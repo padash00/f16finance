@@ -2233,48 +2233,97 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         return `За период ${dateFrom} — ${dateTo} активность руководителя${leaderName ? ` "${leaderName}"` : ''} не найдена.`
       }
 
-      const lines: string[] = [
-        `📋 Активность руководителя за ${dateFrom} — ${dateTo}`,
-        '',
-      ]
-      for (const row of leaderRows.slice(-120)) {
+      const fmtMoney = (value: number) => `${Math.round(value).toLocaleString('ru-RU')} ₸`
+      const firstActor = actorMap.get(String(leaderRows[0]?.actor_user_id || ''))?.name || 'руководитель'
+      const pageViews = new Map<string, number>()
+      let loginCount = 0
+      let expenseOps = 0
+      let incomeOps = 0
+      let expenseTotal = 0
+      let incomeTotal = 0
+
+      const events: Array<{ text: string; stamp: string; count: number }> = []
+      for (const row of leaderRows) {
         const actor = actorMap.get(String(row.actor_user_id || ''))
         const actorLabel = actor?.name || 'Руководитель'
-        const when = new Date(String(row.created_at || '')).toLocaleString('ru-RU', {
+        const stamp = new Date(String(row.created_at || '')).toLocaleString('ru-RU', {
           timeZone: 'Asia/Almaty',
           day: '2-digit',
           month: '2-digit',
           hour: '2-digit',
           minute: '2-digit',
         })
+
         if (row.entity_type === 'auth-session' && String(row.action || '').includes('login')) {
-          lines.push(`• ${when} — ${actorLabel} вошла в систему`)
+          loginCount += 1
+          events.push({ stamp, count: 1, text: `${actorLabel} вошла в систему` })
           continue
         }
+
         if (row.entity_type === 'page-view') {
-          const path = String((row.payload || {}).pathname || row.entity_id || '')
-          lines.push(`• ${when} — ${actorLabel} открыла ${path}`)
+          const path = String((row.payload || {}).pathname || row.entity_id || '').trim() || '/'
+          pageViews.set(path, (pageViews.get(path) || 0) + 1)
+          events.push({ stamp, count: 1, text: `${actorLabel} открыла раздел ${path}` })
           continue
         }
+
         if (row.entity_type === 'income') {
           const p = (row.payload || {}) as Record<string, unknown>
           const amount =
             Number(p.total_amount || 0) ||
             Number(p.cash_amount || 0) + Number(p.kaspi_amount || 0) + Number(p.online_amount || 0) + Number(p.card_amount || 0)
+          incomeOps += 1
+          incomeTotal += amount
           const actionLabel =
             row.action === 'create' ? 'добавила доход' : row.action === 'delete' ? 'удалила доход' : 'изменила доход'
-          lines.push(`• ${when} — ${actorLabel} ${actionLabel} (${Math.round(amount).toLocaleString('ru-RU')} ₸)`)
+          events.push({ stamp, count: 1, text: `${actorLabel} ${actionLabel} на ${fmtMoney(amount)}` })
           continue
         }
+
         if (row.entity_type === 'expense') {
           const p = (row.payload || {}) as Record<string, unknown>
           const amount = Number(p.total_amount || 0) || Number(p.cash_amount || 0) + Number(p.kaspi_amount || 0)
-          const category = String(p.category || '')
+          const category = String(p.category || '').trim()
+          expenseOps += 1
+          expenseTotal += amount
           const actionLabel =
             row.action === 'create' ? 'добавила расход' : row.action === 'delete' ? 'удалила расход' : 'изменила расход'
-          lines.push(`• ${when} — ${actorLabel} ${actionLabel}${category ? ` (${category})` : ''} (${Math.round(amount).toLocaleString('ru-RU')} ₸)`)
+          events.push({ stamp, count: 1, text: `${actorLabel} ${actionLabel}${category ? ` (${category})` : ''} на ${fmtMoney(amount)}` })
           continue
         }
+      }
+
+      const compactEvents: Array<{ text: string; stamp: string; count: number }> = []
+      for (const event of events) {
+        const prev = compactEvents[compactEvents.length - 1]
+        if (prev && prev.text === event.text) {
+          prev.count += 1
+          continue
+        }
+        compactEvents.push({ text: event.text, stamp: event.stamp, count: event.count })
+      }
+
+      const topPages = Array.from(pageViews.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([path, cnt]) => `${path} (${cnt})`)
+
+      const lines: string[] = []
+      lines.push(`За период ${dateFrom} — ${dateTo} по ${firstActor}:`)
+      lines.push(`• входов в систему: ${loginCount}`)
+      lines.push(`• операций по расходам: ${expenseOps}${expenseOps ? `, сумма ${fmtMoney(expenseTotal)}` : ''}`)
+      lines.push(`• операций по доходам: ${incomeOps}${incomeOps ? `, сумма ${fmtMoney(incomeTotal)}` : ''}`)
+      if (topPages.length) lines.push(`• чаще всего открывала: ${topPages.join(', ')}`)
+      lines.push('')
+      lines.push('Ключевые действия:')
+
+      for (const event of compactEvents.slice(-25)) {
+        lines.push(`• ${event.stamp} — ${event.text}${event.count > 1 ? ` (повтор: ${event.count} раза)` : ''}`)
+      }
+
+      if (compactEvents.length > 25) {
+        lines.push('')
+        lines.push(`Показаны последние 25 событий из ${compactEvents.length}.`)
       }
 
       return lines.join('\n')
