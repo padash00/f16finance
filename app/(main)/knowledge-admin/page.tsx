@@ -19,6 +19,8 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import { ArticleEditorDialog, emptyArticleValue, type ArticleEditorValue } from '@/components/admin/article-editor-dialog'
+
 type CategoryKind = 'rules' | 'faq' | 'salary' | 'problem' | 'checklist'
 
 type KnowledgeCategory = {
@@ -129,22 +131,6 @@ const AUDIENCE_OPTIONS = [
   { value: 'public', label: 'Публично' },
   { value: 'kiosk', label: 'Киоск' },
 ] as const
-
-const emptyArticle = {
-  title: '',
-  company_id: '',
-  category_id: '',
-  summary: '',
-  content: '',
-  tags: '',
-  audience: ['operator', 'cashier', 'manager'] as string[],
-  severity: 'info' as const,
-  related_fine_amount: '',
-  related_bonus_amount: '',
-  sort_order: 100,
-  is_published: true,
-  requires_confirmation: false,
-}
 
 const emptyTemplate = {
   title: '',
@@ -259,9 +245,10 @@ export default function KnowledgeAdminPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const [categoryForm, setCategoryForm] = useState<any>(emptyCategory)
-  const [articleForm, setArticleForm] = useState<any>(emptyArticle)
   const [templateForm, setTemplateForm] = useState<any>(emptyTemplate)
   const [itemForm, setItemForm] = useState<any>(emptyItem)
+  const [articleDialogOpen, setArticleDialogOpen] = useState(false)
+  const [articleDialogValue, setArticleDialogValue] = useState<ArticleEditorValue | undefined>(undefined)
 
   const categoryById = useMemo(() => {
     return new Map(data.categories.map((category) => [category.id, category]))
@@ -387,31 +374,46 @@ export default function KnowledgeAdminPage() {
     if (result) setCategoryForm(emptyCategory)
   }
 
-  async function submitArticle(event: FormEvent) {
-    event.preventDefault()
-    const audience = Array.isArray(articleForm.audience)
-      ? articleForm.audience
-      : splitList(articleForm.audience || '')
+  async function submitArticleDialog(value: ArticleEditorValue) {
     const result = await send('upsertArticle', {
-      ...articleForm,
-      company_id: normalizeId(articleForm.company_id),
-      category_id: normalizeId(articleForm.category_id),
-      tags: splitList(articleForm.tags || ''),
-      audience,
-      related_fine_amount: moneyOrNull(articleForm.related_fine_amount),
-      related_bonus_amount: moneyOrNull(articleForm.related_bonus_amount),
-      sort_order: Number(articleForm.sort_order || 100),
-      requires_confirmation: articleForm.requires_confirmation === true,
+      ...value,
+      company_id: normalizeId(value.company_id),
+      category_id: normalizeId(value.category_id),
+      tags: splitList(value.tags || ''),
+      audience: value.audience,
+      related_fine_amount: moneyOrNull(value.related_fine_amount),
+      related_bonus_amount: moneyOrNull(value.related_bonus_amount),
+      sort_order: Number(value.sort_order || 100),
+      requires_confirmation: value.requires_confirmation === true,
     })
     if (result) {
-      // сохраняем выбор точки, категории и аудитории — для пакетного ввода
-      setArticleForm({
-        ...emptyArticle,
-        company_id: articleForm.company_id || '',
-        category_id: articleForm.category_id || '',
-        audience,
-      })
+      setArticleDialogOpen(false)
     }
+  }
+
+  function openArticleDialogNew() {
+    setArticleDialogValue({ ...emptyArticleValue })
+    setArticleDialogOpen(true)
+  }
+
+  function openArticleDialogEdit(article: KnowledgeArticle) {
+    setArticleDialogValue({
+      id: article.id,
+      company_id: article.company_id || '',
+      category_id: article.category_id || '',
+      title: article.title,
+      summary: article.summary || '',
+      content: article.content || '',
+      tags: article.tags?.join(', ') || '',
+      audience: article.audience || [],
+      severity: article.severity,
+      related_fine_amount: article.related_fine_amount ?? '',
+      related_bonus_amount: article.related_bonus_amount ?? '',
+      sort_order: article.sort_order ?? 100,
+      is_published: article.is_published,
+      requires_confirmation: article.requires_confirmation === true,
+    })
+    setArticleDialogOpen(true)
   }
 
   async function submitTemplate(event: FormEvent) {
@@ -538,21 +540,31 @@ export default function KnowledgeAdminPage() {
         ) : (
           <>
             {tab === 'articles' && (
-              <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
+              <div className="min-w-0">
                 <Panel title="Материалы для операторов" icon={FileText}>
                   <TabHint
                     title="Что здесь создавать?"
                     text="Это сами правила и ответы: как открыть смену, что делать если не работает Kaspi, когда штраф, когда премия, как разговаривать с клиентом."
                   />
                   <div className="mb-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                      <Search className="h-4 w-4 text-slate-500" />
-                      <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Поиск по FAQ, правилам, проблемам..."
-                        className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
-                      />
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+                      <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                        <Search className="h-4 w-4 text-slate-500" />
+                        <input
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          placeholder="Поиск по FAQ, правилам, проблемам..."
+                          className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openArticleDialogNew}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Новый материал
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <SelectInput
@@ -610,19 +622,7 @@ export default function KnowledgeAdminPage() {
                               article={article}
                               category={article.category_id ? categoryById.get(article.category_id) : undefined}
                               companyName={article.company_id ? companyById.get(article.company_id)?.name : undefined}
-                              onEdit={() =>
-                                setArticleForm({
-                                  ...article,
-                                  company_id: article.company_id || '',
-                                  category_id: article.category_id || '',
-                                  summary: article.summary || '',
-                                  tags: article.tags?.join(', ') || '',
-                                  audience: article.audience || [],
-                                  related_fine_amount: article.related_fine_amount ?? '',
-                                  related_bonus_amount: article.related_bonus_amount ?? '',
-                                  requires_confirmation: article.requires_confirmation === true,
-                                })
-                              }
+                              onEdit={() => openArticleDialogEdit(article)}
                               onDelete={() => {
                                 if (!confirmDelete(article.title)) return
                                 void send('deleteArticle', undefined, article.id)
@@ -634,123 +634,6 @@ export default function KnowledgeAdminPage() {
                     ))}
                     {!articlesByCategory.length && <EmptyState text="Материалов пока нет. Создайте первую инструкцию или нажмите «Создать базу F16»." />}
                   </div>
-                </Panel>
-
-                <Panel title={articleForm.id ? 'Редактировать материал' : 'Новый материал'} icon={Plus}>
-                  <form onSubmit={submitArticle} className="space-y-4">
-                    <div className="space-y-2">
-                      <FieldLabel>Название</FieldLabel>
-                      <TextInput value={articleForm.title} onChange={(event) => setArticleForm({ ...articleForm, title: event.target.value })} required />
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <FieldLabel>Точка</FieldLabel>
-                        <SelectInput value={articleForm.company_id} onChange={(event) => setArticleForm({ ...articleForm, company_id: event.target.value })}>
-                          <option value="">Для всех точек</option>
-                          {data.companies.map((company) => (
-                            <option key={company.id} value={company.id}>
-                              {company.name}
-                            </option>
-                          ))}
-                        </SelectInput>
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Категория</FieldLabel>
-                        <SelectInput value={articleForm.category_id} onChange={(event) => setArticleForm({ ...articleForm, category_id: event.target.value })}>
-                          <option value="">Без категории</option>
-                          {data.categories
-                            .filter((category) => !articleForm.company_id || !category.company_id || category.company_id === articleForm.company_id)
-                            .map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.title}
-                                {category.company_id ? ` · ${companyById.get(category.company_id)?.name || ''}` : ''}
-                              </option>
-                            ))}
-                        </SelectInput>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Важность</FieldLabel>
-                      <SelectInput value={articleForm.severity} onChange={(event) => setArticleForm({ ...articleForm, severity: event.target.value })}>
-                        {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </SelectInput>
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Краткое описание</FieldLabel>
-                      <TextArea value={articleForm.summary} onChange={(event) => setArticleForm({ ...articleForm, summary: event.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Полный текст</FieldLabel>
-                      <TextArea value={articleForm.content} onChange={(event) => setArticleForm({ ...articleForm, content: event.target.value })} required className="min-h-44" />
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Теги через запятую</FieldLabel>
-                      <TextInput value={articleForm.tags} onChange={(event) => setArticleForm({ ...articleForm, tags: event.target.value })} placeholder="касса, смена, конфликт" />
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Аудитория</FieldLabel>
-                      <div className="flex flex-wrap gap-2">
-                        {AUDIENCE_OPTIONS.map((opt) => {
-                          const current: string[] = Array.isArray(articleForm.audience)
-                            ? articleForm.audience
-                            : []
-                          const checked = current.includes(opt.value)
-                          return (
-                            <label
-                              key={opt.value}
-                              className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                                checked
-                                  ? 'border-amber-300/70 bg-amber-300/15 text-amber-100'
-                                  : 'border-slate-700 bg-slate-900/70 text-slate-400 hover:border-slate-500'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                className="hidden"
-                                checked={checked}
-                                onChange={() => {
-                                  const next = checked
-                                    ? current.filter((v) => v !== opt.value)
-                                    : [...current, opt.value]
-                                  setArticleForm({ ...articleForm, audience: next })
-                                }}
-                              />
-                              {opt.label}
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div className="space-y-2">
-                        <FieldLabel>Штраф, ₸</FieldLabel>
-                        <TextInput value={articleForm.related_fine_amount} onChange={(event) => setArticleForm({ ...articleForm, related_fine_amount: event.target.value })} inputMode="numeric" />
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Бонус, ₸</FieldLabel>
-                        <TextInput value={articleForm.related_bonus_amount} onChange={(event) => setArticleForm({ ...articleForm, related_bonus_amount: event.target.value })} inputMode="numeric" />
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Порядок</FieldLabel>
-                        <TextInput value={articleForm.sort_order} onChange={(event) => setArticleForm({ ...articleForm, sort_order: event.target.value })} inputMode="numeric" />
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                        <input type="checkbox" checked={articleForm.is_published} onChange={(event) => setArticleForm({ ...articleForm, is_published: event.target.checked })} />
-                        Опубликовано для операторов
-                      </label>
-                      <label className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-950/10 px-4 py-3 text-sm text-amber-100">
-                        <input type="checkbox" checked={!!articleForm.requires_confirmation} onChange={(event) => setArticleForm({ ...articleForm, requires_confirmation: event.target.checked })} />
-                        Требует подтверждения оператором
-                      </label>
-                    </div>
-                    <FormActions saving={saving} reset={() => setArticleForm(emptyArticle)} isEditing={Boolean(articleForm.id)} />
-                  </form>
                 </Panel>
               </div>
             )}
@@ -1074,6 +957,16 @@ export default function KnowledgeAdminPage() {
             )}
           </>
         )}
+
+        <ArticleEditorDialog
+          open={articleDialogOpen}
+          onOpenChange={setArticleDialogOpen}
+          initialValue={articleDialogValue}
+          categories={data.categories}
+          companies={data.companies}
+          saving={saving}
+          onSubmit={submitArticleDialog}
+        />
       </section>
     </main>
   )
