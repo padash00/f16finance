@@ -289,6 +289,17 @@ export default function HrPage() {
         </div>
       </Card>
 
+      <div className="flex items-center justify-between px-1">
+        <div className="text-sm text-gray-400">
+          {tab === 'active' ? 'Список активных сотрудников' : 'Список уволенных сотрудников'}
+        </div>
+        {!loading && filtered.length > 0 ? (
+          <div className="text-xs text-gray-500">
+            Найдено: <span className="text-gray-300 font-semibold">{filtered.length}</span>
+          </div>
+        ) : null}
+      </div>
+
       {loading ? (
         <Card className="py-12 text-center text-muted-foreground bg-gray-900/60 border-gray-800">
           <Loader2 className="w-5 h-5 animate-spin mx-auto mb-3" />
@@ -299,17 +310,17 @@ export default function HrPage() {
           {tab === 'active' ? 'Активных сотрудников не найдено' : 'Уволенных сотрудников нет'}
         </Card>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {filtered.map((emp) => {
             const busy = busyId === emp.id
             const dismissed = !!emp.dismissed_at
             return (
               <Card
                 key={`${emp.kind}-${emp.id}`}
-                className={`p-4 flex items-start justify-between gap-4 border transition ${
+                className={`p-5 flex items-start justify-between gap-4 border shadow-sm transition ${
                   dismissed
                     ? 'bg-red-500/5 border-red-500/25'
-                    : 'bg-gray-900/60 border-gray-800 hover:border-gray-600'
+                    : 'bg-gray-900/60 border-gray-800 hover:border-indigo-500/40 hover:bg-gray-900/80'
                 }`}
               >
                 <div className="flex-1 min-w-0">
@@ -325,7 +336,7 @@ export default function HrPage() {
                       <span className="text-[10px] uppercase text-muted-foreground">· {emp.position}</span>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                  <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                     {emp.phone && <span>📞 {emp.phone}</span>}
                     {emp.email && <span>✉ {emp.email}</span>}
                     {emp.monthly_salary != null && <span>💰 {emp.monthly_salary.toLocaleString('ru-RU')} ₸/мес</span>}
@@ -347,14 +358,16 @@ export default function HrPage() {
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => toggleHistory(emp)}
-                    className="mt-2 flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition"
-                  >
-                    {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                    История
-                  </button>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleHistory(emp)}
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-400 hover:text-white hover:border-gray-500 transition"
+                    >
+                      {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      История действий
+                    </button>
+                  </div>
 
                   {historyOpen[`${emp.kind}-${emp.id}`] && (
                     <div className="mt-2 pl-2 border-l border-gray-700 text-xs space-y-1">
