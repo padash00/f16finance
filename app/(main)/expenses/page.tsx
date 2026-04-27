@@ -304,6 +304,7 @@ export default function ExpensesPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false)
+  const [expenseModalLoading, setExpenseModalLoading] = useState(false)
 
   // Expense templates
   const [templates, setTemplates] = useState<{id:string,name:string,category:string,amount:number,payment_type:string,company_id:string|null,comment:string|null}[]>([])
@@ -378,11 +379,29 @@ export default function ExpensesPage() {
       if (event.origin !== window.location.origin) return
       if ((event.data as any)?.type !== 'expense-wizard-created') return
       setShowAddExpenseModal(false)
+      setExpenseModalLoading(false)
       reload().catch(() => null)
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
   }, [reload])
+
+  useEffect(() => {
+    if (!showAddExpenseModal) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowAddExpenseModal(false)
+        setExpenseModalLoading(false)
+      }
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [showAddExpenseModal])
 
   const companyMap = useMemo(() => {
     const map = new Map<string, Company>()
@@ -978,7 +997,10 @@ export default function ExpensesPage() {
                   {canCreateExpense ? (
                     <Button
                       size="sm"
-                      onClick={() => setShowAddExpenseModal(true)}
+                      onClick={() => {
+                        setExpenseModalLoading(true)
+                        setShowAddExpenseModal(true)
+                      }}
                       className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25"
                     >
                       <Plus className="w-4 h-4 mr-1" /> Добавить
@@ -1556,22 +1578,45 @@ export default function ExpensesPage() {
       ) : null}
 
       {showAddExpenseModal ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm">
-          <div className="w-full max-w-6xl h-[92vh] rounded-2xl border border-white/10 bg-slate-950 overflow-hidden shadow-2xl">
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
+          onClick={() => {
+            setShowAddExpenseModal(false)
+            setExpenseModalLoading(false)
+          }}
+        >
+          <div
+            className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-white/10 bg-slate-950 overflow-hidden shadow-2xl transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="h-12 border-b border-white/10 flex items-center justify-between px-3">
               <div className="text-sm text-white">Добавление расхода</div>
               <button
-                onClick={() => setShowAddExpenseModal(false)}
+                onClick={() => {
+                  setShowAddExpenseModal(false)
+                  setExpenseModalLoading(false)
+                }}
                 className="rounded-md p-1.5 text-gray-400 hover:text-white hover:bg-white/10"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <iframe
-              src="/expenses/new?embedded=1"
-              className="w-full h-[calc(92vh-48px)] bg-slate-950"
-              title="Добавление расхода"
-            />
+            <div className="relative h-[calc(92vh-48px)]">
+              {expenseModalLoading ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/90">
+                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Открываю форму расхода...
+                  </div>
+                </div>
+              ) : null}
+              <iframe
+                src="/expenses/new?embedded=1"
+                className="w-full h-full bg-slate-950"
+                title="Добавление расхода"
+                onLoad={() => setExpenseModalLoading(false)}
+              />
+            </div>
           </div>
         </div>
       ) : null}
