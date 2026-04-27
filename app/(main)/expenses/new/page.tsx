@@ -93,6 +93,10 @@ export default function ExpenseWizardPage() {
   const [operators, setOperators] = useState<Operator[]>([])
   const [whitelist, setWhitelist] = useState<WhitelistVendor[]>([])
   const [categoryQuery, setCategoryQuery] = useState('')
+  const [operatorsLoaded, setOperatorsLoaded] = useState(false)
+  const [whitelistLoaded, setWhitelistLoaded] = useState(false)
+  const [loadingOperators, setLoadingOperators] = useState(false)
+  const [loadingWhitelist, setLoadingWhitelist] = useState(false)
 
   const [loadingCatalogs, setLoadingCatalogs] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -108,21 +112,15 @@ export default function ExpenseWizardPage() {
     const load = async () => {
       setLoadingCatalogs(true)
       try {
-        const [catRes, compRes, opRes, wlRes] = await Promise.all([
+        const [catRes, compRes] = await Promise.all([
           fetch('/api/admin/expense-categories', { cache: 'no-store' }),
           fetch('/api/admin/companies', { cache: 'no-store' }),
-          fetch('/api/admin/operators?active_only=true', { cache: 'no-store' }),
-          fetch('/api/admin/expenses/whitelist', { cache: 'no-store' }),
         ])
         const cats = catRes.ok ? (await catRes.json()).data || [] : []
         const comps = compRes.ok ? (await compRes.json()).data || [] : []
-        const ops = opRes.ok ? (await opRes.json()).data || [] : []
-        const wl = wlRes.ok ? (await wlRes.json()).data || [] : []
         if (cancelled) return
         setCategories(cats)
         setCompanies(comps)
-        setOperators(ops)
-        setWhitelist(wl)
       } catch {
         if (!cancelled) setError('Не удалось загрузить справочники')
       } finally {
@@ -160,6 +158,48 @@ export default function ExpenseWizardPage() {
     }
     start()
   }, [sessionId, starting])
+
+  useEffect(() => {
+    if (operatorsLoaded || loadingOperators || step !== 1) return
+    let cancelled = false
+    const loadOperators = async () => {
+      setLoadingOperators(true)
+      try {
+        const opRes = await fetch('/api/admin/operators?active_only=true', { cache: 'no-store' })
+        const ops = opRes.ok ? (await opRes.json()).data || [] : []
+        if (cancelled) return
+        setOperators(ops)
+        setOperatorsLoaded(true)
+      } finally {
+        if (!cancelled) setLoadingOperators(false)
+      }
+    }
+    loadOperators()
+    return () => {
+      cancelled = true
+    }
+  }, [operatorsLoaded, loadingOperators, step])
+
+  useEffect(() => {
+    if (whitelistLoaded || loadingWhitelist || step < 2) return
+    let cancelled = false
+    const loadWhitelist = async () => {
+      setLoadingWhitelist(true)
+      try {
+        const wlRes = await fetch('/api/admin/expenses/whitelist', { cache: 'no-store' })
+        const wl = wlRes.ok ? (await wlRes.json()).data || [] : []
+        if (cancelled) return
+        setWhitelist(wl)
+        setWhitelistLoaded(true)
+      } finally {
+        if (!cancelled) setLoadingWhitelist(false)
+      }
+    }
+    loadWhitelist()
+    return () => {
+      cancelled = true
+    }
+  }, [whitelistLoaded, loadingWhitelist, step])
 
   const total = payload.amount_cash + payload.amount_kaspi
   const dateMs = useMemo(() => new Date(payload.date).getTime(), [payload.date])
@@ -588,6 +628,9 @@ export default function ExpenseWizardPage() {
 
           <div>
             <label className="text-sm font-medium mb-1 block">Оператор смены (опционально)</label>
+            {loadingOperators ? (
+              <div className="text-xs text-muted-foreground mb-1">Загружаю операторов...</div>
+            ) : null}
             <select
               value={payload.operator_id || ''}
               onChange={(e) => setPayload((p) => ({ ...p, operator_id: e.target.value || null }))}
@@ -703,6 +746,7 @@ export default function ExpenseWizardPage() {
 
           {payload.document_kind === 'whitelist' && (
             <div className="ml-8">
+              {loadingWhitelist ? <p className="text-xs text-muted-foreground mb-2">Загружаю доверенных поставщиков...</p> : null}
               {eligibleWhitelist.length === 0 ? (
                 <p className="text-sm text-amber-500">
                   Доверенных поставщиков нет.{' '}
