@@ -30,6 +30,12 @@ type WhitelistVendor = {
   company_id: string | null
   default_category_id: string | null
 }
+type AiCategoryHint = {
+  recommended_category: string
+  alternatives: string[]
+  reason: string
+  questions: string[]
+}
 
 type DocumentKind = 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off'
 
@@ -104,6 +110,9 @@ export default function ExpenseWizardPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{ status: string; id: string } | null>(null)
+  const [aiHint, setAiHint] = useState<AiCategoryHint | null>(null)
+  const [aiHintLoading, setAiHintLoading] = useState(false)
+  const [aiHintError, setAiHintError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -368,6 +377,41 @@ export default function ExpenseWizardPage() {
     }
   }
 
+  async function askAiCategoryHint() {
+    if (!payload.company_id) {
+      setAiHintError('Сначала выберите точку.')
+      return
+    }
+    if (payload.item_name.trim().length < 3) {
+      setAiHintError('Напишите что купили (минимум 3 символа).')
+      return
+    }
+    if (payload.comment.trim().length < 10) {
+      setAiHintError('Добавьте комментарий (минимум 10 символов).')
+      return
+    }
+    setAiHintLoading(true)
+    setAiHintError(null)
+    try {
+      const response = await fetch('/api/admin/expenses/ai-category-hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: payload.company_id,
+          item_name: payload.item_name,
+          comment: payload.comment,
+        }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(json.error || 'Не удалось получить подсказку ИИ')
+      setAiHint((json.data || null) as AiCategoryHint | null)
+    } catch (e: any) {
+      setAiHintError(e?.message || 'Ошибка подсказки ИИ')
+    } finally {
+      setAiHintLoading(false)
+    }
+  }
+
   async function handleFile(file: File | null) {
     if (!file || !sessionId) return
     setError(null)
@@ -489,55 +533,104 @@ export default function ExpenseWizardPage() {
             {isCompanyValid ? <p className={validHintClass}>Точка выбрана</p> : null}
           </div>
 
-          <div>
-            <label className="text-sm font-medium mb-1 flex items-center gap-2">
-              <span>Категория</span>
-              {isCategoryValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
-            </label>
-            <input
-              value={categoryQuery}
-              onChange={(e) => setCategoryQuery(e.target.value)}
-              placeholder="Поиск категории (например: зарплата, хоз, закуп)"
-              className={`${inputBaseClass} mb-2`}
-            />
-            <div className="max-h-64 overflow-auto rounded-md border p-2 space-y-2">
-              {filteredGroupedCategories.map((g) => (
-                <div key={g.group}>
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 px-1">
-                    {g.label}
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div>
+              <label className="text-sm font-medium mb-1 flex items-center gap-2">
+                <span>Категория</span>
+                {isCategoryValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
+              </label>
+              <input
+                value={categoryQuery}
+                onChange={(e) => setCategoryQuery(e.target.value)}
+                placeholder="Поиск категории (например: зарплата, хоз, закуп)"
+                className={`${inputBaseClass} mb-2`}
+              />
+              <div className="max-h-64 overflow-auto rounded-md border p-2 space-y-2">
+                {filteredGroupedCategories.map((g) => (
+                  <div key={g.group}>
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 px-1">
+                      {g.label}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                    {g.items.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setPayload((p) => ({
+                            ...p,
+                            category_id: c.id,
+                            category_name: c.name,
+                          }))
+                        }}
+                        className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                          payload.category_id === c.id
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border hover:border-primary/40'
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                  {g.items.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setPayload((p) => ({
-                          ...p,
-                          category_id: c.id,
-                          category_name: c.name,
-                        }))
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                        payload.category_id === c.id
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border hover:border-primary/40'
-                      }`}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
+                ))}
+                {filteredCategoriesCount === 0 ? (
+                  <div className="text-xs text-amber-400 px-1">Ничего не найдено. Попробуй другое слово.</div>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Найдено категорий: {filteredCategoriesCount}
+              </p>
+              {isCategoryValid ? <p className={validHintClass}>Категория выбрана</p> : null}
+            </div>
+            <div className="rounded-md border bg-muted/20 p-3 h-fit">
+              <div className="text-sm font-semibold mb-1">Затрудняешься с категорией?</div>
+              <div className="text-xs text-muted-foreground mb-3">
+                Опиши расход и нажми кнопку — ИИ предложит категорию из ваших текущих категорий.
+              </div>
+              <Button
+                variant="outline"
+                className="w-full mb-2"
+                onClick={askAiCategoryHint}
+                disabled={aiHintLoading}
+              >
+                {aiHintLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Спросить ИИ
+              </Button>
+              {aiHintError ? (
+                <div className="text-xs text-destructive">{aiHintError}</div>
+              ) : null}
+              {aiHint ? (
+                <div className="space-y-2 mt-2 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Рекомендация</div>
+                    <div className="font-semibold text-foreground">{aiHint.recommended_category}</div>
                   </div>
+                  <div>
+                    <div className="text-muted-foreground">Почему</div>
+                    <div>{aiHint.reason}</div>
+                  </div>
+                  {aiHint.alternatives.length > 0 ? (
+                    <div>
+                      <div className="text-muted-foreground">Альтернативы</div>
+                      <div>{aiHint.alternatives.join(', ')}</div>
+                    </div>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      const cat = categories.find((c) => c.name.toLowerCase() === aiHint.recommended_category.toLowerCase())
+                      if (!cat) return
+                      setPayload((p) => ({ ...p, category_id: cat.id, category_name: cat.name }))
+                    }}
+                  >
+                    Применить рекомендацию
+                  </Button>
                 </div>
-              ))}
-              {filteredCategoriesCount === 0 ? (
-                <div className="text-xs text-amber-400 px-1">Ничего не найдено. Попробуй другое слово.</div>
               ) : null}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Найдено категорий: {filteredCategoriesCount}
-            </p>
-            {isCategoryValid ? <p className={validHintClass}>Категория выбрана</p> : null}
           </div>
 
           <div>
