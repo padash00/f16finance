@@ -19,6 +19,8 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 import { isAbortError } from '@/lib/is-abort-error'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -208,6 +210,7 @@ function requestTimeline(request: InventoryRequest) {
 function StoreRequestsJournalPageContent() {
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedRequest, setSelectedRequest] = useState<InventoryRequest | null>(null)
   const [requestDetailsOpen, setRequestDetailsOpen] = useState(false)
@@ -221,8 +224,13 @@ function StoreRequestsJournalPageContent() {
   const [searchInput, setSearchInput] = useState(filters.q)
   const debouncedSearch = useDebouncedValue(searchInput, 300)
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true)
+  const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
+    const soft = Boolean(opts?.soft)
+    if (soft) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
     setError(null)
     try {
       const response = await fetch('/api/admin/inventory/requests', { cache: 'no-store', signal })
@@ -237,7 +245,10 @@ function StoreRequestsJournalPageContent() {
       if (isAbortError(err) || signal?.aborted) return
       setError(err?.message || 'Не удалось загрузить журнал заявок')
     } finally {
-      if (!signal?.aborted) setLoading(false)
+      if (!signal?.aborted) {
+        if (soft) setRefreshing(false)
+        else setLoading(false)
+      }
     }
   }
 
@@ -377,8 +388,8 @@ function StoreRequestsJournalPageContent() {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0} className="h-9 gap-1.5">
@@ -391,31 +402,37 @@ function StoreRequestsJournalPageContent() {
       <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
         <Card className="border-white/10 bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего</p>
-          <p className="mt-1 text-xl font-semibold">{stats.total}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold">{stats.total}</p>}
         </Card>
         <Card className="border-violet-500/20 bg-violet-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-violet-300/70">Новые</p>
-          <p className="mt-1 text-xl font-semibold text-violet-200">{stats.newCount}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-violet-200">{stats.newCount}</p>}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Одобрены</p>
-          <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.approved}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.approved}</p>}
         </Card>
         <Card className="border-cyan-500/20 bg-cyan-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">Выданы</p>
-          <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.issued}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.issued}</p>}
         </Card>
         <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Получены</p>
-          <p className="mt-1 text-xl font-semibold text-blue-200">{stats.received}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-blue-200">{stats.received}</p>}
         </Card>
         <Card className="border-red-500/20 bg-red-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-red-300/70">Отклонены</p>
-          <p className="mt-1 text-xl font-semibold text-red-200">{stats.rejected}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-red-200">{stats.rejected}</p>}
         </Card>
       </div>
 
       {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">{error}</div> : null}
+      {refreshing ? (
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Обновление журнала…
+        </div>
+      ) : null}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -465,16 +482,23 @@ function StoreRequestsJournalPageContent() {
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
         {loading ? (
-          <div className="flex h-60 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <StoreDataTableSkeleton columns={8} />
         ) : filtered.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <Package className="h-8 w-8 opacity-50" />
             По этим фильтрам ничего не найдено
           </div>
         ) : (
-          <div className="max-h-[calc(100vh-340px)] overflow-auto">
+          <div className="relative max-h-[calc(100vh-340px)] overflow-auto">
+            {refreshing ? (
+              <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
+                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Обновление…
+                </div>
+              </div>
+            ) : null}
+            <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -584,6 +608,7 @@ function StoreRequestsJournalPageContent() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </Card>

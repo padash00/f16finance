@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
 
 type InventoryLocation = {
@@ -108,6 +110,7 @@ function actorLabel(staff: { full_name: string | null } | null | undefined, fall
 export default function StoreRevisionsPage() {
   const [data, setData] = useState<RevisionsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -124,8 +127,13 @@ export default function StoreRevisionsPage() {
   const [selectedRevision, setSelectedRevision] = useState<InventoryRevision | null>(null)
   const [revisionDetailsOpen, setRevisionDetailsOpen] = useState(false)
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true)
+  const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
+    const soft = Boolean(opts?.soft)
+    if (soft) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
     setError(null)
     try {
       const response = await fetch(`/api/admin/store/revisions?scope=${scope}`, { cache: 'no-store', signal })
@@ -136,10 +144,13 @@ export default function StoreRevisionsPage() {
       setLocationId((current) => current || json.data?.locations?.[0]?.id || '')
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
-      setData(null)
+      if (!soft) setData(null)
       setError(err?.message || 'Не удалось загрузить ревизии')
     } finally {
-      if (!signal?.aborted) setLoading(false)
+      if (!signal?.aborted) {
+        if (soft) setRefreshing(false)
+        else setLoading(false)
+      }
     }
   }
 
@@ -250,7 +261,7 @@ export default function StoreRevisionsPage() {
       setComment('')
       setLines([])
       setSuccess('Ревизия проведена, расхождения записаны')
-      await load()
+      await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести ревизию')
     } finally {
@@ -335,8 +346,8 @@ export default function StoreRevisionsPage() {
               </button>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
           <Button
@@ -357,19 +368,19 @@ export default function StoreRevisionsPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="border-white/10 bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Актов</p>
-          <p className="mt-1 text-xl font-semibold">{revisionsStats.count}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{revisionsStats.count}</p>}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">С расхождениями</p>
-          <p className="mt-1 text-xl font-semibold text-amber-200">{revisionsStats.withMismatch}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{revisionsStats.withMismatch}</p>}
         </Card>
         <Card className="border-rose-500/20 bg-rose-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-rose-300/70">Недостача (всего)</p>
-          <p className="mt-1 text-xl font-semibold text-rose-200">{formatQty(revisionsStats.totalShortage)}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-20" /> : <p className="mt-1 text-xl font-semibold text-rose-200">{formatQty(revisionsStats.totalShortage)}</p>}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Излишек (всего)</p>
-          <p className="mt-1 text-xl font-semibold text-emerald-200">{formatQty(revisionsStats.totalSurplus)}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-20" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{formatQty(revisionsStats.totalSurplus)}</p>}
         </Card>
       </div>
 
@@ -392,16 +403,23 @@ export default function StoreRevisionsPage() {
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
         {loading ? (
-          <div className="flex h-60 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <StoreDataTableSkeleton columns={10} />
         ) : filteredRevisions.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <Package className="h-8 w-8 opacity-50" />
             {revisionSearch ? 'Ничего не найдено' : 'Ревизий пока нет — нажмите «Новый акт»'}
           </div>
         ) : (
-          <div className="max-h-[calc(100vh-380px)] overflow-auto">
+          <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
+            {refreshing ? (
+              <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
+                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Обновление…
+                </div>
+              </div>
+            ) : null}
+            <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -502,6 +520,7 @@ export default function StoreRevisionsPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </Card>

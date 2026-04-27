@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
+import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 import { isAbortError } from '@/lib/is-abort-error'
 
@@ -90,6 +92,7 @@ function movementTypeClass(type: string) {
 function StoreMovementsPageContent() {
   const [data, setData] = useState<MovementsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useUrlState({
     q: '',
@@ -99,8 +102,13 @@ function StoreMovementsPageContent() {
   const [queryInput, setQueryInput] = useState(filters.q)
   const debouncedQuery = useDebouncedValue(queryInput, 300)
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true)
+  const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
+    const soft = Boolean(opts?.soft)
+    if (soft) {
+      setRefreshing(true)
+    } else {
+      setLoading(true)
+    }
     setError(null)
     try {
       const scope =
@@ -127,10 +135,13 @@ function StoreMovementsPageContent() {
       })
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
-      setData(null)
+      if (!soft) setData(null)
       setError(err?.message || 'Не удалось загрузить движения')
     } finally {
-      if (!signal?.aborted) setLoading(false)
+      if (!signal?.aborted) {
+        if (soft) setRefreshing(false)
+        else setLoading(false)
+      }
     }
   }
 
@@ -209,8 +220,8 @@ function StoreMovementsPageContent() {
               Списание
             </Button>
           </Link>
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
         </div>
@@ -220,19 +231,21 @@ function StoreMovementsPageContent() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="border-white/10 bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего движений</p>
-          <p className="mt-1 text-xl font-semibold">{stats.count}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{stats.count}</p>}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Приёмок</p>
-          <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.receipts}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.receipts}</p>}
         </Card>
         <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Выдач на точку</p>
-          <p className="mt-1 text-xl font-semibold text-blue-200">{stats.transfers}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-blue-200">{stats.transfers}</p>}
         </Card>
         <Card className="border-white/10 bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Сумма</p>
-          <p className="mt-1 truncate text-xl font-semibold" title={formatMoney(stats.total)}>{formatMoney(stats.total)}</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-24" /> : (
+            <p className="mt-1 truncate text-xl font-semibold" title={formatMoney(stats.total)}>{formatMoney(stats.total)}</p>
+          )}
         </Card>
       </div>
 
@@ -273,16 +286,23 @@ function StoreMovementsPageContent() {
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
         {loading ? (
-          <div className="flex h-60 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <StoreDataTableSkeleton columns={6} />
         ) : filteredMovements.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <Package className="h-8 w-8 opacity-50" />
             По этим фильтрам движений не найдено
           </div>
         ) : (
-          <div className="max-h-[calc(100vh-340px)] overflow-auto">
+          <div className="relative max-h-[calc(100vh-340px)] overflow-auto">
+            {refreshing ? (
+              <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
+                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Обновление…
+                </div>
+              </div>
+            ) : null}
+            <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -345,6 +365,7 @@ function StoreMovementsPageContent() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </Card>
