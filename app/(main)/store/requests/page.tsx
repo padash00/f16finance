@@ -296,25 +296,27 @@ function StoreRequestsPageContent() {
   }, [requests, filters])
 
   const pendingRequests = filteredRequests.filter((request) => request.status === 'new' || request.status === 'disputed')
-  const approvedRequests = filteredRequests.filter((request) =>
-    ['approved_full', 'approved_partial', 'issued'].includes(request.status),
+  const readyToIssueRequests = filteredRequests.filter((request) =>
+    ['approved_full', 'approved_partial'].includes(request.status),
   )
+  const issuedAwaitingReceiveRequests = filteredRequests.filter((request) => request.status === 'issued')
   const historyRequests = filteredRequests.filter((request) => ['received', 'rejected'].includes(request.status))
 
   const stats = useMemo(() => {
     const totalRequested = pendingRequests.reduce((sum, request) => sum + requestItemsCount(request), 0)
-    const totalApproved = approvedRequests.reduce(
+    const totalApproved = filteredRequests.reduce(
       (sum, request) => sum + asArray(request.items).reduce((acc, item) => acc + Number(item.approved_qty || 0), 0),
       0,
     )
     return {
       pending: pendingRequests.length,
-      approved: approvedRequests.length,
+      toIssue: readyToIssueRequests.length,
+      issued: issuedAwaitingReceiveRequests.length,
       history: historyRequests.length,
       totalRequested,
       totalApproved,
     }
-  }, [approvedRequests, historyRequests.length, pendingRequests])
+  }, [filteredRequests])
 
   const updateDraft = (requestId: string, patch: Partial<DecisionDraft>) => {
     setDecisionDrafts((prev) => ({
@@ -522,14 +524,20 @@ function StoreRequestsPageContent() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Card className="border-violet-500/20 bg-violet-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-violet-300/70">Новые заявки</p>
           <p className="mt-1 text-xl font-semibold text-violet-200">{stats.pending}</p>
         </Card>
         <Card className="border-cyan-500/20 bg-cyan-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">К выдаче</p>
-          <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.approved}</p>
+          <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">Ждёт выдачи</p>
+          <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.toIssue}</p>
+          <p className="mt-1 text-[10px] text-cyan-200/60">Одобрено, не отмечено «выдано»</p>
+        </Card>
+        <Card className="border-teal-500/20 bg-teal-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-teal-300/70">В пути</p>
+          <p className="mt-1 text-xl font-semibold text-teal-200">{stats.issued}</p>
+          <p className="mt-1 text-[10px] text-teal-200/60">Выдано со склада</p>
         </Card>
         <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-blue-300/70">История</p>
@@ -542,6 +550,7 @@ function StoreRequestsPageContent() {
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Одобрено</p>
           <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.totalApproved}</p>
+          <p className="mt-1 text-[10px] text-emerald-200/60">Ед. по одобренным количествам</p>
         </Card>
       </div>
 
@@ -747,6 +756,106 @@ function StoreRequestsPageContent() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                  </div>
+                </div>
+              </Card>
+            )
+          })
+        )}
+      </div>
+
+      {/* Одобрено — отметить выдачу со склада (статус «Выдана») */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <PackageCheck className="h-4 w-4 text-cyan-300" />
+          Одобрено — отметьте выдачу со склада
+          <span className="text-xs text-muted-foreground">({readyToIssueRequests.length})</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Когда товар реально отдали с подсобки на точку, нажмите «Отметить выданной» — заявка перейдёт в статус «Выдана».
+        </p>
+        {readyToIssueRequests.length === 0 ? (
+          <Card className="border-white/10 bg-card/70 p-4 text-sm text-muted-foreground">
+            Нет заявок в ожидании выдачи. После одобрения они появятся здесь.
+          </Card>
+        ) : (
+          readyToIssueRequests.map((request) => {
+            const items = asArray(request.items)
+            const requested = items.reduce((sum, i) => sum + Number(i.requested_qty || 0), 0)
+            const approved = items.reduce((sum, i) => sum + Number(i.approved_qty || 0), 0)
+            const pointName = request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'
+            return (
+              <Card key={request.id} className="overflow-hidden border-cyan-500/20 bg-card/70">
+                <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-3">
+                  <RequestStatusBadge status={request.status} />
+                  <span className="text-base font-semibold text-foreground">{pointName}</span>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatQty(approved)} ед. к выдаче · {items.length} поз.
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="gap-1.5 bg-cyan-600/90 text-white hover:bg-cyan-600"
+                      disabled={savingId === request.id}
+                      onClick={() => void transitionStatus(request.id, 'issued')}
+                    >
+                      {savingId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PackageCheck className="h-3.5 w-3.5" />}
+                      Отметить выданной
+                    </Button>
+                  </div>
+                </div>
+                <div className="px-4 py-2 text-xs text-muted-foreground">
+                  {request.source_location?.name || 'Склад'} → {request.target_location?.name || 'Витрина'}
+                  {' · '}
+                  запрошено {formatQty(requested)}
+                </div>
+              </Card>
+            )
+          })
+        )}
+      </div>
+
+      {/* Выдано — подтвердить получение на точке */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <PackageCheck className="h-4 w-4 text-teal-300" />
+          Выдано — отметьте получение на точке
+          <span className="text-xs text-muted-foreground">({issuedAwaitingReceiveRequests.length})</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Когда витрина приняла товар, нажмите «Отметить полученной» — статус станет «Получена».
+        </p>
+        {issuedAwaitingReceiveRequests.length === 0 ? (
+          <Card className="border-white/10 bg-card/70 p-4 text-sm text-muted-foreground">
+            Нет заявок в статусе «Выдана».
+          </Card>
+        ) : (
+          issuedAwaitingReceiveRequests.map((request) => {
+            const items = asArray(request.items)
+            const approved = items.reduce((sum, i) => sum + Number(i.approved_qty || 0), 0)
+            const pointName = request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'
+            return (
+              <Card key={request.id} className="overflow-hidden border-teal-500/20 bg-card/70">
+                <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-3">
+                  <RequestStatusBadge status={request.status} />
+                  <span className="text-base font-semibold text-foreground">{pointName}</span>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Выдано {formatDateTime(request.issued_at)} · {formatQty(approved)} ед.
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="gap-1.5 bg-teal-600/90 text-white hover:bg-teal-600"
+                      disabled={savingId === request.id}
+                      onClick={() => void transitionStatus(request.id, 'received')}
+                    >
+                      {savingId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      Отметить полученной
+                    </Button>
                   </div>
                 </div>
               </Card>
