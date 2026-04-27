@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveFinancialGroup } from '@/lib/core/financial-groups'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { bulkSyncInventoryItemsToPointProducts, ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -81,12 +82,14 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const data = await fetchStoreReceipts(supabase as any, inventoryScope)
-    const { data: expenseCategories, error: expenseCategoriesError } = await supabase
+    const { data: expenseCategoriesRaw, error: expenseCategoriesError } = await supabase
       .from('expense_categories')
       .select('id, name, accounting_group')
-      .in('accounting_group', ['cogs', 'COGS'])
       .order('name', { ascending: true })
     if (expenseCategoriesError) throw expenseCategoriesError
+    const expenseCategories = (expenseCategoriesRaw || []).filter((row: any) => {
+      return resolveFinancialGroup(String(row?.name || ''), String(row?.accounting_group || '')) === 'cogs'
+    })
     let draftsQuery: any = supabase
       .from('inventory_receipt_drafts')
       .select('id, title, payload, status, created_at, updated_at')
