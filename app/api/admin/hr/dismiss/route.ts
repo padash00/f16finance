@@ -4,15 +4,33 @@ import { ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { isTelegramConfigured, sendTelegram } from '@/lib/server/telegram'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
+
+const DISMISSAL_TYPES: DismissalType[] = ['voluntary', 'mutual_agreement', 'cause', 'contract_end', 'other']
+const DISMISSAL_TYPE_LABELS: Record<DismissalType, string> = {
+  voluntary: 'По собственному желанию',
+  mutual_agreement: 'По соглашению сторон',
+  cause: 'По статье',
+  contract_end: 'Истёк срок договора',
+  other: 'Другое',
 }
 
 type Body = {
   kind?: 'staff' | 'operator'
   id?: string
   reason?: string
+  dismissal_date?: string
+  dismissal_type?: DismissalType
+}
+
+function escHtml(s: string): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 export async function POST(req: Request) {
@@ -28,6 +46,14 @@ export async function POST(req: Request) {
     const kind = body?.kind
     const id = String(body?.id || '').trim()
     const reason = String(body?.reason || '').trim()
+    const dismissalType: DismissalType = DISMISSAL_TYPES.includes(body?.dismissal_type as DismissalType)
+      ? (body!.dismissal_type as DismissalType)
+      : 'other'
+
+    let dismissalDate = String(body?.dismissal_date || '').trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dismissalDate)) {
+      dismissalDate = new Date().toISOString().slice(0, 10)
+    }
 
     if (kind !== 'staff' && kind !== 'operator') {
       return json({ error: 'kind должен быть staff или operator' }, 400)
@@ -45,6 +71,9 @@ export async function POST(req: Request) {
     const dismissedAt = new Date().toISOString()
     const activeOrganizationId = access.activeOrganization?.id || null
 
+    let employeeName = ''
+    let companyName = ''
+
     if (kind === 'staff') {
       await ensureOrganizationStaffAccess({
         activeOrganizationId,
@@ -52,17 +81,22 @@ export async function POST(req: Request) {
         staffId: id,
       })
 
-      const { error } = await supabase
+      const { data: staffRow, error } = await supabase
         .from('staff')
         .update({
           is_active: false,
           dismissed_at: dismissedAt,
+          dismissal_date: dismissalDate,
+          dismissal_type: dismissalType,
           dismissal_reason: reason,
           dismissed_by: dismissedBy,
         })
         .eq('id', id)
+        .select('id, full_name, short_name')
+        .single()
 
       if (error) throw error
+      employeeName = String(staffRow?.full_name || staffRow?.short_name || '')
 
       if (activeOrganizationId) {
         await supabase
@@ -78,17 +112,25 @@ export async function POST(req: Request) {
         operatorId: id,
       })
 
-      const { error } = await supabase
+      const { data: opRow, error } = await supabase
         .from('operators')
         .update({
           is_active: false,
           dismissed_at: dismissedAt,
+          dismissal_date: dismissalDate,
+          dismissal_type: dismissalType,
           dismissal_reason: reason,
           dismissed_by: dismissedBy,
         })
         .eq('id', id)
+        .select('id, name, operator_profiles(full_name)')
+        .single()
 
       if (error) throw error
+      const profile = Array.isArray((opRow as any)?.operator_profiles)
+        ? (opRow as any).operator_profiles[0]
+        : (opRow as any)?.operator_profiles
+      employeeName = String(profile?.full_name?.trim() || (opRow as any)?.name || '')
 
       await supabase
         .from('operator_auth')
@@ -96,13 +138,46 @@ export async function POST(req: Request) {
         .eq('operator_id', id)
     }
 
+    if (activeOrganizationId) {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', activeOrganizationId)
+        .maybeSingle()
+      companyName = String((org as any)?.name || '')
+    }
+
     await writeAuditLog(supabase, {
       actorUserId: access.user?.id || null,
       entityType: kind,
       entityId: id,
       action: 'dismiss',
-      payload: { reason, dismissed_at: dismissedAt },
+      payload: {
+        reason,
+        dismissed_at: dismissedAt,
+        dismissal_date: dismissalDate,
+        dismissal_type: dismissalType,
+      },
     })
+
+    if (isTelegramConfigured()) {
+      const actorName = String(
+        (access.staffMember as any)?.full_name ||
+          (access.staffMember as any)?.short_name ||
+          access.user?.email ||
+          'Владелец',
+      )
+      const html = [
+        '🚫 <b>Увольнение сотрудника</b>',
+        companyName ? `🏢 ${escHtml(companyName)}` : null,
+        `👤 <b>${escHtml(employeeName || '—')}</b> · ${kind === 'operator' ? 'оператор' : 'админ'}`,
+        `📅 Дата: ${escHtml(dismissalDate)}`,
+        `📋 Тип: ${escHtml(DISMISSAL_TYPE_LABELS[dismissalType])}`,
+        `💬 Причина: ${escHtml(reason)}`,
+        `✍ Уволил: ${escHtml(actorName)}`,
+      ].filter(Boolean).join('\n')
+      await sendTelegram(html).catch(() => null)
+    }
 
     return json({ ok: true })
   } catch (error: any) {

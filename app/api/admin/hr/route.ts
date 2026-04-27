@@ -20,6 +20,8 @@ type HrEmployee = {
   email: string | null
   is_active: boolean
   dismissed_at: string | null
+  dismissal_date: string | null
+  dismissal_type: string | null
   dismissal_reason: string | null
   dismissed_by: string | null
   monthly_salary: number | null
@@ -51,7 +53,7 @@ export async function GET(req: Request) {
 
     let staffQuery = supabase
       .from('staff')
-      .select('id, full_name, short_name, role, monthly_salary, phone, email, is_active, dismissed_at, dismissal_reason, dismissed_by')
+      .select('id, full_name, short_name, role, monthly_salary, phone, email, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by')
       .order('full_name')
 
     if (allowedStaffIds) {
@@ -64,7 +66,7 @@ export async function GET(req: Request) {
 
     let operatorsQuery = supabase
       .from('operators')
-      .select('id, name, short_name, role, is_active, dismissed_at, dismissal_reason, dismissed_by, operator_profiles(full_name, position, phone, email)')
+      .select('id, name, short_name, role, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, operator_profiles(full_name, position, phone, email)')
       .order('name')
 
     if (allowedOperatorIds) {
@@ -90,6 +92,8 @@ export async function GET(req: Request) {
       email: row.email || null,
       is_active: row.is_active !== false,
       dismissed_at: row.dismissed_at || null,
+      dismissal_date: row.dismissal_date || null,
+      dismissal_type: row.dismissal_type || null,
       dismissal_reason: row.dismissal_reason || null,
       dismissed_by: row.dismissed_by || null,
       monthly_salary: row.monthly_salary != null ? Number(row.monthly_salary) : null,
@@ -108,6 +112,8 @@ export async function GET(req: Request) {
         email: profile?.email || null,
         is_active: row.is_active !== false,
         dismissed_at: row.dismissed_at || null,
+        dismissal_date: row.dismissal_date || null,
+        dismissal_type: row.dismissal_type || null,
         dismissal_reason: row.dismissal_reason || null,
         dismissed_by: row.dismissed_by || null,
         monthly_salary: null,

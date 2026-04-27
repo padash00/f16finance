@@ -50,6 +50,8 @@ export async function POST(req: Request) {
         .update({
           is_active: true,
           dismissed_at: null,
+          dismissal_date: null,
+          dismissal_type: null,
           dismissal_reason: null,
           dismissed_by: null,
         })
@@ -76,6 +78,8 @@ export async function POST(req: Request) {
         .update({
           is_active: true,
           dismissed_at: null,
+          dismissal_date: null,
+          dismissal_type: null,
           dismissal_reason: null,
           dismissed_by: null,
         })
