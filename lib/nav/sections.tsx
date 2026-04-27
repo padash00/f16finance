@@ -98,6 +98,8 @@ export const navSections: NavSection[] = [
       { href: '/kaspi-terminal', label: 'Kaspi терминал', icon: CreditCard, note: 'Суточные итоги с POS' },
       { href: '/analytics', label: 'Аналитика доходов', icon: BarChart3, note: 'Сравнение точек и тренды' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
+      { href: '/expenses/pending', label: 'Ожидают одобрения', icon: ClipboardList, note: 'Расходы без чека на проверке', badgeColor: 'orange', isNew: true },
+      { href: '/expense-whitelist', label: 'Доверенные поставщики', icon: Shield, note: 'Вендоры без чеков' },
       { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Движение денег и баланс', badge: 'AI', badgeColor: 'blue', isNew: true },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
       { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
