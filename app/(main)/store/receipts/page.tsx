@@ -215,6 +215,7 @@ export default function StoreReceiptsPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceFileUrl, setInvoiceFileUrl] = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
+  const [expenseCategoriesFallback, setExpenseCategoriesFallback] = useState<ExpenseCategoryOption[]>([])
   const [uploadingInvoice, setUploadingInvoice] = useState(false)
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
@@ -276,9 +277,30 @@ export default function StoreReceiptsPage() {
 
   useEffect(() => {
     if (expenseCategoryId) return
-    const first = (data?.expense_categories || [])[0]
+    const first = (data?.expense_categories || []).find((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
+      || expenseCategoriesFallback.find((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
     if (first?.id) setExpenseCategoryId(first.id)
-  }, [data?.expense_categories, expenseCategoryId])
+  }, [data?.expense_categories, expenseCategoriesFallback, expenseCategoryId])
+
+  useEffect(() => {
+    const serverCogs = (data?.expense_categories || []).filter((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
+    if (serverCogs.length > 0) return
+    let cancelled = false
+    const loadExpenseCategories = async () => {
+      try {
+        const response = await fetch('/api/admin/expense-categories', { cache: 'no-store' })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) return
+        if (cancelled) return
+        const rows = Array.isArray(json?.data) ? json.data : []
+        setExpenseCategoriesFallback(rows as ExpenseCategoryOption[])
+      } catch {
+        if (!cancelled) setExpenseCategoriesFallback([])
+      }
+    }
+    void loadExpenseCategories()
+    return () => { cancelled = true }
+  }, [data?.expense_categories])
 
   useEffect(() => {
     try {
@@ -716,6 +738,12 @@ export default function StoreReceiptsPage() {
     return (data?.receipts || []).reduce((s, r) => s + Number(r.total_amount || 0), 0)
   }, [data?.receipts])
 
+  const cogsExpenseCategories = useMemo(() => {
+    const fromServer = (data?.expense_categories || []).filter((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
+    if (fromServer.length > 0) return fromServer
+    return expenseCategoriesFallback.filter((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
+  }, [data?.expense_categories, expenseCategoriesFallback])
+
   return (
     <TooltipProvider delayDuration={200}>
     <div className="mx-auto w-full max-w-screen-2xl space-y-4">
@@ -1107,12 +1135,15 @@ export default function StoreReceiptsPage() {
                   <SelectTrigger><SelectValue placeholder="Выберите категорию COGS" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Выберите категорию COGS</SelectItem>
-                    {(data?.expense_categories || []).map((category) => (
+                    {cogsExpenseCategories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">После приемки расход создается автоматически в выбранной категории.</p>
+                <p className="text-xs text-muted-foreground">
+                  После приемки расход создается автоматически в выбранной категории.
+                  {cogsExpenseCategories.length === 0 ? ' COGS-категории не найдены в справочнике.' : ''}
+                </p>
               </div>
             </div>
 

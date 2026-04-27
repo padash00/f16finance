@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { resolveFinancialGroup } from '@/lib/core/financial-groups'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { bulkSyncInventoryItemsToPointProducts, ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -61,12 +60,6 @@ function normalizeDigits(value: unknown) {
   return String(value || '').replace(/\D/g, '')
 }
 
-function isCogsGroup(value: unknown) {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (!normalized) return false
-  return normalized === 'cogs' || normalized.includes('cogs') || normalized.includes('себестоим')
-}
-
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -88,15 +81,11 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const data = await fetchStoreReceipts(supabase as any, inventoryScope)
-    const { data: expenseCategoriesRaw, error: expenseCategoriesError } = await supabase
+    const { data: expenseCategories, error: expenseCategoriesError } = await supabase
       .from('expense_categories')
       .select('id, name, accounting_group')
       .order('name', { ascending: true })
     if (expenseCategoriesError) throw expenseCategoriesError
-    const expenseCategories = (expenseCategoriesRaw || []).filter((row: any) => {
-      if (isCogsGroup(row?.accounting_group)) return true
-      return resolveFinancialGroup(String(row?.name || ''), String(row?.accounting_group || '')) === 'cogs'
-    })
     let draftsQuery: any = supabase
       .from('inventory_receipt_drafts')
       .select('id, title, payload, status, created_at, updated_at')
@@ -306,11 +295,7 @@ export async function POST(request: Request) {
       .eq('id', expenseCategoryId)
       .maybeSingle()
     if (expenseCategoryError) throw expenseCategoryError
-    if (
-      !expenseCategory?.id
-      || (!isCogsGroup(expenseCategory.accounting_group)
-        && resolveFinancialGroup(String(expenseCategory.name || ''), String(expenseCategory.accounting_group || '')) !== 'cogs')
-    ) {
+    if (!expenseCategory?.id || String(expenseCategory.accounting_group || '').trim().toLowerCase() !== 'cogs') {
       return json({ error: 'Категория расхода должна быть из финансовой группы COGS' }, 400)
     }
 
