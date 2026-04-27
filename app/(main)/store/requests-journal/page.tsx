@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 type InventoryLocation = {
   id: string
@@ -207,6 +208,8 @@ function StoreRequestsJournalPageContent() {
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedRequest, setSelectedRequest] = useState<InventoryRequest | null>(null)
+  const [requestDetailsOpen, setRequestDetailsOpen] = useState(false)
   const [filters, setFilters] = useUrlState({
     q: '',
     status: 'all',
@@ -238,6 +241,15 @@ function StoreRequestsJournalPageContent() {
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    if (!requestDetailsOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [requestDetailsOpen])
 
   useEffect(() => {
     setSearchInput(filters.q)
@@ -467,7 +479,8 @@ function StoreRequestsJournalPageContent() {
                   <th className="w-32 py-2.5 px-2 font-normal">Создал</th>
                   <th className="w-32 py-2.5 px-2 font-normal">Одобрил</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
-                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal">Запрос → Одобр</th>
+                  <th className="w-32 py-2.5 px-2 pr-2 text-right font-normal">Запрос → Одобр</th>
+                  <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Просмотр</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -543,10 +556,23 @@ function StoreRequestsJournalPageContent() {
                           </TooltipContent>
                         </Tooltip>
                       </td>
-                      <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
+                      <td className="w-32 py-2.5 px-2 pr-2 text-right align-middle">
                         <span className="text-xs text-muted-foreground">{formatQty(requested)}</span>
                         <span className="mx-1 text-xs text-muted-foreground">→</span>
                         <span className="text-sm font-semibold text-emerald-300">{formatQty(approved)}</span>
+                      </td>
+                      <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRequest(request)
+                            setRequestDetailsOpen(true)
+                          }}
+                        >
+                          Открыть
+                        </Button>
                       </td>
                     </tr>
                   )
@@ -556,6 +582,133 @@ function StoreRequestsJournalPageContent() {
           </div>
         )}
       </Card>
+
+      <Dialog
+        open={requestDetailsOpen}
+        onOpenChange={(open) => {
+          setRequestDetailsOpen(open)
+          if (!open) setSelectedRequest(null)
+        }}
+      >
+        <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-blue-300" />
+              Детали заявки
+            </DialogTitle>
+            <DialogDescription>
+              {selectedRequest ? (
+                <>
+                  {formatDateTime(selectedRequest.created_at)} ·{' '}
+                  {selectedRequest.company?.name
+                    || selectedRequest.target_location?.company?.name
+                    || selectedRequest.target_location?.name
+                    || 'Точка'}{' '}
+                  · <span className="text-foreground/90">№{String(selectedRequest.id).slice(0, 8)}…</span>
+                </>
+              ) : (
+                'Заявка на пополнение витрины'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-5">
+            {!selectedRequest ? (
+              <p className="text-sm text-muted-foreground">Заявка не выбрана.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <RequestStatusBadge status={selectedRequest.status} />
+                  {selectedRequest.received_qty_confirmed != null ? (
+                    <span className="text-xs text-muted-foreground">
+                      Подтверждено при получении: <span className="font-medium text-foreground">{formatQty(selectedRequest.received_qty_confirmed)}</span> ед.
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                  <div>
+                    <span className="text-xs uppercase tracking-wider">Маршрут</span>
+                    <p className="mt-0.5 text-foreground">
+                      {selectedRequest.source_location?.name || 'Склад'} → {selectedRequest.target_location?.name || 'Витрина'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs uppercase tracking-wider">Создатель</span>
+                    <p className="mt-0.5 text-foreground">{actorLabel(selectedRequest.created_by_staff, selectedRequest.created_by)}</p>
+                  </div>
+                </div>
+
+                {selectedRequest.comment ? (
+                  <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">Комментарий к заявке</span>
+                    <p className="mt-1 text-foreground">{selectedRequest.comment}</p>
+                  </div>
+                ) : null}
+                {selectedRequest.decision_comment ? (
+                  <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">Решение / комментарий</span>
+                    <p className="mt-1 text-foreground">{selectedRequest.decision_comment}</p>
+                  </div>
+                ) : null}
+
+                <div className="rounded-lg border border-white/10 p-3">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Хронология</p>
+                  <ul className="mt-2 space-y-1.5 text-sm">
+                    {requestTimeline(selectedRequest).map((step) => (
+                      <li key={step.key} className="flex flex-wrap justify-between gap-2">
+                        <span className="text-muted-foreground">{step.label}</span>
+                        <span className="text-right">
+                          {formatDateTime(step.at)} · {step.by}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Состав заявки (что запрошено и одобрено)</p>
+                  <div className="overflow-auto rounded-xl border border-white/10">
+                    <table className="w-full min-w-[640px] table-fixed text-sm">
+                      <thead className="bg-white/[0.03]">
+                        <tr className="text-left text-xs text-muted-foreground">
+                          <th className="px-3 py-2 font-normal">Товар</th>
+                          <th className="w-32 px-3 py-2 font-normal">Штрихкод</th>
+                          <th className="w-24 px-3 py-2 text-right font-normal">Запрос</th>
+                          <th className="w-24 px-3 py-2 text-right font-normal">Одобр.</th>
+                          <th className="px-3 py-2 font-normal">Комм. строки</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {asArray(selectedRequest.items).length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
+                              Нет позиций в заявке
+                            </td>
+                          </tr>
+                        ) : (
+                          asArray(selectedRequest.items).map((item) => (
+                            <tr key={item.id} className="border-t border-white/[0.06]">
+                              <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
+                                <span className="block truncate">{item.item?.name || 'Товар'}</span>
+                              </td>
+                              <td className="w-32 px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
+                              <td className="w-24 px-3 py-2 text-right">{formatQty(Number(item.requested_qty || 0))}</td>
+                              <td className="w-24 px-3 py-2 text-right text-emerald-300">
+                                {item.approved_qty == null ? '—' : formatQty(Number(item.approved_qty))}
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground">{item.comment || '—'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <p className="text-center text-xs text-muted-foreground">
         История заявок · {filtered.length} из {requests.length}
