@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -216,6 +216,8 @@ export default function StoreReceiptsPage() {
   const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; lines: ReceiptLine[] }>>([])
   const [bulkMarkupPercent, setBulkMarkupPercent] = useState('')
   const [bulkSalePrice, setBulkSalePrice] = useState('')
+  const [showBulkTools, setShowBulkTools] = useState(false)
+  const [showTemplatesTools, setShowTemplatesTools] = useState(false)
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
   const [formSheetOpen, setFormSheetOpen] = useState(false)
   const [receiptSearch, setReceiptSearch] = useState('')
@@ -957,36 +959,56 @@ export default function StoreReceiptsPage() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Массовые операции по строкам</p>
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="flex gap-2">
-                  <Input value={bulkMarkupPercent} onChange={(e) => setBulkMarkupPercent(e.target.value)} placeholder="Наценка % для всех" />
-                  <Button type="button" variant="outline" onClick={applyBulkMarkupPercent}>Применить</Button>
+              <button
+                type="button"
+                onClick={() => setShowBulkTools((v) => !v)}
+                className="flex w-full items-center justify-between"
+              >
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Массовые операции по строкам</p>
+                <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showBulkTools ? 'rotate-180' : ''}`} />
+              </button>
+              {showBulkTools ? (
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <div className="flex gap-2">
+                    <Input value={bulkMarkupPercent} onChange={(e) => setBulkMarkupPercent(e.target.value)} placeholder="Наценка % для всех" />
+                    <Button type="button" variant="outline" onClick={applyBulkMarkupPercent}>Применить</Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input value={bulkSalePrice} onChange={(e) => setBulkSalePrice(e.target.value)} placeholder="Цена продажи для всех" />
+                    <Button type="button" variant="outline" onClick={applyBulkSalePrice}>Применить</Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Input value={bulkSalePrice} onChange={(e) => setBulkSalePrice(e.target.value)} placeholder="Цена продажи для всех" />
-                  <Button type="button" variant="outline" onClick={applyBulkSalePrice}>Применить</Button>
-                </div>
-              </div>
+              ) : null}
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны приемки</p>
-              <div className="flex flex-wrap gap-2">
-                <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
-                <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
-                <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
-              </div>
-              {savedTemplates.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {savedTemplates.map((tpl) => (
-                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs">
-                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-200 hover:text-white">{tpl.name}</button>
-                      <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-300 hover:text-rose-200">×</button>
+              <button
+                type="button"
+                onClick={() => setShowTemplatesTools((v) => !v)}
+                className="flex w-full items-center justify-between"
+              >
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны приемки</p>
+                <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showTemplatesTools ? 'rotate-180' : ''}`} />
+              </button>
+              {showTemplatesTools ? (
+                <>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
+                    <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
+                    <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
+                  </div>
+                  {savedTemplates.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {savedTemplates.map((tpl) => (
+                        <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs">
+                          <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-200 hover:text-white">{tpl.name}</button>
+                          <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-300 hover:text-rose-200">×</button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
+                </>
+              ) : null}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
