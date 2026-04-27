@@ -413,6 +413,19 @@ export default function ExpensesPage() {
   const canCreateExpense =
     !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
   const canManageExpense = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
+  const statusLabelByValue: Record<Exclude<ExpenseStatusFilter, 'all'>, string> = {
+    confirmed: 'Подтвержден',
+    pending_approval: 'Ожидает одобрения',
+    approved: 'Одобрен',
+    declined: 'Отклонен',
+  }
+  const documentLabelByValue: Record<Exclude<DocumentKindFilter, 'all'>, string> = {
+    receipt: 'Чек',
+    invoice: 'Накладная',
+    bill: 'Счет',
+    whitelist: 'Доверенный поставщик',
+    one_off: 'Разовая услуга',
+  }
 
   const extraCompanyId = useMemo(() => {
     const extra = companies.find((c) => c.code === 'extra' || c.name === 'F16 Extra')
@@ -891,7 +904,7 @@ export default function ExpensesPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page max-w-[1600px] space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-900/30 via-gray-900 to-orange-900/30 p-6 border border-red-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-red-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
@@ -948,7 +961,7 @@ export default function ExpensesPage() {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-gray-500'}`} />
-                      Extra
+                      Доп.точка
                     </button>
                   )}
 
@@ -1045,7 +1058,7 @@ export default function ExpensesPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                  <div className={`grid grid-cols-1 md:grid-cols-2 ${canManageExpense ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} gap-4`}>
                     <div className="space-y-2">
                       <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
                         <Building2 className="w-3 h-3" />
@@ -1113,42 +1126,46 @@ export default function ExpensesPage() {
                       </select>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Статус
-                      </label>
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as ExpenseStatusFilter)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
-                      >
-                        <option value="all">Все статусы</option>
-                        <option value="confirmed">Подтвержден</option>
-                        <option value="approved">Одобрен</option>
-                        <option value="pending_approval">Ожидает одобрения</option>
-                        <option value="declined">Отклонен</option>
-                      </select>
-                    </div>
+                    {canManageExpense ? (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Статус
+                          </label>
+                          <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as ExpenseStatusFilter)}
+                            className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                          >
+                            <option value="all">Все статусы</option>
+                            <option value="confirmed">Подтвержден</option>
+                            <option value="approved">Одобрен</option>
+                            <option value="pending_approval">Ожидает одобрения</option>
+                            <option value="declined">Отклонен</option>
+                          </select>
+                        </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
-                        <Paperclip className="w-3 h-3" />
-                        Документ
-                      </label>
-                      <select
-                        value={documentFilter}
-                        onChange={(e) => setDocumentFilter(e.target.value as DocumentKindFilter)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
-                      >
-                        <option value="all">Любой</option>
-                        <option value="receipt">Чек</option>
-                        <option value="invoice">Накладная</option>
-                        <option value="bill">Счет</option>
-                        <option value="whitelist">Whitelist</option>
-                        <option value="one_off">Разовая без документа</option>
-                      </select>
-                    </div>
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                            <Paperclip className="w-3 h-3" />
+                            Документ
+                          </label>
+                          <select
+                            value={documentFilter}
+                            onChange={(e) => setDocumentFilter(e.target.value as DocumentKindFilter)}
+                            className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                          >
+                            <option value="all">Любой</option>
+                            <option value="receipt">Чек</option>
+                            <option value="invoice">Накладная</option>
+                            <option value="bill">Счет</option>
+                            <option value="whitelist">Доверенный поставщик</option>
+                            <option value="one_off">Разовая услуга</option>
+                          </select>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 space-y-2">
@@ -1200,15 +1217,15 @@ export default function ExpensesPage() {
                           <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
-                      {statusFilter !== 'all' && (
+                      {canManageExpense && statusFilter !== 'all' && (
                         <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-lg flex items-center gap-1">
-                          Статус: {statusFilter}
+                          Статус: {statusLabelByValue[statusFilter as Exclude<ExpenseStatusFilter, 'all'>]}
                           <button onClick={() => setStatusFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
-                      {documentFilter !== 'all' && (
+                      {canManageExpense && documentFilter !== 'all' && (
                         <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded-lg flex items-center gap-1">
-                          Документ: {documentFilter}
+                          Документ: {documentLabelByValue[documentFilter as Exclude<DocumentKindFilter, 'all'>]}
                           <button onClick={() => setDocumentFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
@@ -1245,7 +1262,8 @@ export default function ExpensesPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          {canManageExpense ? (
+            <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter('pending_approval')}
               className={`px-3 py-1.5 rounded-lg text-xs border ${statusFilter === 'pending_approval' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' : 'border-gray-700 text-gray-400 hover:text-white'}`}
@@ -1262,7 +1280,7 @@ export default function ExpensesPage() {
               onClick={() => setDocumentFilter('whitelist')}
               className={`px-3 py-1.5 rounded-lg text-xs border ${documentFilter === 'whitelist' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'border-gray-700 text-gray-400 hover:text-white'}`}
             >
-              Whitelist
+              Доверенные
             </button>
             <button
               onClick={() => setStatusFilter('declined')}
@@ -1270,25 +1288,28 @@ export default function ExpensesPage() {
             >
               Отклоненные
             </button>
-          </div>
+            </div>
+          ) : null}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Card className="p-3 bg-gray-900/60 border-gray-800">
-              <div className="text-[11px] text-gray-500 uppercase">Pending</div>
-              <div className="text-lg font-bold text-yellow-300">{statusSummary.pendingCount}</div>
-              <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.pendingAmount)}</div>
-            </Card>
-            <Card className="p-3 bg-gray-900/60 border-gray-800">
-              <div className="text-[11px] text-gray-500 uppercase">Без документа</div>
-              <div className="text-lg font-bold text-emerald-300">{statusSummary.noDocCount}</div>
-              <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.noDocAmount)}</div>
-            </Card>
-            <Card className="p-3 bg-gray-900/60 border-gray-800">
-              <div className="text-[11px] text-gray-500 uppercase">Отклонено</div>
-              <div className="text-lg font-bold text-red-300">{statusSummary.declinedCount}</div>
-              <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.declinedAmount)}</div>
-            </Card>
-          </div>
+          {canManageExpense ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card className="p-3 bg-gray-900/60 border-gray-800">
+                <div className="text-[11px] text-gray-500 uppercase">Ожидают одобрения</div>
+                <div className="text-lg font-bold text-yellow-300">{statusSummary.pendingCount}</div>
+                <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.pendingAmount)}</div>
+              </Card>
+              <Card className="p-3 bg-gray-900/60 border-gray-800">
+                <div className="text-[11px] text-gray-500 uppercase">Без документа</div>
+                <div className="text-lg font-bold text-emerald-300">{statusSummary.noDocCount}</div>
+                <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.noDocAmount)}</div>
+              </Card>
+              <Card className="p-3 bg-gray-900/60 border-gray-800">
+                <div className="text-[11px] text-gray-500 uppercase">Отклонено</div>
+                <div className="text-lg font-bold text-red-300">{statusSummary.declinedCount}</div>
+                <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.declinedAmount)}</div>
+              </Card>
+            </div>
+          ) : null}
 
           {/* Templates */}
           {templatesTableExists && (
@@ -1389,6 +1410,7 @@ export default function ExpensesPage() {
               companyMap={companyMap}
               operatorName={operatorName}
               canManageExpense={canManageExpense}
+              showControlColumns={canManageExpense}
               openExpenseEditor={openExpenseEditor}
               deleteExpense={deleteExpense}
               deletingExpenseId={deletingExpenseId}
@@ -1963,6 +1985,7 @@ function ListTab({
   companyMap,
   operatorName,
   canManageExpense,
+  showControlColumns,
   openExpenseEditor,
   deleteExpense,
   deletingExpenseId,
@@ -1977,11 +2000,11 @@ function ListTab({
               <th className="px-4 py-3 text-left">Дата</th>
               <th className="px-4 py-3 text-left">Компания</th>
               <th className="px-4 py-3 text-left">Категория</th>
-              <th className="px-4 py-3 text-left">Статус</th>
+              {showControlColumns ? <th className="px-4 py-3 text-left">Статус</th> : null}
               <th className="px-4 py-3 text-right text-red-400">Нал</th>
               <th className="px-4 py-3 text-right text-red-400">Kaspi</th>
               <th className="px-4 py-3 text-right text-white">Итого</th>
-              <th className="px-4 py-3 text-left">Документ</th>
+              {showControlColumns ? <th className="px-4 py-3 text-left">Документ</th> : null}
               <th className="px-4 py-3 text-left">Комментарий</th>
               <th className="px-4 py-3 text-center w-8"></th>
               {canManageExpense ? <th className="px-4 py-3 text-right">Действия</th> : null}
@@ -2035,7 +2058,7 @@ function ListTab({
                     {company?.name ?? '—'}
                     {isExtra && (
                       <span className="ml-2 text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded border border-yellow-500/30">
-                        EXTRA
+                        ДОП
                       </span>
                     )}
                   </td>
@@ -2045,11 +2068,13 @@ function ListTab({
                     </span>
                     <div className="mt-1 text-[11px] text-gray-500">{operatorName(row.operator_id)}</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${statusClass}`}>
-                      {statusLabel}
-                    </span>
-                  </td>
+                  {showControlColumns ? (
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${statusClass}`}>
+                        {statusLabel}
+                      </span>
+                    </td>
+                  ) : null}
                   <td className={`px-4 py-3 text-right font-mono ${row.cash_amount ? 'text-amber-400' : 'text-gray-700'}`}>
                     {row.cash_amount ? Formatters.moneyDetailed(row.cash_amount) : '—'}
                   </td>
@@ -2059,10 +2084,12 @@ function ListTab({
                   <td className="px-4 py-3 text-right font-bold text-red-500 font-mono bg-red-500/5">
                     {Formatters.moneyDetailed(total)}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400">
-                    {docLabel}
-                    {row.one_off_payee ? <div className="text-[10px] text-gray-500 truncate max-w-[120px]">{row.one_off_payee}</div> : null}
-                  </td>
+                  {showControlColumns ? (
+                    <td className="px-4 py-3 text-xs text-gray-400">
+                      {docLabel}
+                      {row.one_off_payee ? <div className="text-[10px] text-gray-500 truncate max-w-[120px]">{row.one_off_payee}</div> : null}
+                    </td>
+                  ) : null}
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">
                     {row.comment || '—'}
                   </td>
@@ -2165,7 +2192,7 @@ function ExpenseRowCompact({ row, companyName, isExtra }: any) {
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-medium text-white truncate flex items-center gap-2">
             {companyName}
-            {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">EXTRA</span>}
+            {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">ДОП</span>}
           </span>
           <span className="text-xs text-gray-500 truncate">{row.category || 'Общее'} • {DateUtils.getRelativeDay(row.date)}</span>
         </div>

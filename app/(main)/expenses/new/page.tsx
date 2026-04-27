@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -89,6 +89,14 @@ function emptyPayload(): WizardPayload {
 }
 
 export default function ExpenseWizardPage() {
+  return (
+    <Suspense fallback={<ExpenseWizardPageFallback />}>
+      <ExpenseWizardPageContent />
+    </Suspense>
+  )
+}
+
+function ExpenseWizardPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const embedded = searchParams.get('embedded') === '1'
@@ -978,6 +986,16 @@ export default function ExpenseWizardPage() {
           </Button>
         )}
       </div>
+    </div>
+  )
+}
+
+function ExpenseWizardPageFallback() {
+  return (
+    <div className="app-page-tight max-w-3xl mx-auto py-6">
+      <Card className="p-6">
+        <div className="text-sm text-muted-foreground">Загрузка мастера расхода...</div>
+      </Card>
     </div>
   )
 }
