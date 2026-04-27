@@ -98,6 +98,7 @@ export const ADMIN_PATHS = [
   '/birthdays',
   '/structure',
   '/staff',
+  '/hr',
   '/tax',
   '/profitability',
   '/goals',
@@ -216,6 +217,7 @@ const OWNER_PATHS = [
   '/operators/*',
   '/operator-analytics',
   '/staff',
+  '/hr',
   '/kpi',
   '/kpi/*',
   '/tasks',
@@ -433,6 +435,7 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
     group: 'Команда',
     pages: [
       { path: '/staff', label: 'Сотрудники' },
+      { path: '/hr', label: 'Кадры (увольнения и восстановление)' },
       { path: '/salary/*', label: 'Карточка зарплаты сотрудника' },
       { path: '/structure', label: 'Структура' },
       { path: '/pass', label: 'Доступы' },
