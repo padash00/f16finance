@@ -1114,7 +1114,7 @@ export default function StoreReceiptsPage() {
                 const lineItem = (data?.items || []).find((row) => row.id === line.item_id) || null
                 return (
                 <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <Label>Товар</Label>
                     <Select
                       value={line.item_id || `__empty__${index}`}
@@ -1136,7 +1136,9 @@ export default function StoreReceiptsPage() {
                         )
                       }
                     >
-                      <SelectTrigger className="min-w-0 [&>span]:truncate"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                      <SelectTrigger className="min-w-0 w-full overflow-hidden [&>span]:block [&>span]:truncate">
+                        <SelectValue placeholder="Выберите товар" />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={`__empty__${index}`}>Выберите товар</SelectItem>
                         {(data?.items || []).map((item) => (
@@ -1148,9 +1150,9 @@ export default function StoreReceiptsPage() {
                     </Select>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <Label>Штрихкод</Label>
-                    <Input value={lineItem?.barcode || '—'} readOnly className="bg-white/[0.03]" />
+                    <Input value={lineItem?.barcode || '—'} readOnly className="bg-white/[0.03] truncate" />
                   </div>
 
                   <div className="space-y-1.5">
