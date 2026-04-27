@@ -30,6 +30,7 @@ type Body = {
     received_at: string
     invoice_number?: string | null
     invoice_file_url?: string | null
+    expense_category_id?: string | null
     comment?: string | null
     items: Array<{
       item_id: string
@@ -80,6 +81,12 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const data = await fetchStoreReceipts(supabase as any, inventoryScope)
+    const { data: expenseCategories, error: expenseCategoriesError } = await supabase
+      .from('expense_categories')
+      .select('id, name, accounting_group')
+      .in('accounting_group', ['cogs', 'COGS'])
+      .order('name', { ascending: true })
+    if (expenseCategoriesError) throw expenseCategoriesError
     let draftsQuery: any = supabase
       .from('inventory_receipt_drafts')
       .select('id, title, payload, status, created_at, updated_at')
@@ -96,7 +103,7 @@ export async function GET(request: Request) {
       data.locations = (data.locations || []).filter((l: any) => l?.location_type === locationType)
       data.receipts = (data.receipts || []).filter((r: any) => r?.location?.location_type === locationType)
     }
-    return json({ ok: true, data: { ...data, drafts: drafts || [] } })
+    return json({ ok: true, data: { ...data, drafts: drafts || [], expense_categories: expenseCategories || [] } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
@@ -154,6 +161,7 @@ export async function POST(request: Request) {
         received_at: String(payload.received_at || '').trim() || null,
         invoice_number: String(payload.invoice_number || '').trim() || null,
         invoice_file_url: String(payload.invoice_file_url || '').trim() || null,
+        expense_category_id: String(payload.expense_category_id || '').trim() || null,
         comment: String(payload.comment || '').trim() || null,
         items: Array.isArray(payload.items) ? payload.items : [],
       }
@@ -243,6 +251,8 @@ export async function POST(request: Request) {
 
     const invoiceFileUrl = String(body.payload.invoice_file_url || '').trim()
     if (!invoiceFileUrl) return json({ error: 'Загрузите накладную (без документа приемка запрещена)' }, 400)
+    const expenseCategoryId = String(body.payload.expense_category_id || '').trim()
+    if (!expenseCategoryId) return json({ error: 'Выберите категорию расхода (COGS) для автодобавления' }, 400)
 
     const invoiceNumber = String(body.payload.invoice_number || '').trim()
     if (invoiceNumber) {
@@ -277,6 +287,68 @@ export async function POST(request: Request) {
           }))
         : [],
     })
+    const receiptId = String(result?.receipt_id || result?.id || '').trim()
+    if (!receiptId) throw new Error('Не удалось получить id приемки')
+
+    const { data: expenseCategory, error: expenseCategoryError } = await supabase
+      .from('expense_categories')
+      .select('id, name, accounting_group')
+      .eq('id', expenseCategoryId)
+      .maybeSingle()
+    if (expenseCategoryError) throw expenseCategoryError
+    if (!expenseCategory?.id || String(expenseCategory.accounting_group || '').toLowerCase() !== 'cogs') {
+      return json({ error: 'Категория расхода должна быть из финансовой группы COGS' }, 400)
+    }
+
+    const { data: locationRow, error: locationError } = await supabase
+      .from('inventory_locations')
+      .select('id, company_id')
+      .eq('id', String(body.payload.location_id || '').trim())
+      .maybeSingle()
+    if (locationError) throw locationError
+    const companyId = String(locationRow?.company_id || '').trim()
+    if (!companyId) {
+      return json({ error: 'Для автодобавления расхода нужна локация с привязкой к точке (company_id)' }, 400)
+    }
+
+    const autoExpenseCommentParts = [
+      `Авто из приемки №${invoiceNumber || receiptId}`,
+      supplierCreate?.organization_name ? `Организация: ${supplierCreate.organization_name}` : null,
+      supplierCreate?.bin_iin ? `БИН/ИИН: ${normalizeDigits(supplierCreate.bin_iin)}` : null,
+      body.payload.comment ? `Комментарий приемки: ${String(body.payload.comment || '').trim()}` : null,
+    ].filter(Boolean)
+    const autoExpenseComment = autoExpenseCommentParts.join('\n')
+
+    const receiptTotal = Number(result?.total_amount || 0)
+    const existingExpenseQuery: any = supabase
+      .from('expenses')
+      .select('id')
+      .eq('source_type', 'inventory_receipt')
+      .eq('source_id', receiptId)
+      .limit(1)
+    const { data: existingExpense, error: existingExpenseError } = await existingExpenseQuery.maybeSingle()
+    if (existingExpenseError) throw existingExpenseError
+    if (!existingExpense?.id) {
+      const expenseInsertPayload: Record<string, unknown> = {
+        date: body.payload.received_at,
+        company_id: companyId,
+        operator_id: null,
+        category: String(expenseCategory.name || '').trim(),
+        cash_amount: receiptTotal,
+        kaspi_amount: 0,
+        comment: autoExpenseComment || 'Авто из приемки',
+        attachment_url: invoiceFileUrl,
+        document_kind: 'invoice',
+        document_url: invoiceFileUrl,
+        status: 'confirmed',
+        source_type: 'inventory_receipt',
+        source_id: receiptId,
+      }
+      const { error: autoExpenseError } = await supabase
+        .from('expenses')
+        .insert([expenseInsertPayload])
+      if (autoExpenseError) throw autoExpenseError
+    }
 
     // Always update sale/default purchase prices globally from receipt lines
     if (Array.isArray(body.payload.items)) {
@@ -334,6 +406,8 @@ export async function POST(request: Request) {
       action: 'create',
       payload: {
         ...result,
+        auto_expense: true,
+        auto_expense_category_id: expenseCategoryId,
         update_sale_price: true,
       },
     })

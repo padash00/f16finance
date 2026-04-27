@@ -35,6 +35,12 @@ type InventorySupplier = {
   organization_name: string | null
 }
 
+type ExpenseCategoryOption = {
+  id: string
+  name: string
+  accounting_group: string
+}
+
 type InventoryItem = {
   id: string
   name: string
@@ -78,6 +84,7 @@ type InventoryReceiptDraft = {
     received_at?: string | null
     invoice_number?: string | null
     invoice_file_url?: string | null
+    expense_category_id?: string | null
     comment?: string | null
     items?: Array<{
       item_id?: string
@@ -100,6 +107,7 @@ type ReceiptsResponse = {
     locations: InventoryLocation[]
     receipts: InventoryReceipt[]
     drafts?: InventoryReceiptDraft[]
+    expense_categories?: ExpenseCategoryOption[]
   }
   error?: string
 }
@@ -206,6 +214,7 @@ export default function StoreReceiptsPage() {
   const [receivedAt, setReceivedAt] = useState(new Date().toISOString().slice(0, 10))
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceFileUrl, setInvoiceFileUrl] = useState('')
+  const [expenseCategoryId, setExpenseCategoryId] = useState('')
   const [uploadingInvoice, setUploadingInvoice] = useState(false)
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
@@ -264,6 +273,12 @@ export default function StoreReceiptsPage() {
       if (Array.isArray(parsed)) setSavedTemplates(parsed)
     } catch { /* ignore parse errors */ }
   }, [])
+
+  useEffect(() => {
+    if (expenseCategoryId) return
+    const first = (data?.expense_categories || [])[0]
+    if (first?.id) setExpenseCategoryId(first.id)
+  }, [data?.expense_categories, expenseCategoryId])
 
   useEffect(() => {
     try {
@@ -396,6 +411,10 @@ export default function StoreReceiptsPage() {
       setError('Загрузите файл накладной. Без документа приемка запрещена.')
       return
     }
+    if (!expenseCategoryId) {
+      setError('Выберите категорию расхода COGS для автодобавления')
+      return
+    }
     if (supplierMode === 'existing' && !supplierId) {
       setError('Выберите поставщика')
       return
@@ -437,6 +456,7 @@ export default function StoreReceiptsPage() {
             received_at: receivedAt,
             invoice_number: invoiceNumber.trim() || null,
             invoice_file_url: invoiceFileUrl,
+            expense_category_id: expenseCategoryId || null,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -454,6 +474,7 @@ export default function StoreReceiptsPage() {
       setSupplierBinIin('')
       setInvoiceNumber('')
       setInvoiceFileUrl('')
+      setExpenseCategoryId('')
       setComment('')
       setLines([emptyLine()])
       setSuccess('Приемка проведена. Остатки и цены обновлены везде.')
@@ -499,6 +520,7 @@ export default function StoreReceiptsPage() {
             received_at: receivedAt,
             invoice_number: invoiceNumber.trim() || null,
             invoice_file_url: invoiceFileUrl || null,
+            expense_category_id: expenseCategoryId || null,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -522,6 +544,7 @@ export default function StoreReceiptsPage() {
     setReceivedAt(String(payload.received_at || new Date().toISOString().slice(0, 10)))
     setInvoiceNumber(String(payload.invoice_number || ''))
     setInvoiceFileUrl(String(payload.invoice_file_url || ''))
+    setExpenseCategoryId(String(payload.expense_category_id || ''))
     setComment(String(payload.comment || ''))
     if (payload.supplier_create?.bin_iin || payload.supplier_create?.organization_name || payload.supplier_create?.name) {
       setSupplierMode('new')
@@ -1077,6 +1100,19 @@ export default function StoreReceiptsPage() {
               <div className="space-y-1.5">
                 <Label>Номер накладной</Label>
                 <Input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} placeholder="Например, INV-104" />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Категория расхода (COGS, обязательно)</Label>
+                <Select value={expenseCategoryId || '__none__'} onValueChange={(value) => setExpenseCategoryId(value === '__none__' ? '' : value)}>
+                  <SelectTrigger><SelectValue placeholder="Выберите категорию COGS" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Выберите категорию COGS</SelectItem>
+                    {(data?.expense_categories || []).map((category) => (
+                      <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">После приемки расход создается автоматически в выбранной категории.</p>
               </div>
             </div>
 
