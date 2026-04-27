@@ -79,6 +79,7 @@ interface IncomeRow {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  kaspi_before_midnight?: number | null
   online_amount: number | null
   card_amount: number | null
   comment: string | null
@@ -274,6 +275,52 @@ const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   const prevTo = addDaysISO(dateFrom, -1)
   const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
   return { prevFrom, prevTo, durationDays }
+}
+
+const splitIncomeKaspiByCalendarDay = (rows: IncomeRow[]): IncomeRow[] => {
+  const normalized: IncomeRow[] = []
+
+  for (const row of rows) {
+    const totalKaspi = Number(row.kaspi_amount || 0)
+    const beforeMidnight =
+      row.kaspi_before_midnight == null ? null : Number(row.kaspi_before_midnight || 0)
+
+    if (row.shift !== 'night') {
+      normalized.push(row)
+      continue
+    }
+
+    const currentDateKaspi =
+      beforeMidnight == null
+        ? 0
+        : Math.min(Math.max(beforeMidnight, 0), Math.max(totalKaspi, 0))
+    const nextDateKaspi =
+      beforeMidnight == null
+        ? Math.max(totalKaspi, 0)
+        : Math.max(totalKaspi - currentDateKaspi, 0)
+
+    normalized.push({
+      ...row,
+      kaspi_amount: currentDateKaspi,
+    })
+
+    if (nextDateKaspi > 0) {
+      normalized.push({
+        ...row,
+        id: `${row.id}:kaspi-next-day`,
+        date: addDaysISO(row.date, 1),
+        cash_amount: 0,
+        kaspi_amount: nextDateKaspi,
+        online_amount: 0,
+        card_amount: 0,
+        comment: row.comment
+          ? `${row.comment} [Kaspi после 00:00]`
+          : 'Kaspi после 00:00 (авторазбивка)',
+      })
+    }
+  }
+
+  return normalized
 }
 
 const getISOWeekKey = (isoDate: string): string => {
@@ -1181,7 +1228,8 @@ function ReportsContent() {
     try {
       const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
-      const incomeParams = new URLSearchParams({ from: prevFrom, to: dateTo, page_size: '5000' })
+      const incomeFrom = addDaysISO(prevFrom, -1)
+      const incomeParams = new URLSearchParams({ from: incomeFrom, to: dateTo, page_size: '5000' })
       const expenseCurParams = new URLSearchParams({ from: dateFrom, to: dateTo, page_size: '5000', page: '0' })
       const expensePrevParams = new URLSearchParams({ from: prevFrom, to: prevTo, page_size: '5000', page: '0' })
       if (companyFilter !== 'all') {
@@ -1218,7 +1266,7 @@ function ReportsContent() {
         expenses = expenses.filter((r) => r.company_id !== extraCompanyId)
       }
 
-      setIncomes(incomes)
+      setIncomes(splitIncomeKaspiByCalendarDay(incomes))
       setExpenses(expenses)
 
       if (isRefresh) showToast('Данные обновлены', 'success')
