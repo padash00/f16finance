@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -121,6 +121,36 @@ type ReceiptLine = {
   comment: string
 }
 
+type AiParseItem = {
+  invoice_name: string
+  quantity: number
+  unit_cost: number
+  total_cost: number
+  barcode: string | null
+  matched_item_id: string | null
+  matched_item_name: string | null
+  match_source: 'barcode' | 'mapping' | 'gpt' | null
+  manual_item_id?: string | null
+}
+
+type AiParseResult = {
+  supplier_name: string | null
+  invoice_number: string | null
+  invoice_date: string | null
+  raw_text: string | null
+  total_amount: number
+  matched_count: number
+  unmatched_count: number
+  cogs_suggestion?: {
+    recommended_category_id: string | null
+    recommended_category_name: string | null
+    reason: string | null
+    confidence?: 'high' | 'medium' | 'low' | null
+    alternatives?: Array<{ id: string; name: string }>
+  } | null
+  items: AiParseItem[]
+}
+
 function firstOrSelf<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return (value[0] as T) || null
   return value ?? null
@@ -217,6 +247,8 @@ export default function StoreReceiptsPage() {
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
   const [expenseCategoriesFallback, setExpenseCategoriesFallback] = useState<ExpenseCategoryOption[]>([])
   const [uploadingInvoice, setUploadingInvoice] = useState(false)
+  const [aiParsing, setAiParsing] = useState(false)
+  const [aiParseResult, setAiParseResult] = useState<AiParseResult | null>(null)
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
   const [quickQuery, setQuickQuery] = useState('')
@@ -246,6 +278,8 @@ export default function StoreReceiptsPage() {
         suppliers: asArray(json.data.suppliers),
         locations: asArray(json.data.locations),
         receipts: asArray(json.data.receipts).map(normalizeReceipt),
+        drafts: asArray(json.data.drafts),
+        expense_categories: asArray(json.data.expense_categories),
       }
       setData(normalized)
       setLocationId((current) => current || normalized.locations?.[0]?.id || '')
@@ -496,6 +530,7 @@ export default function StoreReceiptsPage() {
       setSupplierBinIin('')
       setInvoiceNumber('')
       setInvoiceFileUrl('')
+      setAiParseResult(null)
       setExpenseCategoryId('')
       setComment('')
       setLines([emptyLine()])
@@ -566,6 +601,7 @@ export default function StoreReceiptsPage() {
     setReceivedAt(String(payload.received_at || new Date().toISOString().slice(0, 10)))
     setInvoiceNumber(String(payload.invoice_number || ''))
     setInvoiceFileUrl(String(payload.invoice_file_url || ''))
+    setAiParseResult(null)
     setExpenseCategoryId(String(payload.expense_category_id || ''))
     setComment(String(payload.comment || ''))
     if (payload.supplier_create?.bin_iin || payload.supplier_create?.organization_name || payload.supplier_create?.name) {
@@ -711,12 +747,137 @@ export default function StoreReceiptsPage() {
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить накладную')
       setInvoiceFileUrl(String(json.document_url || ''))
+      setAiParseResult(null)
     } catch (err: any) {
       setError(err?.message || 'Не удалось загрузить накладную')
     } finally {
       setUploadingInvoice(false)
     }
   }
+
+  const runAiInvoiceParse = async () => {
+    setError(null)
+    setSuccess(null)
+    if (!invoiceFileUrl) {
+      setError('Сначала загрузите накладную, потом запустите ИИ-распознавание.')
+      return
+    }
+    setAiParsing(true)
+    try {
+      const response = await fetch('/api/admin/store/receipts/ai-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_file_url: invoiceFileUrl }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok || !json?.data) throw new Error(json?.error || 'ИИ не смог распознать накладную')
+      const normalized = json.data as AiParseResult
+      setAiParseResult({
+        ...normalized,
+        items: (normalized.items || []).map((item) => ({
+          ...item,
+          manual_item_id: item.matched_item_id || null,
+        })),
+      })
+      setSuccess('ИИ распознал накладную. Проверьте и примените данные.')
+    } catch (err: any) {
+      setAiParseResult(null)
+      setError(err?.message || 'Не удалось распознать накладную')
+    } finally {
+      setAiParsing(false)
+    }
+  }
+
+  const applyAiParseResult = () => {
+    if (!aiParseResult) return
+    if (aiParseResult.supplier_name) {
+      const normalizedName = aiParseResult.supplier_name.trim().toLowerCase()
+      const existingSupplier = (data?.suppliers || []).find((s) => String(s.name || '').trim().toLowerCase() === normalizedName)
+      if (existingSupplier) {
+        setSupplierMode('existing')
+        setSupplierId(existingSupplier.id)
+        setSupplierName('')
+        setSupplierOrganizationName('')
+        setSupplierBinIin('')
+      } else {
+        setSupplierMode('new')
+        setSupplierId('')
+        setSupplierName(aiParseResult.supplier_name)
+        setSupplierOrganizationName(aiParseResult.supplier_name)
+      }
+    }
+    if (aiParseResult.invoice_number) setInvoiceNumber(aiParseResult.invoice_number)
+    if (aiParseResult.invoice_date) setReceivedAt(aiParseResult.invoice_date)
+    if (aiParseResult.cogs_suggestion?.recommended_category_id) {
+      setExpenseCategoryId(aiParseResult.cogs_suggestion.recommended_category_id)
+    }
+
+    const parsedLines = (aiParseResult.items || [])
+      .map((item) => ({ ...item, resolved_item_id: item.manual_item_id || item.matched_item_id }))
+      .filter((item) => item.resolved_item_id && Number(item.quantity || 0) > 0)
+      .map((item) => {
+        const catalog = (data?.items || []).find((row) => row.id === item.resolved_item_id)
+        const unitCost = Number(item.unit_cost || 0)
+        const salePrice = Number(catalog?.sale_price || 0)
+        const fallbackCost = String(catalog?.default_purchase_price || '')
+        return {
+          item_id: String(item.resolved_item_id),
+          quantity: String(item.quantity || ''),
+          unit_cost: unitCost > 0 ? String(unitCost) : fallbackCost,
+          sale_price: String(salePrice || ''),
+          markup_percent: calcMarkupPercent(unitCost > 0 ? String(unitCost) : fallbackCost, String(salePrice || '')),
+          comment: item.invoice_name || '',
+        }
+      })
+
+    if (parsedLines.length > 0) {
+      setLines(parsedLines)
+      setSuccess(`Применено ${parsedLines.length} строк из распознанной накладной.`)
+    } else {
+      setError('ИИ не нашел сопоставленных товаров. Добавьте строки вручную.')
+    }
+  }
+
+  const setAiManualItem = (index: number, itemId: string) => {
+    setAiParseResult((current) => {
+      if (!current) return current
+      const nextItems = current.items.map((item, i) => (i === index ? { ...item, manual_item_id: itemId || null } : item))
+      const matchedCount = nextItems.filter((item) => item.manual_item_id || item.matched_item_id).length
+      return {
+        ...current,
+        items: nextItems,
+        matched_count: matchedCount,
+        unmatched_count: nextItems.length - matchedCount,
+      }
+    })
+  }
+
+  const applyAiCogsCategory = () => {
+    const categoryId = aiParseResult?.cogs_suggestion?.recommended_category_id || ''
+    if (!categoryId) return
+    setExpenseCategoryId(categoryId)
+    setSuccess('Категория COGS из AI-подсказки применена.')
+  }
+
+  const applySpecificCogsCategory = (categoryId: string, categoryName: string) => {
+    if (!categoryId) return
+    setExpenseCategoryId(categoryId)
+    setSuccess(`Категория COGS «${categoryName}» применена.`)
+  }
+
+  const cogsConfidence = aiParseResult?.cogs_suggestion?.confidence || null
+  const cogsConfidenceLabel = cogsConfidence === 'high'
+    ? 'Высокая уверенность'
+    : cogsConfidence === 'medium'
+      ? 'Средняя уверенность'
+      : cogsConfidence === 'low'
+        ? 'Низкая уверенность'
+        : 'Уверенность не определена'
+  const cogsConfidenceClass = cogsConfidence === 'high'
+    ? 'border-emerald-300/30 bg-emerald-400/15 text-emerald-100'
+    : cogsConfidence === 'medium'
+      ? 'border-amber-300/30 bg-amber-400/15 text-amber-100'
+      : 'border-rose-300/30 bg-rose-400/15 text-rose-100'
 
   const filteredReceipts = useMemo(() => {
     const q = receiptSearch.trim().toLowerCase()
@@ -1157,6 +1318,17 @@ export default function StoreReceiptsPage() {
                   disabled={uploadingInvoice}
                 />
                 {uploadingInvoice ? <Loader2 className="h-4 w-4 animate-spin text-amber-300" /> : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => void runAiInvoiceParse()}
+                  disabled={!invoiceFileUrl || uploadingInvoice || aiParsing}
+                >
+                  {aiParsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Распознать ИИ
+                </Button>
               </div>
               {invoiceFileUrl ? (
                 <a href={invoiceFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
@@ -1165,6 +1337,103 @@ export default function StoreReceiptsPage() {
               ) : (
                 <p className="text-xs text-amber-200">Без загруженной накладной приемка не будет проведена.</p>
               )}
+              {aiParseResult ? (
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-3 text-xs text-emerald-100">
+                  <p className="font-medium">
+                    ИИ-черновик: найдено {aiParseResult.items.length} строк, сопоставлено {aiParseResult.matched_count}, без совпадения {aiParseResult.unmatched_count}.
+                  </p>
+                  <p className="mt-1 text-emerald-200/90">
+                    {aiParseResult.supplier_name ? `Поставщик: ${aiParseResult.supplier_name}. ` : ''}
+                    {aiParseResult.invoice_number ? `Номер: ${aiParseResult.invoice_number}. ` : ''}
+                    {aiParseResult.invoice_date ? `Дата: ${aiParseResult.invoice_date}.` : ''}
+                  </p>
+                  {aiParseResult.cogs_suggestion?.recommended_category_name ? (
+                    <div className="mt-2 rounded-lg border border-emerald-300/20 bg-black/20 px-2 py-2 text-[11px] text-emerald-100">
+                      <p>
+                        Рекомендованная COGS-категория: <span className="font-medium">{aiParseResult.cogs_suggestion.recommended_category_name}</span>
+                      </p>
+                      <p className={`mt-1 inline-flex rounded-full border px-2 py-0.5 ${cogsConfidenceClass}`}>
+                        {cogsConfidenceLabel}
+                      </p>
+                      {aiParseResult.cogs_suggestion.reason ? (
+                        <p className="mt-1 text-emerald-200/85">{aiParseResult.cogs_suggestion.reason}</p>
+                      ) : null}
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px]"
+                          onClick={applyAiCogsCategory}
+                        >
+                          Применить категорию
+                        </Button>
+                      </div>
+                      {(aiParseResult.cogs_suggestion.alternatives || []).length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-emerald-200/80">Альтернативы:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(aiParseResult.cogs_suggestion.alternatives || []).map((alt) => (
+                              <Button
+                                key={alt.id}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-[11px]"
+                                onClick={() => applySpecificCogsCategory(alt.id, alt.name)}
+                              >
+                                {alt.name}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                      onClick={applyAiParseResult}
+                    >
+                      Применить в форму
+                    </Button>
+                  </div>
+                  {aiParseResult.items.some((item) => !(item.manual_item_id || item.matched_item_id)) ? (
+                    <div className="mt-3 space-y-2 rounded-lg border border-emerald-300/20 bg-black/20 p-2">
+                      <p className="text-[11px] text-emerald-200/90">Ручное сопоставление несвязанных строк:</p>
+                      {aiParseResult.items.map((item, index) => {
+                        const resolvedId = item.manual_item_id || item.matched_item_id || '__none__'
+                        if (resolvedId !== '__none__') return null
+                        return (
+                          <div key={`${item.invoice_name}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
+                            <p className="truncate text-emerald-100">
+                              {item.invoice_name} · {item.quantity} шт
+                            </p>
+                            <Select
+                              value={resolvedId}
+                              onValueChange={(value) => setAiManualItem(index, value === '__none__' ? '' : value)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Выберите товар из каталога" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Без сопоставления</SelectItem>
+                                {(data?.items || []).map((catalogItem) => (
+                                  <SelectItem key={catalogItem.id} value={catalogItem.id} title={`${catalogItem.name} · ${catalogItem.barcode}`}>
+                                    <span className="block max-w-[380px] truncate">{catalogItem.name} · {catalogItem.barcode}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">
