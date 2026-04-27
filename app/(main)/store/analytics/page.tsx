@@ -245,24 +245,22 @@ export default function StoreAnalyticsPage() {
   }, [data?.balances])
 
   return (
-    <div className="space-y-6">
-      <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
-              <Store className="h-3.5 w-3.5" />
-              Аналитика точек
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Как двигается товар по витринам</h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              На этой странице видно, что пришло на каждую точку, сколько продали, сколько ушло в долг, сколько вернули и где уже есть риск по остаткам.
-            </p>
-          </div>
-
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
+          <Store className="h-5 w-5 text-cyan-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-semibold text-foreground">Аналитика точек</h1>
+          <p className="truncate text-xs text-muted-foreground">
+            Приход на витрины, продажи, долги, возвраты и риски по остаткам.
+          </p>
+        </div>
+        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="rounded-2xl">
-                <MoreHorizontal className="mr-2 h-4 w-4" />
+              <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <MoreHorizontal className="h-3.5 w-3.5" />
                 Действия
               </Button>
             </DropdownMenuTrigger>
@@ -276,7 +274,7 @@ export default function StoreAnalyticsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </Card>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
         <button
@@ -296,12 +294,12 @@ export default function StoreAnalyticsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
       ) : null}
 
       {tab === 'showcase' ? (
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_400px]">
-        <Card className="border-white/10 p-5">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_400px]">
+        <Card className="border-white/10 bg-card/70 p-5">
           <div className="flex items-center gap-2">
             <Boxes className="h-4 w-4 text-cyan-300" />
             <h2 className="text-lg font-semibold text-foreground">Сводка по витринам</h2>
@@ -384,7 +382,7 @@ export default function StoreAnalyticsPage() {
           </div>
         </Card>
 
-        <Card className="border-white/10 p-5">
+        <Card className="border-white/10 bg-card/70 p-5">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
             <h2 className="text-lg font-semibold text-foreground">Риск по витринам</h2>
@@ -429,8 +427,8 @@ export default function StoreAnalyticsPage() {
         </Card>
       </section>
       ) : (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_400px]">
-          <Card className="border-white/10 p-5">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_400px]">
+          <Card className="border-white/10 bg-card/70 p-5">
             <div className="flex items-center gap-2">
               <Boxes className="h-4 w-4 text-cyan-300" />
               <h2 className="text-lg font-semibold text-foreground">Складские запасы</h2>
@@ -447,7 +445,7 @@ export default function StoreAnalyticsPage() {
               </div>
             </div>
           </Card>
-          <Card className="border-white/10 p-5">
+          <Card className="border-white/10 bg-card/70 p-5">
             <h2 className="text-lg font-semibold text-foreground">Топ по стоимости (склад)</h2>
             <div className="mt-4 space-y-2">
               {warehouseAnalytics.topByValue.map((row: any) => (

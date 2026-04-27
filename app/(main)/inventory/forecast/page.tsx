@@ -146,20 +146,21 @@ export function InventoryForecastPageContent() {
   ]
 
   return (
-    <div className="app-page">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <PackageSearch className="h-6 w-6 text-emerald-400" />
-            Прогноз остатков
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Основано на продажах за последние 30 дней</p>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      <div className="flex flex-wrap items-center gap-3 md:items-start md:justify-between">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
+            <PackageSearch className="h-5 w-5 text-emerald-300" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Прогноз остатков</h1>
+            <p className="truncate text-xs text-muted-foreground">Основано на продажах за последние 30 дней</p>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
           {companies.length > 0 && (
             <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="h-9 w-[180px]">
                 <SelectValue placeholder="Все компании" />
               </SelectTrigger>
               <SelectContent>
@@ -172,7 +173,7 @@ export function InventoryForecastPageContent() {
           )}
           {locations.length > 0 && (
             <Select value={locationId || '__all'} onValueChange={v => setLocationId(v === '__all' ? '' : v)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="h-9 w-[180px]">
                 <SelectValue placeholder="Все локации" />
               </SelectTrigger>
               <SelectContent>
@@ -183,15 +184,15 @@ export function InventoryForecastPageContent() {
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
         </div>
       </div>
 
       {/* Summary cards */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card
           className="cursor-pointer hover:ring-1 hover:ring-red-500/40 transition-all"
           onClick={() => setFilterStatus(filterStatus === 'critical' ? 'all' : 'critical')}
@@ -251,7 +252,7 @@ export function InventoryForecastPageContent() {
       </div>
 
       {/* Filter buttons */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
         {filterButtons.map(btn => (
           <button
             key={btn.key}
@@ -278,13 +279,13 @@ export function InventoryForecastPageContent() {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">
           {error}
         </div>
       )}
 
       {/* Table */}
-      <Card>
+      <Card className="border-white/10 bg-card/70">
         <CardContent className="p-0">
           {loading ? (
             <div className="space-y-0">

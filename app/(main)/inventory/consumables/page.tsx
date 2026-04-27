@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, Package2, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -281,14 +281,20 @@ export function ConsumablesPageContent() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Расходники</h1>
-          <p className="text-sm text-muted-foreground">Нормы потребления и контроль остатков по точкам</p>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <Package2 className="h-5 w-5 text-amber-300" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Расходники</h1>
+            <p className="truncate text-xs text-muted-foreground">Нормы потребления и контроль остатков по точкам</p>
+          </div>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-          <RefreshCw className="h-4 w-4" />
+        <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={loadData} disabled={loading}>
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Обновить
         </Button>
       </div>
 

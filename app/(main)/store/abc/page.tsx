@@ -56,24 +56,24 @@ export default function StoreAbcPage() {
   const topRows = useMemo(() => rows.slice(0, 20), [rows])
 
   return (
-    <div className="space-y-6">
-      <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-xs text-violet-200">
-              <BarChart3 className="h-3.5 w-3.5" />
-              ABC-анализ
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              {tab === 'sales' ? 'По продажам витрины' : 'По запасам склада'}
-            </h1>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
+            <BarChart3 className="h-5 w-5 text-violet-300" />
           </div>
-          <Button variant="outline" onClick={() => void load(tab)} disabled={loading} className="rounded-2xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">ABC-анализ</h1>
+            <p className="truncate text-xs text-muted-foreground">
+              {tab === 'sales' ? 'По продажам витрины' : 'По запасам склада'}
+            </p>
+          </div>
         </div>
-      </Card>
+        <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load(tab)} disabled={loading}>
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Обновить
+        </Button>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
         <button
@@ -92,9 +92,9 @@ export default function StoreAbcPage() {
         </button>
       </div>
 
-      {error ? <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
+      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div> : null}
 
-      <Card className="border-white/10 p-5">
+      <Card className="border-white/10 bg-card/70 p-5">
         <div className="mb-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
           <span>A: {summary.count_a || 0}</span>
           <span>B: {summary.count_b || 0}</span>
