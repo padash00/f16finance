@@ -147,57 +147,10 @@ export async function POST(req: Request) {
     const canManageFinance = access.isSuperAdmin || access.staffRole === 'owner'
 
     if (body.action === 'createExpense') {
-      if (!canCreateFinance) return json({ error: 'forbidden' }, 403)
-      const validationError = validatePayload(body.payload)
-      if (validationError) return json({ error: validationError }, 400)
-      await resolveCompanyScope({
-        activeOrganizationId: access.activeOrganization?.id || null,
-        requestedCompanyId: body.payload.company_id,
-        isSuperAdmin: access.isSuperAdmin,
-      })
-
-      const insertPayload = normalizePayload(body.payload)
-
-      if (!body.force) {
-        const { data: dup } = await supabase
-          .from('expenses')
-          .select('id, date, category, cash_amount, kaspi_amount, comment, operator_id')
-          .eq('date', insertPayload.date)
-          .eq('company_id', insertPayload.company_id)
-          .eq('category', insertPayload.category)
-          .eq('cash_amount', insertPayload.cash_amount)
-          .eq('kaspi_amount', insertPayload.kaspi_amount)
-          .limit(1)
-          .maybeSingle()
-        if (dup) {
-          return json({
-            error: 'duplicate',
-            duplicate: {
-              id: dup.id,
-              date: dup.date,
-              category: dup.category,
-              total: Number(dup.cash_amount || 0) + Number(dup.kaspi_amount || 0),
-              comment: dup.comment,
-            },
-          }, 409)
-        }
-      }
-
-      const { data, error } = await supabase.from('expenses').insert([insertPayload]).select('*').single()
-      if (error) throw error
-
-      await writeAuditLog(supabase, {
-        actorUserId: user?.id || null,
-        entityType: 'expense',
-        entityId: String(data.id),
-        action: 'create',
-        payload: {
-          ...insertPayload,
-          total_amount: Number(insertPayload.cash_amount || 0) + Number(insertPayload.kaspi_amount || 0),
-        },
-      })
-
-      return json({ ok: true, data })
+      return json({
+        error: 'Создание расхода доступно только через мастер. Откройте /expenses/new.',
+        code: 'wizard-required',
+      }, 410)
     }
 
     if (body.action === 'updateExpense') {

@@ -2867,6 +2867,78 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
+      const expenseDecisionMatch = callbackData.match(/^expense_(approve|decline):([0-9a-f-]+)$/i)
+      if (expenseDecisionMatch) {
+        const action = String(expenseDecisionMatch[1] || '').toLowerCase()
+        const expenseId = String(expenseDecisionMatch[2] || '').trim()
+        await answerCallbackQuery(callbackQueryId, action === 'approve' ? 'Одобряю...' : 'Нужна причина отклонения...').catch(() => null)
+        try {
+          const botUser = await identifyBotUser(telegramUserId)
+          const canDecideExpense = ['super_admin', 'owner'].includes(botUser.role)
+          if (!canDecideExpense) {
+            await answerCallbackQuery(callbackQueryId, '⛔ Только владелец/суперадмин может принять решение', true)
+            return json({ ok: true })
+          }
+
+          const { data: expenseRow, error: expenseError } = await supabase
+            .from('expenses')
+            .select('id, status, one_off_payee, one_off_reason, category, cash_amount, kaspi_amount')
+            .eq('id', expenseId)
+            .maybeSingle()
+          if (expenseError) throw expenseError
+          if (!expenseRow?.id) {
+            await answerCallbackQuery(callbackQueryId, 'Расход не найден', true)
+            return json({ ok: true })
+          }
+          if (String(expenseRow.status || '') !== 'pending_approval') {
+            await answerCallbackQuery(callbackQueryId, 'Этот расход уже обработан', true)
+            if (chatId && messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
+            return json({ ok: true })
+          }
+
+          if (action === 'approve') {
+            const { error: updError } = await supabase
+              .from('expenses')
+              .update({
+                status: 'approved',
+                approved_by: null,
+                approved_at: new Date().toISOString(),
+              })
+              .eq('id', expenseId)
+              .eq('status', 'pending_approval')
+            if (updError) throw updError
+            await writeAuditLog(supabase, {
+              actorUserId: null,
+              entityType: 'expense',
+              entityId: expenseId,
+              action: 'expense.approve',
+              payload: { source: 'telegram', decided_by: botUser.name, decided_role: botUser.role },
+            })
+            if (chatId && messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
+            if (chatId) await sendTelegramText(chatId, '✅ Расход одобрен.')
+            return json({ ok: true })
+          }
+
+          if (chatId) {
+            await supabase.from('telegram_chat_history').upsert({
+              chat_id: `expense_decline_${chatId}`,
+              history: [{
+                content: JSON.stringify({
+                  expenseId,
+                  messageId: messageId || null,
+                  startedAt: new Date().toISOString(),
+                }),
+              }],
+              updated_at: new Date().toISOString(),
+            })
+            await sendTelegramText(chatId, '📝 Напишите причину отклонения (минимум 10 символов) или "отмена".')
+          }
+        } catch (error: any) {
+          if (chatId) await sendTelegramText(chatId, `❌ Ошибка: ${error?.message || 'Не удалось обработать решение по расходу'}`).catch(() => null)
+        }
+        return json({ ok: true })
+      }
+
       const taskMatch = callbackData.match(/^task:([0-9a-f-]+):(accept|need_info|blocked|already_done|complete)$/i)
       if (!taskMatch) {
         await answerCallbackQuery(callbackQueryId, 'Неизвестное действие', true)
@@ -3217,6 +3289,84 @@ export async function POST(req: Request) {
         } catch (error: any) {
           await sendTelegramText(chatId, `❌ Ошибка: ${error?.message || 'Не удалось принять решение по заявке'}`)
         }
+        return json({ ok: true })
+      }
+
+      const expenseDeclineSessionKey = `expense_decline_${chatId}`
+      const { data: expenseDeclineRow } = await supabase
+        .from('telegram_chat_history')
+        .select('history')
+        .eq('chat_id', expenseDeclineSessionKey)
+        .maybeSingle()
+      const rawExpenseDeclineSession = (expenseDeclineRow?.history as any[])?.[0]?.content
+      let expenseDeclineSession: any = null
+      try {
+        expenseDeclineSession = rawExpenseDeclineSession ? JSON.parse(String(rawExpenseDeclineSession)) : null
+      } catch {
+        expenseDeclineSession = null
+      }
+      if (expenseDeclineSession?.expenseId) {
+        const botCanDecide = ['super_admin', 'owner'].includes(botUser.role)
+        if (!botCanDecide) {
+          await supabase.from('telegram_chat_history').delete().eq('chat_id', expenseDeclineSessionKey)
+          await sendTelegramText(chatId, '⛔ Нет доступа к отклонению расхода.')
+          return json({ ok: true })
+        }
+        const reasonInput = text.trim()
+        if (/^(отмена|cancel)$/i.test(reasonInput)) {
+          await supabase.from('telegram_chat_history').delete().eq('chat_id', expenseDeclineSessionKey)
+          await sendTelegramText(chatId, '❌ Отклонение расхода отменено.')
+          return json({ ok: true })
+        }
+        if (reasonInput.length < 10) {
+          await sendTelegramText(chatId, 'Причина слишком короткая. Укажите минимум 10 символов или напишите "отмена".')
+          return json({ ok: true })
+        }
+
+        const expenseId = String(expenseDeclineSession.expenseId || '')
+        const { data: expenseRow, error: expenseError } = await supabase
+          .from('expenses')
+          .select('id, status')
+          .eq('id', expenseId)
+          .maybeSingle()
+        if (expenseError) {
+          await sendTelegramText(chatId, `❌ Ошибка: ${expenseError.message}`)
+          return json({ ok: true })
+        }
+        if (!expenseRow?.id || String(expenseRow.status || '') !== 'pending_approval') {
+          await supabase.from('telegram_chat_history').delete().eq('chat_id', expenseDeclineSessionKey)
+          await sendTelegramText(chatId, 'Этот расход уже обработан или не найден.')
+          return json({ ok: true })
+        }
+
+        const { error: declineError } = await supabase
+          .from('expenses')
+          .update({
+            status: 'declined',
+            declined_by: null,
+            declined_at: new Date().toISOString(),
+            declined_reason: reasonInput,
+          })
+          .eq('id', expenseId)
+          .eq('status', 'pending_approval')
+        if (declineError) {
+          await sendTelegramText(chatId, `❌ Ошибка: ${declineError.message}`)
+          return json({ ok: true })
+        }
+
+        await writeAuditLog(supabase, {
+          actorUserId: null,
+          entityType: 'expense',
+          entityId: expenseId,
+          action: 'expense.decline',
+          payload: { source: 'telegram', reason: reasonInput, decided_by: botUser.name, decided_role: botUser.role },
+        })
+
+        await supabase.from('telegram_chat_history').delete().eq('chat_id', expenseDeclineSessionKey)
+        if (expenseDeclineSession.messageId) {
+          await clearCallbackButtons(chatId, Number(expenseDeclineSession.messageId)).catch(() => null)
+        }
+        await sendTelegramText(chatId, '❌ Расход отклонён.')
         return json({ ok: true })
       }
 

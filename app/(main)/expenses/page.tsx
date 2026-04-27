@@ -792,7 +792,7 @@ export default function ExpensesPage() {
     }
     if (t.comment) params.set('comment', t.comment)
     if (t.company_id) params.set('company_id', t.company_id)
-    window.location.href = `/expenses/add?${params.toString()}`
+    window.location.href = `/expenses/new?${params.toString()}`
   }
 
   const handleDeleteTemplate = async (id: string) => {
@@ -914,7 +914,7 @@ export default function ExpensesPage() {
                   </Link>
 
                   {canCreateExpense ? (
-                    <Link href="/expenses/add">
+                    <Link href="/expenses/new">
                       <Button size="sm" className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25">
                         <Plus className="w-4 h-4 mr-1" /> Добавить
                       </Button>
