@@ -227,6 +227,7 @@ function ExpenseWizardPageContent() {
   const groupedCategories = useMemo(() => {
     const map = new Map<string, Category[]>()
     for (const cat of categories) {
+      if (cat.accounting_group === 'cogs') continue
       const group = String(cat.accounting_group || 'operating')
       const list = map.get(group) || []
       list.push(cat)
@@ -596,6 +597,9 @@ function ExpenseWizardPageContent() {
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Найдено категорий: {filteredCategoriesCount}
+              </p>
+              <p className="text-xs text-amber-400/80 mt-1">
+                Категории COGS недоступны в ручном добавлении расходов (используйте приемку).
               </p>
               {isCategoryValid ? <p className={validHintClass}>Категория выбрана</p> : null}
             </div>

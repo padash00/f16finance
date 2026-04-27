@@ -124,12 +124,15 @@ export async function POST(request: Request) {
     })
     const { data: categoryRow, error: categoryError } = await supabase
       .from('expense_categories')
-      .select('id, name')
+      .select('id, name, accounting_group')
       .eq('id', payload.category_id || '')
       .maybeSingle()
     if (categoryError) throw categoryError
     if (!categoryRow?.id || !String(categoryRow.name || '').trim()) {
       return json({ error: 'Категория не найдена. Выберите категорию заново.' }, 400)
+    }
+    if (String(categoryRow.accounting_group || '').trim().toLowerCase() === 'cogs') {
+      return json({ error: 'Категории COGS нельзя добавлять вручную в расходах. Используйте приемку.' }, 400)
     }
 
     const isOwner = access.isSuperAdmin || role === 'owner'
