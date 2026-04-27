@@ -18,8 +18,8 @@ function canManageStore(access: {
 }
 
 type Body = {
-  action: 'createReceipt'
-  payload: {
+  action: 'createReceipt' | 'saveDraft' | 'deleteDraft'
+  payload?: {
     location_id: string
     supplier_id?: string | null
     supplier_create?: {
@@ -39,6 +39,8 @@ type Body = {
       comment?: string | null
     }>
   }
+  draft_id?: string
+  draft_title?: string | null
 }
 
 function normalizeMoney(value: unknown) {
@@ -78,12 +80,23 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const data = await fetchStoreReceipts(supabase as any, inventoryScope)
+    let draftsQuery: any = supabase
+      .from('inventory_receipt_drafts')
+      .select('id, title, payload, status, created_at, updated_at')
+      .eq('status', 'draft')
+      .order('updated_at', { ascending: false })
+      .limit(30)
+    if (!access.isSuperAdmin && access.activeOrganization?.id) {
+      draftsQuery = draftsQuery.eq('organization_id', access.activeOrganization.id)
+    }
+    const { data: drafts, error: draftsError } = await draftsQuery
+    if (draftsError) throw draftsError
     const locationType = scope === 'showcase' ? 'point_display' : scope === 'warehouse' ? 'warehouse' : null
     if (locationType) {
       data.locations = (data.locations || []).filter((l: any) => l?.location_type === locationType)
       data.receipts = (data.receipts || []).filter((r: any) => r?.location?.location_type === locationType)
     }
-    return json({ ok: true, data })
+    return json({ ok: true, data: { ...data, drafts: drafts || [] } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
@@ -112,7 +125,72 @@ export async function POST(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const body = (await request.json().catch(() => null)) as Body | null
-    if (!body?.action || body.action !== 'createReceipt') return json({ error: 'invalid-action' }, 400)
+    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+
+    if (body.action === 'deleteDraft') {
+      const draftId = String(body.draft_id || '').trim()
+      if (!draftId) return json({ error: 'draft-id-required' }, 400)
+      let query: any = supabase
+        .from('inventory_receipt_drafts')
+        .update({ status: 'cancelled' })
+        .eq('id', draftId)
+        .eq('status', 'draft')
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        query = query.eq('organization_id', access.activeOrganization.id)
+      }
+      const { error: deleteDraftError } = await query
+      if (deleteDraftError) throw deleteDraftError
+      return json({ ok: true })
+    }
+
+    if (body.action === 'saveDraft') {
+      const payload = body.payload || ({} as any)
+      const draftTitle = String(body.draft_title || payload.invoice_number || 'Черновик приемки').trim()
+      const draftId = String(body.draft_id || '').trim()
+      const draftPayload = {
+        location_id: String(payload.location_id || '').trim(),
+        supplier_id: String(payload.supplier_id || '').trim() || null,
+        supplier_create: payload.supplier_create || null,
+        received_at: String(payload.received_at || '').trim() || null,
+        invoice_number: String(payload.invoice_number || '').trim() || null,
+        invoice_file_url: String(payload.invoice_file_url || '').trim() || null,
+        comment: String(payload.comment || '').trim() || null,
+        items: Array.isArray(payload.items) ? payload.items : [],
+      }
+      if (draftId) {
+        let updateQuery: any = supabase
+          .from('inventory_receipt_drafts')
+          .update({
+            title: draftTitle || 'Черновик приемки',
+            payload: draftPayload,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', draftId)
+          .eq('status', 'draft')
+        if (!access.isSuperAdmin && access.activeOrganization?.id) {
+          updateQuery = updateQuery.eq('organization_id', access.activeOrganization.id)
+        }
+        const { data: updatedDraft, error: updateDraftError } = await updateQuery.select('id').single()
+        if (updateDraftError) throw updateDraftError
+        return json({ ok: true, data: { id: updatedDraft.id } })
+      }
+      const insertPayload: Record<string, unknown> = {
+        organization_id: access.activeOrganization?.id || null,
+        created_by: actorUserId,
+        title: draftTitle || 'Черновик приемки',
+        payload: draftPayload,
+      }
+      const { data: createdDraft, error: createDraftError } = await supabase
+        .from('inventory_receipt_drafts')
+        .insert([insertPayload])
+        .select('id')
+        .single()
+      if (createDraftError) throw createDraftError
+      return json({ ok: true, data: { id: createdDraft.id } })
+    }
+
+    if (body.action !== 'createReceipt') return json({ error: 'invalid-action' }, 400)
+    if (!body.payload) return json({ error: 'payload-required' }, 400)
     await ensureInventoryLocationAccess(supabase as any, String(body.payload.location_id || '').trim(), inventoryScope)
 
     const supplierIdRaw = String(body.payload.supplier_id || '').trim()
@@ -166,11 +244,27 @@ export async function POST(request: Request) {
     const invoiceFileUrl = String(body.payload.invoice_file_url || '').trim()
     if (!invoiceFileUrl) return json({ error: 'Загрузите накладную (без документа приемка запрещена)' }, 400)
 
+    const invoiceNumber = String(body.payload.invoice_number || '').trim()
+    if (invoiceNumber) {
+      let duplicateQuery: any = supabase
+        .from('inventory_receipts')
+        .select('id')
+        .eq('supplier_id', supplierId)
+        .eq('invoice_number', invoiceNumber)
+        .eq('received_at', body.payload.received_at)
+        .limit(1)
+      const { data: duplicateReceipt, error: duplicateError } = await duplicateQuery.maybeSingle()
+      if (duplicateError) throw duplicateError
+      if (duplicateReceipt?.id) {
+        return json({ error: 'Похоже, такая накладная уже проведена (дубликат БИН/ИИН + номер + дата)' }, 409)
+      }
+    }
+
     const result = await postInventoryReceipt(supabase as any, {
       location_id: String(body.payload.location_id || '').trim(),
       supplier_id: supplierId,
       received_at: body.payload.received_at,
-      invoice_number: body.payload.invoice_number || null,
+      invoice_number: invoiceNumber || null,
       invoice_file_url: invoiceFileUrl,
       comment: body.payload.comment || null,
       created_by: actorUserId,
@@ -243,6 +337,24 @@ export async function POST(request: Request) {
         update_sale_price: true,
       },
     })
+
+    const draftId = String(body.draft_id || '').trim()
+    if (draftId) {
+      let draftUpdateQuery: any = supabase
+        .from('inventory_receipt_drafts')
+        .update({
+          status: 'posted',
+          posted_receipt_id: String(result?.receipt_id || result?.id || '') || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', draftId)
+        .eq('status', 'draft')
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        draftUpdateQuery = draftUpdateQuery.eq('organization_id', access.activeOrganization.id)
+      }
+      const { error: draftMarkError } = await draftUpdateQuery
+      if (draftMarkError) throw draftMarkError
+    }
 
     return json({ ok: true, data: result })
   } catch (error: any) {

@@ -64,6 +64,34 @@ type InventoryReceipt = {
   }>
 }
 
+type InventoryReceiptDraft = {
+  id: string
+  title: string | null
+  payload: {
+    location_id?: string | null
+    supplier_id?: string | null
+    supplier_create?: {
+      name?: string
+      organization_name?: string
+      bin_iin?: string
+    } | null
+    received_at?: string | null
+    invoice_number?: string | null
+    invoice_file_url?: string | null
+    comment?: string | null
+    items?: Array<{
+      item_id?: string
+      quantity?: number | string
+      unit_cost?: number | string
+      sale_price?: number | string
+      comment?: string | null
+    }>
+  }
+  status: string
+  created_at: string
+  updated_at: string
+}
+
 type ReceiptsResponse = {
   ok: boolean
   data?: {
@@ -71,6 +99,7 @@ type ReceiptsResponse = {
     suppliers: InventorySupplier[]
     locations: InventoryLocation[]
     receipts: InventoryReceipt[]
+    drafts?: InventoryReceiptDraft[]
   }
   error?: string
 }
@@ -169,6 +198,7 @@ export default function StoreReceiptsPage() {
 
   const [locationId, setLocationId] = useState('')
   const [supplierId, setSupplierId] = useState('')
+  const [draftId, setDraftId] = useState<string | null>(null)
   const [supplierMode, setSupplierMode] = useState<'existing' | 'new'>('existing')
   const [supplierName, setSupplierName] = useState('')
   const [supplierOrganizationName, setSupplierOrganizationName] = useState('')
@@ -391,6 +421,7 @@ export default function StoreReceiptsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createReceipt',
+          draft_id: draftId,
           payload: {
             location_id: locationId,
             supplier_id: supplierMode === 'existing' ? supplierId || null : null,
@@ -414,6 +445,7 @@ export default function StoreReceiptsPage() {
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось провести приемку')
 
       setSupplierId('')
+      setDraftId(null)
       setSupplierMode('existing')
       setSupplierName('')
       setSupplierOrganizationName('')
@@ -428,6 +460,108 @@ export default function StoreReceiptsPage() {
       setError(err?.message || 'Не удалось провести приемку')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveDraft = async () => {
+    setError(null)
+    setSuccess(null)
+    const payloadItems = lines
+      .map((line) => ({
+        item_id: line.item_id,
+        quantity: parseQty(line.quantity),
+        unit_cost: parseMoney(line.unit_cost),
+        sale_price: parseMoney(line.sale_price),
+        comment: line.comment.trim() || null,
+      }))
+      .filter((line) => line.item_id)
+
+    try {
+      const response = await fetch('/api/admin/store/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveDraft',
+          draft_id: draftId,
+          draft_title: invoiceNumber.trim() || `Черновик ${new Date().toLocaleDateString('ru-RU')}`,
+          payload: {
+            location_id: locationId,
+            supplier_id: supplierMode === 'existing' ? supplierId || null : null,
+            supplier_create: supplierMode === 'new'
+              ? {
+                  name: supplierName.trim(),
+                  organization_name: supplierOrganizationName.trim(),
+                  bin_iin: supplierBinIin.replace(/\D/g, ''),
+                }
+              : null,
+            received_at: receivedAt,
+            invoice_number: invoiceNumber.trim() || null,
+            invoice_file_url: invoiceFileUrl || null,
+            comment: comment.trim() || null,
+            items: payloadItems,
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить черновик')
+      setDraftId(String(json?.data?.id || draftId || ''))
+      setSuccess('Черновик сохранен')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось сохранить черновик')
+    }
+  }
+
+  const applyDraft = (draft: InventoryReceiptDraft) => {
+    const payload = draft.payload || {}
+    const items = Array.isArray(payload.items) ? payload.items : []
+    setDraftId(draft.id)
+    setLocationId(String(payload.location_id || ''))
+    setReceivedAt(String(payload.received_at || new Date().toISOString().slice(0, 10)))
+    setInvoiceNumber(String(payload.invoice_number || ''))
+    setInvoiceFileUrl(String(payload.invoice_file_url || ''))
+    setComment(String(payload.comment || ''))
+    if (payload.supplier_create?.bin_iin || payload.supplier_create?.organization_name || payload.supplier_create?.name) {
+      setSupplierMode('new')
+      setSupplierName(String(payload.supplier_create?.name || ''))
+      setSupplierOrganizationName(String(payload.supplier_create?.organization_name || ''))
+      setSupplierBinIin(String(payload.supplier_create?.bin_iin || ''))
+      setSupplierId('')
+    } else {
+      setSupplierMode('existing')
+      setSupplierId(String(payload.supplier_id || ''))
+      setSupplierName('')
+      setSupplierOrganizationName('')
+      setSupplierBinIin('')
+    }
+    const mappedLines = items.length > 0
+      ? items.map((item) => ({
+          item_id: String(item.item_id || ''),
+          quantity: String(item.quantity ?? ''),
+          unit_cost: String(item.unit_cost ?? ''),
+          sale_price: String(item.sale_price ?? ''),
+          markup_percent: calcMarkupPercent(String(item.unit_cost ?? ''), String(item.sale_price ?? '')),
+          comment: String(item.comment || ''),
+        }))
+      : [emptyLine()]
+    setLines(mappedLines)
+    setFormSheetOpen(true)
+    setSuccess('Черновик загружен в форму')
+  }
+
+  const deleteDraft = async (id: string) => {
+    try {
+      const response = await fetch('/api/admin/store/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteDraft', draft_id: id }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить черновик')
+      if (draftId === id) setDraftId(null)
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось удалить черновик')
     }
   }
 
@@ -662,6 +796,22 @@ export default function StoreReceiptsPage() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {(data?.drafts || []).length > 0 ? (
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[11px] uppercase tracking-wider text-amber-300/80 mb-2">Черновики приемки</p>
+          <div className="flex flex-wrap gap-2">
+            {(data?.drafts || []).map((draft) => (
+              <div key={draft.id} className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-black/20 px-3 py-1 text-xs">
+                <button type="button" onClick={() => applyDraft(draft)} className="text-amber-200 hover:text-white">
+                  {draft.title || 'Черновик'}
+                </button>
+                <button type="button" onClick={() => void deleteDraft(draft.id)} className="text-rose-300 hover:text-rose-100">×</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
@@ -1082,6 +1232,9 @@ export default function StoreReceiptsPage() {
             <Button type="submit" disabled={saving || loading} className="w-full">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackagePlus className="mr-2 h-4 w-4" />}
               Провести приемку
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void saveDraft()} className="w-full">
+              Сохранить как черновик
             </Button>
           </form>
         </DialogContent>
