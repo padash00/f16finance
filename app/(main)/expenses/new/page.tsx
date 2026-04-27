@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -90,6 +90,8 @@ function emptyPayload(): WizardPayload {
 
 export default function ExpenseWizardPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const embedded = searchParams.get('embedded') === '1'
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -363,6 +365,15 @@ export default function ExpenseWizardPage() {
       const json = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(json.error || 'Не удалось создать расход')
       setDone({ status: json.data.status, id: json.data.id })
+      if (embedded) {
+        if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'expense-wizard-created',
+            payload: { id: json.data.id, status: json.data.status },
+          }, window.location.origin)
+        }
+        return
+      }
       setTimeout(() => {
         if (json.data.status === 'pending_approval') {
           router.push('/expenses/pending')

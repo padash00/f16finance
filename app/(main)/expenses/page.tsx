@@ -303,6 +303,7 @@ export default function ExpensesPage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false)
 
   // Expense templates
   const [templates, setTemplates] = useState<{id:string,name:string,category:string,amount:number,payment_type:string,company_id:string|null,comment:string|null}[]>([])
@@ -359,7 +360,7 @@ export default function ExpensesPage() {
   // Data hooks
   const { companies } = useCompanies()
   const { operators } = useOperators({ activeOnly: true })
-  const { rows, setRows, loading, loadingMore, hasMore, loadMore } = useExpenses({
+  const { rows, setRows, loading, loadingMore, hasMore, loadMore, reload } = useExpenses({
     from: dateFrom || undefined,
     to: dateTo || undefined,
     companyId: companyFilter !== 'all' ? companyFilter : undefined,
@@ -371,6 +372,17 @@ export default function ExpensesPage() {
     sort: sortMode,
     pageSize: 2000,
   })
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      if ((event.data as any)?.type !== 'expense-wizard-created') return
+      setShowAddExpenseModal(false)
+      reload().catch(() => null)
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [reload])
 
   const companyMap = useMemo(() => {
     const map = new Map<string, Company>()
@@ -951,11 +963,13 @@ export default function ExpensesPage() {
                   </Link>
 
                   {canCreateExpense ? (
-                    <Link href="/expenses/new">
-                      <Button size="sm" className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25">
-                        <Plus className="w-4 h-4 mr-1" /> Добавить
-                      </Button>
-                    </Link>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAddExpenseModal(true)}
+                      className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Добавить
+                    </Button>
                   ) : null}
                 </div>
               </div>
@@ -1515,6 +1529,27 @@ export default function ExpensesPage() {
                 {savingExpenseEdit ? 'Сохраняю...' : 'Сохранить изменения'}
               </Button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAddExpenseModal ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm">
+          <div className="w-full max-w-6xl h-[92vh] rounded-2xl border border-white/10 bg-slate-950 overflow-hidden shadow-2xl">
+            <div className="h-12 border-b border-white/10 flex items-center justify-between px-3">
+              <div className="text-sm text-white">Добавление расхода</div>
+              <button
+                onClick={() => setShowAddExpenseModal(false)}
+                className="rounded-md p-1.5 text-gray-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <iframe
+              src="/expenses/new?embedded=1"
+              className="w-full h-[calc(92vh-48px)] bg-slate-950"
+              title="Добавление расхода"
+            />
           </div>
         </div>
       ) : null}
