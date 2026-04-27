@@ -50,6 +50,7 @@ function SidebarItem({
   return (
     <Link
       href={item.href}
+      prefetch
       onClick={onClick}
       className={cn(
         'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-all duration-300',

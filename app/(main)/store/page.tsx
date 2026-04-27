@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -18,7 +19,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { InventoryPageContent } from '../inventory/page'
+import { isAbortError } from '@/lib/is-abort-error'
+
+const InventoryPageContent = dynamic(
+  () => import('../inventory/page').then((m) => m.InventoryPageContent),
+  { ssr: false, loading: () => <div className="min-h-[12rem] animate-pulse rounded-lg bg-white/5" aria-hidden /> },
+)
 
 type StoreOverviewResponse = {
   items: Array<{ id: string; low_stock_threshold: number | null }>
@@ -118,47 +124,62 @@ export default function StoreOverviewPage() {
       setSearchResults([])
       return
     }
+    const ac = new AbortController()
     const timer = setTimeout(async () => {
       setSearching(true)
       try {
-        const res = await fetch(`/api/admin/store/global-search?q=${encodeURIComponent(filters.q.trim())}`, { cache: 'no-store' })
+        const res = await fetch(`/api/admin/store/global-search?q=${encodeURIComponent(filters.q.trim())}`, {
+          cache: 'no-store',
+          signal: ac.signal,
+        })
         const json = await res.json().catch(() => null)
+        if (ac.signal.aborted) return
         if (!res.ok || !json?.ok) {
           setSearchResults([])
           return
         }
         setSearchResults(Array.isArray(json?.data?.results) ? json.data.results : [])
-      } catch {
+      } catch (e) {
+        if (isAbortError(e) || ac.signal.aborted) return
         setSearchResults([])
       } finally {
-        setSearching(false)
+        if (!ac.signal.aborted) setSearching(false)
       }
     }, 250)
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      ac.abort()
+    }
   }, [filters.q])
 
   useEffect(() => {
+    const ac = new AbortController()
     async function load() {
       try {
         const [resOverview, resTimeline] = await Promise.all([
-          fetch('/api/admin/store/overview', { cache: 'no-store' }),
-          fetch('/api/admin/store/audit-timeline?limit=20', { cache: 'no-store' }),
+          fetch('/api/admin/store/overview', { cache: 'no-store', signal: ac.signal }),
+          fetch('/api/admin/store/audit-timeline?limit=20', { cache: 'no-store', signal: ac.signal }),
         ])
+        if (ac.signal.aborted) return
         const jsonOverview = await resOverview.json().catch(() => null)
+        if (ac.signal.aborted) return
         if (resOverview.ok && jsonOverview?.ok) {
           setOverview(jsonOverview.data as StoreOverviewResponse)
         }
         const jsonTimeline = await resTimeline.json().catch(() => null)
+        if (ac.signal.aborted) return
         if (resTimeline.ok && jsonTimeline?.ok) {
           setTimeline(Array.isArray(jsonTimeline?.data?.timeline) ? jsonTimeline.data.timeline : [])
         }
-      } catch {
+      } catch (e) {
+        if (isAbortError(e) || ac.signal.aborted) return
         setOverview(null)
         setTimeline([])
       }
     }
 
     void load()
+    return () => ac.abort()
   }, [])
 
   const metrics = useMemo(() => {

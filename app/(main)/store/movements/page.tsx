@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
+import { isAbortError } from '@/lib/is-abort-error'
 
 type InventoryLocation = {
   id: string
@@ -98,14 +99,15 @@ function StoreMovementsPageContent() {
   const [queryInput, setQueryInput] = useState(filters.q)
   const debouncedQuery = useDebouncedValue(queryInput, 300)
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
       const scope =
         filters.place === 'warehouse' ? 'warehouse' : filters.place === 'showcase' ? 'showcase' : 'all'
-      const response = await fetch(`/api/admin/store/movements?scope=${scope}`, { cache: 'no-store' })
+      const response = await fetch(`/api/admin/store/movements?scope=${scope}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as MovementsResponse | null
+      if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить движения')
 
       setData({
@@ -124,15 +126,18 @@ function StoreMovementsPageContent() {
         })),
       })
     } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return
       setData(null)
       setError(err?.message || 'Не удалось загрузить движения')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    void load()
+    const ac = new AbortController()
+    void load(ac.signal)
+    return () => ac.abort()
   }, [filters.place])
 
   useEffect(() => {

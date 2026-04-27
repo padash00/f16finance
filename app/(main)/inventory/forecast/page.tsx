@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCompanies } from '@/hooks/use-companies'
+import { isAbortError } from '@/lib/is-abort-error'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -104,26 +105,30 @@ export function InventoryForecastPageContent() {
     })()
   }, [companyId])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
       if (companyId) params.set('company_id', companyId)
       if (locationId) params.set('location_id', locationId)
-      const res = await fetch(`/api/admin/inventory/forecast?${params.toString()}`)
+      const res = await fetch(`/api/admin/inventory/forecast?${params.toString()}`, { signal })
       const j = await res.json()
+      if (signal?.aborted) return
       if (!res.ok) throw new Error(j.error || 'Ошибка загрузки')
       setForecast(j.data || [])
     } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return
       setError(err?.message || 'Не удалось загрузить прогноз')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [companyId, locationId])
 
   useEffect(() => {
-    void load()
+    const ac = new AbortController()
+    void load(ac.signal)
+    return () => ac.abort()
   }, [load])
 
   // Summary counts

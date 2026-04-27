@@ -5,6 +5,7 @@ import { BarChart3, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { isAbortError } from '@/lib/is-abort-error'
 
 type AbcRow = {
   item_id: string
@@ -31,26 +32,30 @@ export default function StoreAbcPage() {
   const [rows, setRows] = useState<AbcRow[]>([])
   const [summary, setSummary] = useState<Record<string, number>>({})
 
-  const load = async (mode: 'sales' | 'stock' = tab) => {
+  const load = async (mode: 'sales' | 'stock' = tab, signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/inventory/abc?mode=${mode}&days=30`, { cache: 'no-store' })
+      const res = await fetch(`/api/admin/inventory/abc?mode=${mode}&days=30`, { cache: 'no-store', signal })
       const json = (await res.json().catch(() => null)) as AbcResponse | null
+      if (signal?.aborted) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить ABC')
       setRows(json.data || [])
       setSummary(json.summary || {})
     } catch (e: any) {
+      if (isAbortError(e) || signal?.aborted) return
       setRows([])
       setSummary({})
       setError(e?.message || 'Не удалось загрузить ABC')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    void load(tab)
+    const ac = new AbortController()
+    void load(tab, ac.signal)
+    return () => ac.abort()
   }, [tab])
 
   const topRows = useMemo(() => rows.slice(0, 20), [rows])

@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { formatMoney } from '@/lib/core/format'
+import { isAbortError } from '@/lib/is-abort-error'
 
 type InventoryLocation = {
   id: string
@@ -80,12 +81,13 @@ export default function StoreAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/store/analytics', { cache: 'no-store' })
+      const response = await fetch('/api/admin/store/analytics', { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as AnalyticsResponse | null
+      if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить аналитику')
 
       setData({
@@ -109,15 +111,18 @@ export default function StoreAnalyticsPage() {
         })),
       })
     } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return
       setData(null)
       setError(err?.message || 'Не удалось загрузить аналитику')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    void load()
+    const ac = new AbortController()
+    void load(ac.signal)
+    return () => ac.abort()
   }, [])
 
   const pointLocations = useMemo(

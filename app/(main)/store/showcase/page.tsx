@@ -35,6 +35,7 @@ import { Label } from '@/components/ui/label'
 import { Search } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,14 +140,15 @@ export default function ShowcasePage() {
 
   // ── Load ─────────────────────────────────────────────────────────────────────
 
-  const load = useCallback(async (companyId?: string | null) => {
+  const load = useCallback(async (companyId?: string | null, signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
       const id = companyId ?? selectedCompanyId
       const url = id ? `/api/admin/store/showcase?company_id=${id}` : '/api/admin/store/showcase'
-      const res = await fetch(url, { cache: 'no-store' })
+      const res = await fetch(url, { cache: 'no-store', signal })
       const json = await res.json().catch(() => null)
+      if (signal?.aborted) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка загрузки')
       const d = json.data
       setCompanies(d.companies || [])
@@ -157,20 +159,25 @@ export default function ShowcasePage() {
       setWarehouseItems(d.warehouseItems || [])
       setPendingRequests(d.pendingRequests || [])
     } catch (e: any) {
+      if (isAbortError(e) || signal?.aborted) return
       setError(e?.message || 'Ошибка')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [selectedCompanyId])
 
   useEffect(() => {
+    const ac = new AbortController()
     try {
       const params = new URLSearchParams(window.location.search)
       const companyId = params.get('company_id')
-      void load(companyId)
+      void load(companyId, ac.signal)
     } catch {
-      void load()
+      void load(undefined, ac.signal)
     }
+    return () => ac.abort()
+    // initial load + read company from URL; do not re-run when load/company changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Request form ─────────────────────────────────────────────────────────────

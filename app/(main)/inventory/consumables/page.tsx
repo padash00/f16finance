@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { isAbortError } from '@/lib/is-abort-error'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 type ConsumableItem = { id: string; name: string; barcode: string; unit: string; category?: { id: string; name: string } | null }
@@ -96,21 +97,35 @@ export function ConsumablesPageContent() {
   const [issuePackSize, setIssuePackSize] = useState('1')
   const [issueComment, setIssueComment] = useState('')
 
-  async function loadData() {
+  async function loadData(signal?: AbortSignal) {
     setLoading(true)
     setError(null)
-    const res = await fetch('/api/admin/inventory/consumables', { cache: 'no-store' })
-    const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.ok) {
-      setError(json?.error || 'Не удалось загрузить данные')
-      setLoading(false)
-      return
+    try {
+      const res = await fetch('/api/admin/inventory/consumables', { cache: 'no-store', signal })
+      const json = await res.json().catch(() => null)
+      if (signal?.aborted) return
+      if (!res.ok || !json?.ok) {
+        setError(json?.error || 'Не удалось загрузить данные')
+        return
+      }
+      setData(json.data)
+    } catch (e) {
+      if (isAbortError(e) || signal?.aborted) return
+      setError('Не удалось загрузить данные')
+    } finally {
+      if (!signal?.aborted) setLoading(false)
     }
-    setData(json.data)
-    setLoading(false)
   }
 
-  useEffect(() => { void loadData() }, [])
+  useEffect(() => {
+    const ac = new AbortController()
+    void loadData(ac.signal)
+    return () => ac.abort()
+  }, [])
+
+  function handleRefreshClick() {
+    void loadData()
+  }
 
   const pointLocations = useMemo(
     () => (data?.locations || []).filter((l) => l.location_type === 'point_display'),
@@ -292,7 +307,7 @@ export function ConsumablesPageContent() {
             <p className="truncate text-xs text-muted-foreground">Нормы потребления и контроль остатков по точкам</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={loadData} disabled={loading}>
+        <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleRefreshClick} disabled={loading}>
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           Обновить
         </Button>

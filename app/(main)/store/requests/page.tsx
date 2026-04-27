@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
+import { isAbortError } from '@/lib/is-abort-error'
 
 type InventoryLocation = {
   id: string
@@ -217,12 +218,13 @@ function StoreRequestsPageContent() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/inventory/requests', { cache: 'no-store' })
+      const response = await fetch('/api/admin/inventory/requests', { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as InventoryResponse | null
+      if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить заявки магазина')
       }
@@ -237,14 +239,17 @@ function StoreRequestsPageContent() {
         return next
       })
     } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return
       setError(err?.message || 'Не удалось загрузить заявки магазина')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    load()
+    const ac = new AbortController()
+    void load(ac.signal)
+    return () => ac.abort()
   }, [])
 
   useEffect(() => {
@@ -491,7 +496,7 @@ function StoreRequestsPageContent() {
               Журнал
             </Button>
           </Link>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>

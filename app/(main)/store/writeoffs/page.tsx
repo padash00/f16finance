@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
+import { isAbortError } from '@/lib/is-abort-error'
 
 type InventoryLocation = {
   id: string
@@ -129,20 +130,22 @@ export default function StoreWriteoffsPage() {
   const [selectedWriteoff, setSelectedWriteoff] = useState<InventoryWriteoff | null>(null)
   const [writeoffDetailsOpen, setWriteoffDetailsOpen] = useState(false)
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/admin/store/writeoffs?scope=${scope}`, { cache: 'no-store' })
+      const response = await fetch(`/api/admin/store/writeoffs?scope=${scope}`, { cache: 'no-store', signal })
       const json = (await response.json().catch(() => null)) as WriteoffsResponse | null
+      if (signal?.aborted) return
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить списания')
       setData(json.data)
       setLocationId((current) => current || json.data?.locations?.[0]?.id || '')
     } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return
       setData(null)
       setError(err?.message || 'Не удалось загрузить списания')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
@@ -152,7 +155,9 @@ export default function StoreWriteoffsPage() {
       const q = params.get('q')
       if (q) setQuickQuery(q)
     } catch { /* ignore query parse errors */ }
-    void load()
+    const ac = new AbortController()
+    void load(ac.signal)
+    return () => ac.abort()
   }, [scope])
 
   useEffect(() => {

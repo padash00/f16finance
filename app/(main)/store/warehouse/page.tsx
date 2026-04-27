@@ -49,6 +49,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,14 +177,15 @@ export default function WarehousePage() {
   const [warehouseFileDone, setWarehouseFileDone] = useState<string | null>(null)
   const warehouseFileRef = useRef<HTMLInputElement>(null)
 
-  const load = useCallback(async (companyId?: string | null) => {
+  const load = useCallback(async (companyId?: string | null, signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
     try {
       const id = companyId ?? selectedCompanyId
       const url = id ? `/api/admin/store/warehouse?company_id=${id}` : '/api/admin/store/warehouse'
-      const res = await fetch(url, { cache: 'no-store' })
+      const res = await fetch(url, { cache: 'no-store', signal })
       const json = await res.json().catch(() => null)
+      if (signal?.aborted) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка загрузки')
       const d = json.data
       setCompanies(d.companies || [])
@@ -192,26 +194,31 @@ export default function WarehousePage() {
       setBalances(d.balances || [])
       setCategories(d.categories || [])
     } catch (e: any) {
+      if (isAbortError(e) || signal?.aborted) return
       setError(e?.message || 'Ошибка')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [selectedCompanyId])
 
   useEffect(() => {
+    const ac = new AbortController()
     try {
       const params = new URLSearchParams(window.location.search)
       const companyId = params.get('company_id')
       const q = params.get('q')
       if (q) setStockSearch(q)
-      void load(companyId)
+      void load(companyId, ac.signal)
     } catch {
-      void load()
+      void load(undefined, ac.signal)
     }
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (addMode !== 'items') return
+    const ac = new AbortController()
     const t = setTimeout(async () => {
       if (!itemSearch.trim() && !selectedCategory) { setItemSearchResults([]); return }
       setItemSearchLoading(true)
@@ -219,13 +226,21 @@ export default function WarehousePage() {
         const params = new URLSearchParams()
         if (itemSearch.trim()) params.set('q', itemSearch.trim())
         if (selectedCategory) params.set('category_id', selectedCategory)
-        const res = await fetch(`/api/admin/inventory/catalog?${params}`, { cache: 'no-store' })
+        const res = await fetch(`/api/admin/inventory/catalog?${params}`, { cache: 'no-store', signal: ac.signal })
         const json = await res.json().catch(() => null)
+        if (ac.signal.aborted) return
         setItemSearchResults(json?.data?.items || [])
-      } catch { setItemSearchResults([]) }
-      finally { setItemSearchLoading(false) }
+      } catch (e) {
+        if (isAbortError(e) || ac.signal.aborted) return
+        setItemSearchResults([])
+      } finally {
+        if (!ac.signal.aborted) setItemSearchLoading(false)
+      }
     }, 300)
-    return () => clearTimeout(t)
+    return () => {
+      clearTimeout(t)
+      ac.abort()
+    }
   }, [itemSearch, selectedCategory, addMode])
 
   async function handleBarcodeLookup(e: React.FormEvent) {
