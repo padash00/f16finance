@@ -293,6 +293,16 @@ export default function IncomePage() {
   const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const f = sp.get('from')
+    const t = sp.get('to')
+    const isISO = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
+    if (f && isISO(f)) setDateFrom(f)
+    if (t && isISO(t)) setDateTo(t)
+  }, [])
   const [operatorFilter, setOperatorFilter] = useState<OperatorFilter>('all')
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
@@ -327,6 +337,11 @@ export default function IncomePage() {
 
   // Справочники и данные — через хуки, без прямых Supabase-запросов
   const { companies } = useCompanies()
+  useEffect(() => {
+    if (typeof window === 'undefined' || companies.length === 0) return
+    const c = new URLSearchParams(window.location.search).get('company_id')
+    if (c && companies.some((co) => co.id === c)) setCompanyFilter(c)
+  }, [companies])
   const { operators } = useOperators({ activeOnly: true })
   const {
     rows: serverRows,

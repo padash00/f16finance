@@ -68,6 +68,24 @@ export default function KaspiTerminalPage() {
   const [editAmount, setEditAmount] = useState('')
   const [editNote, setEditNote] = useState('')
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const f = sp.get('from')
+    const t = sp.get('to')
+    const tab = sp.get('tab')
+    const isISO = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
+    if (f && isISO(f)) setFrom(f)
+    if (t && isISO(t)) setTo(t)
+    if (tab === 'reconciliation' || tab === 'recon') setTab('reconciliation')
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !companies?.length) return
+    const c = new URLSearchParams(window.location.search).get('company_id')
+    if (c && companies.some((co) => co.id === c)) setFilterCompany(c)
+  }, [companies])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)

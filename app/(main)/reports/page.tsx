@@ -13,6 +13,9 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { countImpreciseNightKaspiInRange, splitIncomeKaspiByCalendarDay } from '@/lib/reports/income-calendar-kaspi'
+import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
+import { ReportsPageSkeleton } from '@/components/reports/reports-page-skeleton'
 
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { Button } from '@/components/ui/button'
@@ -275,52 +278,6 @@ const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   const prevTo = addDaysISO(dateFrom, -1)
   const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
   return { prevFrom, prevTo, durationDays }
-}
-
-const splitIncomeKaspiByCalendarDay = (rows: IncomeRow[]): IncomeRow[] => {
-  const normalized: IncomeRow[] = []
-
-  for (const row of rows) {
-    const totalKaspi = Number(row.kaspi_amount || 0)
-    const beforeMidnight =
-      row.kaspi_before_midnight == null ? null : Number(row.kaspi_before_midnight || 0)
-
-    if (row.shift !== 'night') {
-      normalized.push(row)
-      continue
-    }
-
-    const currentDateKaspi =
-      beforeMidnight == null
-        ? 0
-        : Math.min(Math.max(beforeMidnight, 0), Math.max(totalKaspi, 0))
-    const nextDateKaspi =
-      beforeMidnight == null
-        ? Math.max(totalKaspi, 0)
-        : Math.max(totalKaspi - currentDateKaspi, 0)
-
-    normalized.push({
-      ...row,
-      kaspi_amount: currentDateKaspi,
-    })
-
-    if (nextDateKaspi > 0) {
-      normalized.push({
-        ...row,
-        id: `${row.id}:kaspi-next-day`,
-        date: addDaysISO(row.date, 1),
-        cash_amount: 0,
-        kaspi_amount: nextDateKaspi,
-        online_amount: 0,
-        card_amount: 0,
-        comment: row.comment
-          ? `${row.comment} [Kaspi после 00:00]`
-          : 'Kaspi после 00:00 (авторазбивка)',
-      })
-    }
-  }
-
-  return normalized
 }
 
 const getISOWeekKey = (isoDate: string): string => {
@@ -1015,6 +972,7 @@ function ReportsContent() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [impreciseNightKaspiCount, setImpreciseNightKaspiCount] = useState(0)
 
   // Filter states
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -6))
@@ -1048,6 +1006,7 @@ function ReportsContent() {
   const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
   const realtimeChannel = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const realtimeReloadTimerRef = useRef<number | null>(null)
 
   // Virtual list ref for table
   const tableContainerRef = useRef<HTMLDivElement>(null)
@@ -1266,7 +1225,8 @@ function ReportsContent() {
         expenses = expenses.filter((r) => r.company_id !== extraCompanyId)
       }
 
-      setIncomes(splitIncomeKaspiByCalendarDay(incomes))
+      setImpreciseNightKaspiCount(countImpreciseNightKaspiInRange(incomes, dateFrom, dateTo))
+      setIncomes(splitIncomeKaspiByCalendarDay(incomes) as IncomeRow[])
       setExpenses(expenses)
 
       if (isRefresh) showToast('Данные обновлены', 'success')
@@ -1293,6 +1253,16 @@ function ReportsContent() {
     showToast,
   ])
 
+  const scheduleReportsRealtimeReload = useCallback(() => {
+    if (realtimeReloadTimerRef.current !== null) {
+      window.clearTimeout(realtimeReloadTimerRef.current)
+    }
+    realtimeReloadTimerRef.current = window.setTimeout(() => {
+      realtimeReloadTimerRef.current = null
+      void loadData(true)
+    }, 2000)
+  }, [loadData])
+
   useEffect(() => {
     if (!companiesLoaded) return
     loadData(false)
@@ -1304,44 +1274,44 @@ function ReportsContent() {
   useEffect(() => {
     if (!companiesLoaded) return
 
-    // Setup realtime subscription for live updates
+    const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+    const incomeEarliest = addDaysISO(prevFrom, -1)
+
+    const incomeTouchesRange = (iso: string | undefined) =>
+      !!iso && iso >= incomeEarliest && iso <= dateTo
+
+    const expenseTouchesRange = (iso: string | undefined) =>
+      !!iso &&
+      ((iso >= dateFrom && iso <= dateTo) || (iso >= prevFrom && iso <= prevTo))
+
     const channel = supabase
       .channel('financial-reports')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'incomes' },
-        (payload: any) => {
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            // Refresh data if the new record is in our date range
-            const newDate = (payload.new as IncomeRow).date
-            if (newDate >= dateFrom && newDate <= dateTo) {
-              loadData(true)
-            }
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'expenses' },
-        (payload: any) => {
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const newDate = (payload.new as ExpenseRow).date
-            if (newDate >= dateFrom && newDate <= dateTo) {
-              loadData(true)
-            }
-          }
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, (payload: any) => {
+        const next = payload.new as IncomeRow | undefined
+        const prev = payload.old as IncomeRow | undefined
+        const dates = [next?.date, prev?.date].filter(Boolean) as string[]
+        if (dates.some((d) => incomeTouchesRange(d))) scheduleReportsRealtimeReload()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, (payload: any) => {
+        const next = payload.new as ExpenseRow | undefined
+        const prev = payload.old as ExpenseRow | undefined
+        const dates = [next?.date, prev?.date].filter(Boolean) as string[]
+        if (dates.some((d) => expenseTouchesRange(d))) scheduleReportsRealtimeReload()
+      })
       .subscribe()
 
     realtimeChannel.current = channel
 
     return () => {
+      if (realtimeReloadTimerRef.current !== null) {
+        window.clearTimeout(realtimeReloadTimerRef.current)
+        realtimeReloadTimerRef.current = null
+      }
       if (realtimeChannel.current) {
         supabase.removeChannel(realtimeChannel.current)
       }
     }
-  }, [companiesLoaded, dateFrom, dateTo, loadData])
+  }, [companiesLoaded, dateFrom, dateTo, scheduleReportsRealtimeReload])
 
   // =====================
   // URL SYNC
@@ -1358,6 +1328,7 @@ function ReportsContent() {
     const pGroup = parseGroup(sp.get('group'))
     const pExtra = parseBool(sp.get('extra'))
     const pTab = parseTab(sp.get('tab'))
+    const pCompare = parseBool(sp.get('compare'))
 
     if (pFrom && isISODate(pFrom)) setDateFrom(pFrom)
     if (pTo && isISODate(pTo)) setDateTo(pTo)
@@ -1379,6 +1350,7 @@ function ReportsContent() {
     if (pGroup) setGroupMode(pGroup)
     if (pExtra) setIncludeExtraInTotals(true)
     if (pTab) setActiveTab(pTab)
+    if (pCompare) setComparisonMode(true)
 
     didInitFromUrl.current = true
   }, [companiesLoaded, companies, searchParams, applyPreset])
@@ -1396,12 +1368,25 @@ function ReportsContent() {
       params.set('group', groupMode)
       params.set('extra', includeExtraInTotals ? '1' : '0')
       params.set('tab', activeTab)
+      params.set('compare', comparisonMode ? '1' : '0')
 
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     }, 250)
 
     return () => clearTimeout(timeoutId)
-  }, [dateFrom, dateTo, datePreset, companyFilter, shiftFilter, groupMode, includeExtraInTotals, activeTab, pathname, router])
+  }, [
+    dateFrom,
+    dateTo,
+    datePreset,
+    companyFilter,
+    shiftFilter,
+    groupMode,
+    includeExtraInTotals,
+    activeTab,
+    comparisonMode,
+    pathname,
+    router,
+  ])
 
   // =====================
   // DATA PROCESSING (MEMOIZED)
@@ -2095,7 +2080,8 @@ function ReportsContent() {
           })),
         },
       ],
-      highlights: [
+        highlights: [
+        `Ночной Kaspi в отчёте делится по календарным суткам, если в доходах заполнено «Kaspi до 00:00»; иначе суточное распределение может быть неточным.`,
         `Сравнение с прошлым периодом: выручка ${getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)}, прибыль ${getPercentageChange(totals.profit, totalsPrev.profit)}.`,
         topCompany ? `Лидер по выручке: ${topCompany.name} (${formatMoneyCompact(topCompany.value)}).` : 'Лидер по выручке не определён: нет данных по компаниям.',
         topExpense ? `Главная статья расходов: ${topExpense.name} (${formatMoneyCompact(topExpense.amount)}).` : 'Главная статья расходов не определена: нет данных по расходам.',
@@ -2208,17 +2194,12 @@ function ReportsContent() {
   // =====================
   // LOADING & ERROR STATES
   // =====================
-  if (loading && companies.length === 0) {
-    return (
-      <>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-              <BarChart3 className="w-8 h-8 text-white" />
-            </div>
-            <p className="text-gray-400">Загрузка аналитики...</p>
-          </div>
-      </>
-    )
+  if (!companiesLoaded) {
+    return <ReportsPageSkeleton />
+  }
+
+  if (loading && incomes.length === 0) {
+    return <ReportsPageSkeleton />
   }
 
   if (error) {
@@ -2244,7 +2225,11 @@ function ReportsContent() {
   // =====================
   return (
     <>
-        <div className="app-page-ultra max-w-[1800px] space-y-6">
+        <div
+          className={`app-page-ultra max-w-[1800px] space-y-6 relative transition-opacity duration-200 ${
+            refreshing ? 'opacity-80 ring-1 ring-violet-500/20 rounded-3xl' : ''
+          }`}
+        >
           {/* Toast */}
           {toast && (
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
@@ -2382,6 +2367,14 @@ function ReportsContent() {
               </tbody>
             </table>
           </div>
+
+          <ReportsMethodologyBanner
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            comparisonMode={comparisonMode}
+            impreciseNightKaspiCount={impreciseNightKaspiCount}
+            companyId={companyFilter}
+          />
 
           {/* AI Insights */}
           {aiInsights.length > 0 && (
@@ -3229,18 +3222,7 @@ function ReportsContent() {
 // =====================
 export default function ReportsPage() {
   return (
-    <Suspense
-      fallback={
-        <>
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-                <BarChart3 className="w-8 h-8 text-white" />
-              </div>
-              <p className="text-gray-400">Загрузка аналитики...</p>
-            </div>
-        </>
-      }
-    >
+    <Suspense fallback={<ReportsPageSkeleton />}>
       <ReportsContent />
     </Suspense>
   )
