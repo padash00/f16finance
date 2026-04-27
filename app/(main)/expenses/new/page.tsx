@@ -382,12 +382,8 @@ export default function ExpenseWizardPage() {
       setAiHintError('Сначала выберите точку.')
       return
     }
-    if (payload.item_name.trim().length < 3) {
-      setAiHintError('Напишите что купили (минимум 3 символа).')
-      return
-    }
-    if (payload.comment.trim().length < 10) {
-      setAiHintError('Добавьте комментарий (минимум 10 символов).')
+    if (payload.item_name.trim().length < 3 && payload.comment.trim().length < 10) {
+      setAiHintError('Напишите либо в "Краткое название" (>=3), либо в "Комментарий" (>=10).')
       return
     }
     setAiHintLoading(true)
@@ -587,7 +583,7 @@ export default function ExpenseWizardPage() {
             <div className="rounded-md border bg-muted/20 p-3 h-fit">
               <div className="text-sm font-semibold mb-1">Затрудняешься с категорией?</div>
               <div className="text-xs text-muted-foreground mb-3">
-                Опиши расход и нажми кнопку — ИИ предложит категорию из ваших текущих категорий.
+                Напиши расход в "Краткое название" или "Комментарий", затем нажми кнопку.
               </div>
               <Button
                 variant="outline"

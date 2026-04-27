@@ -64,8 +64,11 @@ export async function POST(req: Request) {
     const itemName = String(body?.item_name || '').trim()
     const comment = String(body?.comment || '').trim()
     if (!companyId) return json({ error: 'company_id обязателен' }, 400)
-    if (!itemName || itemName.length < 3) return json({ error: 'Опишите, что купили (минимум 3 символа).' }, 400)
-    if (!comment || comment.length < 10) return json({ error: 'Добавьте комментарий (минимум 10 символов).' }, 400)
+    const hasItemName = itemName.length >= 3
+    const hasComment = comment.length >= 10
+    if (!hasItemName && !hasComment) {
+      return json({ error: 'Напишите в "Краткое название" (>=3) или в "Комментарий" (>=10).' }, 400)
+    }
 
     await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
@@ -103,8 +106,8 @@ export async function POST(req: Request) {
     const categoriesBlock = categories.map((c) => `- ${c.name} [group=${c.group}]`).join('\n')
     const userPrompt = [
       `Точка: ${companyName}`,
-      `Что купили: ${itemName}`,
-      `Комментарий: ${comment}`,
+      `Что купили: ${itemName || '(не указано)'}`,
+      `Комментарий: ${comment || '(не указано)'}`,
       '',
       'Категории:',
       categoriesBlock,
