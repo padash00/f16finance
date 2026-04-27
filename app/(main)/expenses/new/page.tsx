@@ -58,6 +58,9 @@ const todayISO = () => {
 }
 
 const fmtMoney = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
+const inputBaseClass = 'w-full h-10 px-3 rounded-md border bg-background'
+const inputErrorClass = 'border-destructive ring-1 ring-destructive/30'
+const validHintClass = 'text-[11px] text-emerald-400 mt-1'
 
 function emptyPayload(): WizardPayload {
   return {
@@ -182,6 +185,15 @@ export default function ExpenseWizardPage() {
     && total > 0
     && (!isBackdated || payload.backdated_confirmed)
 
+  const step1Errors: string[] = []
+  if (!payload.company_id) step1Errors.push('Не выбрана точка')
+  if (!payload.category_id) step1Errors.push('Не выбрана категория')
+  if (payload.item_name.trim().length < 5) step1Errors.push('Краткое название меньше 5 символов')
+  if (payload.comment.trim().length < 20) step1Errors.push('Комментарий меньше 20 символов')
+  if (total <= 0) step1Errors.push('Сумма расхода должна быть больше 0')
+  if (!payload.date) step1Errors.push('Не выбрана дата расхода')
+  if (isBackdated && !payload.backdated_confirmed) step1Errors.push('Нужно подтвердить старую дату расхода')
+
   const step2Valid = (() => {
     const k = payload.document_kind
     if (!k) return false
@@ -192,6 +204,23 @@ export default function ExpenseWizardPage() {
     }
     return false
   })()
+  const isCompanyValid = !!payload.company_id
+  const isCategoryValid = !!payload.category_id
+  const isItemNameValid = payload.item_name.trim().length >= 5
+  const isCommentValid = payload.comment.trim().length >= 20
+  const isAmountValid = total > 0
+  const isDateValid = !!payload.date && (!isBackdated || payload.backdated_confirmed)
+  const step2Errors: string[] = []
+  if (!payload.document_kind) {
+    step2Errors.push('Выберите тип подтверждения расхода')
+  } else if (payload.document_kind === 'receipt' || payload.document_kind === 'invoice' || payload.document_kind === 'bill') {
+    if (!payload.document_url) step2Errors.push('Загрузите чек / накладную / счет')
+  } else if (payload.document_kind === 'whitelist') {
+    if (!payload.whitelist_vendor_id) step2Errors.push('Выберите доверенного поставщика')
+  } else if (payload.document_kind === 'one_off') {
+    if (payload.one_off_payee.trim().length < 3) step2Errors.push('Поле "Кому платим" должно быть минимум 3 символа')
+    if (payload.one_off_reason.trim().length < 30) step2Errors.push('Поле "Почему нет чека" должно быть минимум 30 символов')
+  }
 
   async function patchSession(nextStep: number, partial: Partial<WizardPayload>) {
     if (!sessionId) throw new Error('session not started')
@@ -328,13 +357,26 @@ export default function ExpenseWizardPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-6">
-        {[1, 2, 3].map((n) => (
-          <div
-            key={n}
-            className={`h-2 flex-1 rounded-full ${n <= step ? 'bg-primary' : 'bg-muted'}`}
-          />
-        ))}
+      <div className="rounded-lg border bg-card p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className={`h-2 flex-1 rounded-full ${n <= step ? 'bg-primary' : 'bg-muted'}`}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className={`rounded-md border px-2 py-1 ${step >= 1 ? 'border-primary/40 bg-primary/5 text-primary' : 'text-muted-foreground'}`}>
+            1) Что и куда
+          </div>
+          <div className={`rounded-md border px-2 py-1 ${step >= 2 ? 'border-primary/40 bg-primary/5 text-primary' : 'text-muted-foreground'}`}>
+            2) Документ
+          </div>
+          <div className={`rounded-md border px-2 py-1 ${step >= 3 ? 'border-primary/40 bg-primary/5 text-primary' : 'text-muted-foreground'}`}>
+            3) Подтверждение
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -346,15 +388,28 @@ export default function ExpenseWizardPage() {
 
       {step === 1 && (
         <Card className="p-6 space-y-5">
+          {!step1Valid && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="text-sm font-semibold text-amber-300 mb-1">Что нужно заполнить:</div>
+              <ul className="text-xs text-amber-100/90 space-y-1">
+                {step1Errors.map((err) => (
+                  <li key={err}>- {err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div>
-            <label className="text-sm font-medium mb-1 block">Точка</label>
+            <label className="text-sm font-medium mb-1 flex items-center gap-2">
+              <span>Точка</span>
+              {isCompanyValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
+            </label>
             {loadingCatalogs ? (
               <div className="text-sm text-muted-foreground">Загрузка...</div>
             ) : (
               <select
                 value={payload.company_id}
                 onChange={(e) => setPayload((p) => ({ ...p, company_id: e.target.value }))}
-                className="w-full h-10 px-3 rounded-md border bg-background"
+                className={`${inputBaseClass} ${!payload.company_id ? inputErrorClass : ''}`}
               >
                 <option value="">— Выберите точку —</option>
                 {companies.map((c) => (
@@ -362,10 +417,14 @@ export default function ExpenseWizardPage() {
                 ))}
               </select>
             )}
+            {isCompanyValid ? <p className={validHintClass}>Точка выбрана</p> : null}
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1 block">Категория</label>
+            <label className="text-sm font-medium mb-1 flex items-center gap-2">
+              <span>Категория</span>
+              {isCategoryValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
+            </label>
             <select
               value={payload.category_id}
               onChange={(e) => {
@@ -376,7 +435,7 @@ export default function ExpenseWizardPage() {
                   category_name: cat?.name || '',
                 }))
               }}
-              className="w-full h-10 px-3 rounded-md border bg-background"
+              className={`${inputBaseClass} ${!payload.category_id ? inputErrorClass : ''}`}
             >
               <option value="">— Выберите категорию —</option>
               {groupedCategories.map((g) => (
@@ -387,29 +446,38 @@ export default function ExpenseWizardPage() {
                 </optgroup>
               ))}
             </select>
+            {isCategoryValid ? <p className={validHintClass}>Категория выбрана</p> : null}
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1 block">Краткое название</label>
+            <label className="text-sm font-medium mb-1 flex items-center gap-2">
+              <span>Краткое название</span>
+              {isItemNameValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
+            </label>
             <input
               value={payload.item_name}
               onChange={(e) => setPayload((p) => ({ ...p, item_name: e.target.value }))}
               placeholder="Например: Кофе зерно, Зарплата Мерея за апрель"
-              className="w-full h-10 px-3 rounded-md border bg-background"
+              className={`${inputBaseClass} ${payload.item_name.trim().length < 5 ? inputErrorClass : ''}`}
             />
             <p className="text-xs text-muted-foreground mt-1">Минимум 5 символов</p>
+            {isItemNameValid ? <p className={validHintClass}>Ок, название понятное</p> : null}
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1 block">Комментарий</label>
+            <label className="text-sm font-medium mb-1 flex items-center gap-2">
+              <span>Комментарий</span>
+              {isCommentValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
+            </label>
             <textarea
               rows={3}
               value={payload.comment}
               onChange={(e) => setPayload((p) => ({ ...p, comment: e.target.value }))}
               placeholder="Подробнее: зачем покупка, для кого, на какую смену"
-              className="w-full px-3 py-2 rounded-md border bg-background resize-none"
+              className={`w-full px-3 py-2 rounded-md border bg-background resize-none ${payload.comment.trim().length < 20 ? inputErrorClass : ''}`}
             />
             <p className="text-xs text-muted-foreground mt-1">Минимум 20 символов ({payload.comment.trim().length})</p>
+            {isCommentValid ? <p className={validHintClass}>Комментарий заполнен</p> : null}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -420,7 +488,7 @@ export default function ExpenseWizardPage() {
                 min="0"
                 value={payload.amount_cash || ''}
                 onChange={(e) => setPayload((p) => ({ ...p, amount_cash: Math.max(0, Number(e.target.value) || 0) }))}
-                className="w-full h-10 px-3 rounded-md border bg-background"
+                className={`${inputBaseClass} ${(payload.amount_cash + payload.amount_kaspi) <= 0 ? inputErrorClass : ''}`}
               />
             </div>
             <div>
@@ -430,22 +498,28 @@ export default function ExpenseWizardPage() {
                 min="0"
                 value={payload.amount_kaspi || ''}
                 onChange={(e) => setPayload((p) => ({ ...p, amount_kaspi: Math.max(0, Number(e.target.value) || 0) }))}
-                className="w-full h-10 px-3 rounded-md border bg-background"
+                className={`${inputBaseClass} ${(payload.amount_cash + payload.amount_kaspi) <= 0 ? inputErrorClass : ''}`}
               />
             </div>
           </div>
           {total > 0 && (
-            <div className="text-sm text-muted-foreground">Итого: <span className="font-semibold text-foreground">{fmtMoney(total)}</span></div>
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>Итого: <span className="font-semibold text-foreground">{fmtMoney(total)}</span></span>
+            </div>
           )}
 
           <div>
-            <label className="text-sm font-medium mb-1 block">Дата</label>
+            <label className="text-sm font-medium mb-1 flex items-center gap-2">
+              <span>Дата</span>
+              {isDateValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
+            </label>
             <input
               type="date"
               value={payload.date}
               max={todayISO()}
               onChange={(e) => setPayload((p) => ({ ...p, date: e.target.value, backdated_confirmed: false }))}
-              className="w-full h-10 px-3 rounded-md border bg-background"
+              className={`${inputBaseClass} ${!payload.date || (isBackdated && !payload.backdated_confirmed) ? inputErrorClass : ''}`}
             />
             {isBackdated && (
               <label className="mt-2 flex items-start gap-2 text-xs">
@@ -458,6 +532,7 @@ export default function ExpenseWizardPage() {
                 <span>Подтверждаю, что это действительно расход старше 7 дней. Это действие будет залогировано.</span>
               </label>
             )}
+            {isDateValid ? <p className={validHintClass}>Дата подтверждена</p> : null}
           </div>
 
           <div>
@@ -479,6 +554,16 @@ export default function ExpenseWizardPage() {
       {step === 2 && (
         <Card className="p-6 space-y-4">
           <h3 className="font-semibold">Подтверждающий документ</h3>
+          {!step2Valid && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="text-sm font-semibold text-amber-300 mb-1">Что еще нужно:</div>
+              <ul className="text-xs text-amber-100/90 space-y-1">
+                {step2Errors.map((err) => (
+                  <li key={err}>- {err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <button
             type="button"
@@ -545,6 +630,7 @@ export default function ExpenseWizardPage() {
                   Загрузить файл (до 10 МБ)
                 </Button>
               )}
+              {payload.document_url ? <p className={validHintClass}>Документ загружен</p> : null}
             </div>
           )}
 
@@ -572,16 +658,19 @@ export default function ExpenseWizardPage() {
                   <Link href="/expense-whitelist" className="underline">Добавить</Link>
                 </p>
               ) : (
-                <select
-                  value={payload.whitelist_vendor_id || ''}
-                  onChange={(e) => setPayload((p) => ({ ...p, whitelist_vendor_id: e.target.value || null }))}
-                  className="w-full h-10 px-3 rounded-md border bg-background"
-                >
-                  <option value="">— Выберите поставщика —</option>
-                  {eligibleWhitelist.map((v) => (
-                    <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    value={payload.whitelist_vendor_id || ''}
+                    onChange={(e) => setPayload((p) => ({ ...p, whitelist_vendor_id: e.target.value || null }))}
+                    className={`${inputBaseClass} ${!payload.whitelist_vendor_id ? inputErrorClass : ''}`}
+                  >
+                    <option value="">— Выберите поставщика —</option>
+                    {eligibleWhitelist.map((v) => (
+                      <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                    ))}
+                  </select>
+                  {payload.whitelist_vendor_id ? <p className={validHintClass}>Поставщик выбран</p> : null}
+                </>
               )}
             </div>
           )}
@@ -612,8 +701,9 @@ export default function ExpenseWizardPage() {
                   value={payload.one_off_payee}
                   onChange={(e) => setPayload((p) => ({ ...p, one_off_payee: e.target.value }))}
                   placeholder="Имя или название"
-                  className="w-full h-10 px-3 rounded-md border bg-background"
+                  className={`${inputBaseClass} ${payload.one_off_payee.trim().length < 3 ? inputErrorClass : ''}`}
                 />
+                {payload.one_off_payee.trim().length >= 3 ? <p className={validHintClass}>Получатель указан</p> : null}
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Почему нет чека</label>
@@ -622,9 +712,10 @@ export default function ExpenseWizardPage() {
                   value={payload.one_off_reason}
                   onChange={(e) => setPayload((p) => ({ ...p, one_off_reason: e.target.value }))}
                   placeholder="Подробно: что, у кого, почему чек не выдали"
-                  className="w-full px-3 py-2 rounded-md border bg-background resize-none"
+                  className={`w-full px-3 py-2 rounded-md border bg-background resize-none ${payload.one_off_reason.trim().length < 30 ? inputErrorClass : ''}`}
                 />
                 <p className="text-xs text-muted-foreground mt-1">Минимум 30 символов ({payload.one_off_reason.trim().length})</p>
+                {payload.one_off_reason.trim().length >= 30 ? <p className={validHintClass}>Причина заполнена</p> : null}
               </div>
             </div>
           )}
