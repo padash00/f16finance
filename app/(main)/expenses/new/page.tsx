@@ -92,6 +92,7 @@ export default function ExpenseWizardPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [whitelist, setWhitelist] = useState<WhitelistVendor[]>([])
+  const [categoryQuery, setCategoryQuery] = useState('')
 
   const [loadingCatalogs, setLoadingCatalogs] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -135,6 +136,14 @@ export default function ExpenseWizardPage() {
   }, [])
 
   useEffect(() => {
+    if (payload.company_id || companies.length === 0) return
+    const preferred = companies.find((c) => String(c.code || '').toLowerCase() === 'arena') || companies[0]
+    if (preferred?.id) {
+      setPayload((prev) => ({ ...prev, company_id: preferred.id }))
+    }
+  }, [companies, payload.company_id])
+
+  useEffect(() => {
     if (sessionId || starting) return
     const start = async () => {
       setStarting(true)
@@ -170,6 +179,20 @@ export default function ExpenseWizardPage() {
       items: items.sort((a, b) => a.name.localeCompare(b.name, 'ru')),
     }))
   }, [categories])
+  const filteredGroupedCategories = useMemo(() => {
+    const q = categoryQuery.trim().toLowerCase()
+    if (!q) return groupedCategories
+    return groupedCategories
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => item.name.toLowerCase().includes(q)),
+      }))
+      .filter((group) => group.items.length > 0)
+  }, [groupedCategories, categoryQuery])
+  const filteredCategoriesCount = useMemo(
+    () => filteredGroupedCategories.reduce((acc, group) => acc + group.items.length, 0),
+    [filteredGroupedCategories],
+  )
 
   const eligibleWhitelist = useMemo(() => {
     if (!payload.company_id) return whitelist
@@ -406,16 +429,22 @@ export default function ExpenseWizardPage() {
             {loadingCatalogs ? (
               <div className="text-sm text-muted-foreground">Загрузка...</div>
             ) : (
-              <select
-                value={payload.company_id}
-                onChange={(e) => setPayload((p) => ({ ...p, company_id: e.target.value }))}
-                className={`${inputBaseClass} ${!payload.company_id ? inputErrorClass : ''}`}
-              >
-                <option value="">— Выберите точку —</option>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setPayload((p) => ({ ...p, company_id: c.id }))}
+                    className={`text-left rounded-md border px-3 py-2 transition ${
+                      payload.company_id === c.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
                 ))}
-              </select>
+              </div>
             )}
             {isCompanyValid ? <p className={validHintClass}>Точка выбрана</p> : null}
           </div>
@@ -425,27 +454,49 @@ export default function ExpenseWizardPage() {
               <span>Категория</span>
               {isCategoryValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
             </label>
-            <select
-              value={payload.category_id}
-              onChange={(e) => {
-                const cat = categories.find((c) => c.id === e.target.value)
-                setPayload((p) => ({
-                  ...p,
-                  category_id: e.target.value,
-                  category_name: cat?.name || '',
-                }))
-              }}
-              className={`${inputBaseClass} ${!payload.category_id ? inputErrorClass : ''}`}
-            >
-              <option value="">— Выберите категорию —</option>
-              {groupedCategories.map((g) => (
-                <optgroup key={g.group} label={g.label}>
+            <input
+              value={categoryQuery}
+              onChange={(e) => setCategoryQuery(e.target.value)}
+              placeholder="Поиск категории (например: зарплата, хоз, закуп)"
+              className={`${inputBaseClass} mb-2`}
+            />
+            <div className="max-h-64 overflow-auto rounded-md border p-2 space-y-2">
+              {filteredGroupedCategories.map((g) => (
+                <div key={g.group}>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 px-1">
+                    {g.label}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                   {g.items.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setPayload((p) => ({
+                          ...p,
+                          category_id: c.id,
+                          category_name: c.name,
+                        }))
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                        payload.category_id === c.id
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      {c.name}
+                    </button>
                   ))}
-                </optgroup>
+                  </div>
+                </div>
               ))}
-            </select>
+              {filteredCategoriesCount === 0 ? (
+                <div className="text-xs text-amber-400 px-1">Ничего не найдено. Попробуй другое слово.</div>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Найдено категорий: {filteredCategoriesCount}
+            </p>
             {isCategoryValid ? <p className={validHintClass}>Категория выбрана</p> : null}
           </div>
 
