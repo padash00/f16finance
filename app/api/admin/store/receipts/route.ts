@@ -61,6 +61,12 @@ function normalizeDigits(value: unknown) {
   return String(value || '').replace(/\D/g, '')
 }
 
+function isCogsGroup(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return false
+  return normalized === 'cogs' || normalized.includes('cogs') || normalized.includes('себестоим')
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -88,6 +94,7 @@ export async function GET(request: Request) {
       .order('name', { ascending: true })
     if (expenseCategoriesError) throw expenseCategoriesError
     const expenseCategories = (expenseCategoriesRaw || []).filter((row: any) => {
+      if (isCogsGroup(row?.accounting_group)) return true
       return resolveFinancialGroup(String(row?.name || ''), String(row?.accounting_group || '')) === 'cogs'
     })
     let draftsQuery: any = supabase
@@ -299,7 +306,11 @@ export async function POST(request: Request) {
       .eq('id', expenseCategoryId)
       .maybeSingle()
     if (expenseCategoryError) throw expenseCategoryError
-    if (!expenseCategory?.id || String(expenseCategory.accounting_group || '').toLowerCase() !== 'cogs') {
+    if (
+      !expenseCategory?.id
+      || (!isCogsGroup(expenseCategory.accounting_group)
+        && resolveFinancialGroup(String(expenseCategory.name || ''), String(expenseCategory.accounting_group || '')) !== 'cogs')
+    ) {
       return json({ error: 'Категория расхода должна быть из финансовой группы COGS' }, 400)
     }
 
