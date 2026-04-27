@@ -22,8 +22,14 @@ type Body = {
   payload: {
     location_id: string
     supplier_id?: string | null
+    supplier_create?: {
+      name: string
+      bin_iin: string
+      organization_name: string
+    } | null
     received_at: string
     invoice_number?: string | null
+    invoice_file_url?: string | null
     comment?: string | null
     items: Array<{
       item_id: string
@@ -45,6 +51,10 @@ function normalizeQty(value: unknown) {
   const amount = Number(value || 0)
   if (!Number.isFinite(amount)) return 0
   return Math.round((amount + Number.EPSILON) * 1000) / 1000
+}
+
+function normalizeDigits(value: unknown) {
+  return String(value || '').replace(/\D/g, '')
 }
 
 export async function GET(request: Request) {
@@ -105,11 +115,63 @@ export async function POST(request: Request) {
     if (!body?.action || body.action !== 'createReceipt') return json({ error: 'invalid-action' }, 400)
     await ensureInventoryLocationAccess(supabase as any, String(body.payload.location_id || '').trim(), inventoryScope)
 
+    const supplierIdRaw = String(body.payload.supplier_id || '').trim()
+    const supplierCreate = body.payload.supplier_create || null
+    let supplierId: string | null = supplierIdRaw || null
+
+    if (!supplierId && supplierCreate) {
+      const binIin = normalizeDigits(supplierCreate.bin_iin)
+      const supplierName = String(supplierCreate.name || '').trim()
+      const organizationName = String(supplierCreate.organization_name || '').trim()
+      if (!supplierName) return json({ error: 'Введите название поставщика' }, 400)
+      if (!organizationName) return json({ error: 'Введите название организации' }, 400)
+      if (!/^\d{12}$/.test(binIin)) return json({ error: 'ИИН/БИН должен состоять из 12 цифр' }, 400)
+
+      let existingQuery: any = supabase
+        .from('inventory_suppliers')
+        .select('id')
+        .eq('bin_iin', binIin)
+        .limit(1)
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        existingQuery = existingQuery.eq('organization_id', access.activeOrganization.id)
+      }
+      const { data: existingSupplier, error: existingSupplierError } = await existingQuery.maybeSingle()
+      if (existingSupplierError) throw existingSupplierError
+
+      if (existingSupplier?.id) {
+        supplierId = String(existingSupplier.id)
+      } else {
+        const insertPayload: Record<string, unknown> = {
+          name: supplierName,
+          organization_name: organizationName,
+          bin_iin: binIin,
+          contact_name: null,
+          phone: null,
+          notes: null,
+        }
+        if (!access.isSuperAdmin && access.activeOrganization?.id) {
+          insertPayload.organization_id = access.activeOrganization.id
+        }
+        const { data: createdSupplier, error: createSupplierError } = await supabase
+          .from('inventory_suppliers')
+          .insert([insertPayload])
+          .select('id')
+          .single()
+        if (createSupplierError) throw createSupplierError
+        supplierId = String(createdSupplier.id)
+      }
+    }
+    if (!supplierId) return json({ error: 'Укажите поставщика (или создайте нового с ИИН/БИН и названием организации)' }, 400)
+
+    const invoiceFileUrl = String(body.payload.invoice_file_url || '').trim()
+    if (!invoiceFileUrl) return json({ error: 'Загрузите накладную (без документа приемка запрещена)' }, 400)
+
     const result = await postInventoryReceipt(supabase as any, {
       location_id: String(body.payload.location_id || '').trim(),
-      supplier_id: body.payload.supplier_id || null,
+      supplier_id: supplierId,
       received_at: body.payload.received_at,
       invoice_number: body.payload.invoice_number || null,
+      invoice_file_url: invoiceFileUrl,
       comment: body.payload.comment || null,
       created_by: actorUserId,
       items: Array.isArray(body.payload.items)

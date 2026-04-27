@@ -240,7 +240,7 @@ export async function fetchStoreOverview(supabase: AnySupabase, scope?: Inventor
       .limit(24),
     supabase
       .from('inventory_receipts')
-      .select('id, received_at, total_amount, invoice_number, comment, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, item:item_id(id, name, barcode, unit))')
+      .select('id, received_at, total_amount, invoice_number, invoice_file_url, comment, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(10),
     supabase
@@ -332,7 +332,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
     ),
     supabase
       .from('inventory_receipts')
-      .select('id, location_id, supplier_id, received_at, invoice_number, comment, total_amount, status, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(60),
   ])
@@ -513,7 +513,7 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_receipts')
-      .select('id, location_id, supplier_id, received_at, invoice_number, comment, total_amount, status, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
+      .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
@@ -593,7 +593,14 @@ export async function createInventoryCategory(
 
 export async function createInventorySupplier(
   supabase: AnySupabase,
-  payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null },
+  payload: {
+    name: string
+    bin_iin?: string | null
+    organization_name?: string | null
+    contact_name?: string | null
+    phone?: string | null
+    notes?: string | null
+  },
   scope?: InventoryScope,
 ) {
   const { data, error } = await supabase
@@ -602,6 +609,8 @@ export async function createInventorySupplier(
       {
         organization_id: scope?.organizationId || null,
         name: payload.name.trim(),
+        bin_iin: payload.bin_iin?.trim() || null,
+        organization_name: payload.organization_name?.trim() || null,
         contact_name: payload.contact_name?.trim() || null,
         phone: payload.phone?.trim() || null,
         notes: payload.notes?.trim() || null,
@@ -805,13 +814,22 @@ export async function updateInventoryCategory(
 export async function updateInventorySupplier(
   supabase: AnySupabase,
   id: string,
-  payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null },
+  payload: {
+    name: string
+    bin_iin?: string | null
+    organization_name?: string | null
+    contact_name?: string | null
+    phone?: string | null
+    notes?: string | null
+  },
   scope?: InventoryScope,
 ) {
   let query: any = supabase
     .from('inventory_suppliers')
     .update({
       name: payload.name.trim(),
+      bin_iin: payload.bin_iin?.trim() || null,
+      organization_name: payload.organization_name?.trim() || null,
       contact_name: payload.contact_name?.trim() || null,
       phone: payload.phone?.trim() || null,
       notes: payload.notes?.trim() || null,
@@ -870,6 +888,7 @@ export async function postInventoryReceipt(
     received_at: string
     supplier_id?: string | null
     invoice_number?: string | null
+    invoice_file_url?: string | null
     comment?: string | null
     created_by?: string | null
     items: Array<{ item_id: string; quantity: number; unit_cost: number; comment?: string | null }>
@@ -880,6 +899,7 @@ export async function postInventoryReceipt(
     p_received_at: payload.received_at,
     p_supplier_id: payload.supplier_id || null,
     p_invoice_number: payload.invoice_number || null,
+    p_invoice_file_url: payload.invoice_file_url || null,
     p_comment: payload.comment || null,
     p_created_by: payload.created_by || null,
     p_items: payload.items,

@@ -31,6 +31,8 @@ type InventoryLocation = {
 type InventorySupplier = {
   id: string
   name: string
+  bin_iin: string | null
+  organization_name: string | null
 }
 
 type InventoryItem = {
@@ -49,6 +51,7 @@ type InventoryReceipt = {
   received_at: string
   total_amount: number
   invoice_number: string | null
+  invoice_file_url: string | null
   comment: string | null
   supplier?: InventorySupplier | null
   location?: InventoryLocation | null
@@ -98,6 +101,7 @@ function normalizeReceipt(raw: any): InventoryReceipt {
     received_at: raw?.received_at || '',
     total_amount: Number(raw?.total_amount || 0),
     invoice_number: raw?.invoice_number || null,
+    invoice_file_url: raw?.invoice_file_url || null,
     comment: raw?.comment || null,
     supplier: firstOrSelf(raw?.supplier),
     location: firstOrSelf(raw?.location),
@@ -165,8 +169,14 @@ export default function StoreReceiptsPage() {
 
   const [locationId, setLocationId] = useState('')
   const [supplierId, setSupplierId] = useState('')
+  const [supplierMode, setSupplierMode] = useState<'existing' | 'new'>('existing')
+  const [supplierName, setSupplierName] = useState('')
+  const [supplierOrganizationName, setSupplierOrganizationName] = useState('')
+  const [supplierBinIin, setSupplierBinIin] = useState('')
   const [receivedAt, setReceivedAt] = useState(new Date().toISOString().slice(0, 10))
   const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [invoiceFileUrl, setInvoiceFileUrl] = useState('')
+  const [uploadingInvoice, setUploadingInvoice] = useState(false)
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
   const [quickQuery, setQuickQuery] = useState('')
@@ -350,6 +360,29 @@ export default function StoreReceiptsPage() {
       setError('Добавьте хотя бы одну товарную строку')
       return
     }
+    if (!invoiceFileUrl) {
+      setError('Загрузите файл накладной. Без документа приемка запрещена.')
+      return
+    }
+    if (supplierMode === 'existing' && !supplierId) {
+      setError('Выберите поставщика')
+      return
+    }
+    if (supplierMode === 'new') {
+      if (!supplierName.trim()) {
+        setError('Введите название поставщика')
+        return
+      }
+      if (!supplierOrganizationName.trim()) {
+        setError('Введите название организации')
+        return
+      }
+      const onlyDigits = supplierBinIin.replace(/\D/g, '')
+      if (!/^\d{12}$/.test(onlyDigits)) {
+        setError('ИИН/БИН должен состоять из 12 цифр')
+        return
+      }
+    }
 
     setSaving(true)
     try {
@@ -360,9 +393,17 @@ export default function StoreReceiptsPage() {
           action: 'createReceipt',
           payload: {
             location_id: locationId,
-            supplier_id: supplierId || null,
+            supplier_id: supplierMode === 'existing' ? supplierId || null : null,
+            supplier_create: supplierMode === 'new'
+              ? {
+                  name: supplierName.trim(),
+                  organization_name: supplierOrganizationName.trim(),
+                  bin_iin: supplierBinIin.replace(/\D/g, ''),
+                }
+              : null,
             received_at: receivedAt,
             invoice_number: invoiceNumber.trim() || null,
+            invoice_file_url: invoiceFileUrl,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -373,7 +414,12 @@ export default function StoreReceiptsPage() {
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось провести приемку')
 
       setSupplierId('')
+      setSupplierMode('existing')
+      setSupplierName('')
+      setSupplierOrganizationName('')
+      setSupplierBinIin('')
       setInvoiceNumber('')
+      setInvoiceFileUrl('')
       setComment('')
       setLines([emptyLine()])
       setSuccess('Приемка проведена. Остатки и цены обновлены везде.')
@@ -468,6 +514,27 @@ export default function StoreReceiptsPage() {
     a.download = `receipts-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const uploadInvoice = async (file: File | null) => {
+    if (!file) return
+    setError(null)
+    setUploadingInvoice(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/admin/store/receipts/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить накладную')
+      setInvoiceFileUrl(String(json.document_url || ''))
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось загрузить накладную')
+    } finally {
+      setUploadingInvoice(false)
+    }
   }
 
   const filteredReceipts = useMemo(() => {
@@ -638,14 +705,20 @@ export default function StoreReceiptsPage() {
                         </TooltipContent>
                       </Tooltip>
                       {receipt.comment ? (
-                        <p className="truncate text-[11px] text-muted-foreground">{receipt.comment}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{receipt.comment}</p>
                       ) : null}
                     </td>
                     <td className="w-40 py-2.5 px-2 align-middle">
                       <span className="line-clamp-1 text-xs text-muted-foreground">{receipt.location?.name || '—'}</span>
                     </td>
                     <td className="w-32 py-2.5 px-2 align-middle">
-                      <span className="truncate font-mono text-xs text-muted-foreground">{receipt.invoice_number || '—'}</span>
+                      {receipt.invoice_file_url ? (
+                        <a href={receipt.invoice_file_url} target="_blank" rel="noreferrer" className="truncate font-mono text-xs text-emerald-300 underline">
+                          {receipt.invoice_number || 'Открыть'}
+                        </a>
+                      ) : (
+                        <span className="truncate font-mono text-xs text-rose-300">Нет файла</span>
+                      )}
                     </td>
                     <td className="w-20 py-2.5 px-2 text-right align-middle">
                       <span className="text-sm font-semibold">{(receipt.items || []).length}</span>
@@ -781,17 +854,47 @@ export default function StoreReceiptsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Поставщик</Label>
-                <Select value={supplierId || '__none__'} onValueChange={(value) => setSupplierId(value === '__none__' ? '' : value)}>
-                  <SelectTrigger><SelectValue placeholder="Без поставщика" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Без поставщика</SelectItem>
-                    {(data?.suppliers || []).map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                <Label>Поставщик (обязательно)</Label>
+                <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setSupplierMode('existing')}
+                    className={`rounded-md px-3 py-1.5 transition ${supplierMode === 'existing' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Из списка
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSupplierMode('new')}
+                    className={`rounded-md px-3 py-1.5 transition ${supplierMode === 'new' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Новый поставщик
+                  </button>
+                </div>
+                {supplierMode === 'existing' ? (
+                  <Select value={supplierId || '__none__'} onValueChange={(value) => setSupplierId(value === '__none__' ? '' : value)}>
+                    <SelectTrigger><SelectValue placeholder="Выберите поставщика" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Выберите поставщика</SelectItem>
+                      {(data?.suppliers || []).map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          {supplier.name} {supplier.bin_iin ? `· ${supplier.bin_iin}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="grid gap-2">
+                    <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Название поставщика" />
+                    <Input value={supplierOrganizationName} onChange={(e) => setSupplierOrganizationName(e.target.value)} placeholder="Название организации" />
+                    <Input
+                      value={supplierBinIin}
+                      onChange={(e) => setSupplierBinIin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                      placeholder="ИИН/БИН (12 цифр)"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -803,6 +906,26 @@ export default function StoreReceiptsPage() {
                 <Label>Номер накладной</Label>
                 <Input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} placeholder="Например, INV-104" />
               </div>
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
+              <Label>Файл накладной (обязательно)</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(event) => void uploadInvoice(event.target.files?.[0] || null)}
+                  disabled={uploadingInvoice}
+                />
+                {uploadingInvoice ? <Loader2 className="h-4 w-4 animate-spin text-amber-300" /> : null}
+              </div>
+              {invoiceFileUrl ? (
+                <a href={invoiceFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                  Накладная загружена — открыть файл
+                </a>
+              ) : (
+                <p className="text-xs text-amber-200">Без загруженной накладной приемка не будет проведена.</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -983,6 +1106,9 @@ export default function StoreReceiptsPage() {
                   Локация: <span className="text-foreground">{selectedReceipt.location?.name || '—'}</span>
                   {selectedReceipt.invoice_number ? (
                     <span> · Накладная: <span className="text-foreground">{selectedReceipt.invoice_number}</span></span>
+                  ) : null}
+                  {selectedReceipt.invoice_file_url ? (
+                    <span> · <a href={selectedReceipt.invoice_file_url} target="_blank" rel="noreferrer" className="underline text-emerald-300">Файл накладной</a></span>
                   ) : null}
                   <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedReceipt.total_amount || 0))}</span></span>
                 </div>
