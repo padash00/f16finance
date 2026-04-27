@@ -62,6 +62,8 @@ import type { Company, DateRangePreset, SessionRoleInfo } from '@/lib/core/types
 
 // ================== TYPES ==================
 type PayFilter = 'all' | 'cash' | 'kaspi'
+type ExpenseStatusFilter = 'all' | 'confirmed' | 'pending_approval' | 'approved' | 'declined'
+type DocumentKindFilter = 'all' | 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off'
 type SortMode = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
 
 type ChartPoint = {
@@ -278,6 +280,8 @@ export default function ExpensesPage() {
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<ExpenseStatusFilter>('all')
+  const [documentFilter, setDocumentFilter] = useState<DocumentKindFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const searchDebounced = useDebouncedValue(searchTerm.trim(), 350)
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
@@ -361,6 +365,8 @@ export default function ExpensesPage() {
     companyId: companyFilter !== 'all' ? companyFilter : undefined,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
     payFilter: payFilter !== 'all' ? payFilter : undefined,
+    statusFilter: statusFilter !== 'all' ? statusFilter : undefined,
+    documentKind: documentFilter !== 'all' ? documentFilter : undefined,
     search: searchDebounced.length >= SEARCH_MIN_LEN ? searchDebounced : undefined,
     sort: sortMode,
     pageSize: 2000,
@@ -440,6 +446,8 @@ export default function ExpensesPage() {
     setCompanyFilter('all')
     setCategoryFilter('all')
     setPayFilter('all')
+    setStatusFilter('all')
+    setDocumentFilter('all')
     setSearchTerm('')
     setIncludeExtraInTotals(false)
   }
@@ -532,6 +540,8 @@ export default function ExpensesPage() {
     companyFilter !== 'all',
     categoryFilter !== 'all',
     payFilter !== 'all',
+    statusFilter !== 'all',
+    documentFilter !== 'all',
     searchTerm !== ''
   ].filter(Boolean).length
 
@@ -599,6 +609,33 @@ export default function ExpensesPage() {
       ],
     }
   }, [analytics, companyFilter, companyName, dateFrom, dateTo, periodLabel])
+
+  const statusSummary = useMemo(() => {
+    const initial = {
+      pendingCount: 0,
+      pendingAmount: 0,
+      declinedCount: 0,
+      declinedAmount: 0,
+      noDocCount: 0,
+      noDocAmount: 0,
+    }
+    return rows.reduce((acc, row) => {
+      const total = rowTotal(row)
+      if (row.status === 'pending_approval') {
+        acc.pendingCount += 1
+        acc.pendingAmount += total
+      }
+      if (row.status === 'declined') {
+        acc.declinedCount += 1
+        acc.declinedAmount += total
+      }
+      if (row.document_kind === 'whitelist' || row.document_kind === 'one_off') {
+        acc.noDocCount += 1
+        acc.noDocAmount += total
+      }
+      return acc
+    }, initial)
+  }, [rows])
 
   // Export
   const downloadCSV = async () => {
@@ -994,7 +1031,7 @@ export default function ExpensesPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                     <div className="space-y-2">
                       <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
                         <Building2 className="w-3 h-3" />
@@ -1061,6 +1098,43 @@ export default function ExpensesPage() {
                         <option value="amount_asc">Сумма ↑</option>
                       </select>
                     </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Статус
+                      </label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as ExpenseStatusFilter)}
+                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                      >
+                        <option value="all">Все статусы</option>
+                        <option value="confirmed">Подтвержден</option>
+                        <option value="approved">Одобрен</option>
+                        <option value="pending_approval">Ожидает одобрения</option>
+                        <option value="declined">Отклонен</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <Paperclip className="w-3 h-3" />
+                        Документ
+                      </label>
+                      <select
+                        value={documentFilter}
+                        onChange={(e) => setDocumentFilter(e.target.value as DocumentKindFilter)}
+                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                      >
+                        <option value="all">Любой</option>
+                        <option value="receipt">Чек</option>
+                        <option value="invoice">Накладная</option>
+                        <option value="bill">Счет</option>
+                        <option value="whitelist">Whitelist</option>
+                        <option value="one_off">Разовая без документа</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="mt-4 space-y-2">
@@ -1112,6 +1186,18 @@ export default function ExpensesPage() {
                           <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
+                      {statusFilter !== 'all' && (
+                        <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-lg flex items-center gap-1">
+                          Статус: {statusFilter}
+                          <button onClick={() => setStatusFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                      {documentFilter !== 'all' && (
+                        <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded-lg flex items-center gap-1">
+                          Документ: {documentFilter}
+                          <button onClick={() => setDocumentFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
                       {searchTerm && (
                         <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-lg flex items-center gap-1">
                           Поиск: "{searchTerm}"
@@ -1143,6 +1229,51 @@ export default function ExpensesPage() {
             {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
               <span className="px-3 py-1.5 text-xs text-gray-400 border border-gray-700/50 rounded-lg">{periodLabel}</span>
             )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setStatusFilter('pending_approval')}
+              className={`px-3 py-1.5 rounded-lg text-xs border ${statusFilter === 'pending_approval' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' : 'border-gray-700 text-gray-400 hover:text-white'}`}
+            >
+              Ожидают одобрения
+            </button>
+            <button
+              onClick={() => setDocumentFilter('one_off')}
+              className={`px-3 py-1.5 rounded-lg text-xs border ${documentFilter === 'one_off' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' : 'border-gray-700 text-gray-400 hover:text-white'}`}
+            >
+              Разовые без документа
+            </button>
+            <button
+              onClick={() => setDocumentFilter('whitelist')}
+              className={`px-3 py-1.5 rounded-lg text-xs border ${documentFilter === 'whitelist' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'border-gray-700 text-gray-400 hover:text-white'}`}
+            >
+              Whitelist
+            </button>
+            <button
+              onClick={() => setStatusFilter('declined')}
+              className={`px-3 py-1.5 rounded-lg text-xs border ${statusFilter === 'declined' ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'border-gray-700 text-gray-400 hover:text-white'}`}
+            >
+              Отклоненные
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Card className="p-3 bg-gray-900/60 border-gray-800">
+              <div className="text-[11px] text-gray-500 uppercase">Pending</div>
+              <div className="text-lg font-bold text-yellow-300">{statusSummary.pendingCount}</div>
+              <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.pendingAmount)}</div>
+            </Card>
+            <Card className="p-3 bg-gray-900/60 border-gray-800">
+              <div className="text-[11px] text-gray-500 uppercase">Без документа</div>
+              <div className="text-lg font-bold text-emerald-300">{statusSummary.noDocCount}</div>
+              <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.noDocAmount)}</div>
+            </Card>
+            <Card className="p-3 bg-gray-900/60 border-gray-800">
+              <div className="text-[11px] text-gray-500 uppercase">Отклонено</div>
+              <div className="text-lg font-bold text-red-300">{statusSummary.declinedCount}</div>
+              <div className="text-xs text-gray-400">{Formatters.moneyDetailed(statusSummary.declinedAmount)}</div>
+            </Card>
           </div>
 
           {/* Templates */}
@@ -1811,9 +1942,11 @@ function ListTab({
               <th className="px-4 py-3 text-left">Дата</th>
               <th className="px-4 py-3 text-left">Компания</th>
               <th className="px-4 py-3 text-left">Категория</th>
+              <th className="px-4 py-3 text-left">Статус</th>
               <th className="px-4 py-3 text-right text-red-400">Нал</th>
               <th className="px-4 py-3 text-right text-red-400">Kaspi</th>
               <th className="px-4 py-3 text-right text-white">Итого</th>
+              <th className="px-4 py-3 text-left">Документ</th>
               <th className="px-4 py-3 text-left">Комментарий</th>
               <th className="px-4 py-3 text-center w-8"></th>
               {canManageExpense ? <th className="px-4 py-3 text-right">Действия</th> : null}
@@ -1824,6 +1957,34 @@ function ListTab({
               const total = rowTotal(row)
               const company = companyMap.get(row.company_id)
               const isExtra = company?.code === 'extra' || company?.name === 'F16 Extra'
+              const statusLabel =
+                row.status === 'pending_approval'
+                  ? 'Ожидает'
+                  : row.status === 'approved'
+                  ? 'Одобрен'
+                  : row.status === 'declined'
+                  ? 'Отклонен'
+                  : 'Подтвержден'
+              const statusClass =
+                row.status === 'pending_approval'
+                  ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                  : row.status === 'approved'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : row.status === 'declined'
+                  ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                  : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+              const docLabel =
+                row.document_kind === 'receipt'
+                  ? 'Чек'
+                  : row.document_kind === 'invoice'
+                  ? 'Накладная'
+                  : row.document_kind === 'bill'
+                  ? 'Счет'
+                  : row.document_kind === 'whitelist'
+                  ? 'Whitelist'
+                  : row.document_kind === 'one_off'
+                  ? 'One-off'
+                  : '—'
 
               return (
                 <tr
@@ -1849,6 +2010,11 @@ function ListTab({
                     </span>
                     <div className="mt-1 text-[11px] text-gray-500">{operatorName(row.operator_id)}</div>
                   </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                  </td>
                   <td className={`px-4 py-3 text-right font-mono ${row.cash_amount ? 'text-amber-400' : 'text-gray-700'}`}>
                     {row.cash_amount ? Formatters.moneyDetailed(row.cash_amount) : '—'}
                   </td>
@@ -1857,6 +2023,10 @@ function ListTab({
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-red-500 font-mono bg-red-500/5">
                     {Formatters.moneyDetailed(total)}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-400">
+                    {docLabel}
+                    {row.one_off_payee ? <div className="text-[10px] text-gray-500 truncate max-w-[120px]">{row.one_off_payee}</div> : null}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">
                     {row.comment || '—'}

@@ -75,6 +75,8 @@ export async function GET(req: Request) {
     const companyId = url.searchParams.get('company_id')
     const category = url.searchParams.get('category')
     const payFilter = url.searchParams.get('pay_filter') as 'cash' | 'kaspi' | null
+    const status = url.searchParams.get('status')
+    const documentKind = url.searchParams.get('document_kind')
     const search = url.searchParams.get('search')
     const sort = (url.searchParams.get('sort') || 'date_desc') as 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
     const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
@@ -91,7 +93,7 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('expenses')
-      .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url')
+      .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url, status, document_kind, one_off_payee, created_at')
       .range(page * pageSize, page * pageSize + pageSize - 1)
 
     if (from) query = query.gte('date', from)
@@ -103,6 +105,8 @@ export async function GET(req: Request) {
       query = query.in('company_id', companyScope.allowedCompanyIds)
     }
     if (category) query = query.eq('category', category)
+    if (status) query = query.eq('status', status)
+    if (documentKind) query = query.eq('document_kind', documentKind)
     if (payFilter === 'cash') query = query.gt('cash_amount', 0)
     else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
     if (search && search.length >= 2) {

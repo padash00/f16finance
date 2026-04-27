@@ -12,6 +12,10 @@ export type ExpenseRow = {
   kaspi_amount: number | null
   comment: string | null
   attachment_url: string | null
+  status?: 'confirmed' | 'pending_approval' | 'approved' | 'declined' | null
+  document_kind?: 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off' | null
+  one_off_payee?: string | null
+  created_at?: string | null
 }
 
 export type UseExpensesOptions = {
@@ -22,6 +26,10 @@ export type UseExpensesOptions = {
   category?: string
   /** Filter by payment type > 0 */
   payFilter?: 'cash' | 'kaspi'
+  /** Filter by expense status */
+  statusFilter?: 'confirmed' | 'pending_approval' | 'approved' | 'declined'
+  /** Filter by document kind */
+  documentKind?: 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off'
   /** Server-side ilike search on comment and category (min 2 chars) */
   search?: string
   /** Sort order (default: date_desc) */
@@ -49,6 +57,8 @@ export function useExpenses(options: UseExpensesOptions = {}) {
     companyId,
     category,
     payFilter,
+    statusFilter,
+    documentKind,
     search,
     sort = 'date_desc',
     fetchAll = false,
@@ -83,6 +93,8 @@ export function useExpenses(options: UseExpensesOptions = {}) {
         if (companyId) params.set('company_id', companyId)
         if (category) params.set('category', category)
         if (payFilter) params.set('pay_filter', payFilter)
+        if (statusFilter) params.set('status', statusFilter)
+        if (documentKind) params.set('document_kind', documentKind)
         if (search && search.length >= 2) params.set('search', search)
         params.set('sort', sort)
         if (fetchAll && mode === 'replace') {
@@ -141,7 +153,7 @@ export function useExpenses(options: UseExpensesOptions = {}) {
         setLoadingMore(false)
       }
     },
-    [from, to, companyId, category, payFilter, search, sort, fetchAll, pageSize],
+    [from, to, companyId, category, payFilter, statusFilter, documentKind, search, sort, fetchAll, pageSize],
   )
 
   useEffect(() => {
