@@ -60,6 +60,22 @@ function normalizeDigits(value: unknown) {
   return String(value || '').replace(/\D/g, '')
 }
 
+async function resolveLocationOrganizationId(
+  supabase: any,
+  locationId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('inventory_locations')
+    .select('id, organization_id, company:company_id(organization_id)')
+    .eq('id', locationId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const orgFromLocation = (data as any)?.organization_id
+  const orgFromCompany = (data as any)?.company?.organization_id
+  return orgFromLocation ? String(orgFromLocation) : orgFromCompany ? String(orgFromCompany) : null
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -198,7 +214,10 @@ export async function POST(request: Request) {
 
     if (body.action !== 'createReceipt') return json({ error: 'invalid-action' }, 400)
     if (!body.payload) return json({ error: 'payload-required' }, 400)
-    await ensureInventoryLocationAccess(supabase as any, String(body.payload.location_id || '').trim(), inventoryScope)
+    const locationId = String(body.payload.location_id || '').trim()
+    await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+    const locationOrganizationId =
+      (await resolveLocationOrganizationId(supabase as any, locationId)) || access.activeOrganization?.id || null
 
     const supplierIdRaw = String(body.payload.supplier_id || '').trim()
     const supplierCreate = body.payload.supplier_create || null
@@ -230,12 +249,13 @@ export async function POST(request: Request) {
           name: supplierName,
           organization_name: organizationName,
           bin_iin: binIin,
+          organization_id: locationOrganizationId,
           contact_name: null,
           phone: null,
           notes: null,
         }
-        if (!access.isSuperAdmin && access.activeOrganization?.id) {
-          insertPayload.organization_id = access.activeOrganization.id
+        if (!insertPayload.organization_id) {
+          return json({ error: 'Не удалось определить организацию поставщика по выбранной точке приемки' }, 400)
         }
         const { data: createdSupplier, error: createSupplierError } = await supabase
           .from('inventory_suppliers')
