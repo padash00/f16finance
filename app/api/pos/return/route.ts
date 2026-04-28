@@ -27,10 +27,11 @@ export async function GET(request: Request) {
       .from('point_sales')
       .select('id, sale_date, sold_at, total_amount, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, items:point_sale_items(id, item_id, quantity, unit_price, total_price, inventory_items(name))')
 
+    if (!saleId && !shortId) {
+      return json({ error: 'sale_id or short_id required' }, 400)
+    }
     if (saleId) {
       query = query.eq('id', saleId)
-    } else {
-      return json({ error: 'sale_id or short_id required' }, 400)
     }
 
     if (companyScope.allowedCompanyIds !== null) {
