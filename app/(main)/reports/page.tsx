@@ -13,7 +13,8 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { countImpreciseNightKaspiInRange, splitIncomeKaspiByCalendarDay } from '@/lib/reports/income-calendar-kaspi'
+import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
+import { emptyProcessedReport, processedFromBundleAggregate, type ReportBundleAggregate } from '@/lib/reports/from-api-aggregate'
 import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
 import { ReportsPageSkeleton } from '@/components/reports/reports-page-skeleton'
 
@@ -132,6 +133,7 @@ interface FinancialTotals {
 }
 
 interface TimeAggregation {
+  key: string
   label: string
   sortISO: string
   income: number
@@ -279,32 +281,6 @@ const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
   return { prevFrom, prevTo, durationDays }
 }
-
-const getISOWeekKey = (isoDate: string): string => {
-  const d = fromISO(isoDate)
-  d.setHours(0, 0, 0, 0)
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7))
-  const isoYear = d.getFullYear()
-  const week1 = new Date(isoYear, 0, 4)
-  week1.setHours(0, 0, 0, 0)
-  const week1Thursday = new Date(week1)
-  week1Thursday.setDate(week1.getDate() + 3 - ((week1.getDay() + 6) % 7))
-  const diffDays = Math.round((d.getTime() - week1Thursday.getTime()) / 86400000)
-  const weekNo = 1 + Math.floor(diffDays / 7)
-  return `${isoYear}-W${String(weekNo).padStart(2, '0')}`
-}
-
-const getISOWeekStartISO = (isoDate: string): string => {
-  const d = fromISO(isoDate)
-  d.setHours(0, 0, 0, 0)
-  const day = d.getDay()
-  const diffToMonday = (day + 6) % 7
-  d.setDate(d.getDate() - diffToMonday)
-  return toISODateLocal(d)
-}
-
-const getMonthKey = (isoDate: string): string => isoDate.slice(0, 7)
-const getYearKey = (isoDate: string): string => isoDate.slice(0, 4)
 
 const formatDateRange = (from: string, to: string): string => {
   const d1 = fromISO(from)
@@ -973,6 +949,9 @@ function ReportsContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [impreciseNightKaspiCount, setImpreciseNightKaspiCount] = useState(0)
+  const [bundleAggregate, setBundleAggregate] = useState<ReportBundleAggregate | null>(null)
+  const [forecastHints, setForecastHints] = useState<ForecastHints | null>(null)
+  const [bundleAsOf, setBundleAsOf] = useState('')
 
   // Filter states
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -6))
@@ -1024,14 +1003,6 @@ function ReportsContent() {
     const m = new Map<string, Company>()
     for (const c of companies) m.set(c.id, c)
     return m
-  }, [companies])
-
-  const extraCompanyId = useMemo(() => {
-    for (const c of companies) {
-      const code = (c.code || '').toLowerCase()
-      if (code === 'extra' || c.name?.toLowerCase().includes('extra')) return c.id
-    }
-    return null
   }, [companies])
 
   const companyName = useCallback((id: string) => companyById.get(id)?.name ?? 'Неизвестно', [companyById])
@@ -1185,53 +1156,36 @@ function ReportsContent() {
     setError(null)
 
     try {
-      const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+      const params = new URLSearchParams({
+        from: dateFrom,
+        to: dateTo,
+        as_of: todayISO(),
+        group: groupMode,
+        include_extra: includeExtraInTotals ? '1' : '0',
+      })
+      if (companyFilter !== 'all') params.set('company_id', companyFilter)
+      if (shiftFilter !== 'all') params.set('shift', shiftFilter)
 
-      const incomeFrom = addDaysISO(prevFrom, -1)
-      const incomeParams = new URLSearchParams({ from: incomeFrom, to: dateTo, page_size: '5000' })
-      const expenseCurParams = new URLSearchParams({ from: dateFrom, to: dateTo, page_size: '5000', page: '0' })
-      const expensePrevParams = new URLSearchParams({ from: prevFrom, to: prevTo, page_size: '5000', page: '0' })
-      if (companyFilter !== 'all') {
-        incomeParams.set('company_id', companyFilter)
-        expenseCurParams.set('company_id', companyFilter)
-        expensePrevParams.set('company_id', companyFilter)
-      }
-      if (shiftFilter !== 'all') {
-        incomeParams.set('shift', shiftFilter)
-      }
-
-      const [incomeResp, expenseCurResp, expensePrevResp] = await Promise.all([
-        fetch(`/api/admin/incomes?${incomeParams}`),
-        fetch(`/api/admin/expenses?${expenseCurParams}`),
-        fetch(`/api/admin/expenses?${expensePrevParams}`),
-      ])
-
+      const bundleResp = await fetch(`/api/admin/reports/bundle?${params.toString()}`)
       if (myReqId !== reqIdRef.current) return
 
-      const incomeJson = await incomeResp.json()
-      const expenseCurJson = await expenseCurResp.json()
-      const expensePrevJson = await expensePrevResp.json()
+      const bundleJson = await bundleResp.json()
+      if (!bundleResp.ok || bundleJson.error) throw new Error(bundleJson.error || 'Ошибка загрузки отчёта')
+      const data = bundleJson.data
+      if (!data?.aggregate) throw new Error('Пустой ответ')
 
-      if (incomeJson.error) throw new Error(incomeJson.error)
-      if (expenseCurJson.error) throw new Error(expenseCurJson.error)
-      if (expensePrevJson.error) throw new Error(expensePrevJson.error)
-
-      let incomes: IncomeRow[] = incomeJson.data || []
-      let expenses: ExpenseRow[] = [...(expenseCurJson.data || []), ...(expensePrevJson.data || [])]
-
-      // Client-side extra company exclusion (when no specific company selected)
-      if (companyFilter === 'all' && !includeExtraInTotals && extraCompanyId) {
-        incomes = incomes.filter((r) => r.company_id !== extraCompanyId)
-        expenses = expenses.filter((r) => r.company_id !== extraCompanyId)
-      }
-
-      setImpreciseNightKaspiCount(countImpreciseNightKaspiInRange(incomes, dateFrom, dateTo))
-      setIncomes(splitIncomeKaspiByCalendarDay(incomes) as IncomeRow[])
-      setExpenses(expenses)
+      setBundleAggregate(data.aggregate as ReportBundleAggregate)
+      setForecastHints((data.forecastHints as ForecastHints | null) ?? null)
+      setBundleAsOf(String(data.asOf || todayISO()))
+      setImpreciseNightKaspiCount(Number(data.impreciseNightKaspiCount || 0))
+      setIncomes((data.incomes || []) as IncomeRow[])
+      setExpenses((data.expenses || []) as ExpenseRow[])
 
       if (isRefresh) showToast('Данные обновлены', 'success')
     } catch (err) {
       if (myReqId === reqIdRef.current) {
+        setBundleAggregate(null)
+        setForecastHints(null)
         setError('Ошибка загрузки данных')
         showToast('Ошибка загрузки данных', 'error')
         console.error(err)
@@ -1242,16 +1196,7 @@ function ReportsContent() {
         setRefreshing(false)
       }
     }
-  }, [
-    companiesLoaded,
-    dateFrom,
-    dateTo,
-    companyFilter,
-    shiftFilter,
-    includeExtraInTotals,
-    extraCompanyId,
-    showToast,
-  ])
+  }, [companiesLoaded, dateFrom, dateTo, companyFilter, shiftFilter, includeExtraInTotals, groupMode, showToast])
 
   const scheduleReportsRealtimeReload = useCallback(() => {
     if (realtimeReloadTimerRef.current !== null) {
@@ -1389,252 +1334,12 @@ function ReportsContent() {
   ])
 
   // =====================
-  // DATA PROCESSING (MEMOIZED)
+  // DATA PROCESSING (сервер /api/admin/reports/bundle)
   // =====================
   const processed = useMemo(() => {
-    const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
-
-    const totalsCur: FinancialTotals = {
-      incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
-      expenseCash: 0, expenseKaspi: 0, totalIncome: 0, totalExpense: 0,
-      profit: 0, remainingCash: 0, remainingKaspi: 0, totalBalance: 0,
-      transactionCount: 0, avgTransaction: 0
-    }
-    const totalsPrev: FinancialTotals = { ...totalsCur }
-
-    const expenseByCategoryMap = new Map<string, number>()
-    const incomeByCompanyMap = new Map<string, { 
-      companyId: string; name: string; value: number; cash: number; 
-      kaspi: number; online: number; card: number; count: number 
-    }>()
-    const chartDataMap = new Map<string, TimeAggregation>()
-    const anomalies: Anomaly[] = []
-    const companyStats = new Map<string, CompanyStat>()
-
-    const dailyIncome = new Map<string, number>()
-    const dailyExpense = new Map<string, number>()
-
-    const getRangeBucket = (iso: string): 'current' | 'previous' | null => {
-      if (iso >= dateFrom && iso <= dateTo) return 'current'
-      if (iso >= prevFrom && iso <= prevTo) return 'previous'
-      return null
-    }
-
-    const getKey = (iso: string) => {
-      if (groupMode === 'day') return { key: iso, label: iso.slice(5), sortISO: iso }
-      if (groupMode === 'week') {
-        const wk = getISOWeekKey(iso)
-        return { key: wk, label: wk, sortISO: getISOWeekStartISO(iso) }
-      }
-      if (groupMode === 'month') {
-        const mk = getMonthKey(iso)
-        return { key: mk, label: mk, sortISO: `${mk}-01` }
-      }
-      const y = getYearKey(iso)
-      return { key: y, label: y, sortISO: `${y}-01-01` }
-    }
-
-    const ensureBucket = (key: string, label: string, sortISO: string): TimeAggregation => {
-      const b = chartDataMap.get(key)
-      if (b) return b
-      
-      const newBucket: TimeAggregation = {
-        label, sortISO, income: 0, expense: 0, profit: 0,
-        incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
-        expenseCash: 0, expenseKaspi: 0, count: 0
-      }
-      chartDataMap.set(key, newBucket)
-      return newBucket
-    }
-
-    // Process incomes
-    for (const r of incomes) {
-      const range = getRangeBucket(r.date)
-      if (!range) continue
-
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)
-      const card = safeNumber(r.card_amount)
-      const nonCash = kaspi + online + card
-      const total = cash + nonCash
-      
-      if (total <= 0 && cash === 0 && kaspi === 0 && online === 0) continue
-
-      const tgt = range === 'current' ? totalsCur : totalsPrev
-      tgt.incomeCash += cash
-      tgt.incomeKaspi += kaspi
-      tgt.incomeOnline += online
-      tgt.incomeCard += card
-      tgt.incomeNonCash += nonCash
-      tgt.totalIncome += total
-      tgt.transactionCount += 1
-
-      if (range === 'current') {
-        dailyIncome.set(r.date, (dailyIncome.get(r.date) || 0) + total)
-
-        const { key, label, sortISO } = getKey(r.date)
-        const bucket = ensureBucket(key, label, sortISO)
-        bucket.income += total
-        bucket.incomeCash += cash
-        bucket.incomeKaspi += kaspi
-        bucket.incomeOnline += online
-        bucket.incomeCard += card
-        bucket.incomeNonCash += nonCash
-        bucket.count += 1
-
-        const existing = incomeByCompanyMap.get(r.company_id)
-        if (!existing) {
-          incomeByCompanyMap.set(r.company_id, {
-            companyId: r.company_id,
-            name: companyName(r.company_id),
-            value: total, cash, kaspi, online, card, count: 1
-          })
-        } else {
-          existing.value += total
-          existing.cash += cash
-          existing.kaspi += kaspi
-          existing.online += online
-          existing.card += card
-          existing.count += 1
-        }
-
-        const cs = companyStats.get(r.company_id) || { 
-          income: 0, expense: 0, profit: 0,
-          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,
-          cashExpense: 0, kaspiExpense: 0, transactions: 0
-        }
-        cs.income += total
-        cs.cashIncome += cash
-        cs.kaspiIncome += kaspi
-        cs.onlineIncome += online
-        cs.cardIncome += card
-        cs.transactions += 1
-        companyStats.set(r.company_id, cs)
-      }
-    }
-
-    // Process expenses
-    for (const r of expenses) {
-      const range = getRangeBucket(r.date)
-      if (!range) continue
-
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const total = cash + kaspi
-      
-      if (total <= 0 && cash === 0 && kaspi === 0) continue
-
-      const tgt = range === 'current' ? totalsCur : totalsPrev
-      tgt.expenseCash += cash
-      tgt.expenseKaspi += kaspi
-      tgt.totalExpense += total
-      tgt.transactionCount += 1
-
-      if (range === 'current') {
-        dailyExpense.set(r.date, (dailyExpense.get(r.date) || 0) + total)
-
-        const category = r.category || 'Без категории'
-        expenseByCategoryMap.set(category, (expenseByCategoryMap.get(category) || 0) + total)
-
-        const { key, label, sortISO } = getKey(r.date)
-        const bucket = ensureBucket(key, label, sortISO)
-        bucket.expense += total
-        bucket.expenseCash += cash
-        bucket.expenseKaspi += kaspi
-
-        const cs = companyStats.get(r.company_id) || { 
-          income: 0, expense: 0, profit: 0,
-          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,
-          cashExpense: 0, kaspiExpense: 0, transactions: 0
-        }
-        cs.expense += total
-        cs.cashExpense += cash
-        cs.kaspiExpense += kaspi
-        companyStats.set(r.company_id, cs)
-      }
-    }
-
-    // Finalize totals
-    const finalize = (t: FinancialTotals) => {
-      t.profit = t.totalIncome - t.totalExpense
-      t.remainingCash = t.incomeCash - t.expenseCash
-      t.remainingKaspi = t.incomeNonCash - t.expenseKaspi
-      t.totalBalance = t.profit
-      t.avgTransaction = t.transactionCount > 0 ? t.totalIncome / t.transactionCount : 0
-      return t
-    }
-
-    finalize(totalsCur)
-    finalize(totalsPrev)
-
-    for (const [, stats] of companyStats) {
-      stats.profit = stats.income - stats.expense
-    }
-
-    // Anomaly detection
-    const avgIncome = totalsCur.totalIncome / (dailyIncome.size || 1)
-    const avgExpense = totalsCur.totalExpense / (dailyExpense.size || 1)
-
-    for (const [date, amount] of dailyIncome) {
-      if (amount > avgIncome * 2.5) {
-        anomalies.push({ 
-          type: 'income_spike', date, 
-          description: `Всплеск выручки: ${formatMoneyFull(amount)}`, 
-          severity: 'medium', value: amount 
-        })
-      }
-    }
-    
-    for (const [date, amount] of dailyExpense) {
-      if (amount > avgExpense * 2.5) {
-        anomalies.push({ 
-          type: 'expense_spike', date, 
-          description: `Аномальный расход: ${formatMoneyFull(amount)}`, 
-          severity: 'high', value: amount 
-        })
-      }
-    }
-
-    for (const agg of chartDataMap.values()) {
-      agg.profit = agg.income - agg.expense
-      if (agg.income > 0) {
-        const margin = agg.profit / agg.income
-        if (margin < 0.05) {
-          anomalies.push({ 
-            type: 'low_profit', date: agg.label, 
-            description: `Критически низкая маржа: ${(margin * 100).toFixed(1)}%`, 
-            severity: 'critical', value: agg.profit 
-          })
-        } else if (margin < 0.15) {
-          anomalies.push({ 
-            type: 'low_profit', date: agg.label, 
-            description: `Низкая маржа: ${(margin * 100).toFixed(1)}%`, 
-            severity: 'medium', value: agg.profit 
-          })
-        }
-      }
-    }
-
-    if (totalsCur.totalIncome > 0) {
-      const cashRatio = totalsCur.incomeCash / totalsCur.totalIncome
-      if (cashRatio > 0.8) {
-        anomalies.push({
-          type: 'high_cash_ratio',
-          date: dateTo,
-          description: `Высокая доля наличных: ${(cashRatio * 100).toFixed(0)}%`,
-          severity: 'low',
-          value: cashRatio
-        })
-      }
-    }
-
-    return { 
-      totalsCur, totalsPrev, chartDataMap, expenseByCategoryMap, 
-      incomeByCompanyMap, anomalies, companyStats, prevFrom, prevTo,
-      dailyIncome, dailyExpense
-    }
-  }, [incomes, expenses, dateFrom, dateTo, groupMode, companyName])
+    if (bundleAggregate) return processedFromBundleAggregate(bundleAggregate)
+    return emptyProcessedReport()
+  }, [bundleAggregate])
 
   const totals = processed.totalsCur
   const totalsPrev = processed.totalsPrev
@@ -1932,19 +1637,30 @@ function ReportsContent() {
   }, [totals, totalsPrev, expenseByCategoryData, processed.anomalies])
 
   // =====================
-  // FORECAST
+  // FORECAST (гибрид: МТД + прошлый календарный месяц, иначе линейно)
   // =====================
   const forecast = useMemo(() => {
     if (!['currentMonth', 'currentQuarter', 'currentYear'].includes(datePreset)) return null
-    
+
+    const hybrid =
+      bundleAggregate && forecastHints
+        ? computeMonthEndForecast({
+            dateFrom: bundleAggregate.dateFrom,
+            dateTo: bundleAggregate.dateTo,
+            asOf: bundleAsOf || todayISO(),
+            mtdIncome: bundleAggregate.totalsCur.totalIncome,
+            mtdExpense: bundleAggregate.totalsCur.totalExpense,
+            hints: forecastHints,
+          })
+        : null
+    if (hybrid) return hybrid
+
     const startDate = fromISO(dateFrom)
-    const today = new Date()
     const lastDay = fromISO(dateTo)
-    
-    const daysPassed = Math.max(1, Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1)
+    const asOfD = fromISO(bundleAsOf || todayISO())
+    const daysPassed = Math.max(1, Math.floor((asOfD.getTime() - startDate.getTime()) / 86400000) + 1)
     const totalDays = Math.floor((lastDay.getTime() - startDate.getTime()) / 86400000) + 1
     const remainingDays = Math.max(0, totalDays - daysPassed)
-    
     if (remainingDays <= 0) return null
 
     const avgIncome = totals.totalIncome / daysPassed
@@ -1957,8 +1673,11 @@ function ReportsContent() {
       forecastExpense: Math.round(totals.totalExpense + avgExpense * remainingDays),
       forecastProfit: Math.round(totals.profit + avgProfit * remainingDays),
       confidence: Math.min(95, Math.max(50, 60 + (daysPassed / totalDays) * 40)),
+      runRateIncome: 0,
+      seasonalIncome: 0,
+      note: 'Линейная экстраполяция по накопленному факту',
     }
-  }, [datePreset, dateFrom, dateTo, totals])
+  }, [datePreset, dateFrom, dateTo, totals, bundleAggregate, forecastHints, bundleAsOf])
 
   const assistantSnapshot = useMemo<PageSnapshot>(() => {
     const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
@@ -2198,7 +1917,7 @@ function ReportsContent() {
     return <ReportsPageSkeleton />
   }
 
-  if (loading && incomes.length === 0) {
+  if (loading && !bundleAggregate) {
     return <ReportsPageSkeleton />
   }
 
@@ -2242,18 +1961,15 @@ function ReportsContent() {
           )}
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 backdrop-blur-sm p-6 lg:p-7">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-                  <BarChart3 className="w-8 h-8 text-white" />
+                <div className="p-3 rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-300">
+                  <BarChart3 className="w-8 h-8" />
                 </div>
                 <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    AI Финансовая Аналитика
+                  <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight">
+                    Финансы и отчёты
                   </h1>
                   <p className="text-gray-400 mt-1 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
@@ -2546,6 +2262,9 @@ function ReportsContent() {
                     </span>
                     <span className="text-sm text-gray-400">Осталось {forecast.remainingDays} дн.</span>
                   </div>
+                  {'note' in forecast && forecast.note ? (
+                    <p className="text-xs text-gray-500 mt-2 max-w-3xl leading-relaxed">{forecast.note}</p>
+                  ) : null}
                 </div>
               </div>
             </div>
