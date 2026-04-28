@@ -239,7 +239,7 @@ export default function PosReturnsPage() {
                   Сумма возврата: {formatMoney(result.return_amount)}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Товары возвращены на склад
+                  Товары возвращены в витрину (доступный остаток точки)
                 </p>
               </div>
             </div>
