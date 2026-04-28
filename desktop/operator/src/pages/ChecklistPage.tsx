@@ -6,14 +6,18 @@ import {
   ArrowLeft,
   BadgeCheck,
   Camera,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
   Coins,
+  ImagePlus,
   LogOut,
   RefreshCw,
   Save,
   ShieldAlert,
+  Trash2,
   XCircle,
 } from 'lucide-react'
 
@@ -62,6 +66,7 @@ const SEVERITY_LABELS: Record<string, string> = {
 
 function isAnswered(item: PointChecklistItem, answer: PointChecklistAnswer | undefined) {
   if (!answer) return false
+  if ((item.requires_photo || item.answer_type === 'photo') && !answer.photo_data_url) return false
   if (item.answer_type === 'boolean') return typeof answer.passed === 'boolean'
   return String(answer.value ?? answer.note ?? '').trim().length > 0
 }
@@ -94,6 +99,34 @@ function isTemplateDue(template: PointChecklistTemplate, runs: PointChecklistRun
   return false
 }
 
+function resizePhotoToDataUrl(file: File, maxSize = 1280, quality = 0.72): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Не удалось прочитать фото'))
+    reader.onload = () => {
+      const image = new Image()
+      image.onerror = () => reject(new Error('Файл не похож на изображение'))
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height))
+        const width = Math.max(1, Math.round(image.width * scale))
+        const height = Math.max(1, Math.round(image.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const context = canvas.getContext('2d')
+        if (!context) {
+          reject(new Error('Не удалось подготовить фото'))
+          return
+        }
+        context.drawImage(image, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      image.src = String(reader.result || '')
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function ChecklistPage({
   config,
   session,
@@ -107,10 +140,12 @@ export default function ChecklistPage({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentItemIndex, setCurrentItemIndex] = useState(0)
 
   const templates = context?.checklist_templates || []
   const runs = context?.checklist_runs || []
   const articles = context?.articles || []
+  const pendingConfirmations = context?.pending_confirmations || []
   const orderedTemplates = useMemo(() => {
     return [...templates].sort((a, b) => {
       const aDue = isTemplateDue(a, runs)
@@ -157,6 +192,10 @@ export default function ChecklistPage({
 
   const answeredCount = selectedItems.filter((item) => isAnswered(item, responses[item.id])).length
   const requiredMissing = selectedItems.filter((item) => item.is_required && !isAnswered(item, responses[item.id]))
+  const currentItem = selectedItems[Math.min(currentItemIndex, Math.max(selectedItems.length - 1, 0))] || null
+  const currentAnswer = currentItem ? responses[currentItem.id] : undefined
+  const currentItemAnswered = currentItem ? isAnswered(currentItem, currentAnswer) : false
+  const progressPercent = selectedItems.length > 0 ? Math.round((answeredCount / selectedItems.length) * 100) : 0
   const failedCount = selectedItems.filter((item) => isFailedAnswer(responses[item.id])).length
   const potentialFine = selectedItems.reduce((sum, item) => {
     if (!isFailedAnswer(responses[item.id])) return sum
@@ -187,6 +226,7 @@ export default function ChecklistPage({
       const run = firstTemplateId ? data.checklist_runs.find((item) => item.template_id === firstTemplateId) : null
       setActiveRunId(run?.id || null)
       setResponses((run?.responses || {}) as Record<string, PointChecklistAnswer>)
+      setCurrentItemIndex(0)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить чек-листы')
     } finally {
@@ -199,11 +239,16 @@ export default function ChecklistPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, session.operator.operator_id, session.company.id])
 
+  useEffect(() => {
+    setCurrentItemIndex((index) => Math.min(index, Math.max(selectedItems.length - 1, 0)))
+  }, [selectedItems.length])
+
   function selectTemplate(template: PointChecklistTemplate) {
     const run = runByTemplate.get(template.id)
     setSelectedTemplateId(template.id)
     setActiveRunId(run?.id || null)
     setResponses((run?.responses || {}) as Record<string, PointChecklistAnswer>)
+    setCurrentItemIndex(0)
     setError(null)
   }
 
@@ -215,6 +260,16 @@ export default function ChecklistPage({
         ...patch,
       },
     }))
+  }
+
+  function goToNextUnanswered() {
+    if (selectedItems.length === 0) return
+    const nextIndex = selectedItems.findIndex((item, index) => index > currentItemIndex && !isAnswered(item, responses[item.id]))
+    if (nextIndex >= 0) {
+      setCurrentItemIndex(nextIndex)
+      return
+    }
+    setCurrentItemIndex(Math.min(currentItemIndex + 1, selectedItems.length - 1))
   }
 
   async function ensureRun() {
@@ -277,6 +332,22 @@ export default function ChecklistPage({
       await load()
     } catch (completeError) {
       const message = completeError instanceof Error ? completeError.message : 'Не удалось завершить чек-лист'
+      setError(message)
+      toastError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirmArticle(article: PointKnowledgeArticle) {
+    setSaving(true)
+    setError(null)
+    try {
+      await api.confirmPointKnowledgeArticle(config, session, article.id)
+      toastSuccess(`Ознакомление подтверждено: ${article.title}`)
+      await load()
+    } catch (confirmError) {
+      const message = confirmError instanceof Error ? confirmError.message : 'Не удалось подтвердить ознакомление'
       setError(message)
       toastError(message)
     } finally {
@@ -401,6 +472,47 @@ export default function ChecklistPage({
               </div>
             ) : null}
 
+            {pendingConfirmations.length > 0 ? (
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <p className="flex items-center gap-2 font-semibold">
+                      <ShieldAlert className="h-4 w-4" />
+                      Нужно подтвердить правила
+                    </p>
+                    <p className="mt-1 text-sm text-amber-100/75">
+                      Перед работой оператор должен отметить, что ознакомился с правилами, штрафами, бонусами и FAQ.
+                    </p>
+                  </div>
+                  <Badge variant="secondary">{pendingConfirmations.length} материала</Badge>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {pendingConfirmations.slice(0, 4).map((article) => (
+                    <div
+                      key={article.id}
+                      className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{article.title}</p>
+                        <p className="line-clamp-2 text-xs text-amber-100/65">
+                          {article.summary || 'Материал требует подтверждения текущей версии.'}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => void handleConfirmArticle(article)}
+                      >
+                        Подтвердить
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {selectedTemplate ? (
               <Card className="border-white/10 bg-card/90">
                 <CardHeader className="border-b border-white/10">
@@ -437,18 +549,111 @@ export default function ChecklistPage({
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-5">
-                  {selectedItems.map((item, index) => (
+                <CardContent className="space-y-5 pt-5">
+                  {selectedItems.length > 0 ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                            Пошаговый режим
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Пункт {Math.min(currentItemIndex + 1, selectedItems.length)} из {selectedItems.length} · {progressPercent}% готово
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={currentItemIndex <= 0}
+                            onClick={() => setCurrentItemIndex((index) => Math.max(index - 1, 0))}
+                          >
+                            <ChevronLeft className="mr-1 h-4 w-4" />
+                            Назад
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={currentItemAnswered ? 'default' : 'outline'}
+                            size="sm"
+                            disabled={currentItemIndex >= selectedItems.length - 1}
+                            onClick={goToNextUnanswered}
+                          >
+                            Дальше
+                            <ChevronRight className="ml-1 h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressPercent}%` }} />
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {selectedItems.map((item, index) => {
+                          const answered = isAnswered(item, responses[item.id])
+                          const failed = isFailedAnswer(responses[item.id])
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setCurrentItemIndex(index)}
+                              className={`grid h-8 w-8 place-items-center rounded-full border text-xs font-bold transition ${
+                                index === currentItemIndex
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : failed
+                                    ? 'border-rose-400/40 bg-rose-500/15 text-rose-200'
+                                    : answered
+                                      ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200'
+                                      : 'border-white/10 bg-white/5 text-muted-foreground'
+                              }`}
+                              aria-label={`Пункт ${index + 1}`}
+                            >
+                              {index + 1}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {currentItem ? (
                     <ChecklistItemCard
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      answer={responses[item.id]}
-                      linkedArticle={item.knowledge_article_id ? articleById.get(item.knowledge_article_id) : undefined}
+                      key={currentItem.id}
+                      item={currentItem}
+                      index={currentItemIndex}
+                      answer={responses[currentItem.id]}
+                      linkedArticle={currentItem.knowledge_article_id ? articleById.get(currentItem.knowledge_article_id) : undefined}
                       disabled={activeRun?.status === 'completed'}
-                      onChange={(patch) => setAnswer(item.id, patch)}
+                      onChange={(patch) => setAnswer(currentItem.id, patch)}
                     />
-                  ))}
+                  ) : null}
+
+                  {currentItem ? (
+                    <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {currentItemAnswered
+                          ? 'Пункт заполнен. Можно перейти дальше или завершить чек-лист.'
+                          : 'Заполните текущий пункт: отметка, комментарий и фото, если оно требуется.'}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={currentItemIndex <= 0}
+                          onClick={() => setCurrentItemIndex((index) => Math.max(index - 1, 0))}
+                        >
+                          Назад
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={currentItemIndex >= selectedItems.length - 1}
+                          onClick={goToNextUnanswered}
+                        >
+                          Следующий пункт
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {!selectedItems.length ? (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-muted-foreground">
                       В этом сценарии пока нет пунктов. Добавьте пункты в админке базы знаний.
@@ -504,6 +709,23 @@ function ChecklistItemCard({
 }) {
   const answered = isAnswered(item, answer)
   const failed = isFailedAnswer(answer)
+  const needsPhoto = item.requires_photo || item.answer_type === 'photo'
+  const photoInputId = `checklist-photo-${item.id}`
+
+  async function handlePhotoFile(file: File | undefined) {
+    if (!file) return
+    try {
+      const dataUrl = await resizePhotoToDataUrl(file)
+      onChange({
+        photo_data_url: dataUrl,
+        photo_name: file.name,
+        photo_captured_at: new Date().toISOString(),
+        value: item.answer_type === 'photo' ? 'photo_attached' : answer?.value,
+      })
+    } catch (photoError) {
+      toastError(photoError instanceof Error ? photoError.message : 'Не удалось прикрепить фото')
+    }
+  }
 
   return (
     <div className={`rounded-2xl border p-4 ${failed ? 'border-rose-500/30 bg-rose-500/10' : 'border-white/10 bg-black/20'}`}>
@@ -612,6 +834,80 @@ function ChecklistItemCard({
           />
         </div>
       </div>
+
+      {needsPhoto ? (
+        <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-semibold text-sky-100">
+                <Camera className="h-4 w-4" />
+                Фото-доказательство
+              </p>
+              <p className="mt-1 text-xs leading-5 text-sky-100/70">
+                Прикрепите фото проверки. Оно сохраняется в ответе чек-листа вместе со временем фиксации.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                id={photoInputId}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={disabled}
+                onChange={(event) => void handlePhotoFile(event.target.files?.[0])}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                onClick={() => document.getElementById(photoInputId)?.click()}
+              >
+                <ImagePlus className="mr-2 h-4 w-4" />
+                {answer?.photo_data_url ? 'Заменить фото' : 'Добавить фото'}
+              </Button>
+              {answer?.photo_data_url ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={() =>
+                    onChange({
+                      photo_data_url: null,
+                      photo_name: null,
+                      photo_captured_at: null,
+                      value: item.answer_type === 'photo' ? null : answer?.value,
+                    })
+                  }
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Убрать
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          {answer?.photo_data_url ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-[160px_minmax(0,1fr)] md:items-center">
+              <img
+                src={answer.photo_data_url}
+                alt="Фото проверки"
+                className="h-28 w-full rounded-xl border border-white/10 object-cover"
+              />
+              <div className="text-xs leading-5 text-sky-100/75">
+                <p className="font-medium text-sky-100">{answer.photo_name || 'Фото прикреплено'}</p>
+                <p>
+                  Время: {answer.photo_captured_at ? new Date(answer.photo_captured_at).toLocaleString('ru-RU') : 'только что'}
+                </p>
+                <p>Если есть проблема, ниже напишите короткий комментарий для руководителя.</p>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 rounded-xl border border-dashed border-sky-300/20 bg-black/20 px-3 py-2 text-xs text-sky-100/70">
+              Фото пока не прикреплено. Для обязательного фото чек-лист нельзя завершить без снимка.
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }

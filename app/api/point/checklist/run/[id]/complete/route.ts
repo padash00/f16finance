@@ -83,10 +83,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: items } = await supabase
     .from('checklist_items')
-    .select('id, fine_amount, bonus_amount, severity, is_required, title, knowledge_article_id')
+    .select('id, fine_amount, bonus_amount, severity, is_required, requires_photo, answer_type, title, knowledge_article_id')
     .eq('template_id', (run as any).template_id)
 
   const itemsArr = (items || []) as any[]
+  if (targetStatus === 'completed') {
+    const missingRequired = itemsArr.filter((item) => {
+      const response = (mergedResponses as any)[item.id]
+      if (!response) return item.is_required
+      if ((item.requires_photo || item.answer_type === 'photo') && !response.photo_data_url) {
+        return true
+      }
+      if (item.answer_type === 'boolean') return item.is_required && typeof response.passed !== 'boolean'
+      return item.is_required && String(response.value ?? response.note ?? '').trim().length === 0
+    })
+
+    if (missingRequired.length > 0) {
+      return json(
+        {
+          error: 'checklist-required-items-missing',
+          missing_items: missingRequired.map((item) => ({ id: item.id, title: item.title })),
+        },
+        409,
+      )
+    }
+  }
+
   const finesTotal = sumByMatch(itemsArr, mergedResponses, 'fine_amount')
   const bonusesTotal = sumByMatch(itemsArr, mergedResponses, 'bonus_amount')
   const resolvedStaffId =

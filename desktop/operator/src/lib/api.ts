@@ -74,7 +74,10 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    throw new Error(json.error || `HTTP ${res.status}`)
+    const error = new Error(json.message || json.error || `HTTP ${res.status}`)
+    ;(error as Error & { status?: number; payload?: unknown }).status = res.status
+    ;(error as Error & { status?: number; payload?: unknown }).payload = json
+    throw error
   }
 
   return json as T

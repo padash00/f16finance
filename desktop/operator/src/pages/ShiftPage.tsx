@@ -36,6 +36,8 @@ import type {
   BootstrapData,
   DailyKaspiReport,
   OperatorSession,
+  PointChecklistRun,
+  PointChecklistTemplate,
   PointKnowledgeContext,
   PointInventorySaleShiftSummary,
   ShiftForm,
@@ -79,6 +81,21 @@ const emptyForm = (): ShiftForm => ({
   wipon: '',
   comment: '',
 })
+
+function isBlockingChecklistDue(template: PointChecklistTemplate, runs: PointChecklistRun[]) {
+  if (!template.blocks_shift || !template.is_active || template.schedule_type === 'onboarding') return false
+  const completedRuns = runs
+    .filter((run) => run.template_id === template.id && run.status === 'completed' && run.completed_at)
+    .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)))
+
+  if (completedRuns.length === 0) return true
+  if (template.schedule_type !== 'periodic') return false
+
+  const recurrenceMs = Number(template.recurrence_minutes || 0) * 60_000
+  if (recurrenceMs <= 0) return false
+  const lastCompletedAt = new Date(String(completedRuns[0].completed_at)).getTime()
+  return !Number.isFinite(lastCompletedAt) || Date.now() - lastCompletedAt >= recurrenceMs
+}
 
 function isLastDayOfMonth(dateISO: string): boolean {
   const d = new Date(dateISO)
@@ -188,6 +205,11 @@ export default function ShiftPage({
   const hasInventoryRequest = !!onSwitchToRequest
   const kaspiDailySplitEnabled = flags.kaspi_daily_split === true
   const isNightKaspiSplit = kaspiDailySplitEnabled && form.shift === 'night'
+  const dueBlockingChecklists = knowledgeContext?.open_shift
+    ? (knowledgeContext.checklist_templates || []).filter((template) =>
+        isBlockingChecklistDue(template, knowledgeContext.checklist_runs || []),
+      )
+    : []
 
   /** F16 Ramen: классическая смена с ручным налом/Kaspi; витрина только для учёта товара, не в ФАКТ смены. */
   const isRamenCompany = (session.company.code || '').trim().toLowerCase() === 'ramen'
@@ -386,7 +408,11 @@ export default function ShiftPage({
     try {
       await api.sendShiftReport(config, formToSend, ref, session.company.id)
       return 'success'
-    } catch {
+    } catch (sendError) {
+      const status = (sendError as Error & { status?: number }).status
+      if (status && status < 500) {
+        throw sendError
+      }
       await queueShiftReport({ ...formToSend, local_ref: ref }, session.company.id)
       return 'queued'
     }
@@ -416,17 +442,7 @@ export default function ShiftPage({
     setError(null)
     setResult(null)
 
-    const blockingTemplates = (knowledgeContext?.checklist_templates || []).filter(
-      (template) => template.blocks_shift && template.is_active && template.schedule_type !== 'onboarding',
-    )
-    const completedRunTemplateIds = new Set(
-      (knowledgeContext?.checklist_runs || [])
-        .filter((run) => run.status === 'completed')
-        .map((run) => run.template_id),
-    )
-    const missingBlockingTemplates = knowledgeContext?.open_shift
-      ? blockingTemplates.filter((template) => !completedRunTemplateIds.has(template.id))
-      : []
+    const missingBlockingTemplates = dueBlockingChecklists
 
     if (missingBlockingTemplates.length > 0) {
       setError(
@@ -487,6 +503,10 @@ export default function ShiftPage({
         setPendingCount(await getPendingCount())
         setResult(sendResult)
       }
+    } catch (confirmError) {
+      const message = confirmError instanceof Error ? confirmError.message : 'Не удалось отправить отчёт'
+      setError(message)
+      toastError(message)
     } finally {
       setSubmitting(false)
     }
@@ -528,6 +548,10 @@ export default function ShiftPage({
         setPendingCount(await getPendingCount())
         setResult(sendResult)
       }
+    } catch (confirmError) {
+      const message = confirmError instanceof Error ? confirmError.message : 'Не удалось отправить отчёт'
+      setError(message)
+      toastError(message)
     } finally {
       setSubmitting(false)
     }
@@ -549,6 +573,10 @@ export default function ShiftPage({
         setPendingCount(await getPendingCount())
         setResult(sendResult)
       }
+    } catch (confirmError) {
+      const message = confirmError instanceof Error ? confirmError.message : 'Не удалось отправить отчёт'
+      setError(message)
+      toastError(message)
     } finally {
       setSubmitting(false)
     }
@@ -636,6 +664,26 @@ export default function ShiftPage({
 
       <div className="flex flex-1 overflow-auto">
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 p-5">
+          {dueBlockingChecklists.length > 0 ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Есть обязательные чек-листы</p>
+                  <p className="mt-1 text-sm text-amber-100/75">
+                    Перед закрытием смены нужно пройти: {dueBlockingChecklists.map((template) => template.title).join(', ')}.
+                  </p>
+                </div>
+              </div>
+              {onOpenChecklists ? (
+                <Button type="button" variant="outline" className="shrink-0" onClick={onOpenChecklists}>
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Открыть чек-листы
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="grid gap-3 md:grid-cols-2">
               <ModeToggleCard
@@ -977,6 +1025,12 @@ export default function ShiftPage({
             }
 
             async function handleArenaClose() {
+              if (dueBlockingChecklists.length > 0) {
+                toastError(`Перед закрытием смены завершите чек-листы: ${dueBlockingChecklists.map((template) => template.title).join(', ')}`)
+                setArenaCloseConfirm(false)
+                onOpenChecklists?.()
+                return
+              }
               setSubmitting(true)
               try {
                 const fullForm: ShiftForm = {
@@ -995,6 +1049,10 @@ export default function ShiftPage({
                 await sendOne(fullForm)
                 setArenaCloseConfirm(false)
                 onLogout()
+              } catch (confirmError) {
+                const message = confirmError instanceof Error ? confirmError.message : 'Не удалось закрыть смену'
+                setError(message)
+                toastError(message)
               } finally {
                 setSubmitting(false)
               }

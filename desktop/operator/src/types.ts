@@ -312,6 +312,9 @@ export type PointChecklistAnswer = {
   passed?: boolean
   value?: string | number | boolean | null
   note?: string | null
+  photo_data_url?: string | null
+  photo_name?: string | null
+  photo_captured_at?: string | null
 }
 
 export interface PointChecklistRun {

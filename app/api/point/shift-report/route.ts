@@ -72,6 +72,71 @@ function resolveIncomeZone(params: {
   return 'pc'
 }
 
+async function getMissingBlockingChecklists(supabase: any, companyId: string) {
+  const { data: openShift, error: shiftError } = await supabase
+    .from('point_shifts')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('status', 'open')
+    .maybeSingle()
+
+  if (shiftError || !openShift?.id) {
+    return { error: shiftError?.message || null, missing: [] as Array<{ id: string; title: string }> }
+  }
+
+  const { data: templates, error: templatesError } = await supabase
+    .from('checklist_templates')
+    .select('id, title, schedule_type, recurrence_minutes, blocks_shift, is_active')
+    .eq('is_active', true)
+    .eq('blocks_shift', true)
+    .or(`company_id.is.null,company_id.eq.${companyId}`)
+
+  if (templatesError) {
+    return { error: templatesError.message, missing: [] as Array<{ id: string; title: string }> }
+  }
+
+  const templatesArr = ((templates || []) as any[]).filter((template) => template.schedule_type !== 'onboarding')
+  if (templatesArr.length === 0) return { error: null, missing: [] as Array<{ id: string; title: string }> }
+
+  const { data: runs, error: runsError } = await supabase
+    .from('checklist_runs')
+    .select('template_id, status, completed_at')
+    .eq('shift_id', openShift.id)
+    .in(
+      'template_id',
+      templatesArr.map((template) => template.id),
+    )
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+
+  if (runsError) {
+    return { error: runsError.message, missing: [] as Array<{ id: string; title: string }> }
+  }
+
+  const runsByTemplate = new Map<string, any[]>()
+  for (const run of (runs || []) as any[]) {
+    const list = runsByTemplate.get(run.template_id) || []
+    list.push(run)
+    runsByTemplate.set(run.template_id, list)
+  }
+
+  const now = Date.now()
+  const missing = templatesArr.filter((template) => {
+    const completedRuns = runsByTemplate.get(template.id) || []
+    if (completedRuns.length === 0) return true
+    if (template.schedule_type !== 'periodic') return false
+    const recurrenceMs = Number(template.recurrence_minutes || 0) * 60_000
+    if (recurrenceMs <= 0) return false
+    const lastCompletedAt = new Date(String(completedRuns[0].completed_at || '')).getTime()
+    return !Number.isFinite(lastCompletedAt) || now - lastCompletedAt >= recurrenceMs
+  })
+
+  return {
+    error: null,
+    missing: missing.map((template) => ({ id: template.id, title: template.title })),
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const point = await requirePointDevice(request)
@@ -104,6 +169,21 @@ export async function POST(request: Request) {
 
     if (assignmentError) throw assignmentError
     if (!assignment) return json({ error: 'operator-not-assigned-to-point' }, 403)
+
+    const checklistGuard = await getMissingBlockingChecklists(supabase, device.company_id)
+    if (checklistGuard.error) {
+      return json({ error: 'shift-report-checklist-guard-failed', detail: checklistGuard.error }, 400)
+    }
+    if (checklistGuard.missing.length > 0) {
+      return json(
+        {
+          error: 'shift-report-required-checklists-missing',
+          message: 'Перед отправкой отчёта завершите обязательные чек-листы.',
+          missing_checklists: checklistGuard.missing,
+        },
+        409,
+      )
+    }
 
     const normalized = {
       date: payload.date,
