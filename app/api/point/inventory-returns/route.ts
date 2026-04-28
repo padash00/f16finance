@@ -110,28 +110,87 @@ async function ensureCatalogLocationExists(supabase: any, companyId: string) {
 }
 
 async function fetchReturnsWithFallback(supabase: any, locationId: string) {
-  const preferred = await supabase
-    .from('point_returns')
-    .select(
-      'id, sale_id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, sale_item_id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
-    )
-    .eq('location_id', locationId)
-    .order('returned_at', { ascending: false })
-    .limit(20)
-
-  if (!preferred.error) return preferred
-
-  const message = String(preferred.error?.message || '')
-  if (!/sale_id|sale_item_id/i.test(message)) return preferred
-
   return await supabase
     .from('point_returns')
     .select(
-      'id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
+      'id, sale_id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at',
     )
     .eq('location_id', locationId)
     .order('returned_at', { ascending: false })
     .limit(20)
+}
+
+async function enrichSalesAndReturns(params: {
+  supabase: any
+  sales: any[]
+  returns: any[]
+}) {
+  const saleIds = (params.sales || []).map((row) => String(row?.id || '')).filter(Boolean)
+  const returnIds = (params.returns || []).map((row) => String(row?.id || '')).filter(Boolean)
+
+  const [saleItemsRes, returnItemsRes] = await Promise.all([
+    saleIds.length
+      ? params.supabase
+          .from('point_sale_items')
+          .select('id, sale_id, item_id, quantity, unit_price, total_price')
+          .in('sale_id', saleIds)
+      : Promise.resolve({ data: [], error: null } as any),
+    returnIds.length
+      ? params.supabase
+          .from('point_return_items')
+          .select('id, return_id, sale_item_id, item_id, quantity, unit_price, total_price')
+          .in('return_id', returnIds)
+      : Promise.resolve({ data: [], error: null } as any),
+  ])
+  if (saleItemsRes.error) throw saleItemsRes.error
+  if (returnItemsRes.error) throw returnItemsRes.error
+
+  const saleItems = saleItemsRes.data || []
+  const returnItems = returnItemsRes.data || []
+  const itemIds = Array.from(
+    new Set(
+      [...saleItems, ...returnItems]
+        .map((row: any) => String(row?.item_id || ''))
+        .filter(Boolean),
+    ),
+  )
+
+  const itemsRes = itemIds.length
+    ? await params.supabase.from('inventory_items').select('id, name, barcode').in('id', itemIds)
+    : ({ data: [], error: null } as any)
+  if (itemsRes.error) throw itemsRes.error
+  const itemById = new Map<string, any>((itemsRes.data || []).map((row: any) => [String(row.id), row]))
+
+  const saleItemsBySaleId = new Map<string, any[]>()
+  for (const row of saleItems) {
+    const saleId = String((row as any).sale_id || '')
+    if (!saleItemsBySaleId.has(saleId)) saleItemsBySaleId.set(saleId, [])
+    saleItemsBySaleId.get(saleId)!.push({
+      ...row,
+      item: itemById.get(String((row as any).item_id || '')) || null,
+    })
+  }
+
+  const returnItemsByReturnId = new Map<string, any[]>()
+  for (const row of returnItems) {
+    const returnId = String((row as any).return_id || '')
+    if (!returnItemsByReturnId.has(returnId)) returnItemsByReturnId.set(returnId, [])
+    returnItemsByReturnId.get(returnId)!.push({
+      ...row,
+      item: itemById.get(String((row as any).item_id || '')) || null,
+    })
+  }
+
+  return {
+    sales: (params.sales || []).map((sale) => ({
+      ...sale,
+      items: saleItemsBySaleId.get(String(sale?.id || '')) || [],
+    })),
+    returns: (params.returns || []).map((row) => ({
+      ...row,
+      items: returnItemsByReturnId.get(String(row?.id || '')) || [],
+    })),
+  }
 }
 
 async function resolveActor(params: {
@@ -172,7 +231,7 @@ export async function GET(request: Request) {
       fetchReturnsWithFallback(supabase, location.id),
       supabase
         .from('point_sales')
-        .select('id, sale_date, shift, payment_method, total_amount, sold_at, items:point_sale_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))')
+        .select('id, sale_date, shift, payment_method, total_amount, sold_at')
         .eq('location_id', location.id)
         .order('sold_at', { ascending: false })
         .limit(50),
@@ -185,9 +244,15 @@ export async function GET(request: Request) {
 
     if (returnsError) throw returnsError
     if (salesError) throw salesError
+    const enriched = await enrichSalesAndReturns({
+      supabase,
+      sales: sales || [],
+      returns: returns || [],
+    })
+
     const returnedBySaleLineKey = new Map<string, number>()
 
-    for (const pointReturn of returns || []) {
+    for (const pointReturn of enriched.returns || []) {
       const saleId = String((pointReturn as any)?.sale_id || '').trim()
       if (!saleId) continue
       const returnItems = Array.isArray((pointReturn as any)?.items) ? (pointReturn as any).items : []
@@ -201,7 +266,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const normalizedSales = (sales || []).map((sale: any) => {
+    const normalizedSales = (enriched.sales || []).map((sale: any) => {
       const saleId = String(sale?.id || '').trim()
       const saleItems = Array.isArray(sale?.items) ? sale.items : []
       return {
@@ -230,7 +295,7 @@ export async function GET(request: Request) {
           code: device.company?.code || null,
         },
         location,
-        returns: returns || [],
+        returns: enriched.returns || [],
         sales: normalizedSales,
       },
     })
