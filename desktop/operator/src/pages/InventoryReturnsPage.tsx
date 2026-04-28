@@ -86,9 +86,7 @@ export default function InventoryReturnsPage({
     try {
       const data = await api.getPointInventoryReturns(config, session)
       setContext(data)
-      const shiftSales = data.sales.filter(
-        (sale) => sale.sale_date === runtimeShift.date && sale.shift === runtimeShift.shift,
-      )
+      const shiftSales = data.sales || []
       const nextSaleId =
         preserveSaleId && shiftSales.some((sale) => sale.id === preserveSaleId)
           ? preserveSaleId
@@ -107,13 +105,15 @@ export default function InventoryReturnsPage({
     void load()
   }, [])
 
-  // Показываем только продажи текущей смены — другой оператор не может делать возврат чужой смены
-  const currentShiftSales = useMemo(
-    () => (context?.sales || []).filter(
-      (sale) => sale.sale_date === runtimeShift.date && sale.shift === runtimeShift.shift,
-    ),
-    [context?.sales, runtimeShift],
-  )
+  const currentShiftSales = useMemo(() => {
+    const sales = context?.sales || []
+    return [...sales].sort((a, b) => {
+      const aCurrent = a.sale_date === runtimeShift.date && a.shift === runtimeShift.shift ? 1 : 0
+      const bCurrent = b.sale_date === runtimeShift.date && b.shift === runtimeShift.shift ? 1 : 0
+      if (aCurrent !== bCurrent) return bCurrent - aCurrent
+      return String(b.sold_at || '').localeCompare(String(a.sold_at || ''))
+    })
+  }, [context?.sales, runtimeShift])
 
   const selectedSale = useMemo(
     () => currentShiftSales.find((sale) => sale.id === selectedSaleId) || null,
@@ -360,7 +360,7 @@ export default function InventoryReturnsPage({
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : currentShiftSales.length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-muted-foreground">Нет продаж в этой смене</p>
+              <p className="px-2 py-4 text-center text-xs text-muted-foreground">Нет продаж для возврата</p>
             ) : (
               currentShiftSales.map((sale) => {
                 const saleItemsList = Array.isArray(sale.items) ? sale.items : []

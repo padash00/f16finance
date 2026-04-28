@@ -63,6 +63,44 @@ async function resolvePointLocation(supabase: any, companyId: string) {
   return data
 }
 
+async function ensureCatalogLocationExists(supabase: any, companyId: string) {
+  const { data: existing, error: existingError } = await supabase
+    .from('inventory_locations')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('location_type', 'catalog_total')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+  if (existingError) throw existingError
+  if (existing?.id) return String(existing.id)
+
+  const { data: company, error: companyError } = await supabase
+    .from('companies')
+    .select('id, organization_id')
+    .eq('id', companyId)
+    .maybeSingle()
+  if (companyError) throw companyError
+  if (!company?.id) throw new Error('inventory-return-company-not-found')
+
+  const payload = {
+    organization_id: (company as any).organization_id || null,
+    company_id: companyId,
+    name: 'Каталог (итог)',
+    code: 'CATALOG-TOTAL',
+    location_type: 'catalog_total',
+    is_active: true,
+  }
+
+  const { data: created, error: createError } = await supabase
+    .from('inventory_locations')
+    .insert([payload])
+    .select('id')
+    .single()
+  if (createError) throw createError
+  return String(created.id)
+}
+
 async function fetchReturnsWithFallback(supabase: any, locationId: string) {
   const preferred = await supabase
     .from('point_returns')
@@ -129,7 +167,7 @@ export async function GET(request: Request) {
         .select('id, sale_date, shift, payment_method, total_amount, sold_at, items:point_sale_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))')
         .eq('location_id', location.id)
         .order('sold_at', { ascending: false })
-        .limit(12),
+        .limit(50),
     ])
 
     const returns = returnsResult.data
@@ -212,6 +250,7 @@ export async function POST(request: Request) {
     if (body?.action !== 'createReturn') return json({ error: 'invalid-action' }, 400)
 
     const location = await resolvePointLocation(supabase, device.company_id)
+    await ensureCatalogLocationExists(supabase, device.company_id)
     const actor = await resolveActor({ request, supabase, companyId: device.company_id })
 
     const returnDate = String(body.payload?.return_date || '').trim()
