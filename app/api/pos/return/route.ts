@@ -29,8 +29,6 @@ export async function GET(request: Request) {
 
     if (saleId) {
       query = query.eq('id', saleId)
-    } else if (shortId) {
-      query = query.ilike('id', `%${shortId}`)
     } else {
       return json({ error: 'sale_id or short_id required' }, 400)
     }
@@ -42,11 +40,24 @@ export async function GET(request: Request) {
       query = query.in('company_id', companyScope.allowedCompanyIds)
     }
 
-    const { data, error } = await query.maybeSingle()
-    if (error) throw error
-    if (!data) return json({ error: 'Чек не найден' }, 404)
+    if (saleId) {
+      const { data, error } = await query.maybeSingle()
+      if (error) throw error
+      if (!data) return json({ error: 'Чек не найден' }, 404)
+      return json({ ok: true, data })
+    }
 
-    return json({ ok: true, data })
+    // UUID short search: avoid ILIKE on uuid column.
+    const normalizedShort = String(shortId || '').trim().toLowerCase()
+    if (!normalizedShort) return json({ error: 'short_id required' }, 400)
+
+    const { data: rows, error } = await query.order('sold_at', { ascending: false }).limit(200)
+    if (error) throw error
+    const found =
+      (rows || []).find((row: any) => String(row?.id || '').toLowerCase().endsWith(normalizedShort)) || null
+    if (!found) return json({ error: 'Чек не найден' }, 404)
+
+    return json({ ok: true, data: found })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/pos/return.GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка' }, 500)
