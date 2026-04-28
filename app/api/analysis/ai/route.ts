@@ -6,8 +6,14 @@ import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 export async function POST(request: Request) {
   try {
+    const access = await getRequestAccessContext(request)
+    if ("response" in access) {
+      return access.response
+    }
+
     const ip = getClientIp(request)
-    const rl = checkRateLimit(`analysis-ai:${ip}`, 20, 60_000)
+    const userId = access.user?.id || ""
+    const rl = checkRateLimit(`analysis-ai:${userId || ip}`, 20, 60_000)
     if (!rl.allowed) {
       return NextResponse.json(
         {
@@ -16,11 +22,6 @@ export async function POST(request: Request) {
         },
         { status: 429 },
       )
-    }
-
-    const access = await getRequestAccessContext(request)
-    if ("response" in access) {
-      return access.response
     }
 
     const body = (await request.json().catch(() => null)) as AnalysisData | null
