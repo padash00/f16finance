@@ -251,8 +251,9 @@ function PosReceiptsPageContent() {
       try {
         const res = await fetch('/api/pos/bootstrap')
         const j = await res.json()
-        if (j.companies) setCompanies(j.companies)
-        if (j.locations) setLocations(j.locations)
+        const payload = j?.data || {}
+        if (Array.isArray(payload.companies)) setCompanies(payload.companies)
+        if (Array.isArray(payload.locations)) setLocations(payload.locations)
       } catch {
         // non-critical, filters just won't be populated
       }
@@ -279,7 +280,13 @@ function PosReceiptsPageContent() {
       const res = await fetch(`/api/pos/receipts?${params.toString()}`)
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Ошибка загрузки')
-      setSales(j.data || [])
+      const normalizedSales = Array.isArray(j.data)
+        ? j.data.map((sale: Sale) => ({
+            ...sale,
+            items: Array.isArray(sale.items) ? sale.items : [],
+          }))
+        : []
+      setSales(normalizedSales)
       setTotal(j.total || 0)
     } catch (err: any) {
       setError(err?.message || 'Не удалось загрузить чеки')

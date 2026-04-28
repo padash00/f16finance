@@ -66,14 +66,22 @@ async function resolvePointLocation(supabase: any, companyId: string) {
 async function ensureCatalogLocationExists(supabase: any, companyId: string) {
   const { data: existing, error: existingError } = await supabase
     .from('inventory_locations')
-    .select('id')
+    .select('id, is_active')
     .eq('company_id', companyId)
     .eq('location_type', 'catalog_total')
-    .eq('is_active', true)
     .limit(1)
     .maybeSingle()
   if (existingError) throw existingError
-  if (existing?.id) return String(existing.id)
+  if (existing?.id) {
+    if (!existing.is_active) {
+      const { error: reactivateError } = await supabase
+        .from('inventory_locations')
+        .update({ is_active: true })
+        .eq('id', existing.id)
+      if (reactivateError) throw reactivateError
+    }
+    return String(existing.id)
+  }
 
   const { data: company, error: companyError } = await supabase
     .from('companies')
