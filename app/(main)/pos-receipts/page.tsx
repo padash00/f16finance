@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -224,14 +224,18 @@ function PosReceiptsPageContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [filters, setFilters] = useUrlState({
-    page: '1',
-    date_from: '',
-    date_to: '',
-    search: '',
-    company_id: '',
-    location_id: '',
-  })
+  const filterDefaults = useMemo(
+    () => ({
+      page: '1',
+      date_from: '',
+      date_to: '',
+      search: '',
+      company_id: '',
+      location_id: '',
+    }),
+    [],
+  )
+  const [filters, setFilters] = useUrlState(filterDefaults)
   const [searchInput, setSearchInput] = useState(filters.search)
 
   // Companies & locations
@@ -293,7 +297,14 @@ function PosReceiptsPageContent() {
     } finally {
       setLoading(false)
     }
-  }, [filters, page])
+  }, [
+    filters.company_id,
+    filters.location_id,
+    filters.date_from,
+    filters.date_to,
+    filters.search,
+    page,
+  ])
 
   useEffect(() => {
     void load(page)
