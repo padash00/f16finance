@@ -9,6 +9,7 @@ import {
   RefreshCw,
   ReceiptText,
   Search,
+  ScanLine,
   ShoppingBasket,
   Star,
   Tag,
@@ -219,6 +220,8 @@ export default function InventorySalesPage({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [showAllCatalog, setShowAllCatalog] = useState(false)
   const [catalogView, setCatalogView] = useState<'all' | 'low' | 'cart'>('all')
   const [comment, setComment] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
@@ -246,6 +249,7 @@ export default function InventorySalesPage({
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0)
   const [promoValidating, setPromoValidating] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   async function load() {
     setLoading(true)
@@ -301,14 +305,50 @@ export default function InventorySalesPage({
         : catalogView === 'cart'
           ? list.filter((item) => cartIds.has(item.id))
           : list
-    if (!query) return scoped
-    return scoped.filter(
+    const byCategory =
+      categoryFilter === 'all'
+        ? scoped
+        : scoped.filter((item) => item.category?.id === categoryFilter || item.category?.name === categoryFilter)
+    if (!query) return byCategory
+    return byCategory.filter(
       (item) =>
         item.name.toLowerCase().includes(query) ||
         item.barcode.toLowerCase().includes(query) ||
         item.category?.name?.toLowerCase().includes(query),
     )
-  }, [catalogView, cart, context?.items, search])
+  }, [catalogView, cart, categoryFilter, context?.items, search])
+
+  const quickCategories = useMemo(() => {
+    const categoryMap = new Map<string, { id: string; name: string; count: number }>()
+    ;(context?.items || []).forEach((item) => {
+      const category = item.category
+      if (!category?.name) return
+      const id = category.id || category.name
+      const current = categoryMap.get(id)
+      categoryMap.set(id, {
+        id,
+        name: category.name,
+        count: (current?.count || 0) + 1,
+      })
+    })
+    return Array.from(categoryMap.values()).sort((a, b) => b.count - a.count).slice(0, 6)
+  }, [context?.items])
+
+  const visibleItems = useMemo(() => {
+    const query = search.trim()
+    const availableFirst = [...filteredItems].sort((a, b) => {
+      const aAvailable = Number(a.display_qty || 0) > 0 ? 1 : 0
+      const bAvailable = Number(b.display_qty || 0) > 0 ? 1 : 0
+      if (aAvailable !== bAvailable) return bAvailable - aAvailable
+      if (a.display_qty !== b.display_qty) return Number(b.display_qty || 0) - Number(a.display_qty || 0)
+      return a.name.localeCompare(b.name, 'ru')
+    })
+
+    if (query || catalogView !== 'all' || showAllCatalog) return availableFirst
+    return availableFirst.slice(0, 12)
+  }, [catalogView, filteredItems, search, showAllCatalog])
+
+  const hiddenItemsCount = Math.max(0, filteredItems.length - visibleItems.length)
 
   const cartDetailed = useMemo(() => {
     const itemsById = new Map((context?.items || []).map((item) => [item.id, item]))
@@ -418,6 +458,8 @@ export default function InventorySalesPage({
     setCart([])
     setComment('')
     setCatalogView('all')
+    setCategoryFilter('all')
+    setShowAllCatalog(false)
     setMixedCash('')
     setPaymentMethod('cash')
     clearCustomer()
@@ -600,51 +642,77 @@ export default function InventorySalesPage({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* LEFT: product catalog */}
+        {/* LEFT: minimal POS catalog */}
         <div className="flex flex-1 flex-col overflow-hidden border-r border-white/10">
           {/* Status bar */}
-          <div className="flex shrink-0 items-center gap-2 border-b border-white/10 bg-card px-4 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{context?.location?.name || 'Витрина'}</span>
-            <span>·</span>
-            <span>{formatShiftLabel(runtimeShift.shift)}</span>
-            <span>·</span>
-            <span>{availableItemsCount} SKU</span>
-            {lowStockItemsCount > 0 && (
-              <>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-card px-4 py-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{context?.location?.name || 'Витрина'}</span>
                 <span>·</span>
-                <span className="text-amber-400">{lowStockItemsCount} мало</span>
-              </>
-            )}
-            {cartUnits > 0 && (
-              <>
+                <span>{formatShiftLabel(runtimeShift.shift)}</span>
                 <span>·</span>
-                <span className="text-emerald-400">{cartUnits} в корзине</span>
-              </>
-            )}
+                <span>{availableItemsCount} товаров доступно</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Быстрый режим: сканируйте штрихкод или найдите товар, полный каталог скрыт.
+              </p>
+            </div>
+            {onSwitchToScanner ? (
+              <Button type="button" size="sm" variant="outline" onClick={onSwitchToScanner} className="h-8 shrink-0 gap-2">
+                <ScanLine className="h-3.5 w-3.5" />
+                Сканер
+              </Button>
+            ) : null}
           </div>
 
-          {/* Search + filter */}
-          <div className="shrink-0 space-y-2 border-b border-white/10 px-3 py-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск по названию, штрихкоду или категории"
-                className="w-full rounded-lg border border-input bg-background py-1.5 pl-9 pr-3 text-sm outline-none focus:border-emerald-400/50"
-              />
+          {/* Search + quick filters */}
+          <div className="shrink-0 space-y-3 border-b border-white/10 px-3 py-3">
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Сканируйте штрихкод или введите название товара"
+                  className="h-12 w-full rounded-2xl border border-input bg-background py-2 pl-10 pr-10 text-base outline-none transition focus:border-emerald-400/60 focus:bg-white/[0.03]"
+                />
+                {search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    aria-label="Очистить поиск"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant={showAllCatalog ? 'secondary' : 'outline'}
+                onClick={() => setShowAllCatalog((value) => !value)}
+                className="h-12 rounded-2xl px-4"
+              >
+                {showAllCatalog ? 'Скрыть лишнее' : 'Все товары'}
+              </Button>
             </div>
-            <div className="flex gap-1.5">
+
+            <div className="flex flex-wrap gap-1.5">
               {[
-                { key: 'all' as const, label: 'Все' },
-                { key: 'low' as const, label: 'Мало' },
-                { key: 'cart' as const, label: 'В корзине' },
+                { key: 'all' as const, label: 'Быстрые' },
+                { key: 'low' as const, label: `Мало${lowStockItemsCount > 0 ? ` (${lowStockItemsCount})` : ''}` },
+                { key: 'cart' as const, label: `В корзине${cartUnits > 0 ? ` (${cartUnits})` : ''}` },
               ].map((option) => (
                 <button
                   key={option.key}
                   type="button"
-                  onClick={() => setCatalogView(option.key)}
-                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                  onClick={() => {
+                    setCatalogView(option.key)
+                    if (option.key !== 'all') setShowAllCatalog(true)
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     catalogView === option.key
                       ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
                       : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
@@ -653,7 +721,40 @@ export default function InventorySalesPage({
                   {option.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('all')}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  categoryFilter === 'all'
+                    ? 'border-sky-400/40 bg-sky-500/15 text-sky-100'
+                    : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Все категории
+              </button>
+              {quickCategories.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => {
+                    setCategoryFilter(category.id)
+                    setShowAllCatalog(true)
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    categoryFilter === category.id
+                      ? 'border-sky-400/40 bg-sky-500/15 text-sky-100'
+                      : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {category.name}
+                </button>
+              ))}
             </div>
+            {lowStockItemsCount > 0 && (
+              <p className="text-[11px] text-amber-300">
+                {lowStockItemsCount} товара почти закончились. Нажмите “Мало”, если нужно проверить остатки.
+              </p>
+            )}
           </div>
 
           {/* Product grid */}
@@ -666,40 +767,67 @@ export default function InventorySalesPage({
                 Загружаем витрину...
               </div>
             ) : filteredItems.length === 0 ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">Нет товаров</div>
+              <div className="flex h-40 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+                <ShoppingBasket className="h-8 w-8 opacity-50" />
+                <span>{search ? 'Товар не найден. Проверьте название или штрихкод.' : 'Нет доступных товаров на витрине.'}</span>
+              </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 2xl:grid-cols-3">
-                {filteredItems.map((item) => {
-                  const disabled = item.display_qty <= 0
-                  const inCart = cart.some((l) => l.item_id === item.id)
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => addToCart(item)}
-                      disabled={disabled}
-                      className={`rounded-2xl border p-3 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 ${
-                        inCart ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-white/10 bg-white/[0.03]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-sm font-semibold leading-tight text-foreground">{item.name}</p>
-                        <Badge variant={disabled ? 'secondary' : 'success'} className="shrink-0 text-[10px]">
-                          {item.display_qty}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between">
-                        <p className="text-base font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
-                        <div className={`flex h-7 w-7 items-center justify-center rounded-xl ${inCart ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
-                          <Plus className="h-4 w-4" />
+              <div className="space-y-3">
+                {!search.trim() && catalogView === 'all' && !showAllCatalog ? (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                    Показываем только быстрые позиции. Если товара нет на экране, отсканируйте штрихкод, начните поиск или нажмите “Все товары”.
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {visibleItems.map((item) => {
+                    const disabled = item.display_qty <= 0
+                    const inCart = cart.some((l) => l.item_id === item.id)
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => addToCart(item)}
+                        disabled={disabled}
+                        className={`rounded-2xl border p-3 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 ${
+                          inCart ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-white/10 bg-white/[0.03]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 text-sm font-semibold leading-tight text-foreground">{item.name}</p>
+                            {item.category?.name ? (
+                              <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.category.name}</p>
+                            ) : null}
+                          </div>
+                          <Badge variant={disabled ? 'secondary' : 'success'} className="shrink-0 text-[10px]">
+                            {item.display_qty}
+                          </Badge>
                         </div>
-                      </div>
-                      {item.display_qty > 0 && item.display_qty <= 3 && (
-                        <Badge variant="warning" className="mt-1.5 text-[10px]">Мало</Badge>
-                      )}
-                    </button>
-                  )
-                })}
+                        <div className="mt-3 flex items-center justify-between">
+                          <p className="text-base font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
+                          <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${inCart ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                            <Plus className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="mt-2 flex min-h-5 items-center gap-1.5">
+                          {item.display_qty > 0 && item.display_qty <= 3 ? (
+                            <Badge variant="warning" className="text-[10px]">Мало</Badge>
+                          ) : null}
+                          {inCart ? <Badge variant="success" className="text-[10px]">В корзине</Badge> : null}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                {hiddenItemsCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCatalog(true)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-muted-foreground transition hover:border-emerald-400/30 hover:text-foreground"
+                  >
+                    Показать ещё {hiddenItemsCount} товаров
+                  </button>
+                ) : null}
               </div>
             )}
           </div>

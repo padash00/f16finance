@@ -285,7 +285,7 @@ export default function ChecklistPage({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
       <div className="h-9 shrink-0 drag-region bg-card" />
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 py-3 no-drag">
         <div className="flex items-center gap-3">
@@ -315,7 +315,7 @@ export default function ChecklistPage({
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto p-5">
+      <main className="min-h-0 flex-1 overflow-y-auto p-5">
         <div className="mx-auto grid w-full max-w-7xl gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
           <aside className="space-y-4">
             <Card className="border-white/10 bg-card/90">
