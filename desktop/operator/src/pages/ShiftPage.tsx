@@ -36,6 +36,7 @@ import type {
   BootstrapData,
   DailyKaspiReport,
   OperatorSession,
+  PointKnowledgeContext,
   PointInventorySaleShiftSummary,
   ShiftForm,
 } from '@/types'
@@ -51,6 +52,7 @@ interface Props {
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onSwitchToArena?: () => void
+  onOpenChecklists?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -111,6 +113,7 @@ export default function ShiftPage({
   onSwitchToScanner,
   onSwitchToRequest,
   onSwitchToArena,
+  onOpenChecklists,
   onOpenCabinet,
 }: Props) {
   const [draftLost, setDraftLost] = useState(false)
@@ -171,6 +174,7 @@ export default function ShiftPage({
   const [dailyReport, setDailyReport] = useState<DailyKaspiReport | null>(null)
   const [salesSummary, setSalesSummary] = useState<PointInventorySaleShiftSummary | null>(null)
   const [salesSummaryLoading, setSalesSummaryLoading] = useState(false)
+  const [knowledgeContext, setKnowledgeContext] = useState<PointKnowledgeContext | null>(null)
 
   // Arena mode: today's income rows + tech logs
   const [arenaIncomeRows, setArenaIncomeRows] = useState<{ cash_amount: number; kaspi_amount: number; comment: string | null; created_at?: string }[]>([])
@@ -305,6 +309,21 @@ export default function ShiftPage({
     return () => clearTimeout(timer)
   }, [form.date, form.shift, loadSalesSummary, viewMode])
 
+  const loadKnowledgeContext = useCallback(async () => {
+    try {
+      const data = await api.getPointKnowledge(config, session)
+      setKnowledgeContext(data)
+    } catch {
+      setKnowledgeContext(null)
+    }
+  }, [config, session])
+
+  useEffect(() => {
+    void loadKnowledgeContext()
+    const id = setInterval(() => void loadKnowledgeContext(), 60_000)
+    return () => clearInterval(id)
+  }, [loadKnowledgeContext])
+
   const loadArenaIncome = useCallback(async () => {
     if (!useArenaShiftDashboard) return
     setArenaIncomeLoading(true)
@@ -396,6 +415,28 @@ export default function ShiftPage({
     event.preventDefault()
     setError(null)
     setResult(null)
+
+    const blockingTemplates = (knowledgeContext?.checklist_templates || []).filter(
+      (template) => template.blocks_shift && template.is_active && template.schedule_type !== 'onboarding',
+    )
+    const completedRunTemplateIds = new Set(
+      (knowledgeContext?.checklist_runs || [])
+        .filter((run) => run.status === 'completed')
+        .map((run) => run.template_id),
+    )
+    const missingBlockingTemplates = knowledgeContext?.open_shift
+      ? blockingTemplates.filter((template) => !completedRunTemplateIds.has(template.id))
+      : []
+
+    if (missingBlockingTemplates.length > 0) {
+      setError(
+        `Перед закрытием смены завершите обязательные чек-листы: ${missingBlockingTemplates
+          .map((template) => template.title)
+          .join(', ')}`,
+      )
+      onOpenChecklists?.()
+      return
+    }
 
     if (fact <= 0) {
       setError('Введите сумму выручки')
@@ -1395,6 +1436,13 @@ export default function ShiftPage({
                       icon={<ClipboardList className="h-4 w-4" />}
                       label="Заявка на склад"
                       onClick={onSwitchToRequest}
+                    />
+                  ) : null}
+                  {onOpenChecklists ? (
+                    <QuickActionButton
+                      icon={<ClipboardList className="h-4 w-4" />}
+                      label="Чек-листы смены"
+                      onClick={onOpenChecklists}
                     />
                   ) : null}
                   {onOpenCabinet ? (

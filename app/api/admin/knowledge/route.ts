@@ -196,12 +196,122 @@ async function loadKnowledgeData(params: { organizationId: string | null; isSupe
     items = data || []
   }
 
+  const templates = templatesResult.data || []
+  const companies = companiesResult.data || []
+  const templateById = new Map(templates.map((template: any) => [String(template.id), template]))
+  const companyById = new Map(companies.map((company: any) => [String(company.id), company]))
+  const itemsByTemplate = new Map<string, any[]>()
+  for (const item of items) {
+    const list = itemsByTemplate.get(String(item.template_id)) || []
+    list.push(item)
+    itemsByTemplate.set(String(item.template_id), list)
+  }
+
+  let runs: any[] = []
+  if (templateIds.length) {
+    const { data: rawRuns, error: runsError } = await supabase
+      .from('checklist_runs')
+      .select('id, shift_id, template_id, run_by, co_signed_by, started_at, completed_at, scheduled_at, status, responses, fines_total, bonuses_total, created_at, updated_at')
+      .in('template_id', templateIds)
+      .order('created_at', { ascending: false })
+      .limit(150)
+    if (runsError) throw runsError
+
+    const shiftIds = Array.from(new Set((rawRuns || []).map((run: any) => run.shift_id).filter(Boolean).map(String)))
+    const staffIds = Array.from(
+      new Set(
+        (rawRuns || [])
+          .flatMap((run: any) => [run.run_by, run.co_signed_by])
+          .filter(Boolean)
+          .map(String),
+      ),
+    )
+
+    const [shiftsResult, staffResult] = await Promise.all([
+      shiftIds.length
+        ? supabase
+            .from('point_shifts')
+            .select('id, company_id, opened_at, closed_at, shift_type, status')
+            .in('id', shiftIds)
+        : Promise.resolve({ data: [], error: null }),
+      staffIds.length
+        ? supabase
+            .from('staff')
+            .select('id, full_name, short_name, email')
+            .in('id', staffIds)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+    if (shiftsResult.error) throw shiftsResult.error
+    if (staffResult.error) throw staffResult.error
+
+    const shiftById = new Map(((shiftsResult.data || []) as any[]).map((shift) => [String(shift.id), shift]))
+    const staffById = new Map(((staffResult.data || []) as any[]).map((staff) => [String(staff.id), staff]))
+    const allowedCompanySet = allowedCompanyIds ? new Set(allowedCompanyIds) : null
+
+    runs = ((rawRuns || []) as any[])
+      .map((run) => {
+        const shift = shiftById.get(String(run.shift_id))
+        const companyId = shift?.company_id || templateById.get(String(run.template_id))?.company_id || null
+        if (allowedCompanySet && companyId && !allowedCompanySet.has(companyId)) return null
+        const responses = run.responses && typeof run.responses === 'object' && !Array.isArray(run.responses)
+          ? run.responses
+          : {}
+        const responseValues = Object.values(responses as Record<string, any>)
+        const failedCount = responseValues.filter((response: any) => response?.passed === false || response?.value === false).length
+        const templateItems = itemsByTemplate.get(String(run.template_id)) || []
+        const responseItems = templateItems.map((item: any) => {
+          const response = (responses as Record<string, any>)[String(item.id)] || null
+          const hasResponse = response !== null
+          const failed = response?.passed === false || response?.value === false
+          const passed = failed
+            ? false
+            : response?.passed === true || response?.value === true || (hasResponse && item.answer_type !== 'boolean')
+          return {
+            id: item.id,
+            title: item.title,
+            is_required: item.is_required,
+            requires_photo: item.requires_photo,
+            severity: item.severity,
+            fine_amount: item.fine_amount,
+            bonus_amount: item.bonus_amount,
+            answer_type: item.answer_type,
+            passed: hasResponse ? passed : null,
+            failed,
+            value: response?.value ?? null,
+            note: response?.note || response?.comment || null,
+          }
+        })
+        const runner = run.run_by ? staffById.get(String(run.run_by)) : null
+        const cosigner = run.co_signed_by ? staffById.get(String(run.co_signed_by)) : null
+        const company = companyId ? companyById.get(String(companyId)) : null
+
+        return {
+          ...run,
+          template_title: templateById.get(String(run.template_id))?.title || 'Чек-лист',
+          company_id: companyId,
+          company_name: company?.name || null,
+          shift_type: shift?.shift_type || null,
+          shift_status: shift?.status || null,
+          shift_opened_at: shift?.opened_at || null,
+          run_by_name: runner?.full_name || runner?.short_name || runner?.email || null,
+          co_signed_by_name: cosigner?.full_name || cosigner?.short_name || cosigner?.email || null,
+          item_count: templateItems.length,
+          answered_count: responseValues.length,
+          failed_count: failedCount,
+          response_items: responseItems,
+        }
+      })
+      .filter(Boolean)
+  }
+
   return {
     categories: categoriesResult.data || [],
     articles: articlesResult.data || [],
-    templates: templatesResult.data || [],
+    templates,
     items,
-    companies: companiesResult.data || [],
+    companies,
+    runs,
   }
 }
 

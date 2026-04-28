@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  AlertTriangle,
   CalendarDays,
   CheckSquare,
   CreditCard,
+  FileText,
   LogOut,
+  Search,
   RefreshCw,
+  ShieldCheck,
   UserCircle2,
   CheckCircle2,
 } from 'lucide-react'
@@ -16,18 +20,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import * as api from '@/lib/api'
 import { formatDate, formatMoney, todayISO } from '@/lib/utils'
-import type { AppConfig, BootstrapData, DebtItem, OperatorSession, OperatorTask } from '@/types'
+import type {
+  AppConfig,
+  BootstrapData,
+  DebtItem,
+  OperatorSession,
+  OperatorTask,
+  PointKnowledgeArticle,
+  PointKnowledgeContext,
+} from '@/types'
 
 interface Props {
   config: AppConfig
   bootstrap: BootstrapData
   session: OperatorSession
-  returnTo: 'shift' | 'sale' | 'scanner'
+  returnTo: 'shift' | 'sale' | 'return' | 'scanner' | 'checklists'
   onBackToWork: () => void
   onLogout: () => void
 }
 
-type CabinetTab = 'shifts' | 'tasks' | 'debts' | 'profile'
+type CabinetTab = 'knowledge' | 'shifts' | 'tasks' | 'debts' | 'profile'
 
 type ShiftRow = {
   id: string
@@ -41,11 +53,19 @@ type ShiftRow = {
 }
 
 const TABS: { id: CabinetTab; label: string; icon: typeof CalendarDays }[] = [
+  { id: 'knowledge', label: 'Правила и FAQ', icon: FileText },
   { id: 'shifts', label: 'Мои смены', icon: CalendarDays },
   { id: 'tasks', label: 'Мои задачи', icon: CheckSquare },
   { id: 'debts', label: 'Мои долги', icon: CreditCard },
   { id: 'profile', label: 'Профиль', icon: UserCircle2 },
 ]
+
+const SEVERITY_LABELS: Record<string, string> = {
+  info: 'Инфо',
+  normal: 'Обычно',
+  warning: 'Важно',
+  critical: 'Критично',
+}
 
 function taskStatusLabel(status: string) {
   switch (status) {
@@ -107,10 +127,13 @@ export default function OperatorCabinetPage({
   const [adminTokenInput, setAdminTokenInput] = useState('')
   const [payDebtSaving, setPayDebtSaving] = useState(false)
   const [payDebtError, setPayDebtError] = useState<string | null>(null)
-  const [sectionErrors, setSectionErrors] = useState<Partial<Record<'shifts' | 'debts' | 'tasks', string>>>({})
+  const [sectionErrors, setSectionErrors] = useState<Partial<Record<'shifts' | 'debts' | 'tasks' | 'knowledge', string>>>({})
   const [shifts, setShifts] = useState<ShiftRow[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [tasks, setTasks] = useState<OperatorTask[]>([])
+  const [knowledge, setKnowledge] = useState<PointKnowledgeContext | null>(null)
+  const [knowledgeQuery, setKnowledgeQuery] = useState('')
+  const [confirmingArticleId, setConfirmingArticleId] = useState<string | null>(null)
   const [from, setFrom] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - 30)
@@ -123,12 +146,13 @@ export default function OperatorCabinetPage({
     setError(null)
     setSectionErrors({})
 
-    const [cabinetResult, tasksResult] = await Promise.allSettled([
+    const [cabinetResult, tasksResult, knowledgeResult] = await Promise.allSettled([
       api.getPointOperatorCabinet(config, session),
       api.getPointOperatorTasks(config, session),
+      api.getPointKnowledge(config, session),
     ])
 
-    const nextErrors: Partial<Record<'shifts' | 'debts' | 'tasks', string>> = {}
+    const nextErrors: Partial<Record<'shifts' | 'debts' | 'tasks' | 'knowledge', string>> = {}
 
     if (cabinetResult.status === 'fulfilled') {
       const ownShifts = (cabinetResult.value.shifts || []).map((row: any) => {
@@ -179,6 +203,15 @@ export default function OperatorCabinetPage({
       nextErrors.tasks = tasksResult.reason instanceof Error ? tasksResult.reason.message : 'Не удалось загрузить задачи'
     }
 
+    if (knowledgeResult.status === 'fulfilled') {
+      setKnowledge(knowledgeResult.value)
+    } else {
+      setKnowledge(null)
+      nextErrors.knowledge = knowledgeResult.reason instanceof Error
+        ? knowledgeResult.reason.message
+        : 'Не удалось загрузить правила и FAQ'
+    }
+
     // Save to cache if both succeeded
     if (cabinetResult.status === 'fulfilled' && tasksResult.status === 'fulfilled') {
       try {
@@ -192,7 +225,7 @@ export default function OperatorCabinetPage({
     }
 
     setSectionErrors(nextErrors)
-    if (Object.keys(nextErrors).length >= 3) {
+    if (Object.keys(nextErrors).length >= 4) {
       setError('Не удалось загрузить личный кабинет. Проверьте сеть и попробуйте обновить.')
     }
     setLoading(false)
@@ -242,7 +275,47 @@ export default function OperatorCabinetPage({
   const totalShiftRevenue = filteredShifts.reduce((sum, row) => sum + row.total, 0)
   const totalDebt = filteredDebts.filter((item) => item.status === 'active').reduce((sum, row) => sum + row.total_amount, 0)
   const activeTasks = tasks.filter((task) => !['done', 'archived'].includes(task.status)).length
+  const pendingConfirmations = knowledge?.pending_confirmations || []
+  const pendingConfirmationIds = useMemo(
+    () => new Set(pendingConfirmations.map((article) => article.id)),
+    [pendingConfirmations],
+  )
+  const knowledgeArticles = useMemo(() => {
+    const query = knowledgeQuery.trim().toLowerCase()
+    const articles = knowledge?.articles || []
+    if (!query) return articles
+    return articles.filter((article) => {
+      const haystack = [
+        article.title,
+        article.summary,
+        article.content,
+        article.category?.title,
+        ...(article.tags || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [knowledge?.articles, knowledgeQuery])
+  const visibleKnowledgeArticles = useMemo(
+    () => knowledgeArticles.filter((article) => !pendingConfirmationIds.has(article.id)),
+    [knowledgeArticles, pendingConfirmationIds],
+  )
   const profileName = session.operator.full_name || session.operator.name || session.operator.username
+
+  async function handleConfirmArticle(articleId: string) {
+    setConfirmingArticleId(articleId)
+    setError(null)
+    try {
+      await api.confirmPointKnowledgeArticle(config, session, articleId)
+      await load()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось подтвердить ознакомление')
+    } finally {
+      setConfirmingArticleId(null)
+    }
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -321,13 +394,25 @@ export default function OperatorCabinetPage({
               </Card>
             </div>
 
+            {pendingConfirmations.length > 0 ? (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-4 w-4" />
+                  Есть материалы, которые нужно прочитать и подтвердить: {pendingConfirmations.length}
+                </div>
+                <div className="mt-1 text-xs text-amber-100/70">
+                  Откройте вкладку «Правила и FAQ», прочитайте новые правила и нажмите «Ознакомлен».
+                </div>
+              </div>
+            ) : null}
+
             {error ? (
               <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground">
                 {error}
               </div>
             ) : null}
 
-            {activeTab !== 'profile' ? (
+            {activeTab !== 'profile' && activeTab !== 'knowledge' ? (
               <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">С</label>
@@ -338,6 +423,78 @@ export default function OperatorCabinetPage({
                   <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
                 </div>
               </div>
+            ) : null}
+
+            {!loading && activeTab === 'knowledge' ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <ShieldCheck className="h-4 w-4 text-primary" />
+                        Правила, FAQ и подтверждения
+                      </CardTitle>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Здесь правила смены, ответы на частые проблемы, штрафы, бонусы и материалы для обучения.
+                      </p>
+                    </div>
+                    <Badge variant={pendingConfirmations.length ? 'destructive' : 'default'}>
+                      {pendingConfirmations.length ? `Нужно подтвердить: ${pendingConfirmations.length}` : 'Всё подтверждено'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <SectionError message={sectionErrors.knowledge} />
+
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <input
+                      value={knowledgeQuery}
+                      onChange={(event) => setKnowledgeQuery(event.target.value)}
+                      placeholder="Поиск: Kaspi, штраф, закрытие смены, клиент, техника..."
+                      className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+
+                  {pendingConfirmations.length > 0 ? (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+                      <div className="mb-3 text-sm font-semibold text-amber-100">Обязательные материалы</div>
+                      <div className="grid gap-3">
+                        {pendingConfirmations.map((article) => (
+                          <KnowledgeArticleCard
+                            key={article.id}
+                            article={article}
+                            required
+                            confirming={confirmingArticleId === article.id}
+                            onConfirm={() => void handleConfirmArticle(article.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-3">
+                    {visibleKnowledgeArticles.map((article) => (
+                      <KnowledgeArticleCard
+                        key={article.id}
+                        article={article}
+                        required={pendingConfirmationIds.has(article.id)}
+                        confirming={confirmingArticleId === article.id}
+                        onConfirm={
+                          article.requires_confirmation
+                            ? () => void handleConfirmArticle(article.id)
+                            : undefined
+                        }
+                      />
+                    ))}
+                    {visibleKnowledgeArticles.length === 0 && pendingConfirmations.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-muted-foreground">
+                        Материалов пока нет или ничего не найдено по запросу.
+                      </div>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
             ) : null}
 
             {loading ? (
@@ -525,5 +682,60 @@ export default function OperatorCabinetPage({
         </main>
       </div>
     </div>
+  )
+}
+
+function KnowledgeArticleCard({
+  article,
+  required,
+  confirming,
+  onConfirm,
+}: {
+  article: PointKnowledgeArticle
+  required?: boolean
+  confirming?: boolean
+  onConfirm?: () => void
+}) {
+  const severityLabel = SEVERITY_LABELS[article.severity] || article.severity
+  const isDanger = article.severity === 'critical' || article.severity === 'warning'
+
+  return (
+    <article className={`rounded-xl border p-4 ${required ? 'border-amber-500/25 bg-amber-500/10' : 'border-white/10 bg-black/20'}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={isDanger ? 'destructive' : 'secondary'}>{severityLabel}</Badge>
+            {article.category?.title ? <Badge variant="secondary">{article.category.title}</Badge> : null}
+            {article.requires_confirmation ? <Badge variant="secondary">нужно подтверждение</Badge> : null}
+            {article.version ? <Badge variant="outline">v{article.version}</Badge> : null}
+          </div>
+          <h3 className="mt-3 break-words text-base font-semibold">{article.title}</h3>
+          {article.summary ? (
+            <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{article.summary}</p>
+          ) : null}
+          {article.content ? (
+            <div
+              className="mt-3 max-h-48 overflow-auto rounded-xl border border-white/10 bg-background/50 p-3 text-sm leading-6 text-foreground/85"
+              dangerouslySetInnerHTML={{ __html: article.content }}
+            />
+          ) : null}
+          {article.tags?.length ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {article.tags.map((tag) => (
+                <span key={tag} className="rounded-full bg-white/5 px-2 py-1 text-[11px] text-muted-foreground">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {onConfirm ? (
+          <Button type="button" size="sm" onClick={onConfirm} disabled={confirming} className="shrink-0">
+            {confirming ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Ознакомлен
+          </Button>
+        ) : null}
+      </div>
+    </article>
   )
 }

@@ -7,6 +7,8 @@ import type {
   OperatorInfo,
   OperatorTask,
   OperatorTaskComment,
+  PointChecklistAnswer,
+  PointKnowledgeContext,
   Product,
   DebtItem,
   ShiftForm,
@@ -509,6 +511,100 @@ export async function getPointOperatorCabinet(
     shifts: data.shifts || [],
     debts: data.debts || [],
   }
+}
+
+export async function getPointKnowledge(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<PointKnowledgeContext> {
+  const data = await request<{ ok: boolean; data: PointKnowledgeContext }>(
+    config,
+    'GET',
+    `/api/point/knowledge?operator_id=${encodeURIComponent(session.operator.operator_id)}`,
+    undefined,
+    operatorHeaders(session),
+  )
+  return {
+    ...data.data,
+    articles: data.data.articles || [],
+    pending_confirmations: data.data.pending_confirmations || [],
+    checklist_templates: data.data.checklist_templates || [],
+    checklist_items: data.data.checklist_items || [],
+    checklist_runs: data.data.checklist_runs || [],
+  }
+}
+
+export async function confirmPointKnowledgeArticle(
+  config: AppConfig,
+  session: OperatorSession,
+  articleId: string,
+): Promise<{ article_id: string; version: number; already_confirmed?: boolean }> {
+  const data = await request<{
+    ok: boolean
+    data: { article_id: string; version: number; already_confirmed?: boolean }
+  }>(
+    config,
+    'POST',
+    '/api/point/knowledge/confirm',
+    {
+      article_id: articleId,
+      operator_id: session.operator.operator_id,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function startPointChecklistRun(
+  config: AppConfig,
+  session: OperatorSession,
+  templateId: string,
+): Promise<{ run_id: string; reused?: boolean }> {
+  return request(
+    config,
+    'POST',
+    '/api/point/checklist/run',
+    {
+      template_id: templateId,
+      operator_id: session.operator.operator_id,
+    },
+    operatorHeaders(session),
+  )
+}
+
+export async function updatePointChecklistRun(
+  config: AppConfig,
+  session: OperatorSession,
+  runId: string,
+  responses: Record<string, PointChecklistAnswer>,
+): Promise<{ run_id: string; updated: boolean }> {
+  return request(
+    config,
+    'PATCH',
+    `/api/point/checklist/run/${encodeURIComponent(runId)}`,
+    { responses },
+    operatorHeaders(session),
+  )
+}
+
+export async function completePointChecklistRun(
+  config: AppConfig,
+  session: OperatorSession,
+  runId: string,
+  responses: Record<string, PointChecklistAnswer>,
+  status: 'completed' | 'failed' | 'skipped' = 'completed',
+): Promise<{ run_id: string; status: string; fines_total: number; bonuses_total: number }> {
+  return request(
+    config,
+    'POST',
+    `/api/point/checklist/run/${encodeURIComponent(runId)}/complete`,
+    {
+      status,
+      responses,
+      operator_id: session.operator.operator_id,
+    },
+    operatorHeaders(session),
+  )
 }
 
 export async function markPointDebtPaid(

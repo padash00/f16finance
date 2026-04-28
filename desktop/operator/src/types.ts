@@ -111,7 +111,8 @@ export type AppView =
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'inventory-request'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'arena'; bootstrap: BootstrapData; session: OperatorSession }
-  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'return' | 'scanner' }
+  | { screen: 'checklists'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'return' | 'scanner' | 'checklists' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
 export interface AppUpdateProgress {
@@ -257,6 +258,90 @@ export interface OperatorTask {
   created_at: string
   updated_at: string
   completed_at: string | null
+}
+
+export interface PointKnowledgeArticle {
+  id: string
+  title: string
+  slug: string
+  summary: string | null
+  content: string
+  tags: string[] | null
+  audience: string[] | null
+  severity: 'info' | 'normal' | 'warning' | 'critical'
+  version: number | null
+  requires_confirmation: boolean | null
+  related_fine_amount: number | null
+  related_bonus_amount: number | null
+  company_id: string | null
+  category_id: string | null
+  category?: { id: string; title: string; slug: string; kind: string } | null
+}
+
+export interface PointChecklistTemplate {
+  id: string
+  company_id: string | null
+  title: string
+  description: string | null
+  role_scope: string
+  shift_scope: string
+  schedule_type: 'opening' | 'periodic' | 'closing' | 'onboarding' | 'handover'
+  recurrence_minutes: number | null
+  blocks_shift: boolean
+  sort_order: number
+  is_active: boolean
+}
+
+export interface PointChecklistItem {
+  id: string
+  template_id: string
+  category_id: string | null
+  knowledge_article_id: string | null
+  title: string
+  description: string | null
+  answer_type: 'boolean' | 'text' | 'number' | 'photo' | 'choice'
+  is_required: boolean
+  requires_photo: boolean
+  severity: 'info' | 'normal' | 'warning' | 'critical'
+  fine_amount: number | null
+  bonus_amount: number | null
+  sort_order: number
+}
+
+export type PointChecklistAnswer = {
+  passed?: boolean
+  value?: string | number | boolean | null
+  note?: string | null
+}
+
+export interface PointChecklistRun {
+  id: string
+  shift_id: string
+  template_id: string
+  run_by: string | null
+  co_signed_by: string | null
+  started_at: string
+  completed_at: string | null
+  scheduled_at: string | null
+  status: 'in_progress' | 'completed' | 'skipped' | 'failed'
+  responses: Record<string, PointChecklistAnswer>
+  fines_total: number | null
+  bonuses_total: number | null
+}
+
+export interface PointKnowledgeContext {
+  company_id: string
+  articles: PointKnowledgeArticle[]
+  pending_confirmations: PointKnowledgeArticle[]
+  checklist_templates: PointChecklistTemplate[]
+  checklist_items: PointChecklistItem[]
+  checklist_runs: PointChecklistRun[]
+  open_shift: {
+    id: string
+    shift_type: string | null
+    opened_at: string | null
+    operator_id: string | null
+  } | null
 }
 
 export interface PointInventoryRequestItem {

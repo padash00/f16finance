@@ -7,12 +7,23 @@ import { getCurrentOpenShift } from '@/lib/server/point-shifts'
 type Body = {
   template_id?: string | null
   run_by?: string | null
+  operator_id?: string | null
   co_signed_by?: string | null
   scheduled_at?: string | null
 }
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null) {
+  if (!operatorId) return null
+  const { data } = await supabase
+    .from('operator_staff_links')
+    .select('staff_id')
+    .eq('operator_id', operatorId)
+    .maybeSingle()
+  return data?.staff_id || null
 }
 
 // POST /api/point/checklist/run — start a checklist run for current open shift
@@ -41,12 +52,19 @@ export async function POST(request: Request) {
     return json({ run_id: existing.id, reused: true })
   }
 
+  const runBy =
+    body.run_by ||
+    (await resolveStaffIdForOperator(
+      supabase,
+      body.operator_id || request.headers.get('x-point-operator-id'),
+    ))
+
   const { data: inserted, error } = await supabase
     .from('checklist_runs')
     .insert({
       shift_id: shift.id,
       template_id: body.template_id,
-      run_by: body.run_by || null,
+      run_by: runBy || null,
       co_signed_by: body.co_signed_by || null,
       scheduled_at: body.scheduled_at || null,
       status: 'in_progress',
@@ -66,7 +84,7 @@ export async function POST(request: Request) {
     payload: {
       shift_id: shift.id,
       template_id: body.template_id,
-      run_by: body.run_by || null,
+      run_by: runBy || null,
     },
   })
 

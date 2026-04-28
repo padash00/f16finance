@@ -14,6 +14,7 @@ const InventoryReturnsPage = lazy(() => import('@/pages/InventoryReturnsPage'))
 const ScannerPage = lazy(() => import('@/pages/ScannerPage'))
 const InventoryRequestPage = lazy(() => import('@/pages/InventoryRequestPage'))
 const OperatorCabinetPage = lazy(() => import('@/pages/OperatorCabinetPage'))
+const ChecklistPage = lazy(() => import('@/pages/ChecklistPage'))
 const ArenaPage = lazy(() => import('@/pages/ArenaPage'))
 const SetupPage = lazy(() => import('@/pages/SetupPage'))
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'))
@@ -114,6 +115,7 @@ function getActiveOperatorSession(view: AppView): OperatorSession | null {
     view.screen === 'scanner' ||
     view.screen === 'inventory-request' ||
     view.screen === 'arena' ||
+    view.screen === 'checklists' ||
     view.screen === 'operator-cabinet'
   ) {
     return view.session
@@ -381,6 +383,7 @@ export default function App() {
                 currentView.screen === 'inventory-return' ||
                 currentView.screen === 'scanner' ||
                 currentView.screen === 'inventory-request' ||
+                currentView.screen === 'checklists' ||
                 currentView.screen === 'operator-cabinet'
               ) {
                 setView({
@@ -394,6 +397,8 @@ export default function App() {
                         ? 'return'
                       : currentView.screen === 'inventory-sale'
                         ? 'sale'
+                        : currentView.screen === 'checklists'
+                          ? 'checklists'
                         : 'shift',
                 })
               }
@@ -697,6 +702,7 @@ export default function App() {
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
         onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
+        onOpenChecklists={() => setView({ ...view, screen: 'checklists' })}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />,
     )
@@ -807,6 +813,20 @@ export default function App() {
               session: view.session,
             })
           }
+          onLogout={handleLogout}
+        />
+      </ErrorBoundary>,
+    )
+  }
+
+  if (view.screen === 'checklists') {
+    return withUpdateBanner(
+      <ErrorBoundary pageName="checklists">
+        <ChecklistPage
+          config={config!}
+          bootstrap={view.bootstrap}
+          session={view.session}
+          onBackToShift={() => setView({ ...view, screen: 'shift' })}
           onLogout={handleLogout}
         />
       </ErrorBoundary>,

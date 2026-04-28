@@ -6,11 +6,22 @@ import { requirePointDevice } from '@/lib/server/point-devices'
 type Body = {
   status?: 'completed' | 'failed' | 'skipped'
   responses?: Record<string, unknown> | null
+  operator_id?: string | null
   co_signed_by?: string | null
 }
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null) {
+  if (!operatorId) return null
+  const { data } = await supabase
+    .from('operator_staff_links')
+    .select('staff_id')
+    .eq('operator_id', operatorId)
+    .maybeSingle()
+  return data?.staff_id || null
 }
 
 function sumByMatch(items: any[], responses: Record<string, any>, key: 'fine_amount' | 'bonus_amount') {
@@ -78,6 +89,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const itemsArr = (items || []) as any[]
   const finesTotal = sumByMatch(itemsArr, mergedResponses, 'fine_amount')
   const bonusesTotal = sumByMatch(itemsArr, mergedResponses, 'bonus_amount')
+  const resolvedStaffId =
+    (run as any).run_by ||
+    (await resolveStaffIdForOperator(
+      supabase,
+      body.operator_id || request.headers.get('x-point-operator-id'),
+    ))
 
   const update: Record<string, unknown> = {
     status: targetStatus,
@@ -85,6 +102,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     responses: mergedResponses,
     fines_total: finesTotal,
     bonuses_total: bonusesTotal,
+  }
+  if (resolvedStaffId && !(run as any).run_by) {
+    update.run_by = resolvedStaffId
   }
   if (body.co_signed_by !== undefined) {
     update.co_signed_by = body.co_signed_by || null
@@ -96,8 +116,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Auto-incidents: для каждого item с фактическим штрафом/бонусом создаём инцидент.
   // Только при targetStatus !== 'skipped'.
   if (targetStatus !== 'skipped') {
-    const subjectStaffId = (run as any).run_by || null
-    const reportedBy = body.co_signed_by || (run as any).run_by || null
+    const subjectStaffId = resolvedStaffId || null
+    const reportedBy = body.co_signed_by || resolvedStaffId || null
     const incidents: any[] = []
     for (const item of itemsArr) {
       const r = (mergedResponses as any)[item.id]

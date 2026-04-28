@@ -8,6 +8,7 @@ import {
   BookOpen,
   ClipboardList,
   FileText,
+  History,
   Layers3,
   Pencil,
   Plus,
@@ -108,15 +109,55 @@ type Company = {
   name: string
 }
 
+type ChecklistRun = {
+  id: string
+  template_id: string
+  shift_id: string | null
+  run_by: string | null
+  status: 'in_progress' | 'completed' | 'skipped' | 'failed'
+  started_at: string | null
+  completed_at: string | null
+  fines_total: number | null
+  bonuses_total: number | null
+  template_title?: string
+  company_id?: string | null
+  company_name?: string | null
+  shift_type?: string | null
+  shift_status?: string | null
+  shift_opened_at?: string | null
+  run_by_name?: string | null
+  co_signed_by_name?: string | null
+  item_count?: number
+  answered_count?: number
+  failed_count?: number
+  response_items?: ChecklistRunResponseItem[]
+}
+
+type ChecklistRunResponseItem = {
+  id: string
+  title: string
+  is_required: boolean
+  requires_photo: boolean
+  severity: 'info' | 'normal' | 'warning' | 'critical'
+  fine_amount: number | null
+  bonus_amount: number | null
+  answer_type: 'boolean' | 'text' | 'number' | 'photo' | 'choice'
+  passed: boolean | null
+  failed: boolean
+  value: unknown
+  note: string | null
+}
+
 type KnowledgeResponse = {
   categories: KnowledgeCategory[]
   articles: KnowledgeArticle[]
   templates: ChecklistTemplate[]
   items: ChecklistItem[]
   companies: Company[]
+  runs: ChecklistRun[]
 }
 
-type Tab = 'articles' | 'checklists' | 'categories'
+type Tab = 'articles' | 'checklists' | 'runs' | 'categories'
 
 const KIND_LABELS: Record<CategoryKind, string> = {
   rules: 'Правила',
@@ -149,6 +190,13 @@ const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   closing: 'Закрытие',
   onboarding: 'Онбординг',
   handover: 'Передача',
+}
+
+const RUN_STATUS_LABELS: Record<ChecklistRun['status'], string> = {
+  in_progress: 'В работе',
+  completed: 'Завершён',
+  skipped: 'Пропущен',
+  failed: 'Провален',
 }
 
 const CHECKLIST_PRESETS = [
@@ -197,6 +245,7 @@ function normalizeKnowledgeResponse(payload: Partial<KnowledgeResponse> | null |
     templates: Array.isArray(payload?.templates) ? payload.templates : [],
     items: Array.isArray(payload?.items) ? payload.items : [],
     companies: Array.isArray(payload?.companies) ? payload.companies : [],
+    runs: Array.isArray(payload?.runs) ? payload.runs : [],
   }
 }
 
@@ -220,6 +269,23 @@ function normalizeId(value: string | null | undefined) {
 function formatMoney(value: number | null | undefined) {
   if (!value) return null
   return `${new Intl.NumberFormat('ru-KZ').format(value)} ₸`
+}
+
+function formatMoneyText(value: number | null | undefined) {
+  return formatMoney(value) || '0 ₸'
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
@@ -254,6 +320,7 @@ export default function KnowledgeAdminPage() {
     templates: [],
     items: [],
     companies: [],
+    runs: [],
   })
   const [tab, setTab] = useState<Tab>('articles')
   const [query, setQuery] = useState('')
@@ -370,6 +437,27 @@ export default function KnowledgeAdminPage() {
       .map(([id, title]) => ({ id, title, templates: groups.get(id) ?? [] }))
       .filter((group) => group.templates.length > 0)
   }, [filteredTemplates])
+
+  const filteredRuns = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return data.runs.filter((run) => {
+      if (filterCompany === 'global' && run.company_id) return false
+      if (filterCompany !== 'all' && filterCompany !== 'global' && run.company_id !== filterCompany) return false
+      if (!needle) return true
+      return [run.template_title, run.company_name, run.run_by_name, run.co_signed_by_name, run.status, run.shift_type]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(needle))
+    })
+  }, [data.runs, query, filterCompany])
+
+  const runStats = useMemo(() => {
+    return {
+      total: filteredRuns.length,
+      completed: filteredRuns.filter((run) => run.status === 'completed').length,
+      inProgress: filteredRuns.filter((run) => run.status === 'in_progress').length,
+      failedItems: filteredRuns.reduce((sum, run) => sum + Number(run.failed_count || 0), 0),
+    }
+  }, [filteredRuns])
 
   async function load() {
     setLoading(true)
@@ -683,6 +771,7 @@ export default function KnowledgeAdminPage() {
   const tabs = [
     { id: 'articles' as const, label: 'Статьи и FAQ', icon: FileText, count: data.articles.length },
     { id: 'checklists' as const, label: 'Чек-листы', icon: ClipboardList, count: data.templates.length },
+    { id: 'runs' as const, label: 'Журнал чек-листов', icon: History, count: data.runs.length },
     { id: 'categories' as const, label: 'Категории', icon: Layers3, count: data.categories.length },
   ]
 
@@ -705,7 +794,7 @@ export default function KnowledgeAdminPage() {
               <StatCard label="Категорий" value={data.categories.length} />
               <StatCard label="Статей" value={data.articles.length} />
               <StatCard label="Чек-листов" value={data.templates.length} />
-              <StatCard label="Пунктов" value={data.items.length} />
+              <StatCard label="Прохождений" value={data.runs.length} />
             </div>
           </div>
         </div>
@@ -1006,6 +1095,158 @@ export default function KnowledgeAdminPage() {
               </div>
             )}
 
+            {tab === 'runs' && (
+              <div className="min-w-0">
+                <Panel title="Журнал прохождений чек-листов" icon={History}>
+                  <TabHint
+                    title="Что здесь контролировать?"
+                    text="Это история прохождения чек-листов операторами: кто начал, кто завершил, по какой точке, сколько пунктов выполнено и где были проблемы, штрафы или бонусы."
+                  />
+
+                  <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+                    <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                      <Search className="h-4 w-4 text-slate-500" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Поиск по оператору, точке, чек-листу…"
+                        className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+                    <SelectInput
+                      value={filterCompany}
+                      onChange={(event) => setFilterCompany(event.target.value)}
+                      className="!w-auto !py-3 !text-sm"
+                    >
+                      <option value="all">Все точки</option>
+                      <option value="global">Только глобальные</option>
+                      {data.companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </div>
+
+                  <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MiniMetric label="Всего прохождений" value={runStats.total} />
+                    <MiniMetric label="Завершено" value={runStats.completed} />
+                    <MiniMetric label="В работе" value={runStats.inProgress} />
+                    <MiniMetric label="Проблемных пунктов" value={runStats.failedItems} tone="danger" />
+                  </div>
+
+                  <div className="grid gap-3">
+                    {filteredRuns.map((run) => (
+                      <article key={run.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge>{run.company_name || 'Все точки'}</Badge>
+                              <Badge>{RUN_STATUS_LABELS[run.status] || run.status}</Badge>
+                              {run.shift_type && <Badge>Смена: {run.shift_type}</Badge>}
+                              {Number(run.failed_count || 0) > 0 && <Badge>Проблем: {run.failed_count}</Badge>}
+                            </div>
+                            <h3 className="mt-3 break-words text-xl font-black text-slate-100">{run.template_title || 'Чек-лист'}</h3>
+                            <p className="mt-2 break-words text-sm leading-6 text-slate-400">
+                              Проходил: <span className="font-semibold text-slate-200">{run.run_by_name || 'не указан'}</span>
+                              {' · '}
+                              Начало: {formatDateTime(run.started_at)}
+                              {' · '}
+                              Завершение: {formatDateTime(run.completed_at)}
+                            </p>
+                            {run.co_signed_by_name && (
+                              <p className="mt-1 text-sm text-slate-500">Подтвердил: {run.co_signed_by_name}</p>
+                            )}
+                          </div>
+
+                          <div className="grid min-w-[320px] gap-2 sm:grid-cols-3">
+                            <RunMetric
+                              label="Ответы"
+                              value={`${run.answered_count ?? 0}/${run.item_count ?? 0}`}
+                            />
+                            <RunMetric label="Штраф" value={formatMoneyText(run.fines_total)} tone="danger" />
+                            <RunMetric label="Бонус" value={formatMoneyText(run.bonuses_total)} tone="success" />
+                          </div>
+                        </div>
+
+                        {run.response_items?.length ? (
+                          <details className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+                            <summary className="cursor-pointer select-none text-sm font-black text-slate-200">
+                              Детали ответов: {run.response_items.length}
+                            </summary>
+                            <div className="mt-4 grid gap-2">
+                              {run.response_items.map((item, index) => {
+                                const statusLabel = item.passed === true ? 'Ок' : item.failed ? 'Проблема' : 'Нет ответа'
+                                const statusClass =
+                                  item.passed === true
+                                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
+                                    : item.failed
+                                      ? 'border-red-400/30 bg-red-400/10 text-red-100'
+                                      : 'border-slate-700 bg-slate-800/70 text-slate-300'
+                                const displayValue =
+                                  item.value === null || item.value === undefined || item.value === ''
+                                    ? null
+                                    : typeof item.value === 'object'
+                                      ? JSON.stringify(item.value)
+                                      : String(item.value)
+
+                                return (
+                                  <div key={item.id} className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                                            #{index + 1}
+                                          </span>
+                                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${statusClass}`}>
+                                            {statusLabel}
+                                          </span>
+                                          {item.is_required && <Badge>обязательный</Badge>}
+                                          {item.requires_photo && <Badge>фото</Badge>}
+                                          {item.severity !== 'normal' && <Badge>{SEVERITY_LABELS[item.severity]}</Badge>}
+                                        </div>
+                                        <div className="mt-2 break-words text-sm font-bold text-slate-100">{item.title}</div>
+                                        {displayValue && (
+                                          <div className="mt-1 break-words text-xs leading-5 text-slate-400">
+                                            Ответ: {displayValue}
+                                          </div>
+                                        )}
+                                        {item.note && (
+                                          <div className="mt-1 break-words text-xs leading-5 text-slate-400">
+                                            Комментарий: {item.note}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex shrink-0 flex-wrap gap-2 text-xs font-black">
+                                        {Number(item.fine_amount || 0) > 0 && (
+                                          <span className="rounded-full border border-red-400/30 bg-red-400/10 px-2 py-1 text-red-100">
+                                            Штраф {formatMoneyText(item.fine_amount)}
+                                          </span>
+                                        )}
+                                        {Number(item.bonus_amount || 0) > 0 && (
+                                          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-emerald-100">
+                                            Бонус {formatMoneyText(item.bonus_amount)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </details>
+                        ) : null}
+                      </article>
+                    ))}
+
+                    {!filteredRuns.length && (
+                      <EmptyState text="Пока нет прохождений чек-листов. Они появятся здесь после того, как оператор начнёт чек-лист в своей программе." />
+                    )}
+                  </div>
+                </Panel>
+              </div>
+            )}
+
             {tab === 'categories' && (
               <div className="min-w-0">
                 <Panel title="Категории базы знаний" icon={Layers3}>
@@ -1116,6 +1357,34 @@ function StatCard({ label, value }: { label: string; value: number }) {
     <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
       <div className="text-3xl font-black">{value}</div>
       <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{label}</div>
+    </div>
+  )
+}
+
+function MiniMetric({ label, value, tone = 'default' }: { label: string; value: number | string; tone?: 'default' | 'danger' | 'success' }) {
+  const toneClass =
+    tone === 'danger'
+      ? 'border-red-400/25 bg-red-500/10 text-red-100'
+      : tone === 'success'
+        ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100'
+        : 'border-slate-800 bg-slate-950/50 text-slate-100'
+
+  return (
+    <div className={`min-w-0 rounded-3xl border p-4 ${toneClass}`}>
+      <div className="break-words text-2xl font-black">{value}</div>
+      <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-slate-400">{label}</div>
+    </div>
+  )
+}
+
+function RunMetric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'danger' | 'success' }) {
+  const valueClass =
+    tone === 'danger' ? 'text-red-200' : tone === 'success' ? 'text-emerald-200' : 'text-slate-100'
+
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+      <div className="break-words text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className={`mt-1 break-words text-sm font-black ${valueClass}`}>{value}</div>
     </div>
   )
 }

@@ -9,6 +9,17 @@ function json(data: unknown, status = 200) {
 type Body = {
   article_id?: string | null
   staff_id?: string | null
+  operator_id?: string | null
+}
+
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null) {
+  if (!operatorId) return null
+  const { data } = await supabase
+    .from('operator_staff_links')
+    .select('staff_id')
+    .eq('operator_id', operatorId)
+    .maybeSingle()
+  return data?.staff_id || null
 }
 
 export async function POST(request: Request) {
@@ -18,7 +29,13 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as Body
   if (!body.article_id) return json({ error: 'article-id-required' }, 400)
-  if (!body.staff_id) return json({ error: 'staff-id-required' }, 400)
+  const staffId =
+    body.staff_id ||
+    (await resolveStaffIdForOperator(
+      supabase,
+      body.operator_id || request.headers.get('x-point-operator-id'),
+    ))
+  if (!staffId) return json({ error: 'staff-id-required' }, 400)
 
   // Текущая версия статьи
   const { data: article, error: articleError } = await supabase
@@ -54,7 +71,7 @@ export async function POST(request: Request) {
     {
       article_id: body.article_id,
       article_version: articleVersion,
-      staff_id: body.staff_id,
+      staff_id: staffId,
       shift_id: shift?.id || null,
     },
   ])
@@ -69,7 +86,7 @@ export async function POST(request: Request) {
     data: {
       article_id: body.article_id,
       version: articleVersion,
-      staff_id: body.staff_id,
+      staff_id: staffId,
       already_confirmed: (insertError as any)?.code === '23505',
     },
   })
