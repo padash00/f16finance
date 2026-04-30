@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
-import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { AdminPageHeader, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -70,6 +71,8 @@ const EMPTY_FORM: CustomerFormData = {
   company_id: '',
 }
 
+const CUSTOMER_TABLE_COLUMNS = 8
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatMoney(value: number) {
@@ -83,6 +86,7 @@ function formatDate(iso: string) {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const tableContainerRef = useRef<HTMLDivElement | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -107,6 +111,17 @@ export default function CustomersPage() {
   // Points adjust
   const [pointsDelta, setPointsDelta] = useState('')
   const [pointsReason, setPointsReason] = useState('')
+
+  const rowVirtualizer = useVirtualizer({
+    count: customers.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 58,
+    overscan: 10,
+  })
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const totalVirtualSize = rowVirtualizer.getTotalSize()
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom = virtualRows.length > 0 ? totalVirtualSize - virtualRows[virtualRows.length - 1].end : 0
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -372,7 +387,8 @@ export default function CustomersPage() {
               Клиентов не найдено
             </div>
           ) : (
-            <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
+            <div className="relative overflow-hidden rounded-none border-0 bg-transparent">
+              <div ref={tableContainerRef} className="max-h-[min(70vh,40rem)] overflow-auto">
               <table className="w-full text-sm">
                 <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-white/10">
@@ -387,7 +403,15 @@ export default function CustomersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {customers.map((customer) => (
+                  {paddingTop > 0 ? (
+                    <tr aria-hidden>
+                      <td colSpan={CUSTOMER_TABLE_COLUMNS} style={{ height: paddingTop }} />
+                    </tr>
+                  ) : null}
+                  {virtualRows.map((virtualRow) => {
+                    const customer = customers[virtualRow.index]
+                    if (!customer) return null
+                    return (
                     <tr
                       key={customer.id}
                       className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer"
@@ -454,10 +478,17 @@ export default function CustomersPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
+                  {paddingBottom > 0 ? (
+                    <tr aria-hidden>
+                      <td colSpan={CUSTOMER_TABLE_COLUMNS} style={{ height: paddingBottom }} />
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
-            </AdminTableViewport>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
