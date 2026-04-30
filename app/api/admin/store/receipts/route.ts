@@ -169,6 +169,17 @@ export async function POST(request: Request) {
     if (body.action === 'deleteDraft') {
       const draftId = String(body.draft_id || '').trim()
       if (!draftId) return json({ error: 'draft-id-required' }, 400)
+      let currentDraftQuery: any = supabase
+        .from('inventory_receipt_drafts')
+        .select('id, title, payload, updated_at')
+        .eq('id', draftId)
+        .eq('status', 'draft')
+        .maybeSingle()
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        currentDraftQuery = currentDraftQuery.eq('organization_id', access.activeOrganization.id)
+      }
+      const { data: currentDraft, error: currentDraftError } = await currentDraftQuery
+      if (currentDraftError) throw currentDraftError
       let query: any = supabase
         .from('inventory_receipt_drafts')
         .update({ status: 'cancelled' })
@@ -179,6 +190,19 @@ export async function POST(request: Request) {
       }
       const { error: deleteDraftError } = await query
       if (deleteDraftError) throw deleteDraftError
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-receipt-draft',
+        entityId: draftId,
+        action: 'delete',
+        payload: {
+          title: currentDraft?.title || null,
+          invoice_number: (currentDraft?.payload as any)?.invoice_number || null,
+          received_at: (currentDraft?.payload as any)?.received_at || null,
+          item_count: Array.isArray((currentDraft?.payload as any)?.items) ? (currentDraft?.payload as any).items.length : 0,
+          updated_at: currentDraft?.updated_at || null,
+        },
+      })
       return json({ ok: true })
     }
 
@@ -217,6 +241,20 @@ export async function POST(request: Request) {
         }
         const { data: updatedDraft, error: updateDraftError } = await updateQuery.select('id').single()
         if (updateDraftError) throw updateDraftError
+        await writeAuditLog(supabase as any, {
+          actorUserId,
+          entityType: 'inventory-receipt-draft',
+          entityId: String(updatedDraft.id),
+          action: 'update',
+          payload: {
+            title: draftTitle || 'Черновик приемки',
+            invoice_number: draftPayload.invoice_number,
+            received_at: draftPayload.received_at,
+            supplier_id: draftPayload.supplier_id,
+            item_count: draftPayload.items.length,
+            payment_mode: draftPayload.payment_mode,
+          },
+        })
         return json({ ok: true, data: { id: updatedDraft.id } })
       }
       const insertPayload: Record<string, unknown> = {
@@ -231,6 +269,20 @@ export async function POST(request: Request) {
         .select('id')
         .single()
       if (createDraftError) throw createDraftError
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-receipt-draft',
+        entityId: String(createdDraft.id),
+        action: 'create',
+        payload: {
+          title: draftTitle || 'Черновик приемки',
+          invoice_number: draftPayload.invoice_number,
+          received_at: draftPayload.received_at,
+          supplier_id: draftPayload.supplier_id,
+          item_count: draftPayload.items.length,
+          payment_mode: draftPayload.payment_mode,
+        },
+      })
       return json({ ok: true, data: { id: createdDraft.id } })
     }
 

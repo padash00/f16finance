@@ -86,6 +86,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'point-incident': 'инцидент точки',
   'inventory-item': 'товар склада',
   'inventory-receipt': 'приемку склада',
+  'inventory-receipt-draft': 'черновик приемки',
   'inventory-request': 'заявку склада',
   'inventory-return': 'возврат склада',
   'inventory-sale': 'продажу склада',
@@ -294,6 +295,7 @@ const FIELD_LABELS: Record<string, string> = {
   supplier_debt_status: 'Статус долга поставщика',
   due_date: 'Срок оплаты',
   is_consignment: 'Реализация',
+  title: 'Название',
   point_mode: 'Режим точки',
   low_stock_threshold: 'Минимальный остаток',
 }
@@ -491,6 +493,20 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     return {
       title: `${who} провел приемку ${money(p.total_amount) || ''}`.trim(),
       subtitle: compact([text(p.supplier_name || p.supplier_organization_name), text(p.invoice_number)]),
+      details: compact(details),
+      detailRows: details,
+    }
+  }
+
+  if (et === 'inventory-receipt-draft') {
+    addDetail(details, 'Название', p.title)
+    addDetail(details, 'Накладная', p.invoice_number)
+    addDetail(details, 'Дата приемки', dateLabel(p.received_at))
+    addDetail(details, 'Позиций', p.item_count)
+    addDetail(details, 'Оплата', p.payment_mode === 'deferred' ? 'отсрочка' : p.payment_mode === 'now' ? 'оплата сразу' : p.payment_mode)
+    return {
+      title: `${who} ${action} черновик приемки`,
+      subtitle: text(p.title) || text(p.invoice_number) || item.subtitle,
       details: compact(details),
       detailRows: details,
     }
