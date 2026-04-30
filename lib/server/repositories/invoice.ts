@@ -10,43 +10,102 @@ export type InvoiceSessionData = {
 
 // ─── Name mappings ─────────────────────────────────────────────────────────────
 
-export async function fetchInvoiceNameMappings(supabase: AnySupabase) {
-  const { data, error } = await supabase
+export type InvoiceMappingRow = {
+  invoice_name: string
+  item_id: string
+  supplier_id: string | null
+  item_name?: string
+  last_unit_cost?: number | null
+  last_sale_price?: number | null
+}
+
+export async function fetchInvoiceNameMappings(
+  supabase: AnySupabase,
+  scope?: { organizationId?: string | null; supplierId?: string | null },
+): Promise<InvoiceMappingRow[]> {
+  let query: any = supabase
     .from('invoice_name_mappings')
-    .select('invoice_name, item_id, item:item_id(name)')
+    .select('invoice_name, item_id, supplier_id, last_unit_cost, last_sale_price, item:item_id(name)')
+    .order('last_seen_at', { ascending: false, nullsFirst: false })
     .order('usage_count', { ascending: false })
 
+  if (scope?.organizationId) {
+    query = query.eq('organization_id', scope.organizationId)
+  }
+  // Supplier filter: if provided, fetch this supplier's mappings + global (null) ones as fallback.
+  if (scope?.supplierId) {
+    query = query.or(`supplier_id.eq.${scope.supplierId},supplier_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return (data || []).map((row: any) => ({
     invoice_name: row.invoice_name as string,
     item_id: row.item_id as string,
+    supplier_id: (row.supplier_id || null) as string | null,
     item_name: row.item?.name as string | undefined,
+    last_unit_cost: row.last_unit_cost == null ? null : Number(row.last_unit_cost),
+    last_sale_price: row.last_sale_price == null ? null : Number(row.last_sale_price),
   }))
 }
 
 export async function upsertInvoiceNameMappings(
   supabase: AnySupabase,
-  mappings: Array<{ invoice_name: string; item_id: string }>,
+  mappings: Array<{
+    invoice_name: string
+    item_id: string
+    organization_id: string
+    supplier_id?: string | null
+    last_unit_cost?: number | null
+    last_sale_price?: number | null
+  }>,
 ) {
   if (mappings.length === 0) return
 
+  const now = new Date().toISOString()
   for (const m of mappings) {
-    // Try update first (increment usage_count)
-    const { data: existing } = await supabase
+    const cleanName = String(m.invoice_name || '').trim()
+    if (!cleanName || !m.item_id || !m.organization_id) continue
+
+    let existingQuery: any = supabase
       .from('invoice_name_mappings')
       .select('id, usage_count')
-      .ilike('invoice_name', m.invoice_name)
-      .maybeSingle()
+      .eq('organization_id', m.organization_id)
+      .ilike('invoice_name', cleanName)
+      .limit(1)
+    if (m.supplier_id) {
+      existingQuery = existingQuery.eq('supplier_id', m.supplier_id)
+    } else {
+      existingQuery = existingQuery.is('supplier_id', null)
+    }
+    const { data: existing } = await existingQuery.maybeSingle()
 
-    if (existing) {
-      await supabase
-        .from('invoice_name_mappings')
-        .update({ item_id: m.item_id, usage_count: existing.usage_count + 1, updated_at: new Date().toISOString() })
-        .eq('id', existing.id)
+    const updates: Record<string, unknown> = {
+      item_id: m.item_id,
+      updated_at: now,
+      last_seen_at: now,
+    }
+    if (m.last_unit_cost != null) updates.last_unit_cost = m.last_unit_cost
+    if (m.last_sale_price != null) updates.last_sale_price = m.last_sale_price
+
+    if (existing?.id) {
+      updates.usage_count = (Number(existing.usage_count || 0) + 1)
+      await supabase.from('invoice_name_mappings').update(updates).eq('id', existing.id)
     } else {
       await supabase
         .from('invoice_name_mappings')
-        .insert([{ invoice_name: m.invoice_name, item_id: m.item_id, usage_count: 1 }])
+        .insert([
+          {
+            invoice_name: cleanName,
+            item_id: m.item_id,
+            organization_id: m.organization_id,
+            supplier_id: m.supplier_id || null,
+            usage_count: 1,
+            last_unit_cost: m.last_unit_cost ?? null,
+            last_sale_price: m.last_sale_price ?? null,
+            last_seen_at: now,
+          },
+        ])
         .throwOnError()
     }
   }
@@ -54,15 +113,29 @@ export async function upsertInvoiceNameMappings(
 
 // ─── Inventory items for matching ─────────────────────────────────────────────
 
-export async function fetchInventoryItemsForMatching(supabase: AnySupabase) {
-  const { data, error } = await supabase
+export async function fetchInventoryItemsForMatching(
+  supabase: AnySupabase,
+  scope?: { organizationId?: string | null },
+) {
+  let query: any = supabase
     .from('inventory_items')
-    .select('id, name, barcode, unit')
+    .select('id, name, barcode, unit, organization_id')
     .eq('is_active', true)
     .order('name', { ascending: true })
 
+  if (scope?.organizationId) {
+    // Match org items + legacy null-org rows (kept for backward-compatibility).
+    query = query.or(`organization_id.eq.${scope.organizationId},organization_id.is.null`)
+  }
+
+  const { data, error } = await query
   if (error) throw error
-  return (data || []) as Array<{ id: string; name: string; barcode: string; unit: string }>
+  return (data || []).map((row: any) => ({
+    id: row.id as string,
+    name: row.name as string,
+    barcode: row.barcode as string,
+    unit: row.unit as string,
+  })) as Array<{ id: string; name: string; barcode: string; unit: string }>
 }
 
 // ─── Warehouse location ────────────────────────────────────────────────────────
@@ -70,7 +143,7 @@ export async function fetchInventoryItemsForMatching(supabase: AnySupabase) {
 export async function fetchFirstWarehouseLocation(supabase: AnySupabase) {
   const { data, error } = await supabase
     .from('inventory_locations')
-    .select('id, name')
+    .select('id, name, organization_id')
     .eq('location_type', 'warehouse')
     .eq('is_active', true)
     .order('name', { ascending: true })
@@ -78,7 +151,7 @@ export async function fetchFirstWarehouseLocation(supabase: AnySupabase) {
     .maybeSingle()
 
   if (error) throw error
-  return data as { id: string; name: string } | null
+  return data as { id: string; name: string; organization_id: string | null } | null
 }
 
 // ─── Telegram invoice sessions ─────────────────────────────────────────────────

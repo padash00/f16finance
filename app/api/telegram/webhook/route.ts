@@ -888,24 +888,26 @@ async function handleInvoicePhoto(chatId: number, messageId: number, telegramUse
   // 3. Download and encode photo
   const imageDataUrl = await downloadTelegramFileAsBase64(filePath)
 
-  // 4. Fetch inventory items and learned mappings in parallel
-  const [inventoryItems, mappings, warehouse] = await Promise.all([
-    fetchInventoryItemsForMatching(supabase),
-    fetchInvoiceNameMappings(supabase),
-    fetchFirstWarehouseLocation(supabase),
-  ])
-
+  // 4. First fetch warehouse to know the organization scope.
+  const warehouse = await fetchFirstWarehouseLocation(supabase)
   if (!warehouse) {
     await sendTelegramText(chatId, '⚠️ Нет активных складов в системе. Создайте склад в разделе «Магазин».')
     return
   }
+  const orgScope = { organizationId: warehouse.organization_id }
+
+  // Then load inventory and mappings scoped to that organization (no supplier in Telegram path).
+  const [inventoryItems, mappings] = await Promise.all([
+    fetchInventoryItemsForMatching(supabase, orgScope),
+    fetchInvoiceNameMappings(supabase, orgScope),
+  ])
 
   if (inventoryItems.length === 0) {
     await sendTelegramText(chatId, '⚠️ Каталог товаров пуст. Добавьте товары в разделе «Магазин → Каталог».')
     return
   }
 
-  // 5. Parse with GPT-4o
+  // 5. Parse with GPT-4o (no supplier alias context — supplier is unknown in Telegram flow).
   const parsed = await parseInvoiceWithGPT(imageDataUrl, inventoryItems)
 
   if (!parsed.items || parsed.items.length === 0) {
@@ -913,7 +915,7 @@ async function handleInvoicePhoto(chatId: number, messageId: number, telegramUse
     return
   }
 
-  // 6. Match items to inventory
+  // 6. Match items to inventory (no supplier scope — webhook doesn't know which supplier).
   const matchedItems = matchInvoiceItems(parsed.items, inventoryItems, mappings)
   const hasAnyMatch = matchedItems.some((it) => it.matched_item_id)
 
@@ -1016,11 +1018,33 @@ async function handleInvoiceConfirm(
     })),
   })
 
-  // Save learned name mappings for matched items
-  const newMappings = matchedItems
-    .filter((it: any) => it.match_source !== 'mapping' && it.invoice_name && it.matched_item_id)
-    .map((it: any) => ({ invoice_name: it.invoice_name, item_id: it.matched_item_id }))
-  await upsertInvoiceNameMappings(supabase, newMappings).catch(() => null)
+  // Save learned name mappings for matched items (global scope — Telegram doesn't know supplier).
+  // Resolve organization from the receipt's warehouse location.
+  const { data: warehouseRow } = await supabase
+    .from('inventory_locations')
+    .select('organization_id')
+    .eq('id', session.warehouse_location_id)
+    .maybeSingle()
+  const warehouseOrgId = (warehouseRow as any)?.organization_id || null
+  if (warehouseOrgId) {
+    const newMappings = matchedItems
+      .filter(
+        (it: any) =>
+          it.match_source !== 'mapping' &&
+          it.match_source !== 'mapping_supplier' &&
+          it.match_source !== 'mapping_global' &&
+          it.invoice_name &&
+          it.matched_item_id,
+      )
+      .map((it: any) => ({
+        invoice_name: it.invoice_name,
+        item_id: it.matched_item_id,
+        organization_id: warehouseOrgId,
+        supplier_id: null as string | null,
+        last_unit_cost: Number(it.unit_cost || 0) || null,
+      }))
+    await upsertInvoiceNameMappings(supabase, newMappings).catch(() => null)
+  }
 
   await confirmInvoiceSession(supabase, sessionId, receipt?.receipt_id || receipt?.id || '')
 

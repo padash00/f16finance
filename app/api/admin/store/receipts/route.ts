@@ -44,6 +44,7 @@ type Body = {
       unit_cost: number
       sale_price?: number
       comment?: string | null
+      invoice_name?: string | null
     }>
   }
   draft_id?: string
@@ -462,6 +463,44 @@ export async function POST(request: Request) {
       .from('supplier_debts')
       .upsert([debtPayload], { onConflict: 'receipt_id' })
     if (debtError) throw debtError
+
+    // Learn supplier→item aliases from this receipt for the next AI parse run.
+    if (locationOrganizationId && Array.isArray(body.payload.items)) {
+      const aliasUpserts: Array<{
+        invoice_name: string
+        item_id: string
+        organization_id: string
+        supplier_id?: string | null
+        last_unit_cost?: number | null
+        last_sale_price?: number | null
+      }> = []
+      for (const line of body.payload.items) {
+        const rawName = String(line.invoice_name || '').trim()
+        const itemId = String(line.item_id || '').trim()
+        if (!rawName || !itemId) continue
+        aliasUpserts.push({
+          invoice_name: rawName,
+          item_id: itemId,
+          organization_id: locationOrganizationId,
+          supplier_id: supplierId,
+          last_unit_cost: normalizeUnitCost(line.unit_cost),
+          last_sale_price: line.sale_price != null ? normalizeMoney(line.sale_price) : null,
+        })
+      }
+      if (aliasUpserts.length > 0) {
+        try {
+          const { upsertInvoiceNameMappings } = await import('@/lib/server/repositories/invoice')
+          await upsertInvoiceNameMappings(supabase as any, aliasUpserts)
+        } catch (aliasError: any) {
+          // Non-fatal: receipt is already posted.
+          await writeSystemErrorLogSafe({
+            scope: 'server',
+            area: 'api/admin/store/receipts.alias_upsert',
+            message: aliasError?.message || 'alias upsert failed',
+          })
+        }
+      }
+    }
 
     // Always update sale/default purchase prices globally from receipt lines
     if (Array.isArray(body.payload.items)) {

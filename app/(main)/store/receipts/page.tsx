@@ -123,6 +123,8 @@ type ReceiptLine = {
   sale_price: string
   markup_percent: string
   comment: string
+  invoice_name?: string
+  last_unit_cost?: number | null
 }
 
 type AiParseItem = {
@@ -133,7 +135,10 @@ type AiParseItem = {
   barcode: string | null
   matched_item_id: string | null
   matched_item_name: string | null
-  match_source: 'barcode' | 'mapping' | 'gpt' | null
+  match_source: 'barcode' | 'mapping' | 'mapping_supplier' | 'mapping_global' | 'gpt' | null
+  last_unit_cost?: number | null
+  last_sale_price?: number | null
+  unit_cost_change_pct?: number | null
   manual_item_id?: string | null
 }
 
@@ -514,6 +519,7 @@ export default function StoreReceiptsPage() {
         unit_cost: parseUnitCost(line.unit_cost),
         sale_price: parseMoney(line.sale_price),
         comment: line.comment.trim() || null,
+        invoice_name: line.invoice_name?.trim() || null,
       }))
       .filter((line) => line.item_id && line.quantity > 0 && line.unit_cost >= 0 && line.sale_price >= 0)
 
@@ -865,12 +871,23 @@ export default function StoreReceiptsPage() {
       setError('Сначала загрузите накладную, потом запустите ИИ-распознавание.')
       return
     }
+    if (supplierMode === 'existing' && !supplierId) {
+      setError('Выберите поставщика — без него ИИ не может использовать обученные алиасы.')
+      return
+    }
+    if (supplierMode === 'new' && !supplierName.trim()) {
+      setError('Заполните данные поставщика — без него ИИ не может использовать обученные алиасы.')
+      return
+    }
     setAiParsing(true)
     try {
       const response = await fetch('/api/admin/store/receipts/ai-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoice_file_url: invoiceFileUrl }),
+        body: JSON.stringify({
+          invoice_file_url: invoiceFileUrl,
+          supplier_id: supplierMode === 'existing' ? supplierId || null : null,
+        }),
       })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok || !json?.data) throw new Error(json?.error || 'ИИ не смог распознать накладную')
@@ -921,16 +938,23 @@ export default function StoreReceiptsPage() {
       .map((item) => {
         const catalog = (data?.items || []).find((row) => row.id === item.resolved_item_id)
         const unitCost = Number(item.unit_cost || 0)
-        const salePrice = Number(catalog?.sale_price || 0)
+        const lastUnit = item.last_unit_cost != null ? Number(item.last_unit_cost) : null
+        const lastSale = item.last_sale_price != null ? Number(item.last_sale_price) : null
         const fallbackCost = String(catalog?.default_purchase_price || '')
+        const finalUnit = unitCost > 0 ? String(unitCost) : (lastUnit && lastUnit > 0 ? String(lastUnit) : fallbackCost)
+        const finalSale = lastSale && lastSale > 0
+          ? String(lastSale)
+          : String(Number(catalog?.sale_price || 0) || '')
         return {
           item_id: String(item.resolved_item_id),
           quantity: String(item.quantity || ''),
-          unit_cost: unitCost > 0 ? String(unitCost) : fallbackCost,
-          sale_price: String(salePrice || ''),
-          markup_percent: calcMarkupPercent(unitCost > 0 ? String(unitCost) : fallbackCost, String(salePrice || '')),
-          comment: item.invoice_name || '',
-        }
+          unit_cost: finalUnit,
+          sale_price: finalSale,
+          markup_percent: calcMarkupPercent(finalUnit, finalSale),
+          comment: '',
+          invoice_name: item.invoice_name || '',
+          last_unit_cost: lastUnit,
+        } as ReceiptLine
       })
 
     if (parsedLines.length > 0) {
@@ -1552,6 +1576,12 @@ export default function StoreReceiptsPage() {
                   <p className="font-medium">
                     ИИ-черновик: найдено {aiParseResult.items.length} строк, сопоставлено {aiParseResult.matched_count}, без совпадения {aiParseResult.unmatched_count}.
                   </p>
+                  {(() => {
+                    const learned = aiParseResult.items.filter((it) => it.match_source === 'mapping_supplier').length
+                    return learned > 0 ? (
+                      <p className="text-[11px] text-emerald-200/90">🎯 Узнано по предыдущим приёмкам этого поставщика: {learned}</p>
+                    ) : null
+                  })()}
                   <p className="mt-1 text-emerald-200/90">
                     {aiParseResult.supplier_name ? `Поставщик: ${aiParseResult.supplier_name}. ` : ''}
                     {aiParseResult.invoice_number ? `Номер: ${aiParseResult.invoice_number}. ` : ''}
@@ -1726,6 +1756,24 @@ export default function StoreReceiptsPage() {
                       }
                       placeholder="499,6757"
                     />
+                    {(() => {
+                      if (!line.last_unit_cost || line.last_unit_cost <= 0) return null
+                      const current = parseUnitCost(line.unit_cost)
+                      if (current <= 0) return null
+                      const change = ((current - line.last_unit_cost) / line.last_unit_cost) * 100
+                      const abs = Math.abs(change)
+                      if (abs < 1) {
+                        return (
+                          <p className="text-[10px] text-muted-foreground">Прошлая закупка: {line.last_unit_cost} ₸</p>
+                        )
+                      }
+                      const up = change > 0
+                      return (
+                        <p className={`text-[10px] ${up ? 'text-rose-300' : 'text-emerald-300'}`}>
+                          {up ? '↑' : '↓'} {Math.round(abs * 10) / 10}% к прошлой ({line.last_unit_cost} ₸)
+                        </p>
+                      )
+                    })()}
                   </div>
 
                   <div className="space-y-1.5">

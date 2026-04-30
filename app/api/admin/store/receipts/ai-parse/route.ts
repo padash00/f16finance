@@ -14,6 +14,7 @@ function json(data: unknown, status = 200) {
 
 type Body = {
   invoice_file_url?: string
+  supplier_id?: string | null
 }
 
 type CogsSuggestion = {
@@ -219,23 +220,44 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body | null
     const invoiceFileUrl = String(body?.invoice_file_url || '').trim()
     if (!invoiceFileUrl) return json({ error: 'invoice_file_url обязателен' }, 400)
+    const supplierId = String(body?.supplier_id || '').trim() || null
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const [inventoryItems, nameMappings, fileData] = await Promise.all([
-      fetchInventoryItemsForMatching(supabase as any),
-      fetchInvoiceNameMappings(supabase as any),
+    const orgId = access.activeOrganization?.id || null
+    const matchScope = { organizationId: orgId, supplierId }
+
+    const [inventoryItems, nameMappings, fileData, supplierRow] = await Promise.all([
+      fetchInventoryItemsForMatching(supabase as any, { organizationId: orgId }),
+      fetchInvoiceNameMappings(supabase as any, matchScope),
       urlToDataUrl(invoiceFileUrl),
+      supplierId
+        ? supabase.from('inventory_suppliers').select('id, name, organization_name').eq('id', supplierId).maybeSingle()
+        : Promise.resolve({ data: null }),
     ])
     const apiKey = process.env.OPENAI_API_KEY
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
+    const supplierAliases = supplierId
+      ? nameMappings
+          .filter((m) => m.supplier_id && String(m.supplier_id) === String(supplierId))
+          .map((m) => ({
+            raw_name: m.invoice_name,
+            item_id: m.item_id,
+            item_name: m.item_name,
+            last_unit_cost: m.last_unit_cost ?? null,
+          }))
+      : []
+    const supplierName: string | null = supplierRow && (supplierRow as any).data
+      ? ((supplierRow as any).data?.organization_name || (supplierRow as any).data?.name || null)
+      : null
+
     const parsed = fileData.mime === 'application/pdf'
       ? await parseInvoiceFromPdfText(fileData.bytes)
-      : await parseInvoiceWithGPT(fileData.dataUrl, inventoryItems)
-    const matched = matchInvoiceItems(parsed.items || [], inventoryItems, nameMappings)
+      : await parseInvoiceWithGPT(fileData.dataUrl, inventoryItems, { supplierAliases, supplierName })
+    const matched = matchInvoiceItems(parsed.items || [], inventoryItems, nameMappings, { supplierId })
     const cogsRes = await supabase
       .from('expense_categories')
       .select('id,name,accounting_group')
@@ -292,6 +314,9 @@ export async function POST(req: Request) {
           matched_item_id: item.matched_item_id || null,
           matched_item_name: item.matched_item_name || null,
           match_source: item.match_source || null,
+          last_unit_cost: item.last_unit_cost ?? null,
+          last_sale_price: item.last_sale_price ?? null,
+          unit_cost_change_pct: item.unit_cost_change_pct ?? null,
         })),
       },
     })

@@ -23,7 +23,10 @@ export type ParsedInvoice = {
 export type MatchedInvoiceItem = ParsedInvoiceItem & {
   matched_item_id: string | null
   matched_item_name: string | null
-  match_source: 'barcode' | 'mapping' | 'gpt' | null
+  match_source: 'barcode' | 'mapping_supplier' | 'mapping_global' | 'mapping' | 'gpt' | null
+  last_unit_cost?: number | null
+  last_sale_price?: number | null
+  unit_cost_change_pct?: number | null
 }
 
 type InventoryItemShort = {
@@ -37,6 +40,9 @@ type NameMapping = {
   invoice_name: string
   item_id: string
   item_name?: string
+  supplier_id?: string | null
+  last_unit_cost?: number | null
+  last_sale_price?: number | null
 }
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
@@ -63,7 +69,14 @@ export async function downloadTelegramFileAsBase64(filePath: string): Promise<st
  * Parse an invoice photo using GPT-4o vision.
  * Returns structured data extracted from the image.
  */
-export async function parseInvoiceWithGPT(imageDataUrl: string, inventoryItems: InventoryItemShort[]): Promise<ParsedInvoice> {
+export async function parseInvoiceWithGPT(
+  imageDataUrl: string,
+  inventoryItems: InventoryItemShort[],
+  context?: {
+    supplierAliases?: Array<{ raw_name: string; item_id: string; item_name?: string; last_unit_cost?: number | null }>
+    supplierName?: string | null
+  },
+): Promise<ParsedInvoice> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
 
@@ -72,20 +85,32 @@ export async function parseInvoiceWithGPT(imageDataUrl: string, inventoryItems: 
     .map((it) => `ID:${it.id} | Штрихкод:${it.barcode} | Название:${it.name} | Ед:${it.unit}`)
     .join('\n')
 
+  const aliasesContext = (context?.supplierAliases || [])
+    .slice(0, 80)
+    .map((a) => {
+      const price = a.last_unit_cost != null ? ` | прошлая закупка ${a.last_unit_cost}` : ''
+      return `RAW:"${a.raw_name}" → ID:${a.item_id} | Название:${a.item_name || ''}${price}`
+    })
+    .join('\n')
+
+  const aliasBlock = aliasesContext
+    ? `\nИзвестные алиасы от этого поставщика (${context?.supplierName || ''}). Если строка похожа на RAW — используй ID:\n${aliasesContext}\n`
+    : ''
+
   const systemPrompt = `Ты — система OCR для накладных и товарных чеков.
 Извлеки данные из изображения накладной/чека и верни JSON.
 
 Список товаров в базе данных:
 ${itemsContext}
-
+${aliasBlock}
 Правила:
-1. Извлеки все строки товаров с количеством и ценами
-2. Для каждого товара попробуй найти совпадение в базе данных по штрихкоду или названию
-3. Накладные могут быть на русском или казахском языке
-4. Если штрихкод есть на накладной — используй его для поиска
-5. unit_cost и total_cost в тенге (₸)
-6. Если цена не указана — поставь 0
-7. quantity должно быть числом > 0
+1. Извлеки все строки товаров с количеством и ценами.
+2. Если "Известные алиасы" совпадают с строкой — это сильный сигнал, используй их item_id.
+3. Иначе пытайся матчить по штрихкоду или названию из базы.
+4. Накладные могут быть на русском или казахском языке.
+5. unit_cost и total_cost в тенге (₸).
+6. Если цена не указана — поставь 0.
+7. quantity должно быть числом > 0.
 
 Формат ответа (ТОЛЬКО JSON, без markdown):
 {
@@ -151,18 +176,34 @@ ${itemsContext}
 
 /**
  * Match parsed invoice items to inventory items.
- * Priority: 1. barcode match 2. learned mapping 3. GPT suggestion (already embedded in invoice_name → item name similarity).
+ * Priority: 1. barcode  2. supplier-scoped learned mapping  3. global learned mapping  4. fuzzy name match.
+ * Also surfaces last known unit_cost / sale_price from the supplier alias for pre-fill and price-change highlighting.
  */
 export function matchInvoiceItems(
   parsedItems: ParsedInvoiceItem[],
   inventoryItems: InventoryItemShort[],
   mappings: NameMapping[],
+  context?: { supplierId?: string | null },
 ): MatchedInvoiceItem[] {
+  const supplierId = context?.supplierId || null
   const barcodeMap = new Map(inventoryItems.map((it) => [it.barcode, it]))
-  const mappingMap = new Map(mappings.map((m) => [m.invoice_name.toLowerCase(), m]))
+
+  // Build two maps: supplier-specific and global (supplier_id IS NULL).
+  const supplierMap = new Map<string, NameMapping>()
+  const globalMap = new Map<string, NameMapping>()
+  for (const m of mappings) {
+    const key = String(m.invoice_name || '').trim().toLowerCase()
+    if (!key) continue
+    if (m.supplier_id && supplierId && String(m.supplier_id) === String(supplierId)) {
+      supplierMap.set(key, m)
+    } else if (!m.supplier_id) {
+      // Don't overwrite an existing global with a stale duplicate.
+      if (!globalMap.has(key)) globalMap.set(key, m)
+    }
+  }
 
   return parsedItems.map((item) => {
-    // 1. Try barcode match
+    // 1. Barcode match — strongest signal.
     if (item.barcode) {
       const found = barcodeMap.get(item.barcode)
       if (found) {
@@ -170,24 +211,47 @@ export function matchInvoiceItems(
       }
     }
 
-    // 2. Try learned name mapping
-    const mappingKey = item.invoice_name.toLowerCase()
-    const mapping = mappingMap.get(mappingKey)
-    if (mapping) {
-      const foundItem = inventoryItems.find((it) => it.id === mapping.item_id)
+    const mappingKey = String(item.invoice_name || '').trim().toLowerCase()
+
+    // 2. Supplier-scoped mapping wins over global if both exist.
+    const supplierMapping = supplierMap.get(mappingKey)
+    if (supplierMapping) {
+      const foundItem = inventoryItems.find((it) => it.id === supplierMapping.item_id)
+      const last = supplierMapping.last_unit_cost ?? null
+      const change =
+        last != null && Number(last) > 0 && Number(item.unit_cost || 0) > 0
+          ? ((Number(item.unit_cost) - Number(last)) / Number(last)) * 100
+          : null
       return {
         ...item,
-        matched_item_id: mapping.item_id,
-        matched_item_name: foundItem?.name || mapping.item_name || null,
-        match_source: 'mapping' as const,
+        matched_item_id: supplierMapping.item_id,
+        matched_item_name: foundItem?.name || supplierMapping.item_name || null,
+        match_source: 'mapping_supplier' as const,
+        last_unit_cost: last,
+        last_sale_price: supplierMapping.last_sale_price ?? null,
+        unit_cost_change_pct: change == null ? null : Math.round(change * 10) / 10,
       }
     }
 
-    // 3. Try fuzzy name match (simple contains check)
-    const searchName = item.invoice_name.toLowerCase()
+    // 3. Global mapping fallback.
+    const globalMapping = globalMap.get(mappingKey)
+    if (globalMapping) {
+      const foundItem = inventoryItems.find((it) => it.id === globalMapping.item_id)
+      return {
+        ...item,
+        matched_item_id: globalMapping.item_id,
+        matched_item_name: foundItem?.name || globalMapping.item_name || null,
+        match_source: 'mapping_global' as const,
+        last_unit_cost: globalMapping.last_unit_cost ?? null,
+        last_sale_price: globalMapping.last_sale_price ?? null,
+      }
+    }
+
+    // 4. Fuzzy fallback: simple substring match.
+    const searchName = mappingKey
     const fuzzy = inventoryItems.find((it) => {
       const n = it.name.toLowerCase()
-      return n.includes(searchName) || searchName.includes(n)
+      return searchName.length > 2 && (n.includes(searchName) || searchName.includes(n))
     })
     if (fuzzy) {
       return { ...item, matched_item_id: fuzzy.id, matched_item_name: fuzzy.name, match_source: 'gpt' as const }
@@ -225,7 +289,14 @@ export function buildInvoiceConfirmationText(
     lines.push(`<b>✅ Распознано товаров: ${matched.length}</b>`)
     for (const item of matched) {
       const cost = item.total_cost || item.quantity * item.unit_cost
-      const src = item.match_source === 'barcode' ? '🔍' : item.match_source === 'mapping' ? '📖' : '🤖'
+      const src =
+        item.match_source === 'barcode'
+          ? '🔍'
+          : item.match_source === 'mapping_supplier'
+          ? '🎯'
+          : item.match_source === 'mapping_global' || item.match_source === 'mapping'
+          ? '📖'
+          : '🤖'
       lines.push(`${src} ${item.matched_item_name} — ${item.quantity} шт × ${item.unit_cost.toLocaleString('ru-RU')} ₸`)
       if (item.invoice_name.toLowerCase() !== (item.matched_item_name || '').toLowerCase()) {
         lines.push(`   <i>Из накладной: «${item.invoice_name}»</i>`)
