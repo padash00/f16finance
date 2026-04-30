@@ -56,7 +56,7 @@ create trigger supplier_debts_updated_at
 
 -- Бэкфилл: для каждой приёмки создаём долг.
 -- Если есть авто-расход (source_type='inventory_receipt') — переносим в долг как paid.
--- Если расхода нет — оставляем open (но это не ожидается, т.к. до сих пор все приёмки сразу шли в expenses).
+-- Используем подзапросы вместо JOIN, чтобы не зависеть от типа expenses.source_id (text/uuid).
 insert into public.supplier_debts (
   receipt_id, supplier_id, company_id, organization_id,
   expense_category_id,
@@ -72,26 +72,48 @@ select
   r.supplier_id,
   l.company_id,
   l.organization_id,
-  cat.id,
+  (
+    select ec.id
+    from public.expense_categories ec
+    where lower(coalesce(ec.name, '')) = lower(coalesce(
+      (select e.category from public.expenses e
+        where e.source_type = 'inventory_receipt'
+          and e.source_id::text = r.id::text
+        order by e.date desc nulls last
+        limit 1), ''))
+    limit 1
+  ),
   coalesce(r.total_amount, 0),
-  case when e.id is not null then 'paid' else 'open' end,
-  case when e.id is not null then e.date else null end,
-  coalesce(e.cash_amount, 0),
-  coalesce(e.kaspi_amount, 0),
-  e.attachment_url,
-  e.comment,
-  e.id,
+  case
+    when exists (
+      select 1 from public.expenses e
+      where e.source_type = 'inventory_receipt'
+        and e.source_id::text = r.id::text
+    ) then 'paid'
+    else 'open'
+  end,
+  (select e.date from public.expenses e
+    where e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
+    order by e.date desc nulls last limit 1),
+  coalesce((select e.cash_amount from public.expenses e
+    where e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
+    order by e.date desc nulls last limit 1), 0),
+  coalesce((select e.kaspi_amount from public.expenses e
+    where e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
+    order by e.date desc nulls last limit 1), 0),
+  (select e.attachment_url from public.expenses e
+    where e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
+    order by e.date desc nulls last limit 1),
+  (select e.comment from public.expenses e
+    where e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
+    order by e.date desc nulls last limit 1),
+  (select e.id from public.expenses e
+    where e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
+    order by e.date desc nulls last limit 1),
   r.created_by,
   r.created_at
 from public.inventory_receipts r
 left join public.inventory_locations l on l.id = r.location_id
-left join public.expenses e
-  on e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
-left join lateral (
-  select ec.id from public.expense_categories ec
-  where lower(coalesce(ec.name, '')) = lower(coalesce(e.category, ''))
-  limit 1
-) cat on true
 on conflict (receipt_id) do nothing;
 
 -- RLS: повторяем модель existing inventory tables (organization-scoped + service role bypass).
