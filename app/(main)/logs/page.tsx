@@ -66,6 +66,8 @@ const VALUE_LABELS: Record<string, string> = {
   'client-navigation': 'переход по сайту',
   'react-error-boundary': 'ошибка React-интерфейса',
   'unhandledrejection': 'необработанная ошибка браузера',
+  'point-debt-notify': 'уведомление о долге точки',
+  'point-debt-item': 'товар в долг точки',
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -77,6 +79,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 function humanValue(value: unknown): string {
   if (value == null || value === '') return ''
   const raw = String(value).trim()
+  if (raw.startsWith('/')) return pageLabel(raw)
   return VALUE_LABELS[raw.toLowerCase()] || raw
 }
 
@@ -110,6 +113,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'inventory-receipt': 'Приемка',
   'supplier-debt': 'Долг поставщика',
   'point-debt': 'Долг точки',
+  'point-debt-item': 'Товар в долг точки',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -145,16 +149,42 @@ function actionLabel(action: string | null): string {
 
 const PAGE_LABELS: Record<string, string> = {
   '': 'Главная',
+  '/': 'Главная',
   'income': 'Доходы',
+  '/income': 'Доходы',
   'expenses': 'Расходы',
+  '/expenses': 'Расходы',
   'reports': 'Отчёты',
+  '/reports': 'Отчёты',
   'profitability': 'Рентабельность',
+  '/profitability': 'Рентабельность',
   'settings': 'Настройки',
+  '/settings': 'Настройки',
   'logs': 'Логи',
+  '/logs': 'Логи',
   'operators': 'Операторы',
+  '/operators': 'Операторы',
   'kaspi-terminal': 'Kaspi терминал',
+  '/kaspi-terminal': 'Kaspi терминал',
   'salary': 'Зарплата',
+  '/salary': 'Зарплата',
   'tasks': 'Задачи',
+  '/tasks': 'Задачи',
+  '/weekly-report': 'Еженедельный отчет',
+  '/store/receipts': 'Приемка склада',
+  '/store/warehouse': 'Склад',
+  '/store/movements': 'Движения склада',
+  '/store/requests': 'Заявки склада',
+  '/store/writeoffs': 'Списания склада',
+  '/store/revisions': 'Ревизии склада',
+  '/store/showcase': 'Витрина',
+  '/point-debts': 'Долги точки',
+}
+
+function pageLabel(value: string) {
+  const raw = value.split('?')[0]
+  const normalized = raw.startsWith('/') ? raw : `/${raw}`
+  return PAGE_LABELS[raw] || PAGE_LABELS[normalized] || raw
 }
 
 // ─── Human-readable title ────────────────────────────────────────────────────
@@ -452,6 +482,8 @@ const ACTION_BADGE_LABELS: Record<string, string> = {
   complete: 'Выполнено',
   'page-view': 'Просмотр',
   visit: 'Посещение',
+  'point-debt-notify': 'Уведомление о долге',
+  'point-debt-item': 'Товар в долг',
 }
 
 function relativeTime(dateStr: string): string {
@@ -743,7 +775,9 @@ export default function LogsPage() {
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500">
                       {item.actorEmail && <span>👤 {item.actorEmail}</span>}
                       <span>🕐 {new Date(item.createdAt).toLocaleString('ru-RU')}</span>
-                      {item.recipient && <span>→ {item.recipient}</span>}
+                      {(item.kind === 'notification' ? item.subtitle || item.recipient : item.recipient) && (
+                        <span>Получатель: {item.kind === 'notification' ? item.subtitle || item.recipient : item.recipient}</span>
+                      )}
                       {item.channel && <span>Канал: {CHANNEL_LABELS[item.channel] || humanValue(item.channel)}</span>}
                     </div>
                   </div>

@@ -81,6 +81,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'point-shift': 'смену точки',
   'point-device': 'устройство точки',
   'point-debt': 'долг точки',
+  'point-debt-item': 'товар в долг точки',
   'point-product': 'товар точки',
   'point-incident': 'инцидент точки',
   'inventory-item': 'товар склада',
@@ -174,6 +175,52 @@ const VALUE_LABELS: Record<string, string> = {
   'client-navigation': 'переход по сайту',
   'react-error-boundary': 'ошибка React-интерфейса',
   'unhandledrejection': 'необработанная ошибка браузера',
+  'point-debt-notify': 'уведомление о долге точки',
+  'point-debt-item': 'товар в долг точки',
+}
+
+const PAGE_LABELS: Record<string, string> = {
+  '': 'Главная',
+  '/': 'Главная',
+  '/logs': 'Логи',
+  '/weekly-report': 'Еженедельный отчет',
+  '/store/receipts': 'Приемка склада',
+  '/store/warehouse': 'Склад',
+  '/store/movements': 'Движения склада',
+  '/store/requests': 'Заявки склада',
+  '/store/writeoffs': 'Списания склада',
+  '/store/revisions': 'Ревизии склада',
+  '/store/showcase': 'Витрина',
+  '/point-debts': 'Долги точки',
+  '/income': 'Доходы',
+  '/expenses': 'Расходы',
+  '/reports': 'Отчеты',
+  '/profitability': 'Рентабельность',
+  '/settings': 'Настройки',
+  '/operators': 'Операторы',
+  '/salary': 'Зарплата',
+  '/tasks': 'Задачи',
+}
+
+function pageLabel(value: unknown) {
+  const raw = text(value).split('?')[0]
+  if (!raw) return ''
+  const normalized = raw.startsWith('/') ? raw : `/${raw}`
+  return PAGE_LABELS[normalized] || PAGE_LABELS[normalized.replace(/\/$/, '')] || raw
+}
+
+function recipientLabel(item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
+  const p = item.payload || {}
+  return text(
+    p.recipient_name ||
+    p.telegram_name ||
+    p.telegram_username ||
+    p.client_name ||
+    p.operator_name ||
+    p.company_name ||
+    p.point_device_name ||
+    p.company_code,
+  ) || item.recipient || ''
 }
 
 function renderValue(value: unknown, label?: string): string {
@@ -298,11 +345,12 @@ function summarizeNotification(item: Omit<CombinedLogItem, 'details' | 'detailRo
   const p = item.payload || {}
   const ok = item.status === 'sent' || item.status === 'delivered'
   const channel = item.channel === 'telegram' ? 'Telegram' : item.channel === 'email' ? 'Email' : item.channel || 'канал'
+  const recipient = recipientLabel(item)
   const rows = [
     `Канал: ${channel}`,
     `Статус: ${ok ? 'доставлено' : 'ошибка отправки'}`,
   ]
-  addDetail(rows, 'Получатель', item.recipient)
+  addDetail(rows, 'Получатель', recipient)
   addDetail(rows, 'Тип уведомления', p.kind)
   addDetail(rows, 'Товар', p.item_name)
   addDetail(rows, 'Количество', p.quantity)
@@ -311,8 +359,8 @@ function summarizeNotification(item: Omit<CombinedLogItem, 'details' | 'detailRo
   addDetail(rows, 'Точка', p.point_device_name)
   addDetail(rows, 'Оператор', p.operator_name)
   return {
-    title: `${channel}: ${ok ? 'уведомление доставлено' : 'ошибка отправки'}`,
-    subtitle: item.recipient || 'получатель не указан',
+    title: ok ? `Уведомление ${channel} доставлено` : `Ошибка отправки уведомления ${channel}`,
+    subtitle: recipient || 'получатель не указан',
     details: rows.join(' · '),
     detailRows: rows,
   }
@@ -447,10 +495,11 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
 
   if (et === 'visit' || et === 'page-view' || act === 'visit' || act === 'page-view') {
     const page = text(p.pathname || p.path || p.page || p.url || item.subtitle)
+    const readablePage = pageLabel(page)
     const source = text(p.source)
-    const rows = [`Страница: ${page || 'не указана'}`]
+    const rows = [`Страница: ${readablePage || page || 'не указана'}`]
     if (source) rows.push(`Источник: ${renderValue(source)}`)
-    return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: rows.join(' · '), detailRows: rows }
+    return { title: `${who} открыл страницу ${readablePage || page || ''}`.trim(), subtitle: readablePage || page || item.subtitle, details: rows.join(' · '), detailRows: rows }
   }
 
   addDetail(details, 'Название', p.title || p.name || p.full_name)
@@ -657,7 +706,7 @@ export async function GET(req: Request) {
         }
 
         if (domain === 'debts') {
-          const debtEntities = ['point-debt', 'supplier-debt']
+          const debtEntities = ['point-debt', 'point-debt-item', 'supplier-debt']
           if (!debtEntities.includes((item.entityType || '').toLowerCase())) return false
         }
 
