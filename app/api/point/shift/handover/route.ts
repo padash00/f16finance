@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 
 type Body = {
@@ -41,9 +41,8 @@ export async function POST(request: Request) {
   if (!open) return json({ error: 'point-shift-no-open' }, 409)
   const prevId = (open as any).id as string
 
-  // 1) Close previous (transactional via RPC)
-  const { data: totals, error: closeErr } = await supabase.rpc('point_shift_close', {
-    p_shift_id: prevId,
+  const { data: handoverResult, error: handoverErr } = await supabase.rpc('point_shift_handover', {
+    p_prev_shift_id: prevId,
     p_closed_by: body.closed_by || null,
     p_closing_cash: Number(body.closing_cash || 0),
     p_closing_kaspi: Number(body.closing_kaspi || 0),
@@ -52,39 +51,21 @@ export async function POST(request: Request) {
     p_z_report_url: body.z_report_url || null,
     p_x_report_url: body.x_report_url || null,
     p_closing_notes: body.closing_notes || null,
-  })
-
-  if (closeErr) {
-    return json({ error: 'point-shift-handover-close-failed', detail: closeErr.message }, 400)
-  }
-
-  // 2) Open new with handover_from_shift_id
-  const { data: newShiftId, error: openErr } = await supabase.rpc('point_shift_open', {
     p_company_id: device.company_id,
     p_operator_id: body.next_operator_id || null,
     p_point_device_id: device.id,
     p_shift_type: body.next_shift_type || 'day',
     p_opening_cash: Number(body.next_opening_cash || 0),
     p_opening_notes: body.next_opening_notes || null,
-    p_handover_from: prevId,
   })
 
-  if (openErr) {
-    await writeSystemErrorLogSafe({
-      area: 'point-shift-handover',
-      scope: 'server',
-      message: openErr.message,
-      payload: {
-        company_id: device.company_id,
-        point_device_id: device.id,
-        previous_shift_id: prevId,
-        next_operator_id: body.next_operator_id || null,
-        totals,
-        risk: 'previous shift was closed before opening next shift failed',
-      },
-    })
-    return json({ error: 'point-shift-handover-open-failed', detail: openErr.message }, 400)
+  if (handoverErr) {
+    return json({ error: 'point-shift-handover-failed', detail: handoverErr.message }, 400)
   }
+
+  const result = handoverResult as any
+  const newShiftId = result?.new_shift_id || null
+  const totals = result?.totals || null
 
   await writeAuditLog(supabase as any, {
     action: 'point_shift.handover',

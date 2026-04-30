@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+
 type AiUsage = {
   prompt_tokens?: number | null
   completion_tokens?: number | null
@@ -33,8 +35,9 @@ function estimateCost(model: string, usage?: AiUsage | null) {
 
 export async function logAiUsageSafe(client: any, entry: AiUsageLogEntry) {
   try {
+    const writer = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : client
     const usage = entry.usage || null
-    await client.from('ai_usage_log').insert({
+    await writer.from('ai_usage_log').insert({
       user_id: entry.userId || null,
       endpoint: entry.endpoint,
       provider: entry.provider || 'openai',

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
@@ -2497,6 +2498,14 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.7, messages, tools, tool_choice: 'auto' }),
       })
       const data = await res.json().catch(() => null)
+      await logAiUsageSafe(supabase, {
+        endpoint: '/api/telegram/webhook:ai-chat',
+        model: OPENAI_MODEL,
+        usage: data?.usage,
+        status: res.ok && !data?.error ? 'success' : 'error',
+        error: !res.ok || data?.error ? data?.error?.message || `OpenAI API error (${res.status})` : null,
+        payload: { chatId: chatIdStr, iteration: iter },
+      })
       const choice = data?.choices?.[0]
       if (!choice) { await editOrSend('❌ Нет ответа от AI.'); return }
 
@@ -2999,6 +3008,11 @@ export async function POST(req: Request) {
           const today = todayISO()
           const parsed = await parseExpenseFromImage(imageDataUrl, apiKey, today)
           if (!parsed) { await editMsg('❌ Не удалось распознать чек. Попробуй другое фото.'); return json({ ok: true }) }
+          await logAiUsageSafe(supabase, {
+            endpoint: '/api/telegram/webhook:expense-receipt-image',
+            model: 'gpt-4o',
+            payload: { chatId: String(chatId), amount: parsed.amount, category: parsed.category },
+          })
 
           const { data: companiesData } = await supabase.from('companies').select('id, name')
           const companiesList = (companiesData || []) as Array<{ id: string; name: string }>
@@ -3086,6 +3100,11 @@ export async function POST(req: Request) {
       }
 
       const { text: transcript, language } = result
+      await logAiUsageSafe(supabase, {
+        endpoint: '/api/telegram/webhook:voice-transcription',
+        model: 'whisper-1',
+        payload: { chatId: String(chatId), language, duration },
+      })
       const langEmoji = langLabel(language)
       const durationStr = duration > 0 ? ` · ${duration}с` : ''
 
