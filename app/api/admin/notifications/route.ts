@@ -9,6 +9,14 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function chunk<T>(items: T[], size = 50): T[][] {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+  return chunks
+}
+
 type NotificationItem = {
   id: string
   title: string
@@ -194,65 +202,87 @@ export async function GET(request: Request) {
     }
 
     // ── Low stock alerts (showcase = catalog - warehouse; flag items at/below threshold) ──
+    let lowStockStage = 'start'
     try {
+      const allowedCompanySet = allowedCompanyIds?.length ? new Set(allowedCompanyIds) : null
+
       // Showcase activated only for points that have an active point_display location.
-      let enabledPointsQuery = supabase
+      lowStockStage = 'enabled-point-display-locations'
+      const { data: enabledPoints, error: enabledErr } = await supabase
         .from('inventory_locations')
         .select('company_id')
         .eq('location_type', 'point_display')
         .eq('is_active', true)
         .not('company_id', 'is', null)
-      if (allowedCompanyIds) enabledPointsQuery = enabledPointsQuery.in('company_id', allowedCompanyIds)
-      const { data: enabledPoints, error: enabledErr } = await enabledPointsQuery
       if (enabledErr) throw enabledErr
       const enabledCompanyIds = Array.from(
-        new Set((enabledPoints || []).map((r: any) => String(r.company_id || '')).filter(Boolean)),
+        new Set(
+          (enabledPoints || [])
+            .map((r: any) => String(r.company_id || ''))
+            .filter((companyId) => companyId && (!allowedCompanySet || allowedCompanySet.has(companyId))),
+        ),
       )
 
       if (enabledCompanyIds.length > 0) {
-        let locationsQuery = supabase
+        const enabledCompanySet = new Set(enabledCompanyIds)
+
+        lowStockStage = 'catalog-and-warehouse-locations'
+        const { data: allLocations, error: locationsError } = await supabase
           .from('inventory_locations')
           .select('id, company_id, location_type')
           .in('location_type', ['catalog_total', 'warehouse'])
-          .in('company_id', enabledCompanyIds)
-        const { data: locations, error: locationsError } = await locationsQuery
         if (locationsError) throw locationsError
-        const locationIds = (locations || []).map((row: any) => String(row.id)).filter(Boolean)
+
+        const locations = (allLocations || []).filter((row: any) =>
+          enabledCompanySet.has(String(row.company_id || '')),
+        )
+        const locationIds = locations.map((row: any) => String(row.id)).filter(Boolean)
         const locationCompanyIds = Array.from(
-          new Set((locations || []).map((row: any) => String(row.company_id || '')).filter(Boolean)),
+          new Set(locations.map((row: any) => String(row.company_id || '')).filter(Boolean)),
         )
 
         const companyNameById = new Map<string, string>()
         if (locationCompanyIds.length > 0) {
+          lowStockStage = 'company-names'
           const { data: companies, error: companiesError } = await supabase
             .from('companies')
             .select('id, name')
-            .in('id', locationCompanyIds)
           if (companiesError) throw companiesError
+          const locationCompanySet = new Set(locationCompanyIds)
           for (const company of companies || []) {
-            companyNameById.set(String((company as any).id), String((company as any).name || 'Точка'))
+            const companyId = String((company as any).id || '')
+            if (locationCompanySet.has(companyId)) {
+              companyNameById.set(companyId, String((company as any).name || 'Точка'))
+            }
           }
         }
 
         if (locationIds.length > 0) {
-          const { data: balanceRows, error: balancesError } = await supabase
-            .from('inventory_balances')
-            .select('item_id, location_id, quantity')
-            .in('location_id', locationIds)
-          if (balancesError) throw balancesError
+          lowStockStage = 'inventory-balances'
+          const balanceRows: any[] = []
+          for (const locationChunk of chunk(locationIds)) {
+            const { data, error: balancesError } = await supabase
+              .from('inventory_balances')
+              .select('item_id, location_id, quantity')
+              .in('location_id', locationChunk)
+            if (balancesError) throw balancesError
+            balanceRows.push(...(data || []))
+          }
 
           const itemIds = Array.from(
-            new Set((balanceRows || []).map((row: any) => String(row.item_id || '')).filter(Boolean)),
+            new Set(balanceRows.map((row: any) => String(row.item_id || '')).filter(Boolean)),
           )
           if (itemIds.length > 0) {
-            const { data: items, error: itemsError } = await supabase
+            lowStockStage = 'inventory-items'
+            const { data: allItems, error: itemsError } = await supabase
               .from('inventory_items')
               .select('id, name, low_stock_threshold')
-              .in('id', itemIds)
             if (itemsError) throw itemsError
+            const itemIdSet = new Set(itemIds)
+            const items = (allItems || []).filter((row: any) => itemIdSet.has(String(row.id || '')))
 
-            const locationMap = new Map<string, any>((locations || []).map((row: any) => [String(row.id), row]))
-            const itemMap = new Map<string, any>((items || []).map((row: any) => [String(row.id), row]))
+            const locationMap = new Map<string, any>(locations.map((row: any) => [String(row.id), row]))
+            const itemMap = new Map<string, any>(items.map((row: any) => [String(row.id), row]))
             const grouped = new Map<
               string,
               {
@@ -332,6 +362,7 @@ export async function GET(request: Request) {
         area: 'api/admin/notifications.low-stock',
         message: (e as any)?.message || 'low-stock-section-failed',
         payload: {
+          stage: lowStockStage,
           code: (e as any)?.code || null,
           details: (e as any)?.details || null,
           hint: (e as any)?.hint || null,
