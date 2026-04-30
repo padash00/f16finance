@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Card } from '@/components/ui/card'
@@ -81,6 +81,20 @@ type CompanyOption = {
   code?: string | null
 }
 
+function parseSseEvent(raw: string) {
+  const event = raw
+    .split('\n')
+    .find((line) => line.startsWith('event:'))
+    ?.slice(6)
+    .trim() || 'message'
+  const data = raw
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .join('\n')
+  return { event, data: data ? JSON.parse(data) : null }
+}
+
 // ================== TOOLTIP ==================
 function ForecastTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -105,6 +119,7 @@ export default function ForecastPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scenario, setScenario] = useState<'pessimistic' | 'realistic' | 'optimistic'>('realistic')
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -130,23 +145,61 @@ export default function ForecastPage() {
   )
 
   const handleGenerate = async () => {
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true)
     setError(null)
+    setResult(null)
     try {
-      const payload = companyId !== 'all' ? { company_id: companyId } : {}
+      const payload = companyId !== 'all' ? { company_id: companyId, stream: true } : { stream: true }
       const res = await fetch('/api/ai/forecast', {
         method: 'POST',
+        signal: ac.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || 'Ошибка генерации прогноза')
-      setResult(data)
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Ошибка генерации прогноза')
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+        for (const rawEvent of events) {
+          if (!rawEvent.trim()) continue
+          const { event, data } = parseSseEvent(rawEvent)
+          if (event === 'meta') {
+            setResult({ ...(data as Omit<ForecastResult, 'text'>), text: '' })
+          }
+          if (event === 'delta') {
+            setResult((current) => current ? { ...current, text: current.text + String(data?.text || '') } : current)
+          }
+          if (event === 'error') {
+            throw new Error(String(data?.error || 'Ошибка генерации прогноза'))
+          }
+        }
+      }
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Ошибка')
     } finally {
+      if (abortRef.current === ac) abortRef.current = null
       setLoading(false)
     }
+  }
+
+  const handleCancel = () => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setLoading(false)
   }
 
   // Build chart data: historical weeks + projected weeks
@@ -270,6 +323,14 @@ export default function ForecastPage() {
                     </>
                   )}
                 </button>
+                {loading ? (
+                  <button
+                    onClick={handleCancel}
+                    className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm text-gray-200 hover:bg-white/10"
+                  >
+                    Отменить
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
@@ -293,7 +354,7 @@ export default function ForecastPage() {
           )}
 
           {/* Loading state */}
-          {loading && (
+          {loading && !result && (
             <Card className="p-8 bg-gray-900/80 border-purple-500/20">
               <div className="flex items-center gap-3 mb-4">
                 <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />
@@ -442,6 +503,7 @@ export default function ForecastPage() {
                     <Sparkles className="w-4 h-4 text-purple-400" />
                   </div>
                   <h2 className="text-sm font-semibold text-white">AI-анализ и прогноз</h2>
+                  {loading ? <span className="text-xs text-purple-300">печатает...</span> : null}
                   <span className="text-xs text-gray-500 ml-auto">{result.dateFrom} — {result.dateTo}</span>
                 </div>
                 <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">

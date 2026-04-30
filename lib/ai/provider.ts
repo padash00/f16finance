@@ -27,6 +27,10 @@ type GenerateAiTextOptions = {
   signal?: AbortSignal
 }
 
+type StreamAiTextOptions = GenerateAiTextOptions & {
+  onDelta: (text: string) => void | Promise<void>
+}
+
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
@@ -104,6 +108,76 @@ async function callOpenAi(options: GenerateAiTextOptions): Promise<AiTextResult>
   return { text, provider: 'openai', model, usage: openAiUsage(payload) }
 }
 
+function extractOpenAiStreamDelta(payload: any): string {
+  const delta = payload?.choices?.[0]?.delta?.content
+  return typeof delta === 'string' ? delta : ''
+}
+
+async function callOpenAiStream(options: StreamAiTextOptions): Promise<AiTextResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY не настроен на сервере.')
+
+  const model = options.model || DEFAULT_OPENAI_MODEL
+  const response = await fetch(OPENAI_CHAT_URL, {
+    method: 'POST',
+    signal: options.signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: options.temperature,
+      max_tokens: options.maxTokens,
+      messages: options.messages,
+      stream: true,
+      stream_options: { include_usage: true },
+    }),
+  })
+
+  if (!response.ok || !response.body) {
+    const detail = await response.text().catch(() => '')
+    const error = new Error(detail || `OpenAI API error (${response.status})`)
+    ;(error as any).status = response.status
+    throw error
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let text = ''
+  let usage: AiUsage | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+
+    for (const event of events) {
+      const dataLines = event
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+
+      for (const dataLine of dataLines) {
+        if (!dataLine || dataLine === '[DONE]') continue
+        const parsed = JSON.parse(dataLine)
+        if (parsed?.usage) usage = openAiUsage(parsed)
+        const delta = extractOpenAiStreamDelta(parsed)
+        if (!delta) continue
+        text += delta
+        await options.onDelta(delta)
+      }
+    }
+  }
+
+  if (!text.trim()) throw new Error('OpenAI не вернул текст.')
+  return { text: text.trim(), provider: 'openai', model, usage }
+}
+
 function toGeminiPayload(messages: AiMessage[], options: GenerateAiTextOptions) {
   const systemText = messages
     .filter((message) => message.role === 'system')
@@ -176,6 +250,39 @@ export async function generateAiText(options: GenerateAiTextOptions): Promise<Ai
   if (process.env.GEMINI_API_KEY) {
     try {
       return await callGemini(options)
+    } catch (error: any) {
+      errors.push(error?.message || String(error))
+      if (error?.name === 'AbortError') throw error
+    }
+  } else {
+    errors.push('GEMINI_API_KEY не настроен на сервере.')
+  }
+
+  throw new Error(errors.filter(Boolean).join(' | ') || 'AI provider не настроен.')
+}
+
+export async function streamAiText(options: StreamAiTextOptions): Promise<AiTextResult> {
+  const errors: string[] = []
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      return await callOpenAiStream(options)
+    } catch (error: any) {
+      errors.push(error?.message || String(error))
+      if (error?.name === 'AbortError') throw error
+      if (error?.status && !shouldFallback(Number(error.status))) {
+        throw error
+      }
+    }
+  } else {
+    errors.push('OPENAI_API_KEY не настроен на сервере.')
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const result = await callGemini(options)
+      await options.onDelta(result.text)
+      return result
     } catch (error: any) {
       errors.push(error?.message || String(error))
       if (error?.name === 'AbortError') throw error

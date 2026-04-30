@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
-import { generateAiText } from '@/lib/ai/provider'
+import { generateAiText, streamAiText, type AiMessage } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -28,6 +28,10 @@ function safeNumber(v: number | null | undefined) {
 
 function formatMoney(v: number) {
   return `${Math.round(v).toLocaleString('ru-RU')} ₸`
+}
+
+function sse(event: string, data: unknown) {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
 function linearRegression(values: number[]) {
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'too-many-requests' }, { status: 429 })
     }
 
-    const body = (await request.json().catch(() => ({}))) as { company_id?: string | null }
+    const body = (await request.json().catch(() => ({}))) as { company_id?: string | null; stream?: boolean | null }
     const selectedCompanyId = typeof body.company_id === 'string' && body.company_id.trim().length > 0 ? body.company_id.trim() : null
 
     const dateTo = todayISO()
@@ -223,14 +227,70 @@ export async function POST(request: Request) {
       'Составь детальный прогноз с анализом трендов.',
     ].join('\n')
 
-    const result = await generateAiText({
+    const aiPayload: { model: string; maxTokens: number; messages: AiMessage[] } = {
       model: OPENAI_MODEL,
       maxTokens: 1200,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-    }).catch(async (error) => {
+    }
+
+    const responsePayload = {
+      dateFrom,
+      dateTo,
+      weeklyIncome,
+      weeklyExpense,
+      weekLabels,
+      projected,
+      scenarios,
+      avgWeeklyIncome,
+      avgWeeklyExpense,
+    }
+
+    if (body.stream === true) {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          try {
+            controller.enqueue(encoder.encode(sse('meta', responsePayload)))
+            const result = await streamAiText({
+              ...aiPayload,
+              onDelta: (text) => controller.enqueue(encoder.encode(sse('delta', { text }))),
+            })
+            await logAiUsageSafe(access.supabase, {
+              userId: access.user?.id || null,
+              endpoint: '/api/ai/forecast',
+              provider: result.provider,
+              model: result.model,
+              usage: result.usage,
+            })
+            controller.enqueue(encoder.encode(sse('done', { ok: true, provider: result.provider, model: result.model })))
+            controller.close()
+          } catch (error) {
+            await logAiUsageSafe(access.supabase, {
+              userId: access.user?.id || null,
+              endpoint: '/api/ai/forecast',
+              model: OPENAI_MODEL,
+              status: 'error',
+              error: error instanceof Error ? error.message : String(error),
+            })
+            controller.enqueue(encoder.encode(sse('error', { error: error instanceof Error ? error.message : String(error) })))
+            controller.close()
+          }
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-store, no-transform',
+          Connection: 'keep-alive',
+        },
+      })
+    }
+
+    const result = await generateAiText(aiPayload).catch(async (error) => {
       await logAiUsageSafe(access.supabase, {
         userId: access.user?.id || null,
         endpoint: '/api/ai/forecast',
@@ -254,15 +314,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       text,
-      dateFrom,
-      dateTo,
-      weeklyIncome,
-      weeklyExpense,
-      weekLabels,
-      projected,
-      scenarios,
-      avgWeeklyIncome,
-      avgWeeklyExpense,
+      ...responsePayload,
     })
   } catch (error) {
     console.error('POST /api/ai/forecast failed:', error)

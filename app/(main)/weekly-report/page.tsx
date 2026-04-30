@@ -81,6 +81,20 @@ import {
 // =====================
 type Company = { id: string; name: string; code: string | null }
 
+function parseSseEvent(raw: string) {
+  const event = raw
+    .split('\n')
+    .find((line) => line.startsWith('event:'))
+    ?.slice(6)
+    .trim() || 'message'
+  const data = raw
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .join('\n')
+  return { event, data: data ? JSON.parse(data) : null }
+}
+
 // Основные типы для сальдо
 type WeekTotals = {
   // Доходы по типам
@@ -676,6 +690,7 @@ function WeeklyReportContent() {
   const [aiReport, setAiReport] = useState<string | null>(null)
   const [aiReportLoading, setAiReportLoading] = useState(false)
   const [aiReportError, setAiReportError] = useState<string | null>(null)
+  const aiReportAbortRef = useRef<AbortController | null>(null)
 
   // Date states
   const todayISO = useMemo(() => getTodayISO(), [])
@@ -1606,24 +1621,58 @@ function WeeklyReportContent() {
   }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast])
 
   const handleGenerateAiReport = useCallback(async () => {
+    aiReportAbortRef.current?.abort()
+    const ac = new AbortController()
+    aiReportAbortRef.current = ac
     setAiReportLoading(true)
     setAiReportError(null)
-    setAiReport(null)
+    setAiReport('')
     try {
       const res = await fetch('/api/ai/weekly-report', {
         method: 'POST',
+        signal: ac.signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom: startDate, dateTo: endDate }),
+        body: JSON.stringify({ dateFrom: startDate, dateTo: endDate, stream: true }),
       })
-      const json = await res.json().catch(() => null)
-      if (!res.ok || json?.error) throw new Error(json?.error || 'Ошибка генерации отчёта')
-      setAiReport(json.text || null)
+      if (!res.ok || !res.body) {
+        const json = await res.json().catch(() => null)
+        throw new Error(json?.error || 'Ошибка генерации отчёта')
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+        for (const rawEvent of events) {
+          if (!rawEvent.trim()) continue
+          const { event, data } = parseSseEvent(rawEvent)
+          if (event === 'delta') {
+            setAiReport((current) => `${current || ''}${String(data?.text || '')}`)
+          }
+          if (event === 'error') {
+            throw new Error(String(data?.error || 'Ошибка генерации отчёта'))
+          }
+        }
+      }
     } catch (err: any) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setAiReportError(err?.message || 'Не удалось сгенерировать отчёт')
     } finally {
+      if (aiReportAbortRef.current === ac) aiReportAbortRef.current = null
       setAiReportLoading(false)
     }
   }, [startDate, endDate])
+
+  const handleCancelAiReport = useCallback(() => {
+    aiReportAbortRef.current?.abort()
+    aiReportAbortRef.current = null
+    setAiReportLoading(false)
+  }, [])
 
   // =====================
   // LOADING & ERROR
@@ -2489,9 +2538,17 @@ function WeeklyReportContent() {
                   </>
                 )}
               </button>
+              {aiReportLoading ? (
+                <button
+                  onClick={handleCancelAiReport}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-gray-200 hover:bg-white/10"
+                >
+                  Отменить
+                </button>
+              ) : null}
             </div>
 
-            {aiReportLoading && (
+            {aiReportLoading && !aiReport && (
               <div className="space-y-3">
                 <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
                 <div className="h-3 bg-gray-800 rounded-full animate-pulse w-5/6" />
@@ -2505,8 +2562,9 @@ function WeeklyReportContent() {
               <p className="text-sm text-red-400">{aiReportError}</p>
             )}
 
-            {aiReport && !aiReportLoading && (
+            {aiReport && (
               <div className="prose prose-invert prose-sm max-w-none">
+                {aiReportLoading ? <p className="mb-2 text-xs text-violet-300">AI пишет отчёт...</p> : null}
                 <pre className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
               </div>
             )}
