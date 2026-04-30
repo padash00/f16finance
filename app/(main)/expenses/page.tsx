@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import { useCompanies } from '@/hooks/use-companies'
@@ -269,6 +270,7 @@ async function logExpenseEvent(event: {
 
 // ================== MAIN COMPONENT ==================
 export default function ExpensesPage() {
+  const [isClient, setIsClient] = useState(false)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
 
   // Filters
@@ -311,6 +313,10 @@ export default function ExpensesPage() {
   const [templatesTableExists, setTemplatesTableExists] = useState(true)
   const [showAddTemplate, setShowAddTemplate] = useState(false)
   const [newTemplate, setNewTemplate] = useState({name:'',category:'',amount:'',payment_type:'cash'})
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
     const loadSessionRole = async () => {
@@ -1441,9 +1447,9 @@ export default function ExpensesPage() {
           )}
         </div>
 
-      {editingExpense ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl">
+      {isClient && editingExpense ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">Редактирование расхода</h2>
@@ -1574,12 +1580,13 @@ export default function ExpensesPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {showAddExpenseModal ? (
+      {isClient && showAddExpenseModal ? createPortal(
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
           onClick={() => {
             setShowAddExpenseModal(false)
             setExpenseModalLoading(false)
@@ -1611,20 +1618,21 @@ export default function ExpensesPage() {
                 </div>
               ) : null}
               <iframe
-                src="/expenses/new?embedded=1"
+                src="/expenses-embed/new?embedded=1"
                 className="w-full h-full bg-slate-950"
                 title="Добавление расхода"
                 onLoad={() => setExpenseModalLoading(false)}
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       {/* Attachment preview modal */}
-      {previewUrl ? (
+      {isClient && previewUrl ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={() => setPreviewUrl(null)}
         >
           <div
@@ -1679,7 +1687,8 @@ export default function ExpensesPage() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </>
   )

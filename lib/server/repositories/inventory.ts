@@ -306,20 +306,24 @@ export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: Invento
 }
 
 export async function fetchStoreReceipts(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreReceiptsData> {
+  let itemsQuery: any = supabase
+    .from('inventory_items')
+    .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, category:category_id(id, name), organization_id')
+    .eq('is_active', true)
+    .order('name', { ascending: true })
+  if (hasOrganizationScope(scope)) {
+    const orgId = String(scope?.organizationId || '')
+    // Keep legacy shared catalog rows (organization_id is null) visible to org-scoped managers.
+    itemsQuery = itemsQuery.or(`organization_id.eq.${orgId},organization_id.is.null`)
+  }
+
   const [
     { data: items, error: itemsError },
     { data: suppliers, error: suppliersError },
     { data: locations, error: locationsError },
     { data: receipts, error: receiptsError },
   ] = await Promise.all([
-    applyOrganizationFilter(
-      supabase
-      .from('inventory_items')
-      .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, category:category_id(id, name)')
-      .eq('is_active', true)
-      .order('name', { ascending: true }),
-      scope,
-    ),
+    itemsQuery,
     applyOrganizationFilter(supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }), scope),
     applyOrganizationFilter(
       supabase
@@ -343,7 +347,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
   if (receiptsError) throw receiptsError
 
   return {
-    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
+    items: mapNestedRows(items || []),
     suppliers: filterByOrganizationScope((suppliers || []) as any[], scope, (row: any) => row.organization_id),
     locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
     receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import {
   createInventoryCategory,
   createInventoryItem,
@@ -280,7 +281,7 @@ export async function GET(request: Request) {
       area: 'api/admin/inventory.GET',
       message: error?.message || 'Inventory GET error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить складской контур' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось загрузить складской контур') }, 500)
   }
 }
 
@@ -712,6 +713,6 @@ export async function POST(request: Request) {
       area: 'api/admin/inventory.POST',
       message: error?.message || 'Inventory POST error',
     })
-    return json({ error: error?.message || 'Не удалось выполнить складскую операцию' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось выполнить складскую операцию') }, 500)
   }
 }

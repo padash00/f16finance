@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
@@ -211,7 +212,7 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/showcase.GET', message: error?.message })
-    return json({ error: error?.message || 'Ошибка загрузки витрины' }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка загрузки витрины') }, 500)
   }
 }
 
@@ -390,6 +391,6 @@ export async function POST(request: Request) {
     return json({ error: 'unknown-action' }, 400)
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/showcase.POST', message: error?.message })
-    return json({ error: error?.message || 'Ошибка' }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка') }, 500)
   }
 }

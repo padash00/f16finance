@@ -5,6 +5,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { bulkSyncInventoryItemsToPointProducts, ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -58,6 +59,10 @@ function normalizeQty(value: unknown) {
 
 function normalizeDigits(value: unknown) {
   return String(value || '').replace(/\D/g, '')
+}
+
+function isUniqueViolation(error: any) {
+  return String(error?.code || '') === '23505'
 }
 
 async function resolveLocationOrganizationId(
@@ -125,7 +130,7 @@ export async function GET(request: Request) {
       area: 'api/admin/store/receipts.GET',
       message: error?.message || 'Store receipts GET error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить приемку магазина' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось загрузить приемку магазина') }, 500)
   }
 }
 
@@ -245,25 +250,56 @@ export async function POST(request: Request) {
       if (existingSupplier?.id) {
         supplierId = String(existingSupplier.id)
       } else {
-        const insertPayload: Record<string, unknown> = {
-          name: supplierName,
-          organization_name: organizationName,
-          bin_iin: binIin,
-          organization_id: locationOrganizationId,
-          contact_name: null,
-          phone: null,
-          notes: null,
-        }
-        if (!insertPayload.organization_id) {
-          return json({ error: 'Не удалось определить организацию поставщика по выбранной точке приемки' }, 400)
-        }
-        const { data: createdSupplier, error: createSupplierError } = await supabase
+        let existingByNameQuery: any = supabase
           .from('inventory_suppliers')
-          .insert([insertPayload])
-          .select('id')
-          .single()
-        if (createSupplierError) throw createSupplierError
-        supplierId = String(createdSupplier.id)
+          .select('id, organization_id')
+          .ilike('name', supplierName)
+          .limit(1)
+        if (!access.isSuperAdmin && locationOrganizationId) {
+          existingByNameQuery = existingByNameQuery.eq('organization_id', locationOrganizationId)
+        }
+        const { data: existingByName, error: existingByNameError } = await existingByNameQuery.maybeSingle()
+        if (existingByNameError) throw existingByNameError
+        if (existingByName?.id) {
+          supplierId = String(existingByName.id)
+        } else {
+          const insertPayload: Record<string, unknown> = {
+            name: supplierName,
+            organization_name: organizationName,
+            bin_iin: binIin,
+            organization_id: locationOrganizationId,
+            contact_name: null,
+            phone: null,
+            notes: null,
+          }
+          if (!insertPayload.organization_id) {
+            return json({ error: 'Не удалось определить организацию поставщика по выбранной точке приемки' }, 400)
+          }
+          const { data: createdSupplier, error: createSupplierError } = await supabase
+            .from('inventory_suppliers')
+            .insert([insertPayload])
+            .select('id')
+            .single()
+          if (createSupplierError) {
+            if (!isUniqueViolation(createSupplierError)) throw createSupplierError
+            let conflictedByNameQuery: any = supabase
+              .from('inventory_suppliers')
+              .select('id, organization_id')
+              .ilike('name', supplierName)
+              .limit(1)
+            if (!access.isSuperAdmin && locationOrganizationId) {
+              conflictedByNameQuery = conflictedByNameQuery.eq('organization_id', locationOrganizationId)
+            }
+            const { data: conflictedByName, error: conflictedByNameError } = await conflictedByNameQuery.maybeSingle()
+            if (conflictedByNameError) throw conflictedByNameError
+            if (!conflictedByName?.id) {
+              throw createSupplierError
+            }
+            supplierId = String(conflictedByName.id)
+          } else {
+            supplierId = String(createdSupplier.id)
+          }
+        }
       }
     }
     if (!supplierId) return json({ error: 'Укажите поставщика (или создайте нового с ИИН/БИН и названием организации)' }, 400)
@@ -456,6 +492,6 @@ export async function POST(request: Request) {
       area: 'api/admin/store/receipts.POST',
       message: error?.message || 'Store receipts POST error',
     })
-    return json({ error: error?.message || 'Не удалось провести приемку' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось провести приемку') }, 500)
   }
 }

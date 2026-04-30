@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -129,7 +130,7 @@ export async function GET(req: Request) {
     return json({ data: data ?? [] })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expenses GET', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка сервера') }, 500)
   }
 }
 
@@ -251,6 +252,6 @@ export async function POST(req: Request) {
       area: 'api/admin/expenses',
       message: error?.message || 'Admin expenses route error',
     })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка сервера') }, 500)
   }
 }
