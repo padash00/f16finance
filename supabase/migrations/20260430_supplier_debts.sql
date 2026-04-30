@@ -86,7 +86,7 @@ select
 from public.inventory_receipts r
 left join public.inventory_locations l on l.id = r.location_id
 left join public.expenses e
-  on e.source_type = 'inventory_receipt' and e.source_id = r.id
+  on e.source_type = 'inventory_receipt' and e.source_id::text = r.id::text
 left join lateral (
   select ec.id from public.expense_categories ec
   where lower(coalesce(ec.name, '')) = lower(coalesce(e.category, ''))
