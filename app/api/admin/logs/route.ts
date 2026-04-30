@@ -249,7 +249,8 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
 
   if (et === 'visit' || et === 'page-view' || act === 'visit' || act === 'page-view') {
     const page = text(p.pathname || p.path || p.page || p.url || item.subtitle)
-    return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: compact([text(p.source), text(p.user_agent).slice(0, 120)]) }
+    const source = text(p.source)
+    return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: source ? `Источник: ${source}` : null }
   }
 
   addDetail(details, 'Название', p.title || p.name || p.full_name)

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, BellRing, CircleAlert, Download, Eye, Loader2, RefreshCw,
   Search, ShieldCheck, TrendingUp, TrendingDown, User, Building2,
-  Tag, Wallet, CreditCard, ChevronDown, ChevronUp,
+  Tag, Wallet, CreditCard,
   AlertTriangle, CheckCircle, LogIn, Trash2, Pencil, Plus, FileText,
 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -423,15 +423,6 @@ export default function LogsPage() {
   const [actor, setActor] = useState('')
   const [onlyErrors, setOnlyErrors] = useState(false)
   const [page, setPage] = useState(1)
-  const [expandedRaw, setExpandedRaw] = useState<Set<string>>(new Set())
-
-  const toggleRaw = (id: string) =>
-    setExpandedRaw((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
 
   const applyPreset = (preset: 'all' | 'auth' | 'finance' | 'staff' | 'operations' | 'structure' | 'errors') => {
     setPage(1); setEntityType(''); setAction(''); setActor(''); setKind(''); setOnlyErrors(false); setSearch('')
@@ -611,7 +602,6 @@ export default function LogsPage() {
           {(data?.items || []).map((item) => {
             const { Icon, color, bg } = entityIcon(item.entityType, item.action)
             const isError = item.status === 'failed' || item.entityType === 'system-error'
-            const isRawOpen = expandedRaw.has(item.id)
             const badgeLabel = ACTION_BADGE_LABELS[item.action || ''] || item.action || ''
             const isNotif = item.kind === 'notification'
 
@@ -668,21 +658,6 @@ export default function LogsPage() {
                       {item.recipient && <span>→ {item.recipient}</span>}
                       {item.channel && <span>via {item.channel}</span>}
                     </div>
-
-                    {/* Raw JSON toggle */}
-                    {item.payload && (
-                      <button onClick={() => toggleRaw(item.id)}
-                        className="mt-2 flex items-center gap-1 text-xs text-slate-600 hover:text-slate-400 transition">
-                        {isRawOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        {isRawOpen ? 'Скрыть технические данные' : 'Показать технические данные'}
-                      </button>
-                    )}
-
-                    {isRawOpen && item.payload && (
-                      <pre className="mt-2 overflow-x-auto rounded-xl border border-white/8 bg-black/30 p-3 text-[11px] leading-5 text-slate-400">
-                        {JSON.stringify(item.payload, null, 2)}
-                      </pre>
-                    )}
                   </div>
                 </div>
               </Card>
