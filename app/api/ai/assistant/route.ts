@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { runAssistant } from '@/lib/ai/assistant'
+import { runAssistant, streamAssistant } from '@/lib/ai/assistant'
 import type { AssistantRequest } from '@/lib/ai/types'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -31,6 +31,43 @@ export async function POST(request: Request) {
 
     if (!body?.page || !body?.prompt?.trim()) {
       return NextResponse.json({ error: 'page и prompt обязательны.' }, { status: 400 })
+    }
+
+    const wantsStream = request.headers.get('accept')?.includes('text/event-stream')
+    if (wantsStream) {
+      const stream = streamAssistant(
+        body,
+        {
+          supabase: access.supabase,
+          currentSnapshot: body.snapshot || null,
+        },
+        {
+          signal: request.signal,
+          onUsage: (usage) =>
+            logAiUsageSafe(access.supabase, {
+              userId: access.user?.id || null,
+              endpoint: '/api/ai/assistant',
+              model: OPENAI_MODEL,
+              usage,
+            }),
+          onError: (error) =>
+            logAiUsageSafe(access.supabase, {
+              userId: access.user?.id || null,
+              endpoint: '/api/ai/assistant',
+              model: OPENAI_MODEL,
+              status: 'error',
+              error,
+            }),
+        },
+      )
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+        },
+      })
     }
 
     const result = await runAssistant(body, {

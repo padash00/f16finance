@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Bot, Loader2, SendHorizonal, Sparkles } from 'lucide-react'
+import { Bot, Loader2, SendHorizonal, Sparkles, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,10 +37,27 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
             : 'bg-white/5 text-slate-200 border border-white/10',
         )}
       >
-        {message.content}
+        {message.content || (!isUser ? '...' : '')}
       </div>
     </div>
   )
+}
+
+function parseSseEvent(raw: string): { event: string; data: any } | null {
+  const lines = raw.split('\n')
+  const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message'
+  const data = lines
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .join('\n')
+
+  if (!data) return null
+
+  try {
+    return { event, data: JSON.parse(data) }
+  } catch {
+    return null
+  }
 }
 
 export function AssistantPanel({
@@ -56,6 +73,7 @@ export function AssistantPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const canSubmit = prompt.trim().length > 0 && !loading
 
@@ -66,15 +84,21 @@ export function AssistantPanel({
     if (!finalPrompt || loading) return
 
     const nextMessages = [...messages, { role: 'user', content: finalPrompt } satisfies AssistantChatMessage]
-    setMessages(nextMessages)
+    const assistantIndex = nextMessages.length
+    setMessages([...nextMessages, { role: 'assistant', content: '' }])
     setPrompt('')
     setLoading(true)
     setError(null)
 
+    const abortController = new AbortController()
+    abortRef.current = abortController
+
     try {
       const response = await fetch('/api/ai/assistant', {
         method: 'POST',
+        signal: abortController.signal,
         headers: {
+          Accept: 'text/event-stream',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -85,21 +109,64 @@ export function AssistantPanel({
         }),
       })
 
-      const result = (await response.json().catch(() => null)) as AssistantResponse | null
-      const text = typeof result?.text === 'string' ? result.text : null
-      const errorText = typeof result?.error === 'string' ? result.error : 'Не удалось получить ответ консультанта.'
-
-      if (!response.ok || !text) {
+      if (!response.ok || !response.body) {
+        const result = (await response.json().catch(() => null)) as AssistantResponse | null
+        const errorText = typeof result?.error === 'string' ? result.error : 'Не удалось получить ответ консультанта.'
         throw new Error(errorText)
       }
 
-      setMessages([...nextMessages, { role: 'assistant', content: text }])
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let receivedText = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const events = buffer.split('\n\n')
+        buffer = events.pop() || ''
+
+        for (const rawEvent of events) {
+          const parsed = parseSseEvent(rawEvent)
+          if (!parsed) continue
+
+          if (parsed.event === 'delta') {
+            const delta = typeof parsed.data?.text === 'string' ? parsed.data.text : ''
+            if (!delta) continue
+            receivedText += delta
+            setMessages((current) =>
+              current.map((message, index) =>
+                index === assistantIndex ? { ...message, content: receivedText } : message,
+              ),
+            )
+          }
+
+          if (parsed.event === 'error') {
+            throw new Error(typeof parsed.data?.error === 'string' ? parsed.data.error : 'Не удалось получить ответ консультанта.')
+          }
+        }
+      }
+
+      if (!receivedText.trim()) {
+        throw new Error('ИИ не вернул осмысленный ответ.')
+      }
     } catch (requestError) {
+      if (abortController.signal.aborted) return
+
+      setMessages(nextMessages)
       setError(requestError instanceof Error ? requestError.message : 'Не удалось получить ответ консультанта.')
     } finally {
+      abortRef.current = null
       setLoading(false)
       textareaRef.current?.focus()
     }
+  }
+
+  const cancelRequest = () => {
+    abortRef.current?.abort()
+    setLoading(false)
   }
 
   return (
@@ -151,7 +218,7 @@ export function AssistantPanel({
               {loading ? (
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
-                  Консультант анализирует срез данных и при необходимости дополняет ответ серверными данными...
+                  Консультант печатает...
                 </div>
               ) : null}
             </div>
@@ -181,15 +248,23 @@ export function AssistantPanel({
 
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs text-slate-500">Ctrl/Cmd + Enter чтобы отправить</div>
-            <Button
-              type="button"
-              onClick={() => void sendPrompt()}
-              disabled={!canSubmit}
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black hover:from-amber-400 hover:to-orange-400"
-            >
-              <SendHorizonal className="mr-2 h-4 w-4" />
-              Спросить
-            </Button>
+            <div className="flex items-center gap-2">
+              {loading ? (
+                <Button type="button" variant="outline" onClick={cancelRequest} className="rounded-xl">
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Отменить
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                onClick={() => void sendPrompt()}
+                disabled={!canSubmit}
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black hover:from-amber-400 hover:to-orange-400"
+              >
+                <SendHorizonal className="mr-2 h-4 w-4" />
+                Спросить
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>

@@ -21,6 +21,14 @@ type AssistantRunContext = {
   currentSnapshot?: PageSnapshot | null
 }
 
+type AssistantUsage = NonNullable<AssistantResponse['usage']>
+
+type AssistantStreamOptions = {
+  signal?: AbortSignal
+  onUsage?: (usage: AssistantUsage) => void | Promise<void>
+  onError?: (error: string) => void | Promise<void>
+}
+
 type NormalizedDateArgs = {
   dateFrom: string
   dateTo: string
@@ -225,17 +233,136 @@ async function requestOpenAI(payload: Record<string, unknown>) {
   }
 }
 
+async function buildMessages(request: AssistantRequest, context: AssistantRunContext) {
+  const serverSnapshots = await collectServerSnapshots(request, context)
+  const input = buildInput(request, context.currentSnapshot, serverSnapshots)
+  return input.map((msg: any) => ({
+    role: msg.role,
+    content: Array.isArray(msg.content)
+      ? msg.content.map((c: any) => c.text || c.output_text || '').join('')
+      : msg.content,
+  }))
+}
+
+function sse(event: string, data: unknown) {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+function extractStreamDelta(payload: any): string {
+  const delta = payload?.choices?.[0]?.delta?.content
+  return typeof delta === 'string' ? delta : ''
+}
+
+async function processOpenAIStream(
+  response: Response,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  options: AssistantStreamOptions,
+) {
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('OpenAI stream body is empty.')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+
+    for (const event of events) {
+      const dataLines = event
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+
+      for (const dataLine of dataLines) {
+        if (!dataLine || dataLine === '[DONE]') continue
+
+        const parsed = JSON.parse(dataLine)
+        if (parsed?.usage) {
+          await options.onUsage?.(parsed.usage)
+        }
+
+        const delta = extractStreamDelta(parsed)
+        if (delta) {
+          controller.enqueue(encoder.encode(sse('delta', { text: delta })))
+        }
+      }
+    }
+  }
+}
+
+export function streamAssistant(
+  request: AssistantRequest,
+  context: AssistantRunContext,
+  options: AssistantStreamOptions = {},
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const apiKey = process.env.OPENAI_API_KEY
+        if (!apiKey) {
+          const error = 'OPENAI_API_KEY не настроен на сервере.'
+          await options.onError?.(error)
+          controller.enqueue(encoder.encode(sse('error', { error })))
+          controller.close()
+          return
+        }
+
+        const messages = await buildMessages(request, context)
+        const response = await fetch(OPENAI_API_URL, {
+          method: 'POST',
+          signal: options.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: OPENAI_MODEL,
+            max_tokens: 2000,
+            temperature: 0.7,
+            messages,
+            stream: true,
+            stream_options: { include_usage: true },
+          }),
+        })
+
+        if (!response.ok || !response.body) {
+          const detail = await response.text().catch(() => '')
+          const error = detail || `OpenAI API error (${response.status})`
+          await options.onError?.(error)
+          controller.enqueue(encoder.encode(sse('error', { error })))
+          controller.close()
+          return
+        }
+
+        await processOpenAIStream(response, controller, encoder, options)
+        controller.enqueue(encoder.encode(sse('done', { ok: true })))
+        controller.close()
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          controller.close()
+          return
+        }
+
+        const message = error instanceof Error ? error.message : 'Не удалось выполнить AI-запрос.'
+        await options.onError?.(message)
+        controller.enqueue(encoder.encode(sse('error', { error: message })))
+        controller.close()
+      }
+    },
+  })
+}
+
 export async function runAssistant(request: AssistantRequest, context: AssistantRunContext): Promise<AssistantResponse> {
   try {
-    const serverSnapshots = await collectServerSnapshots(request, context)
-
-    const input = buildInput(request, context.currentSnapshot, serverSnapshots)
-    const messages = input.map((msg: any) => ({
-      role: msg.role,
-      content: Array.isArray(msg.content)
-        ? msg.content.map((c: any) => c.text || c.output_text || '').join('')
-        : msg.content,
-    }))
+    const messages = await buildMessages(request, context)
 
     const result = await requestOpenAI({
       model: OPENAI_MODEL,
