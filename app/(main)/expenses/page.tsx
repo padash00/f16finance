@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import { useCompanies } from '@/hooks/use-companies'
@@ -2046,6 +2047,19 @@ function ListTab({
   onPreview,
 }: any) {
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null)
+  const tableContainerRef = useRef<HTMLDivElement | null>(null)
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 56,
+    overscan: 10,
+  })
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const totalVirtualSize = rowVirtualizer.getTotalSize()
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom = virtualRows.length > 0 ? totalVirtualSize - virtualRows[virtualRows.length - 1].end : 0
+  const columnCount = 8 + (showControlColumns ? 2 : 0) + (canManageExpense ? 1 : 0)
 
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return
@@ -2067,9 +2081,9 @@ function ListTab({
 
   return (
     <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
-      <div className="overflow-x-auto">
+      <div ref={tableContainerRef} className="max-h-[72vh] overflow-auto">
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-700 bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
               <th className="px-4 py-3 text-left">Дата</th>
               <th className="px-4 py-3 text-left">Компания</th>
@@ -2085,7 +2099,15 @@ function ListTab({
             </tr>
           </thead>
           <tbody className="text-sm">
-            {rows.map((row: ExpenseRow, idx: number) => {
+            {paddingTop > 0 ? (
+              <tr aria-hidden>
+                <td colSpan={columnCount} style={{ height: paddingTop }} />
+              </tr>
+            ) : null}
+            {virtualRows.map((virtualRow) => {
+              const idx = virtualRow.index
+              const row = rows[idx] as ExpenseRow
+              if (!row) return null
               const total = rowTotal(row)
               const company = companyMap.get(row.company_id)
               const isExtra = company?.code === 'extra' || company?.name === 'F16 Extra'
@@ -2194,6 +2216,11 @@ function ListTab({
                 </tr>
               )
             })}
+            {paddingBottom > 0 ? (
+              <tr aria-hidden>
+                <td colSpan={columnCount} style={{ height: paddingBottom }} />
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
