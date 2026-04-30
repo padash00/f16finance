@@ -22,6 +22,7 @@ type AiUsageLogEntry = {
 const MODEL_COST_PER_MILLION: Record<string, { input: number; output: number }> = {
   'gpt-4o-mini': { input: 0.15, output: 0.6 },
   'gpt-4o': { input: 2.5, output: 10 },
+  'gemini-2.0-flash': { input: 0.1, output: 0.4 },
 }
 
 function estimateCost(model: string, usage?: AiUsage | null) {

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 
+import { generateAiText } from '@/lib/ai/provider'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
 const OPENAI_MODEL = process.env.OPENAI_AI_HELPER_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini'
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -93,8 +93,7 @@ export async function POST(request: Request) {
   const relevant = pickArticles(prompt, articles)
   const shift = shiftRes.data as any | null
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
     return json({ error: 'ai-not-configured' }, 503)
   }
 
@@ -132,30 +131,16 @@ export async function POST(request: Request) {
 
   let aiText = ''
   try {
-    const aiRes = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.2,
-        max_tokens: 600,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-      }),
+    const result = await generateAiText({
+      model: OPENAI_MODEL,
+      temperature: 0.2,
+      maxTokens: 600,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
     })
-
-    if (!aiRes.ok) {
-      const detail = await aiRes.text()
-      return json({ error: 'ai-failed', detail }, 502)
-    }
-
-    const aiJson = (await aiRes.json()) as any
-    aiText = aiJson?.choices?.[0]?.message?.content || ''
+    aiText = result.text
   } catch (e: any) {
     return json({ error: 'ai-network-failed', detail: e?.message || String(e) }, 502)
   }

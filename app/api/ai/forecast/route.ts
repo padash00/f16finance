@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
+import { generateAiText } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 
 function todayISO() {
   const now = new Date()
@@ -72,11 +72,6 @@ export async function POST(request: Request) {
     const rl = checkRateLimit(`ai-forecast:${access.user?.id || ip}`, 30, 60_000)
     if (!rl.allowed) {
       return NextResponse.json({ error: 'too-many-requests' }, { status: 429 })
-    }
-
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'OPENAI_API_KEY не настроен на сервере.' }, { status: 500 })
     }
 
     const body = (await request.json().catch(() => ({}))) as { company_id?: string | null }
@@ -228,42 +223,33 @@ export async function POST(request: Request) {
       'Составь детальный прогноз с анализом трендов.',
     ].join('\n')
 
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        max_tokens: 1200,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-      }),
-    })
-
-    const json = await response.json().catch(() => null)
-    if (!response.ok || json?.error) {
+    const result = await generateAiText({
+      model: OPENAI_MODEL,
+      maxTokens: 1200,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }).catch(async (error) => {
       await logAiUsageSafe(access.supabase, {
         userId: access.user?.id || null,
         endpoint: '/api/ai/forecast',
         model: OPENAI_MODEL,
         status: 'error',
-        error: json?.error?.message || `OpenAI API error (${response.status})`,
+        error: error instanceof Error ? error.message : String(error),
       })
-      return NextResponse.json({ error: json?.error?.message || `OpenAI API error (${response.status})` }, { status: 500 })
-    }
+      throw error
+    })
 
-    const text = json?.choices?.[0]?.message?.content?.trim() || ''
+    const text = result.text.trim()
     if (!text) return NextResponse.json({ error: 'ИИ не вернул прогноз.' }, { status: 500 })
 
     await logAiUsageSafe(access.supabase, {
       userId: access.user?.id || null,
       endpoint: '/api/ai/forecast',
-      model: OPENAI_MODEL,
-      usage: json?.usage,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
     })
 
     return NextResponse.json({

@@ -1,0 +1,188 @@
+import 'server-only'
+
+export type AiMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export type AiUsage = {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+  raw?: unknown
+}
+
+export type AiTextResult = {
+  text: string
+  provider: 'openai' | 'gemini'
+  model: string
+  usage?: AiUsage | null
+}
+
+type GenerateAiTextOptions = {
+  messages: AiMessage[]
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  signal?: AbortSignal
+}
+
+const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
+const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+
+function extractOpenAiText(payload: any): string {
+  return String(payload?.choices?.[0]?.message?.content || '').trim()
+}
+
+function extractGeminiText(payload: any): string {
+  const parts = payload?.candidates?.[0]?.content?.parts
+  if (!Array.isArray(parts)) return ''
+  return parts
+    .map((part: any) => String(part?.text || '').trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+}
+
+function shouldFallback(status: number) {
+  return status === 408 || status === 409 || status === 429 || status >= 500
+}
+
+function openAiUsage(raw: any): AiUsage | null {
+  const usage = raw?.usage
+  if (!usage) return null
+  return {
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    raw: usage,
+  }
+}
+
+function geminiUsage(raw: any): AiUsage | null {
+  const usage = raw?.usageMetadata
+  if (!usage) return null
+  return {
+    prompt_tokens: usage.promptTokenCount,
+    completion_tokens: usage.candidatesTokenCount,
+    total_tokens: usage.totalTokenCount,
+    raw: usage,
+  }
+}
+
+async function callOpenAi(options: GenerateAiTextOptions): Promise<AiTextResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY не настроен на сервере.')
+
+  const model = options.model || DEFAULT_OPENAI_MODEL
+  const response = await fetch(OPENAI_CHAT_URL, {
+    method: 'POST',
+    signal: options.signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: options.temperature,
+      max_tokens: options.maxTokens,
+      messages: options.messages,
+    }),
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || payload?.error) {
+    const detail = payload?.error?.message || `OpenAI API error (${response.status})`
+    const error = new Error(detail)
+    ;(error as any).status = response.status
+    throw error
+  }
+
+  const text = extractOpenAiText(payload)
+  if (!text) throw new Error('OpenAI не вернул текст.')
+  return { text, provider: 'openai', model, usage: openAiUsage(payload) }
+}
+
+function toGeminiPayload(messages: AiMessage[], options: GenerateAiTextOptions) {
+  const systemText = messages
+    .filter((message) => message.role === 'system')
+    .map((message) => message.content)
+    .join('\n\n')
+    .trim()
+
+  const contents = messages
+    .filter((message) => message.role !== 'system')
+    .map((message) => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: message.content }],
+    }))
+
+  return {
+    systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined,
+    contents: contents.length > 0 ? contents : [{ role: 'user', parts: [{ text: systemText || 'Ответь кратко.' }] }],
+    generationConfig: {
+      temperature: options.temperature,
+      maxOutputTokens: options.maxTokens,
+    },
+  }
+}
+
+async function callGemini(options: GenerateAiTextOptions): Promise<AiTextResult> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY не настроен на сервере.')
+
+  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: 'POST',
+      signal: options.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(toGeminiPayload(options.messages, options)),
+    },
+  )
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || payload?.error) {
+    throw new Error(payload?.error?.message || `Gemini API error (${response.status})`)
+  }
+
+  const text = extractGeminiText(payload)
+  if (!text) throw new Error('Gemini не вернул текст.')
+  return { text, provider: 'gemini', model, usage: geminiUsage(payload) }
+}
+
+export async function generateAiText(options: GenerateAiTextOptions): Promise<AiTextResult> {
+  const errors: string[] = []
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      return await callOpenAi(options)
+    } catch (error: any) {
+      errors.push(error?.message || String(error))
+      if (error?.name === 'AbortError') throw error
+      if (error?.status && !shouldFallback(Number(error.status))) {
+        throw error
+      }
+    }
+  } else {
+    errors.push('OPENAI_API_KEY не настроен на сервере.')
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      return await callGemini(options)
+    } catch (error: any) {
+      errors.push(error?.message || String(error))
+      if (error?.name === 'AbortError') throw error
+    }
+  } else {
+    errors.push('GEMINI_API_KEY не настроен на сервере.')
+  }
+
+  throw new Error(errors.filter(Boolean).join(' | ') || 'AI provider не настроен.')
+}
