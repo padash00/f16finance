@@ -249,6 +249,7 @@ function calcMarkupPercent(unitCostRaw: string, salePriceRaw: string) {
 
 export default function StoreReceiptsPage() {
   const [data, setData] = useState<ReceiptsResponse['data'] | null>(null)
+  const [debtByReceiptId, setDebtByReceiptId] = useState<Map<string, { status: 'open' | 'paid' | 'written_off'; total_amount: number; due_date: string | null; is_consignment: boolean }>>(new Map())
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -316,6 +317,28 @@ export default function StoreReceiptsPage() {
       }
       setData(normalized)
       setLocationId((current) => current || normalized.locations?.[0]?.id || '')
+
+      // load debts and build a map by receipt_id
+      try {
+        const debtsResponse = await fetch('/api/admin/store/debts?status=all', { cache: 'no-store', signal })
+        const debtsJson = await debtsResponse.json().catch(() => null)
+        if (debtsResponse.ok && debtsJson?.ok && Array.isArray(debtsJson.data?.debts)) {
+          const map = new Map<string, { status: 'open' | 'paid' | 'written_off'; total_amount: number; due_date: string | null; is_consignment: boolean }>()
+          for (const d of debtsJson.data.debts) {
+            if (d?.receipt_id) {
+              map.set(String(d.receipt_id), {
+                status: d.status,
+                total_amount: Number(d.total_amount || 0),
+                due_date: d.due_date || null,
+                is_consignment: Boolean(d.is_consignment),
+              })
+            }
+          }
+          setDebtByReceiptId(map)
+        }
+      } catch {
+        // non-fatal
+      }
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -1142,6 +1165,7 @@ export default function StoreReceiptsPage() {
                   <th className="w-32 py-2.5 px-2 font-normal">Накладная</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
                   <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-emerald-300/70">Сумма</th>
+                  <th className="w-28 py-2.5 px-2 font-normal">Оплата</th>
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
@@ -1182,6 +1206,24 @@ export default function StoreReceiptsPage() {
                     </td>
                     <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
                       <span className="text-sm font-semibold text-emerald-300">{formatMoney(receipt.total_amount || 0)}</span>
+                    </td>
+                    <td className="w-28 py-2.5 px-2 align-middle">
+                      {(() => {
+                        const debt = debtByReceiptId.get(String(receipt.id))
+                        if (!debt) return <span className="text-xs text-muted-foreground">—</span>
+                        if (debt.status === 'paid') {
+                          return <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">Оплачен</span>
+                        }
+                        if (debt.status === 'written_off') {
+                          return <span className="inline-flex items-center rounded-full border border-gray-500/30 bg-gray-500/15 px-2 py-0.5 text-[10px] text-gray-200">Списан</span>
+                        }
+                        const overdue = debt.due_date ? new Date(debt.due_date).getTime() < Date.now() : false
+                        return (
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${overdue ? 'border-red-500/40 bg-red-500/15 text-red-200' : 'border-amber-500/30 bg-amber-500/15 text-amber-200'}`}>
+                            {overdue ? 'Просрочен' : debt.is_consignment ? 'Реализация' : 'Долг'}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
                       <Button

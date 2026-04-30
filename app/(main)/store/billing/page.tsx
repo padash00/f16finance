@@ -90,6 +90,10 @@ export default function BillingPage() {
   const [paying, setPaying] = useState(false)
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
 
+  const [writeOffDebt, setWriteOffDebt] = useState<Debt | null>(null)
+  const [writeOffReason, setWriteOffReason] = useState('')
+  const [writingOff, setWritingOff] = useState(false)
+
   const load = async () => {
     setLoading(true)
     setError(null)
@@ -177,6 +181,29 @@ export default function BillingPage() {
       setError(err?.message || 'Не удалось загрузить чек')
     } finally {
       setUploadingReceipt(false)
+    }
+  }
+
+  const submitWriteOff = async () => {
+    if (!writeOffDebt) return
+    setWritingOff(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/admin/store/debts/${writeOffDebt.id}/write-off`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: writeOffReason.trim() || null }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось списать долг')
+      setSuccess('Долг списан')
+      setWriteOffDebt(null)
+      setWriteOffReason('')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось списать долг')
+    } finally {
+      setWritingOff(false)
     }
   }
 
@@ -327,7 +354,19 @@ export default function BillingPage() {
                         <div className="text-lg font-semibold">{formatMoney(debt.total_amount)} ₸</div>
                       </div>
                       {debt.status === 'open' ? (
-                        <Button onClick={() => openPay(debt)}>Оплатить</Button>
+                        <div className="flex flex-col gap-1.5">
+                          <Button onClick={() => openPay(debt)}>Оплатить</Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setWriteOffDebt(debt)
+                              setWriteOffReason('')
+                            }}
+                          >
+                            Списать
+                          </Button>
+                        </div>
                       ) : null}
                     </div>
                   </div>
@@ -444,6 +483,47 @@ export default function BillingPage() {
               <Button variant="outline" onClick={closePay} disabled={paying}>Отмена</Button>
               <Button onClick={submitPay} disabled={paying || !payReceiptUrl}>
                 {paying ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Сохраняю...</> : 'Провести оплату'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {writeOffDebt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !writingOff && setWriteOffDebt(null)}>
+          <div
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Списать долг</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {writeOffDebt.supplier?.organization_name || writeOffDebt.supplier?.name || '—'} · {formatMoney(writeOffDebt.total_amount)} ₸
+                </p>
+              </div>
+              <button onClick={() => !writingOff && setWriteOffDebt(null)} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Причина списания</Label>
+              <Textarea
+                rows={3}
+                value={writeOffReason}
+                onChange={(e) => setWriteOffReason(e.target.value)}
+                placeholder="Например: возврат поставщику, поставщик закрылся, бракованный товар"
+              />
+              <p className="text-xs text-muted-foreground">
+                Списанный долг не создаст расход. Действие будет в журнале аудита.
+              </p>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setWriteOffDebt(null)} disabled={writingOff}>Отмена</Button>
+              <Button onClick={submitWriteOff} disabled={writingOff} className="bg-amber-600 hover:bg-amber-500">
+                {writingOff ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Списываю...</> : 'Списать'}
               </Button>
             </div>
           </div>

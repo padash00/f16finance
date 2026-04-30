@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { isAbortError } from '@/lib/is-abort-error'
+import { SupplierDebtsWidget } from '@/components/store/supplier-debts-widget'
 
 const InventoryPageContent = dynamic(
   () => import('../inventory/page').then((m) => m.InventoryPageContent),
@@ -372,7 +373,7 @@ export default function StoreOverviewPage() {
           <MetricCard label="Низкий остаток" value={metrics.lowStock} hint="Позиции под контролем" />
           <MetricCard label="Последние приёмки" value={metrics.receipts} hint="Документы прихода" />
         </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3">
             <p className="text-[11px] uppercase tracking-[0.18em] text-rose-200/80">Неразобранные списания</p>
             <p className="mt-1 text-2xl font-semibold text-rose-200">{metrics.unresolvedWriteoffs}</p>
@@ -383,6 +384,7 @@ export default function StoreOverviewPage() {
             <p className="mt-1 text-2xl font-semibold text-amber-200">{metrics.receiptMismatch}</p>
             <p className="mt-1 text-xs text-amber-200/80">Заявки со статусом disputed</p>
           </div>
+          <SupplierDebtsWidget />
         </div>
 
         {topLowStock.length > 0 ? (
