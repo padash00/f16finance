@@ -262,6 +262,8 @@ export async function writeSystemErrorLog(client: any, entry: SystemErrorEntry) 
     entityId: entry.area,
     action: `${entry.scope}-error`,
     payload: {
+      area: entry.area,
+      scope: entry.scope,
       message: entry.message,
       ...(entry.payload || {}),
     },
