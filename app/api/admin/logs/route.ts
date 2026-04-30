@@ -22,6 +22,250 @@ type NotificationRow = {
   created_at: string
 }
 
+type CombinedLogItem = {
+  id: string
+  kind: 'audit' | 'notification'
+  createdAt: string
+  title: string
+  subtitle: string | null
+  details: string | null
+  entityType: string | null
+  action: string | null
+  actorUserId: string | null
+  actorEmail: string | null
+  channel: string | null
+  status: string | null
+  recipient: string | null
+  payload: Record<string, unknown> | null
+}
+
+const ENTITY_LABELS: Record<string, string> = {
+  income: 'доход',
+  expense: 'расход',
+  company: 'компанию',
+  staff: 'сотрудника',
+  operator: 'оператора',
+  expense_category: 'категорию расходов',
+  'expense-whitelist': 'белый список расходов',
+  'expense-wizard': 'мастер расходов',
+  'expense-approval': 'заявку расхода',
+  'profitability-input': 'ОПиУ',
+  kaspi_terminal: 'Kaspi терминал',
+  'operator-salary-adjustment': 'корректировку зарплаты',
+  'staff-payment': 'выплату зарплаты',
+  salary_payment: 'выплату зарплаты',
+  'auth-attempt': 'вход в систему',
+  'auth-session': 'сессию',
+  'system-error': 'ошибку системы',
+  task: 'задачу',
+  'task-comment': 'комментарий к задаче',
+  shift: 'смену',
+  'point-shift-report': 'отчет смены',
+  'point-shift': 'смену точки',
+  'point-device': 'устройство точки',
+  'point-debt': 'долг точки',
+  'point-product': 'товар точки',
+  'point-incident': 'инцидент точки',
+  'inventory-item': 'товар склада',
+  'inventory-request': 'заявку склада',
+  'inventory-return': 'возврат склада',
+  'inventory-sale': 'продажу склада',
+  'inventory-writeoff': 'списание склада',
+  'operator-company-assignment': 'назначение в компанию',
+  'operator-career': 'карьеру оператора',
+  visit: 'посещение',
+  'page-view': 'страницу',
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  create: 'добавил',
+  'create-batch': 'добавил пачкой',
+  update: 'изменил',
+  'update-online': 'обновил Online сумму',
+  delete: 'удалил',
+  upsert: 'сохранил',
+  approve: 'одобрил',
+  approved: 'одобрил',
+  decline: 'отклонил',
+  declined: 'отклонил',
+  dismiss: 'уволил',
+  restore: 'восстановил',
+  bootstrap: 'подключил',
+  open: 'открыл',
+  close: 'закрыл',
+  handover: 'передал',
+  complete: 'завершил',
+  login: 'вошел в систему',
+  logout: 'вышел из системы',
+  failed: 'получил ошибку',
+  error: 'получил ошибку',
+  'server-error': 'получил ошибку сервера',
+  visit: 'открыл',
+  'page-view': 'открыл',
+}
+
+function actorName(email: string | null) {
+  if (!email) return 'Система'
+  return email.split('@')[0] || email
+}
+
+function text(value: unknown) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
+function money(value: unknown) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number === 0) return ''
+  return `${number.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
+}
+
+function dateLabel(value: unknown) {
+  const raw = text(value)
+  if (!raw) return ''
+  try {
+    return new Date(`${raw}T12:00:00`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  } catch {
+    return raw
+  }
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function compact(parts: Array<string | null | undefined>) {
+  return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ')
+}
+
+function addDetail(parts: string[], label: string, value: unknown) {
+  const rendered = typeof value === 'number' ? money(value) : text(value) || money(value)
+  if (rendered) parts.push(`${label}: ${rendered}`)
+}
+
+function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<CombinedLogItem, 'title' | 'subtitle' | 'details'> {
+  const p = item.payload || {}
+  const et = (item.entityType || '').toLowerCase()
+  const act = (item.action || '').toLowerCase()
+  const who = actorName(item.actorEmail)
+  const entity = ENTITY_LABELS[et] || et || 'событие'
+  const action = ACTION_LABELS[act] || act || 'сделал действие'
+  const details: string[] = []
+
+  if (item.kind === 'notification') {
+    const ok = item.status === 'sent' || item.status === 'delivered'
+    const channel = item.channel === 'telegram' ? 'Telegram' : item.channel === 'email' ? 'Email' : item.channel || 'канал'
+    return {
+      title: `${channel}: ${ok ? 'уведомление доставлено' : 'ошибка отправки'}`,
+      subtitle: item.recipient || 'получатель не указан',
+      details: compact([text(p.kind), text(p.message).slice(0, 160)]),
+    }
+  }
+
+  if (et === 'system-error') {
+    const area = text(p.area) || text(p.scope) || item.subtitle || 'неизвестная область'
+    const message = text(p.message) || 'без текста ошибки'
+    return {
+      title: `Ошибка системы в ${area}`,
+      subtitle: `Действие: ${item.action || 'не указано'}`,
+      details: message,
+    }
+  }
+
+  if (et === 'income') {
+    const src = act === 'update' ? record(p.next) : p
+    const total = Number(src.cash_amount || 0) + Number(src.kaspi_amount || 0) + Number(src.online_amount || 0) + Number(src.card_amount || 0)
+    addDetail(details, 'Дата', dateLabel(src.date))
+    addDetail(details, 'Смена', src.shift === 'day' ? 'день' : src.shift === 'night' ? 'ночь' : src.shift)
+    addDetail(details, 'Наличные', src.cash_amount)
+    addDetail(details, 'Kaspi', src.kaspi_amount)
+    addDetail(details, 'Online', src.online_amount)
+    addDetail(details, 'Карта', src.card_amount)
+    return { title: `${who} ${action} доход ${money(total)}`, subtitle: text(src.company_name) || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'expense') {
+    const src = act === 'update' ? record(p.next) : p
+    const total = Number(src.cash_amount || 0) + Number(src.kaspi_amount || 0)
+    addDetail(details, 'Категория', src.category)
+    addDetail(details, 'Дата', dateLabel(src.date))
+    addDetail(details, 'Наличные', src.cash_amount)
+    addDetail(details, 'Kaspi', src.kaspi_amount)
+    addDetail(details, 'Комментарий', src.comment)
+    return { title: `${who} ${action} расход ${money(total)}`, subtitle: text(src.category) || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'point-shift-report') {
+    addDetail(details, 'Точка', p.point_device_name || p.company_code)
+    addDetail(details, 'Оператор', p.operator_name)
+    addDetail(details, 'Дата', dateLabel(p.date))
+    addDetail(details, 'Смена', p.shift === 'day' ? 'день' : p.shift === 'night' ? 'ночь' : p.shift)
+    addDetail(details, 'Зона', p.zone)
+    addDetail(details, 'Итого', p.total_amount)
+    return { title: `${who} добавил отчет смены ${money(p.total_amount)}`, subtitle: text(p.point_device_name) || text(p.company_code) || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'point-device') {
+    addDetail(details, 'Режим', p.point_mode)
+    addDetail(details, 'Операторов', p.operator_count)
+    const companies = Array.isArray(p.company_ids) ? `${p.company_ids.length} компаний` : ''
+    addDetail(details, 'Компании', companies)
+    return { title: `${who} ${action} устройство точки`, subtitle: item.subtitle, details: compact(details) }
+  }
+
+  if (et.includes('inventory') || et.startsWith('point-')) {
+    addDetail(details, 'Товар', p.product_name || p.item_name || p.name)
+    addDetail(details, 'Кол-во', p.quantity || p.qty)
+    addDetail(details, 'Сумма', p.amount || p.total_amount)
+    addDetail(details, 'Точка', p.point_name || p.point_device_name || p.company_code)
+    addDetail(details, 'Оператор', p.operator_name)
+    return { title: `${who} ${action} ${entity}`, subtitle: text(p.product_name) || text(p.item_name) || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'staff-payment' || et === 'salary_payment') {
+    addDetail(details, 'Сумма', p.total_amount || p.amount)
+    addDetail(details, 'Оператор', p.operator_name || p.staff_name)
+    addDetail(details, 'Комментарий', p.comment)
+    return { title: `${who} ${action} выплату зарплаты ${money(p.total_amount || p.amount)}`, subtitle: text(p.operator_name) || text(p.staff_name) || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'company' || et === 'staff' || et === 'operator' || et === 'expense_category') {
+    addDetail(details, 'Название', p.name || p.full_name)
+    addDetail(details, 'Email', p.email)
+    addDetail(details, 'Роль', p.role)
+    addDetail(details, 'Код', p.code)
+    return { title: `${who} ${action} ${entity}`, subtitle: text(p.name) || text(p.full_name) || text(p.email) || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'auth-attempt' || et === 'auth-session') {
+    const email = text(p.email) || item.actorEmail || ''
+    addDetail(details, 'Email', email)
+    addDetail(details, 'IP', p.ip)
+    addDetail(details, 'Результат', p.result || item.action)
+    return { title: act === 'failed' ? `Неудачная попытка входа: ${email}` : `${email || who} вошел в систему`, subtitle: email || item.subtitle, details: compact(details) }
+  }
+
+  if (et === 'visit' || et === 'page-view' || act === 'visit' || act === 'page-view') {
+    const page = text(p.pathname || p.path || p.page || p.url || item.subtitle)
+    return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: compact([text(p.source), text(p.user_agent).slice(0, 120)]) }
+  }
+
+  addDetail(details, 'Название', p.title || p.name || p.full_name)
+  addDetail(details, 'Дата', dateLabel(p.date))
+  addDetail(details, 'Сумма', p.amount || p.total_amount)
+  addDetail(details, 'Точка', p.point_name || p.point_device_name || p.company_code)
+  addDetail(details, 'Оператор', p.operator_name)
+  addDetail(details, 'Комментарий', p.comment || p.reason || p.message)
+
+  return {
+    title: `${who} ${action} ${entity}`,
+    subtitle: text(p.title) || text(p.name) || text(p.full_name) || item.subtitle,
+    details: compact(details),
+  }
+}
+
 function toCsvValue(value: unknown) {
   const stringValue =
     value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value)
@@ -87,6 +331,7 @@ export async function GET(req: Request) {
         createdAt: row.created_at,
         title: `${row.entity_type} • ${row.action}`,
         subtitle: row.entity_id,
+        details: null,
         entityType: row.entity_type,
         action: row.action,
         actorUserId: row.actor_user_id,
@@ -102,6 +347,7 @@ export async function GET(req: Request) {
         createdAt: row.created_at,
         title: `${row.channel} • ${row.status}`,
         subtitle: row.recipient,
+        details: null,
         entityType: null,
         action: row.payload?.kind ? String(row.payload.kind) : 'notification',
         actorUserId: null,
@@ -112,6 +358,10 @@ export async function GET(req: Request) {
         payload: row.payload || null,
       })),
     ]
+      .map((item) => {
+        const summary = summarizeLogItem(item)
+        return { ...item, ...summary }
+      })
       .filter((item) => {
         if (domain === 'auth') {
           const authEntityTypes = ['auth-attempt', 'auth-session']
@@ -175,20 +425,33 @@ export async function GET(req: Request) {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     if (format === 'csv') {
-      const csvHeader = ['kind', 'createdAt', 'title', 'subtitle', 'entityType', 'action', 'actorEmail', 'channel', 'status', 'recipient', 'payload']
+      const includeRawPayload = url.searchParams.get('raw') === 'true'
+      const csvHeader = [
+        'Дата и время',
+        'Кто сделал',
+        'Что произошло',
+        'Где/объект',
+        'Детали',
+        'Тип',
+        'Действие',
+        'Канал',
+        'Статус',
+        'Получатель',
+        ...(includeRawPayload ? ['Технические данные JSON'] : []),
+      ]
       const csvRows = combined.map((item) =>
         [
-          item.kind,
-          item.createdAt,
+          new Date(item.createdAt).toLocaleString('ru-RU'),
+          item.actorEmail || 'Система',
           item.title,
           item.subtitle,
+          item.details,
           item.entityType,
           item.action,
-          item.actorEmail,
           item.channel,
           item.status,
           item.recipient,
-          item.payload,
+          ...(includeRawPayload ? [item.payload] : []),
         ]
           .map(toCsvValue)
           .join(','),

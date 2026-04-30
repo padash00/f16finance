@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, BellRing, CircleAlert, Download, Eye, Loader2, RefreshCw,
   Search, ShieldCheck, TrendingUp, TrendingDown, User, Building2,
-  Tag, Wallet, CreditCard, Settings, ChevronDown, ChevronUp,
+  Tag, Wallet, CreditCard, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, LogIn, Trash2, Pencil, Plus, FileText,
 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -20,6 +20,7 @@ type LogItem = {
   createdAt: string
   title: string
   subtitle: string | null
+  details: string | null
   entityType: string | null
   action: string | null
   actorUserId: string | null
@@ -425,7 +426,12 @@ export default function LogsPage() {
   const [expandedRaw, setExpandedRaw] = useState<Set<string>>(new Set())
 
   const toggleRaw = (id: string) =>
-    setExpandedRaw((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+    setExpandedRaw((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const applyPreset = (preset: 'all' | 'auth' | 'finance' | 'staff' | 'operations' | 'structure' | 'errors') => {
     setPage(1); setEntityType(''); setAction(''); setActor(''); setKind(''); setOnlyErrors(false); setSearch('')
@@ -643,8 +649,14 @@ export default function LogsPage() {
 
                     {/* Main title */}
                     <p className="mt-1.5 text-sm font-medium leading-snug text-slate-100">
-                      {humanTitle(item)}
+                      {item.title || humanTitle(item)}
                     </p>
+
+                    {item.details && (
+                      <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                        {item.details}
+                      </p>
+                    )}
 
                     {/* Key fields summary */}
                     <PayloadRows item={item} />
@@ -662,7 +674,7 @@ export default function LogsPage() {
                       <button onClick={() => toggleRaw(item.id)}
                         className="mt-2 flex items-center gap-1 text-xs text-slate-600 hover:text-slate-400 transition">
                         {isRawOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        {isRawOpen ? 'Скрыть данные' : 'Показать данные'}
+                        {isRawOpen ? 'Скрыть технические данные' : 'Показать технические данные'}
                       </button>
                     )}
 
