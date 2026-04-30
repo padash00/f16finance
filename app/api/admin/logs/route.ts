@@ -29,6 +29,7 @@ type CombinedLogItem = {
   title: string
   subtitle: string | null
   details: string | null
+  detailRows: string[]
   entityType: string | null
   action: string | null
   actorUserId: string | null
@@ -140,12 +141,136 @@ function compact(parts: Array<string | null | undefined>) {
   return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ')
 }
 
+function renderValue(value: unknown): string {
+  if (value == null || value === '') return ''
+  if (typeof value === 'number') return money(value) || String(value)
+  if (typeof value === 'boolean') return value ? 'да' : 'нет'
+  if (Array.isArray(value)) return value.map(renderValue).filter(Boolean).join(', ')
+  if (typeof value === 'object') return ''
+  return String(value).trim()
+}
+
 function addDetail(parts: string[], label: string, value: unknown) {
-  const rendered = typeof value === 'number' ? money(value) : text(value) || money(value)
+  const rendered = renderValue(value)
   if (rendered) parts.push(`${label}: ${rendered}`)
 }
 
-function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<CombinedLogItem, 'title' | 'subtitle' | 'details'> {
+const FIELD_LABELS: Record<string, string> = {
+  date: 'Дата',
+  shift: 'Смена',
+  zone: 'Зона',
+  category: 'Категория',
+  comment: 'Комментарий',
+  cash_amount: 'Наличные',
+  kaspi_amount: 'Kaspi',
+  online_amount: 'Online',
+  card_amount: 'Карта',
+  total_amount: 'Итого',
+  amount: 'Сумма',
+  quantity: 'Количество',
+  qty: 'Количество',
+  unit_price: 'Цена за единицу',
+  item_name: 'Товар',
+  product_name: 'Товар',
+  name: 'Название',
+  full_name: 'ФИО',
+  email: 'Email',
+  role: 'Роль',
+  code: 'Код',
+  operator_name: 'Оператор',
+  point_device_name: 'Точка',
+  point_name: 'Точка',
+  company_code: 'Компания',
+  company_name: 'Компания',
+  client_name: 'Клиент',
+  reason: 'Причина',
+  message: 'Сообщение',
+  source: 'Источник',
+  point_mode: 'Режим точки',
+  low_stock_threshold: 'Минимальный остаток',
+}
+
+function fieldLabel(key: string) {
+  return FIELD_LABELS[key] || key.replace(/_/g, ' ')
+}
+
+function normalizeForCompare(value: unknown) {
+  if (value == null || value === '') return ''
+  if (typeof value === 'number') return Number(value)
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') return value.trim()
+  return JSON.stringify(value)
+}
+
+function describeChanges(previous: Record<string, unknown>, next: Record<string, unknown>) {
+  const rows: string[] = []
+  const keys = Array.from(new Set([...Object.keys(previous), ...Object.keys(next)]))
+    .filter((key) => !key.endsWith('_id') && !['id', 'created_at', 'updated_at'].includes(key))
+
+  for (const key of keys) {
+    if (normalizeForCompare(previous[key]) === normalizeForCompare(next[key])) continue
+    const before = renderValue(previous[key]) || 'пусто'
+    const after = renderValue(next[key]) || 'пусто'
+    rows.push(`${fieldLabel(key)}: было "${before}", стало "${after}"`)
+  }
+
+  return rows
+}
+
+function addScalarDetails(rows: string[], source: Record<string, unknown>) {
+  const ignored = new Set(['id', 'created_at', 'updated_at', 'previous', 'next', 'meta'])
+  for (const [key, value] of Object.entries(source)) {
+    if (ignored.has(key) || key.endsWith('_id') || key.endsWith('_ids')) continue
+    if (rows.some((row) => row.startsWith(`${fieldLabel(key)}:`))) continue
+    const rendered = renderValue(value)
+    if (rendered) rows.push(`${fieldLabel(key)}: ${rendered}`)
+  }
+}
+
+function summarizeSystemError(p: Record<string, unknown>, item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
+  const area = text(p.area) || text(p.scope) || item.subtitle || 'неизвестная область'
+  const message = text(p.message) || 'без текста ошибки'
+  const rows = [
+    `Где упало: ${area}`,
+    `Техническое действие: ${item.action || 'не указано'}`,
+    `Сообщение ошибки: ${message}`,
+  ]
+  addDetail(rows, 'Код', p.code)
+  addDetail(rows, 'Подробности', p.details)
+  addDetail(rows, 'Подсказка', p.hint)
+  return {
+    title: `Ошибка системы в ${area}`,
+    subtitle: `Действие: ${item.action || 'не указано'}`,
+    details: rows.join(' · '),
+    detailRows: rows,
+  }
+}
+
+function summarizeNotification(item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
+  const p = item.payload || {}
+  const ok = item.status === 'sent' || item.status === 'delivered'
+  const channel = item.channel === 'telegram' ? 'Telegram' : item.channel === 'email' ? 'Email' : item.channel || 'канал'
+  const rows = [
+    `Канал: ${channel}`,
+    `Статус: ${ok ? 'доставлено' : 'ошибка отправки'}`,
+  ]
+  addDetail(rows, 'Получатель', item.recipient)
+  addDetail(rows, 'Тип уведомления', p.kind)
+  addDetail(rows, 'Товар', p.item_name)
+  addDetail(rows, 'Количество', p.quantity)
+  addDetail(rows, 'Сумма', p.total_amount)
+  addDetail(rows, 'Компания', p.company_name)
+  addDetail(rows, 'Точка', p.point_device_name)
+  addDetail(rows, 'Оператор', p.operator_name)
+  return {
+    title: `${channel}: ${ok ? 'уведомление доставлено' : 'ошибка отправки'}`,
+    subtitle: item.recipient || 'получатель не указан',
+    details: rows.join(' · '),
+    detailRows: rows,
+  }
+}
+
+function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>): Pick<CombinedLogItem, 'title' | 'subtitle' | 'details' | 'detailRows'> {
   const p = item.payload || {}
   const et = (item.entityType || '').toLowerCase()
   const act = (item.action || '').toLowerCase()
@@ -155,27 +280,16 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
   const details: string[] = []
 
   if (item.kind === 'notification') {
-    const ok = item.status === 'sent' || item.status === 'delivered'
-    const channel = item.channel === 'telegram' ? 'Telegram' : item.channel === 'email' ? 'Email' : item.channel || 'канал'
-    return {
-      title: `${channel}: ${ok ? 'уведомление доставлено' : 'ошибка отправки'}`,
-      subtitle: item.recipient || 'получатель не указан',
-      details: compact([text(p.kind), text(p.message).slice(0, 160)]),
-    }
+    return summarizeNotification(item)
   }
 
   if (et === 'system-error') {
-    const area = text(p.area) || text(p.scope) || item.subtitle || 'неизвестная область'
-    const message = text(p.message) || 'без текста ошибки'
-    return {
-      title: `Ошибка системы в ${area}`,
-      subtitle: `Действие: ${item.action || 'не указано'}`,
-      details: message,
-    }
+    return summarizeSystemError(p, item)
   }
 
   if (et === 'income') {
     const src = act === 'update' ? record(p.next) : p
+    const prev = act === 'update' ? record(p.previous) : {}
     const total = Number(src.cash_amount || 0) + Number(src.kaspi_amount || 0) + Number(src.online_amount || 0) + Number(src.card_amount || 0)
     addDetail(details, 'Дата', dateLabel(src.date))
     addDetail(details, 'Смена', src.shift === 'day' ? 'день' : src.shift === 'night' ? 'ночь' : src.shift)
@@ -183,18 +297,25 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
     addDetail(details, 'Kaspi', src.kaspi_amount)
     addDetail(details, 'Online', src.online_amount)
     addDetail(details, 'Карта', src.card_amount)
-    return { title: `${who} ${action} доход ${money(total)}`, subtitle: text(src.company_name) || item.subtitle, details: compact(details) }
+    const detailRows = act === 'update'
+      ? describeChanges(prev, src)
+      : [...details]
+    return { title: `${who} ${action} доход ${money(total)}`, subtitle: text(src.company_name) || item.subtitle, details: compact(detailRows.length ? detailRows : details), detailRows: detailRows.length ? detailRows : details }
   }
 
   if (et === 'expense') {
     const src = act === 'update' ? record(p.next) : p
+    const prev = act === 'update' ? record(p.previous) : {}
     const total = Number(src.cash_amount || 0) + Number(src.kaspi_amount || 0)
     addDetail(details, 'Категория', src.category)
     addDetail(details, 'Дата', dateLabel(src.date))
     addDetail(details, 'Наличные', src.cash_amount)
     addDetail(details, 'Kaspi', src.kaspi_amount)
     addDetail(details, 'Комментарий', src.comment)
-    return { title: `${who} ${action} расход ${money(total)}`, subtitle: text(src.category) || item.subtitle, details: compact(details) }
+    const detailRows = act === 'update'
+      ? describeChanges(prev, src)
+      : [...details]
+    return { title: `${who} ${action} расход ${money(total)}`, subtitle: text(src.category) || item.subtitle, details: compact(detailRows.length ? detailRows : details), detailRows: detailRows.length ? detailRows : details }
   }
 
   if (et === 'point-shift-report') {
@@ -204,7 +325,13 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
     addDetail(details, 'Смена', p.shift === 'day' ? 'день' : p.shift === 'night' ? 'ночь' : p.shift)
     addDetail(details, 'Зона', p.zone)
     addDetail(details, 'Итого', p.total_amount)
-    return { title: `${who} добавил отчет смены ${money(p.total_amount)}`, subtitle: text(p.point_device_name) || text(p.company_code) || item.subtitle, details: compact(details) }
+    const meta = record(p.meta)
+    addDetail(details, 'Старт кассы', meta.start_cash)
+    addDetail(details, 'Монеты', meta.coins)
+    addDetail(details, 'Долги', meta.debts)
+    addDetail(details, 'Wipon', meta.wipon)
+    addDetail(details, 'Расхождение', meta.diff)
+    return { title: `${who} добавил отчет смены ${money(p.total_amount)}`, subtitle: text(p.point_device_name) || text(p.company_code) || item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'point-device') {
@@ -212,7 +339,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
     addDetail(details, 'Операторов', p.operator_count)
     const companies = Array.isArray(p.company_ids) ? `${p.company_ids.length} компаний` : ''
     addDetail(details, 'Компании', companies)
-    return { title: `${who} ${action} устройство точки`, subtitle: item.subtitle, details: compact(details) }
+    return { title: `${who} ${action} устройство точки`, subtitle: item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et.includes('inventory') || et.startsWith('point-')) {
@@ -221,22 +348,28 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
     addDetail(details, 'Сумма', p.amount || p.total_amount)
     addDetail(details, 'Точка', p.point_name || p.point_device_name || p.company_code)
     addDetail(details, 'Оператор', p.operator_name)
-    return { title: `${who} ${action} ${entity}`, subtitle: text(p.product_name) || text(p.item_name) || item.subtitle, details: compact(details) }
+    addDetail(details, 'Клиент', p.client_name)
+    addDetail(details, 'Неделя продажи', p.week_start)
+    addDetail(details, 'Режим', p.point_mode)
+    return { title: `${who} ${action} ${entity}`, subtitle: text(p.product_name) || text(p.item_name) || item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'staff-payment' || et === 'salary_payment') {
     addDetail(details, 'Сумма', p.total_amount || p.amount)
     addDetail(details, 'Оператор', p.operator_name || p.staff_name)
     addDetail(details, 'Комментарий', p.comment)
-    return { title: `${who} ${action} выплату зарплаты ${money(p.total_amount || p.amount)}`, subtitle: text(p.operator_name) || text(p.staff_name) || item.subtitle, details: compact(details) }
+    return { title: `${who} ${action} выплату зарплаты ${money(p.total_amount || p.amount)}`, subtitle: text(p.operator_name) || text(p.staff_name) || item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'company' || et === 'staff' || et === 'operator' || et === 'expense_category') {
-    addDetail(details, 'Название', p.name || p.full_name)
-    addDetail(details, 'Email', p.email)
-    addDetail(details, 'Роль', p.role)
-    addDetail(details, 'Код', p.code)
-    return { title: `${who} ${action} ${entity}`, subtitle: text(p.name) || text(p.full_name) || text(p.email) || item.subtitle, details: compact(details) }
+    const src = act === 'update' ? record(p.next) : p
+    const prev = act === 'update' ? record(p.previous) : {}
+    addDetail(details, 'Название', src.name || src.full_name)
+    addDetail(details, 'Email', src.email)
+    addDetail(details, 'Роль', src.role)
+    addDetail(details, 'Код', src.code)
+    const detailRows = act === 'update' ? describeChanges(prev, src) : [...details]
+    return { title: `${who} ${action} ${entity}`, subtitle: text(src.name) || text(src.full_name) || text(src.email) || item.subtitle, details: compact(detailRows.length ? detailRows : details), detailRows: detailRows.length ? detailRows : details }
   }
 
   if (et === 'auth-attempt' || et === 'auth-session') {
@@ -244,13 +377,15 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
     addDetail(details, 'Email', email)
     addDetail(details, 'IP', p.ip)
     addDetail(details, 'Результат', p.result || item.action)
-    return { title: act === 'failed' ? `Неудачная попытка входа: ${email}` : `${email || who} вошел в систему`, subtitle: email || item.subtitle, details: compact(details) }
+    return { title: act === 'failed' ? `Неудачная попытка входа: ${email}` : `${email || who} вошел в систему`, subtitle: email || item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'visit' || et === 'page-view' || act === 'visit' || act === 'page-view') {
     const page = text(p.pathname || p.path || p.page || p.url || item.subtitle)
     const source = text(p.source)
-    return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: source ? `Источник: ${source}` : null }
+    const rows = [`Страница: ${page || 'не указана'}`]
+    if (source) rows.push(`Источник: ${source}`)
+    return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: rows.join(' · '), detailRows: rows }
   }
 
   addDetail(details, 'Название', p.title || p.name || p.full_name)
@@ -259,11 +394,24 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details'>): Pick<Combined
   addDetail(details, 'Точка', p.point_name || p.point_device_name || p.company_code)
   addDetail(details, 'Оператор', p.operator_name)
   addDetail(details, 'Комментарий', p.comment || p.reason || p.message)
+  if (record(p.previous) && record(p.next)) {
+    const changeRows = describeChanges(record(p.previous), record(p.next))
+    if (changeRows.length) {
+      return {
+        title: `${who} ${action} ${entity}`,
+        subtitle: text(record(p.next).title) || text(record(p.next).name) || text(record(p.next).full_name) || item.subtitle,
+        details: compact(changeRows),
+        detailRows: changeRows,
+      }
+    }
+  }
+  addScalarDetails(details, p)
 
   return {
     title: `${who} ${action} ${entity}`,
     subtitle: text(p.title) || text(p.name) || text(p.full_name) || item.subtitle,
     details: compact(details),
+    detailRows: details,
   }
 }
 
@@ -336,6 +484,7 @@ export async function GET(req: Request) {
         title: `${row.entity_type} • ${row.action}`,
         subtitle: row.entity_id,
         details: null,
+        detailRows: [],
         entityType: row.entity_type,
         action: row.action,
         actorUserId: row.actor_user_id,
@@ -352,6 +501,7 @@ export async function GET(req: Request) {
         title: `${row.channel} • ${row.status}`,
         subtitle: row.recipient,
         details: null,
+        detailRows: [],
         entityType: null,
         action: row.payload?.kind ? String(row.payload.kind) : 'notification',
         actorUserId: null,
@@ -435,7 +585,8 @@ export async function GET(req: Request) {
         'Кто сделал',
         'Что произошло',
         'Где/объект',
-        'Детали',
+        'Коротко',
+        'Очень детально',
         'Тип',
         'Действие',
         'Канал',
@@ -450,6 +601,7 @@ export async function GET(req: Request) {
           item.title,
           item.subtitle,
           item.details,
+          item.detailRows.join('\n'),
           item.entityType,
           item.action,
           item.channel,

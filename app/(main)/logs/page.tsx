@@ -21,6 +21,7 @@ type LogItem = {
   title: string
   subtitle: string | null
   details: string | null
+  detailRows?: string[]
   entityType: string | null
   action: string | null
   actorUserId: string | null
@@ -642,10 +643,27 @@ export default function LogsPage() {
                       {item.title || humanTitle(item)}
                     </p>
 
-                    {item.details && (
-                      <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                        {item.details}
-                      </p>
+                    {item.detailRows?.length ? (
+                      <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+                        {item.detailRows.map((row, index) => {
+                          const [label, ...rest] = row.split(': ')
+                          const value = rest.join(': ')
+                          return (
+                            <div key={`${item.id}:${index}`} className="rounded-md border border-white/8 bg-white/[0.03] px-2.5 py-1.5 text-xs">
+                              {value ? (
+                                <>
+                                  <span className="text-slate-500">{label}:</span>{' '}
+                                  <span className="text-slate-200">{value}</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-200">{row}</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : item.details && (
+                      <p className="mt-1 text-xs leading-relaxed text-slate-400">{item.details}</p>
                     )}
 
                     {/* Key fields summary */}
