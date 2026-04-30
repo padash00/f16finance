@@ -274,7 +274,10 @@ function toCsvValue(value: unknown) {
 }
 
 function json(data: unknown, status = 200) {
-  return NextResponse.json(data, { status })
+  return NextResponse.json(data, {
+    status,
+    headers: { 'Cache-Control': 'no-store, max-age=0' },
+  })
 }
 
 export async function GET(req: Request) {
@@ -469,7 +472,10 @@ export async function GET(req: Request) {
 
     const total = combined.length
     const start = (page - 1) * limit
-    const items = combined.slice(start, start + limit)
+    const items = combined.slice(start, start + limit).map((item) => ({
+      ...item,
+      payload: null,
+    }))
 
     return json({
       ok: true,

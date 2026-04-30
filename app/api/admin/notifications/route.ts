@@ -212,12 +212,27 @@ export async function GET(request: Request) {
       if (enabledCompanyIds.length > 0) {
         let locationsQuery = supabase
           .from('inventory_locations')
-          .select('id, company_id, location_type, company:companies!company_id(name)')
+          .select('id, company_id, location_type')
           .in('location_type', ['catalog_total', 'warehouse'])
           .in('company_id', enabledCompanyIds)
         const { data: locations, error: locationsError } = await locationsQuery
         if (locationsError) throw locationsError
         const locationIds = (locations || []).map((row: any) => String(row.id)).filter(Boolean)
+        const locationCompanyIds = Array.from(
+          new Set((locations || []).map((row: any) => String(row.company_id || '')).filter(Boolean)),
+        )
+
+        const companyNameById = new Map<string, string>()
+        if (locationCompanyIds.length > 0) {
+          const { data: companies, error: companiesError } = await supabase
+            .from('companies')
+            .select('id, name')
+            .in('id', locationCompanyIds)
+          if (companiesError) throw companiesError
+          for (const company of companies || []) {
+            companyNameById.set(String((company as any).id), String((company as any).name || 'Точка'))
+          }
+        }
 
         if (locationIds.length > 0) {
           const { data: balanceRows, error: balancesError } = await supabase
@@ -255,12 +270,11 @@ export async function GET(request: Request) {
               const item = itemMap.get(String((row as any).item_id || ''))
               const location = locationMap.get(String((row as any).location_id || ''))
               if (!item?.name || !location?.company_id) continue
-              const company = Array.isArray(location?.company) ? location.company[0] : location?.company
 
               const key = `${location.company_id}:${row.item_id}`
               const prev = grouped.get(key) || {
                 companyId: String(location.company_id),
-                companyName: String(company?.name || 'Точка'),
+                companyName: companyNameById.get(String(location.company_id)) || 'Точка',
                 itemId: String(row.item_id || ''),
                 itemName: String(item.name),
                 threshold: Number(item.low_stock_threshold || 0),
@@ -317,6 +331,11 @@ export async function GET(request: Request) {
         scope: 'server',
         area: 'api/admin/notifications.low-stock',
         message: (e as any)?.message || 'low-stock-section-failed',
+        payload: {
+          code: (e as any)?.code || null,
+          details: (e as any)?.details || null,
+          hint: (e as any)?.hint || null,
+        },
       })
     }
 
