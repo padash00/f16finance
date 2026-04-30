@@ -32,6 +32,7 @@ type Body = {
     invoice_number?: string | null
     invoice_file_url?: string | null
     expense_category_id?: string | null
+    payment_method?: 'cash' | 'kaspi' | null
     comment?: string | null
     items: Array<{
       item_id: string
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
         invoice_number: String(payload.invoice_number || '').trim() || null,
         invoice_file_url: String(payload.invoice_file_url || '').trim() || null,
         expense_category_id: String(payload.expense_category_id || '').trim() || null,
+        payment_method: payload.payment_method === 'kaspi' ? 'kaspi' : 'cash',
         comment: String(payload.comment || '').trim() || null,
         items: Array.isArray(payload.items) ? payload.items : [],
       }
@@ -384,13 +386,14 @@ export async function POST(request: Request) {
     const { data: existingExpense, error: existingExpenseError } = await existingExpenseQuery.maybeSingle()
     if (existingExpenseError) throw existingExpenseError
     if (!existingExpense?.id) {
+      const paymentMethod = body.payload.payment_method === 'kaspi' ? 'kaspi' : 'cash'
       const expenseInsertPayload: Record<string, unknown> = {
         date: body.payload.received_at,
         company_id: companyId,
         operator_id: null,
         category: String(expenseCategory.name || '').trim(),
-        cash_amount: receiptTotal,
-        kaspi_amount: 0,
+        cash_amount: paymentMethod === 'cash' ? receiptTotal : 0,
+        kaspi_amount: paymentMethod === 'kaspi' ? receiptTotal : 0,
         comment: autoExpenseComment || 'Авто из приемки',
         attachment_url: invoiceFileUrl,
         document_kind: 'invoice',

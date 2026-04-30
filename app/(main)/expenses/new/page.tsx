@@ -115,6 +115,7 @@ function ExpenseWizardPageContent() {
   const [loadingWhitelist, setLoadingWhitelist] = useState(false)
 
   const [loadingCatalogs, setLoadingCatalogs] = useState(true)
+  const [canSeeCogs, setCanSeeCogs] = useState(false)
   const [starting, setStarting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -131,15 +132,20 @@ function ExpenseWizardPageContent() {
     const load = async () => {
       setLoadingCatalogs(true)
       try {
-        const [catRes, compRes] = await Promise.all([
+        const [catRes, compRes, roleRes] = await Promise.all([
           fetch('/api/admin/expense-categories', { cache: 'no-store' }),
           fetch('/api/admin/companies', { cache: 'no-store' }),
+          fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null),
         ])
         const cats = catRes.ok ? (await catRes.json()).data || [] : []
         const comps = compRes.ok ? (await compRes.json()).data || [] : []
+        const role = roleRes && roleRes.ok ? await roleRes.json().catch(() => null) : null
+        const isSuperAdmin = Boolean(role?.isSuperAdmin)
+        const staffRole = String(role?.staffRole || '')
         if (cancelled) return
         setCategories(cats)
         setCompanies(comps)
+        setCanSeeCogs(isSuperAdmin || staffRole === 'owner')
       } catch {
         if (!cancelled) setError('Не удалось загрузить справочники')
       } finally {
@@ -227,7 +233,7 @@ function ExpenseWizardPageContent() {
   const groupedCategories = useMemo(() => {
     const map = new Map<string, Category[]>()
     for (const cat of categories) {
-      if (cat.accounting_group === 'cogs') continue
+      if (cat.accounting_group === 'cogs' && !canSeeCogs) continue
       const group = String(cat.accounting_group || 'operating')
       const list = map.get(group) || []
       list.push(cat)
@@ -238,7 +244,7 @@ function ExpenseWizardPageContent() {
       label: getFinancialGroupLabel(group as FinancialGroup),
       items: items.sort((a, b) => a.name.localeCompare(b.name, 'ru')),
     }))
-  }, [categories])
+  }, [categories, canSeeCogs])
   const filteredGroupedCategories = useMemo(() => {
     const q = categoryQuery.trim().toLowerCase()
     if (!q) return groupedCategories
@@ -598,9 +604,11 @@ function ExpenseWizardPageContent() {
               <p className="text-xs text-muted-foreground mt-1">
                 Найдено категорий: {filteredCategoriesCount}
               </p>
-              <p className="text-xs text-amber-400/80 mt-1">
-                Категории COGS недоступны в ручном добавлении расходов (используйте приемку).
-              </p>
+              {!canSeeCogs ? (
+                <p className="text-xs text-amber-400/80 mt-1">
+                  Категории COGS недоступны в ручном добавлении расходов (используйте приемку).
+                </p>
+              ) : null}
               {isCategoryValid ? <p className={validHintClass}>Категория выбрана</p> : null}
             </div>
             <div className="rounded-md border bg-muted/20 p-3 h-fit">

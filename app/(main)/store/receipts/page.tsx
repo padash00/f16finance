@@ -88,6 +88,7 @@ type InventoryReceiptDraft = {
     invoice_number?: string | null
     invoice_file_url?: string | null
     expense_category_id?: string | null
+    payment_method?: 'cash' | 'kaspi' | null
     comment?: string | null
     items?: Array<{
       item_id?: string
@@ -249,6 +250,7 @@ export default function StoreReceiptsPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceFileUrl, setInvoiceFileUrl] = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi'>('cash')
   const [expenseCategoriesFallback, setExpenseCategoriesFallback] = useState<ExpenseCategoryOption[]>([])
   const [uploadingInvoice, setUploadingInvoice] = useState(false)
   const [aiParsing, setAiParsing] = useState(false)
@@ -529,6 +531,7 @@ export default function StoreReceiptsPage() {
             invoice_number: invoiceNumber.trim() || null,
             invoice_file_url: invoiceFileUrl,
             expense_category_id: expenseCategoryId || null,
+            payment_method: paymentMethod,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -548,6 +551,7 @@ export default function StoreReceiptsPage() {
       setInvoiceFileUrl('')
       setAiParseResult(null)
       setExpenseCategoryId('')
+      setPaymentMethod('cash')
       setComment('')
       setLines([emptyLine()])
       setSuccess('Приемка проведена. Остатки и цены обновлены везде.')
@@ -594,6 +598,7 @@ export default function StoreReceiptsPage() {
             invoice_number: invoiceNumber.trim() || null,
             invoice_file_url: invoiceFileUrl || null,
             expense_category_id: expenseCategoryId || null,
+            payment_method: paymentMethod,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -619,6 +624,7 @@ export default function StoreReceiptsPage() {
     setInvoiceFileUrl(String(payload.invoice_file_url || ''))
     setAiParseResult(null)
     setExpenseCategoryId(String(payload.expense_category_id || ''))
+    setPaymentMethod(payload.payment_method === 'kaspi' ? 'kaspi' : 'cash')
     setComment(String(payload.comment || ''))
     if (payload.supplier_create?.bin_iin || payload.supplier_create?.organization_name || payload.supplier_create?.name) {
       setSupplierMode('new')
@@ -1334,6 +1340,19 @@ export default function StoreReceiptsPage() {
                 <p className="text-xs text-muted-foreground">
                   После приемки расход создается автоматически в выбранной категории.
                   {cogsExpenseCategories.length === 0 ? ' COGS-категории не найдены в справочнике.' : ''}
+                </p>
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Способ оплаты</Label>
+                <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value === 'kaspi' ? 'kaspi' : 'cash')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Наличные</SelectItem>
+                    <SelectItem value="kaspi">Kaspi</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Сумма приемки запишется в расход в выбранную графу оплаты.
                 </p>
               </div>
             </div>
