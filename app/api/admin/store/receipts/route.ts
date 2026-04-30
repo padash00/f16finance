@@ -47,13 +47,19 @@ type Body = {
 }
 
 function normalizeMoney(value: unknown) {
-  const numeric = Number(value || 0)
+  const numeric = Number(String(value ?? 0).replace(',', '.'))
   if (!Number.isFinite(numeric)) return 0
   return Math.round((numeric + Number.EPSILON) * 100) / 100
 }
 
+function normalizeUnitCost(value: unknown) {
+  const numeric = Number(String(value ?? 0).replace(',', '.'))
+  if (!Number.isFinite(numeric)) return 0
+  return Math.round((numeric + Number.EPSILON) * 10000) / 10000
+}
+
 function normalizeQty(value: unknown) {
-  const amount = Number(value || 0)
+  const amount = Number(String(value ?? 0).replace(',', '.'))
   if (!Number.isFinite(amount)) return 0
   return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
@@ -339,7 +345,7 @@ export async function POST(request: Request) {
         ? body.payload.items.map((item) => ({
             item_id: String(item.item_id || '').trim(),
             quantity: normalizeQty(item.quantity),
-            unit_cost: normalizeMoney(item.unit_cost),
+            unit_cost: normalizeUnitCost(item.unit_cost),
             comment: item.comment || null,
           }))
         : [],
@@ -413,7 +419,7 @@ export async function POST(request: Request) {
       const updatesRaw = body.payload.items
         .map((item) => ({
           item_id: String(item.item_id || '').trim(),
-          unit_cost: normalizeMoney(item.unit_cost),
+          unit_cost: normalizeUnitCost(item.unit_cost),
           sale_price: normalizeMoney(item.sale_price),
         }))
         .filter((item) => item.item_id && item.sale_price >= 0)

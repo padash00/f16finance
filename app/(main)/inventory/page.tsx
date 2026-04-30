@@ -269,6 +269,12 @@ function parseMoney(value: string) {
   return Math.round((numeric + Number.EPSILON) * 100) / 100
 }
 
+function parseUnitCost(value: string) {
+  const numeric = Number(String(value).replace(',', '.').trim())
+  if (!Number.isFinite(numeric)) return 0
+  return Math.round((numeric + Number.EPSILON) * 10000) / 10000
+}
+
 function formatQty(value: number) {
   const normalized = Number(value || 0)
   return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(3)
@@ -585,7 +591,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   )
 
   const receiptTotal = useMemo(
-    () => receiptLines.reduce((sum, line) => sum + parseMoney(line.quantity) * parseMoney(line.unit_cost), 0),
+    () => receiptLines.reduce((sum, line) => sum + parseMoney(line.quantity) * parseUnitCost(line.unit_cost), 0),
     [receiptLines],
   )
 
@@ -960,7 +966,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       .map((line) => ({
         item_id: line.item_id,
         quantity: parseMoney(line.quantity),
-        unit_cost: parseMoney(line.unit_cost),
+        unit_cost: parseUnitCost(line.unit_cost),
         comment: line.comment.trim() || null,
       }))
       .filter((line) => line.item_id && line.quantity > 0)
@@ -1244,7 +1250,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                     <Input value={line.quantity} onChange={(event) => setReceiptLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
                   </Field>
                   <Field label={index === 0 ? 'Цена закупа' : undefined}>
-                    <Input value={line.unit_cost} onChange={(event) => setReceiptLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, unit_cost: event.target.value } : item))} placeholder="0" />
+                    <Input inputMode="decimal" value={line.unit_cost} onChange={(event) => setReceiptLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, unit_cost: event.target.value } : item))} placeholder="499,6757" />
                   </Field>
                   <Field label={index === 0 ? 'Комментарий' : undefined}>
                     <Input value={line.comment} onChange={(event) => setReceiptLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Опционально" />
@@ -2572,4 +2578,3 @@ function PointMetricCard({
 export default function InventoryPage() {
   return <InventoryLegacyRedirect href="/store" />
 }
-

@@ -192,10 +192,26 @@ function parseMoney(value: string) {
   return Math.round((numeric + Number.EPSILON) * 100) / 100
 }
 
+function parseUnitCost(value: string) {
+  const numeric = Number(String(value).replace(',', '.').trim())
+  if (!Number.isFinite(numeric)) return 0
+  return Math.round((numeric + Number.EPSILON) * 10000) / 10000
+}
+
 function parseQty(value: string) {
   const numeric = Number(String(value).replace(',', '.').trim())
   if (!Number.isFinite(numeric)) return 0
   return Math.round((numeric + Number.EPSILON) * 1000) / 1000
+}
+
+function formatUnitCost(value: number) {
+  const normalized = Number(value || 0)
+  if (!Number.isFinite(normalized)) return '0 ₸'
+  const hasFraction = Math.abs(normalized - Math.round(normalized)) > 0.00001
+  return `${normalized.toLocaleString('ru-RU', {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: 4,
+  })} ₸`
 }
 
 function formatQty(value: number) {
@@ -223,7 +239,7 @@ const emptyLine = (): ReceiptLine => ({
 })
 
 function calcMarkupPercent(unitCostRaw: string, salePriceRaw: string) {
-  const unitCost = parseMoney(unitCostRaw)
+  const unitCost = parseUnitCost(unitCostRaw)
   const salePrice = parseMoney(salePriceRaw)
   if (unitCost <= 0) return ''
   const pct = ((salePrice - unitCost) / unitCost) * 100
@@ -373,7 +389,7 @@ export default function StoreReceiptsPage() {
   }, [])
 
   const receiptTotal = useMemo(() => {
-    return lines.reduce((sum, line) => sum + parseQty(line.quantity) * parseMoney(line.unit_cost), 0)
+    return lines.reduce((sum, line) => sum + parseQty(line.quantity) * parseUnitCost(line.unit_cost), 0)
   }, [lines])
 
   const quickMatches = useMemo(() => {
@@ -467,7 +483,7 @@ export default function StoreReceiptsPage() {
       .map((line) => ({
         item_id: line.item_id,
         quantity: parseQty(line.quantity),
-        unit_cost: parseMoney(line.unit_cost),
+        unit_cost: parseUnitCost(line.unit_cost),
         sale_price: parseMoney(line.sale_price),
         comment: line.comment.trim() || null,
       }))
@@ -570,7 +586,7 @@ export default function StoreReceiptsPage() {
       .map((line) => ({
         item_id: line.item_id,
         quantity: parseQty(line.quantity),
-        unit_cost: parseMoney(line.unit_cost),
+        unit_cost: parseUnitCost(line.unit_cost),
         sale_price: parseMoney(line.sale_price),
         comment: line.comment.trim() || null,
       }))
@@ -705,7 +721,7 @@ export default function StoreReceiptsPage() {
     setLines((prev) =>
       prev.map((line) => {
         if (!line.item_id) return line
-        const base = parseMoney(line.unit_cost)
+        const base = parseUnitCost(line.unit_cost)
         const sale = base > 0 ? String(Math.round((base * (1 + pct / 100) + Number.EPSILON) * 100) / 100) : line.sale_price
         return { ...line, markup_percent: String(pct), sale_price: sale }
       }),
@@ -1542,12 +1558,13 @@ export default function StoreReceiptsPage() {
 
                   <div className="space-y-1.5">
                     <Label>Кол-во</Label>
-                    <Input value={line.quantity} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
+                    <Input inputMode="decimal" value={line.quantity} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
                   </div>
 
                   <div className="space-y-1.5">
                     <Label>Цена закупа</Label>
                     <Input
+                      inputMode="decimal"
                       value={line.unit_cost}
                       onChange={(event) =>
                         setLines((current) =>
@@ -1562,13 +1579,14 @@ export default function StoreReceiptsPage() {
                           ),
                         )
                       }
-                      placeholder="0"
+                      placeholder="499,6757"
                     />
                   </div>
 
                   <div className="space-y-1.5">
                     <Label>Цена продажи</Label>
                     <Input
+                      inputMode="decimal"
                       value={line.sale_price}
                       onChange={(event) =>
                         setLines((current) =>
@@ -1590,13 +1608,14 @@ export default function StoreReceiptsPage() {
                   <div className="space-y-1.5">
                     <Label>Наценка %</Label>
                     <Input
+                      inputMode="decimal"
                       value={line.markup_percent}
                       onChange={(event) =>
                         setLines((current) =>
                           current.map((item, itemIndex) => {
                             if (itemIndex !== index) return item
                             const pct = parseMoney(event.target.value)
-                            const base = parseMoney(item.unit_cost)
+                            const base = parseUnitCost(item.unit_cost)
                             const sale = base > 0 ? String(Math.round((base * (1 + pct / 100) + Number.EPSILON) * 100) / 100) : item.sale_price
                             return {
                               ...item,
@@ -1693,7 +1712,7 @@ export default function StoreReceiptsPage() {
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
                           <td className="px-3 py-2 text-right">{formatQty(Number(item.quantity || 0))}</td>
-                          <td className="px-3 py-2 text-right">{formatMoney(Number(item.unit_cost || 0))}</td>
+                          <td className="px-3 py-2 text-right">{formatUnitCost(Number(item.unit_cost || 0))}</td>
                           <td className="px-3 py-2 text-right">{formatMoney(Number(item.total_cost || 0))}</td>
                         </tr>
                       ))}

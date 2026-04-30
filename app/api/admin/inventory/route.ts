@@ -221,9 +221,15 @@ async function notifyManagersAboutRequest(requestId: string, companyName: string
 }
 
 function normalizeMoney(value: unknown) {
-  const numeric = Number(value || 0)
+  const numeric = Number(String(value ?? 0).replace(',', '.'))
   if (!Number.isFinite(numeric)) return 0
   return Math.round((numeric + Number.EPSILON) * 100) / 100
+}
+
+function normalizeUnitCost(value: unknown) {
+  const numeric = Number(String(value ?? 0).replace(',', '.'))
+  if (!Number.isFinite(numeric)) return 0
+  return Math.round((numeric + Number.EPSILON) * 10000) / 10000
 }
 
 function canManageInventory(access: {
@@ -412,7 +418,7 @@ export async function POST(request: Request) {
         .map((item) => ({
           item_id: String(item.item_id || '').trim(),
           quantity: normalizeMoney(item.quantity),
-          unit_cost: normalizeMoney(item.unit_cost),
+          unit_cost: normalizeUnitCost(item.unit_cost),
           comment: item.comment?.trim() || null,
         }))
         .filter((item) => item.item_id && item.quantity > 0)
