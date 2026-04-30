@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity, BellRing, CircleAlert, Download, Eye, Loader2, RefreshCw,
+  Activity, CircleAlert, Download, Eye, Loader2, RefreshCw,
   Search, ShieldCheck, TrendingUp, TrendingDown, User, Building2,
   Tag, Wallet, CreditCard,
   AlertTriangle, CheckCircle, LogIn, Trash2, Pencil, Plus, FileText,
+  Sparkles,
 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
@@ -16,7 +17,7 @@ import { Input } from '@/components/ui/input'
 
 type LogItem = {
   id: string
-  kind: 'audit' | 'notification'
+  kind: 'audit' | 'notification' | 'ai'
   createdAt: string
   title: string
   subtitle: string | null
@@ -67,6 +68,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'auth-attempt': 'Вход в систему',
   'auth-session': 'Сессия',
   'system-error': 'Ошибка системы',
+  'ai-usage': 'AI запрос',
   'task': 'Задача',
   'shift': 'Смена',
   'operator-company-assignment': 'Назначение в компанию',
@@ -74,6 +76,9 @@ const ENTITY_LABELS: Record<string, string> = {
   'salary_payment': 'Выплата зарплаты',
   'visit': 'Посещение',
   'page-view': 'Просмотр страницы',
+  'inventory-receipt': 'Приемка',
+  'supplier-debt': 'Долг поставщика',
+  'point-debt': 'Долг точки',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -86,6 +91,8 @@ const ACTION_LABELS: Record<string, string> = {
   login: 'вошёл в систему',
   logout: 'вышел из системы',
   failed: 'неудачная попытка входа',
+  complete: 'выполнен',
+  error: 'ошибка',
   'page-view': 'просмотрел страницу',
   visit: 'посетил сайт',
 }
@@ -124,6 +131,8 @@ const PAGE_LABELS: Record<string, string> = {
 function humanTitle(item: LogItem): string {
   const who = actorName(item.actorEmail)
   const p = item.payload || {}
+  const et = (item.entityType || '').toLowerCase()
+  const act = (item.action || '').toLowerCase()
 
   if (item.kind === 'notification') {
     const ch = item.channel === 'telegram' ? 'Telegram' : item.channel === 'email' ? 'Email' : item.channel || ''
@@ -132,8 +141,13 @@ function humanTitle(item: LogItem): string {
     return `${ch} уведомление → ${recipient} — ${ok ? 'доставлено' : 'ошибка'}`
   }
 
-  const et = (item.entityType || '').toLowerCase()
-  const act = (item.action || '').toLowerCase()
+  if (item.kind === 'ai' || et === 'ai-usage') {
+    const endpoint = String(p.endpoint || item.subtitle || '')
+    const status = String(p.status || item.status || '')
+    return status === 'error'
+      ? `${who}: ошибка AI в ${endpoint}`
+      : `${who}: AI запрос выполнен ${endpoint}`
+  }
 
   if (et === 'income') {
     if (act === 'create') {
@@ -330,6 +344,16 @@ function PayloadRows({ item }: { item: LogItem }) {
     add('Результат', p.result || item.action)
   }
 
+  if (et === 'ai-usage') {
+    add('Endpoint', p.endpoint || item.subtitle)
+    add('Провайдер', p.provider || item.channel)
+    add('Модель', p.model)
+    add('Статус', p.status || item.status)
+    add('Токены', p.total_tokens)
+    add('Стоимость', p.cost_estimate)
+    add('Ошибка', p.error)
+  }
+
   if (et === 'income' && act === 'create-batch') {
     add('Кол-во записей', p.count)
   }
@@ -363,6 +387,7 @@ function entityIcon(entityType: string | null, action: string | null) {
   if (et === 'kaspi_terminal') return { Icon: CreditCard, color: 'text-blue-400', bg: 'bg-blue-500/10' }
   if (et === 'profitability-input') return { Icon: FileText, color: 'text-cyan-400', bg: 'bg-cyan-500/10' }
   if (et === 'system-error') return { Icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10' }
+  if (et === 'ai-usage') return { Icon: Sparkles, color: 'text-violet-400', bg: 'bg-violet-500/10' }
   if (et === 'auth-attempt') return { Icon: LogIn, color: 'text-sky-400', bg: 'bg-sky-500/10' }
   if (et === 'task') return { Icon: CheckCircle, color: 'text-indigo-400', bg: 'bg-indigo-500/10' }
   if (et === 'visit' || et === 'page-view' || act === 'page-view' || act === 'visit') return { Icon: Eye, color: 'text-slate-400', bg: 'bg-slate-500/10' }
@@ -393,6 +418,7 @@ const ACTION_BADGE_LABELS: Record<string, string> = {
   logout: 'Выход',
   failed: 'Ошибка',
   error: 'Ошибка',
+  complete: 'Выполнено',
   'page-view': 'Просмотр',
   visit: 'Посещение',
 }
@@ -425,9 +451,15 @@ export default function LogsPage() {
   const [onlyErrors, setOnlyErrors] = useState(false)
   const [page, setPage] = useState(1)
 
-  const applyPreset = (preset: 'all' | 'auth' | 'finance' | 'staff' | 'operations' | 'structure' | 'errors') => {
+  const applyPreset = (preset: 'all' | 'pages' | 'site-errors' | 'telegram' | 'ai' | 'receipts' | 'debts' | 'auth' | 'finance' | 'staff' | 'operations' | 'structure' | 'errors') => {
     setPage(1); setEntityType(''); setAction(''); setActor(''); setKind(''); setOnlyErrors(false); setSearch('')
     if (preset === 'finance') setDomain('finance')
+    else if (preset === 'pages') setDomain('pages')
+    else if (preset === 'site-errors') { setDomain('site-errors'); setOnlyErrors(true) }
+    else if (preset === 'telegram') setDomain('telegram')
+    else if (preset === 'ai') setDomain('ai')
+    else if (preset === 'receipts') setDomain('receipts')
+    else if (preset === 'debts') setDomain('debts')
     else if (preset === 'auth') { setDomain('auth'); setKind('audit') }
     else if (preset === 'staff') { setDomain('staff'); setKind('audit') }
     else if (preset === 'operations') setDomain('operations')
@@ -473,7 +505,7 @@ export default function LogsPage() {
     window.open(`/api/admin/logs?${params.toString()}`, '_blank')
   }
 
-  useEffect(() => { loadLogs() }, [page]) // eslint-disable-line
+  useEffect(() => { loadLogs() }, [page, domain, kind, entityType, action, actor, onlyErrors]) // eslint-disable-line
 
   const stats = useMemo(() => {
     const items = data?.items || []
@@ -481,13 +513,21 @@ export default function LogsPage() {
       total: data?.total || 0,
       audit: items.filter(i => i.kind === 'audit').length,
       notifications: items.filter(i => i.kind === 'notification').length,
+      ai: items.filter(i => i.kind === 'ai').length,
       failed: items.filter(i => i.status === 'failed').length,
       systemErrors: items.filter(i => i.entityType === 'system-error').length,
+      pages: items.filter(i => i.entityType === 'page-view' || i.entityType === 'visit').length,
     }
   }, [data])
 
   const PRESETS = [
     { key: 'all', label: 'Все' },
+    { key: 'pages', label: '👁 Все страницы' },
+    { key: 'site-errors', label: '🚨 Ошибки сайта' },
+    { key: 'telegram', label: '✈ Telegram' },
+    { key: 'ai', label: '✨ AI' },
+    { key: 'receipts', label: '📦 Приемка' },
+    { key: 'debts', label: '🧾 Долги' },
     { key: 'finance', label: '💰 Финансы' },
     { key: 'auth', label: '🔑 Входы' },
     { key: 'staff', label: '👤 Кадры' },
@@ -522,7 +562,7 @@ export default function LogsPage() {
         {[
           { label: 'Всего событий', value: stats.total, icon: Activity },
           { label: 'Действия', value: stats.audit, icon: ShieldCheck },
-          { label: 'Уведомления', value: stats.notifications, icon: BellRing },
+          { label: 'Страницы', value: stats.pages, icon: Eye },
           { label: 'Ошибки отправки', value: stats.failed, icon: CircleAlert },
           { label: 'Ошибки системы', value: stats.systemErrors, icon: AlertTriangle },
         ].map(({ label, value, icon: Icon }) => (
@@ -546,7 +586,7 @@ export default function LogsPage() {
             <button
               key={p.key}
               onClick={() => applyPreset(p.key)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${domain === (p.key === 'all' ? '' : p.key) && !onlyErrors && p.key !== 'errors' || (p.key === 'errors' && onlyErrors) ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${(p.key === 'all' && !domain && !onlyErrors) || (domain === p.key) || (p.key === 'errors' && onlyErrors) ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
             >
               {p.label}
             </button>
@@ -616,8 +656,8 @@ export default function LogsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Kind badge */}
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isNotif ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'}`}>
-                        {isNotif ? 'уведомление' : 'аудит'}
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isNotif ? 'bg-emerald-500/10 text-emerald-400' : item.kind === 'ai' ? 'bg-violet-500/10 text-violet-300' : 'bg-sky-500/10 text-sky-400'}`}>
+                        {isNotif ? 'уведомление' : item.kind === 'ai' ? 'AI' : 'аудит'}
                       </span>
 
                       {/* Action badge */}

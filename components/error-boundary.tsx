@@ -28,7 +28,15 @@ export class ErrorBoundary extends Component<Props, State> {
     fetch('/api/client-log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ level: 'error', message: error.message, stack: error.stack }),
+      body: JSON.stringify({
+        eventType: 'client_error',
+        area: 'react-error-boundary',
+        source: 'react-error-boundary',
+        message: error.message,
+        stack: error.stack,
+        pathname: typeof window !== 'undefined' ? window.location.pathname : null,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      }),
     }).catch(() => null)
   }
 

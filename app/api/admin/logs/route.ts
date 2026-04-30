@@ -22,9 +22,25 @@ type NotificationRow = {
   created_at: string
 }
 
+type AiUsageRow = {
+  id: string
+  created_at: string
+  user_id: string | null
+  endpoint: string
+  provider: string
+  model: string
+  prompt_tokens: number | null
+  completion_tokens: number | null
+  total_tokens: number | null
+  cost_estimate: number | null
+  status: string
+  error: string | null
+  payload: Record<string, unknown> | null
+}
+
 type CombinedLogItem = {
   id: string
-  kind: 'audit' | 'notification'
+  kind: 'audit' | 'notification' | 'ai'
   createdAt: string
   title: string
   subtitle: string | null
@@ -68,10 +84,13 @@ const ENTITY_LABELS: Record<string, string> = {
   'point-product': 'товар точки',
   'point-incident': 'инцидент точки',
   'inventory-item': 'товар склада',
+  'inventory-receipt': 'приемку склада',
   'inventory-request': 'заявку склада',
   'inventory-return': 'возврат склада',
   'inventory-sale': 'продажу склада',
   'inventory-writeoff': 'списание склада',
+  'supplier-debt': 'долг поставщика',
+  'ai-usage': 'AI запрос',
   'operator-company-assignment': 'назначение в компанию',
   'operator-career': 'карьеру оператора',
   visit: 'посещение',
@@ -283,6 +302,23 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     return summarizeNotification(item)
   }
 
+  if (item.kind === 'ai' || et === 'ai-usage') {
+    addDetail(details, 'Endpoint', p.endpoint)
+    addDetail(details, 'Провайдер', p.provider)
+    addDetail(details, 'Модель', p.model)
+    addDetail(details, 'Статус', p.status)
+    addDetail(details, 'Токены всего', p.total_tokens)
+    addDetail(details, 'Стоимость', p.cost_estimate)
+    addDetail(details, 'Ошибка', p.error)
+    const statusLabel = text(p.status) === 'error' ? 'ошибка AI' : 'AI запрос выполнен'
+    return {
+      title: `${who}: ${statusLabel} ${text(p.endpoint) || ''}`.trim(),
+      subtitle: compact([text(p.provider), text(p.model)]),
+      details: compact(details),
+      detailRows: details,
+    }
+  }
+
   if (et === 'system-error') {
     return summarizeSystemError(p, item)
   }
@@ -452,16 +488,28 @@ export async function GET(req: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
-    const [{ data: auditRows, error: auditError }, { data: notificationRows, error: notificationError }] = await Promise.all([
+    const [
+      { data: auditRows, error: auditError },
+      { data: notificationRows, error: notificationError },
+      aiUsageResult,
+    ] = await Promise.all([
       supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(300),
       supabase.from('notification_log').select('*').order('created_at', { ascending: false }).limit(300),
+      supabase.from('ai_usage_log').select('*').order('created_at', { ascending: false }).limit(300).then(
+        (res: any) => res,
+        (error: any) => ({ data: [], error }),
+      ),
     ])
 
     if (auditError) throw auditError
     if (notificationError) throw notificationError
+    const aiUsageRows = aiUsageResult?.error ? [] : ((aiUsageResult?.data || []) as AiUsageRow[])
 
     const actorIds = Array.from(
-      new Set(((auditRows || []) as AuditRow[]).map((row) => row.actor_user_id).filter(Boolean)),
+      new Set([
+        ...((auditRows || []) as AuditRow[]).map((row) => row.actor_user_id).filter(Boolean),
+        ...aiUsageRows.map((row) => row.user_id).filter(Boolean),
+      ]),
     ) as string[]
 
     const actorEmailMap = new Map<string, string>()
@@ -511,6 +559,34 @@ export async function GET(req: Request) {
         recipient: row.recipient,
         payload: row.payload || null,
       })),
+      ...aiUsageRows.map((row) => ({
+        id: `ai:${row.id}`,
+        kind: 'ai' as const,
+        createdAt: row.created_at,
+        title: `${row.provider} • ${row.endpoint}`,
+        subtitle: row.model,
+        details: null,
+        detailRows: [],
+        entityType: 'ai-usage',
+        action: row.status === 'error' ? 'error' : 'complete',
+        actorUserId: row.user_id,
+        actorEmail: row.user_id ? actorEmailMap.get(row.user_id) || null : null,
+        channel: 'ai',
+        status: row.status,
+        recipient: null,
+        payload: {
+          endpoint: row.endpoint,
+          provider: row.provider,
+          model: row.model,
+          prompt_tokens: row.prompt_tokens,
+          completion_tokens: row.completion_tokens,
+          total_tokens: row.total_tokens,
+          cost_estimate: row.cost_estimate,
+          status: row.status,
+          error: row.error,
+          ...(row.payload || {}),
+        },
+      })),
     ]
       .map((item) => {
         const summary = summarizeLogItem(item)
@@ -520,6 +596,40 @@ export async function GET(req: Request) {
         if (domain === 'auth') {
           const authEntityTypes = ['auth-attempt', 'auth-session']
           if (!authEntityTypes.includes((item.entityType || '').toLowerCase())) return false
+        }
+
+        if (domain === 'pages') {
+          const entity = (item.entityType || '').toLowerCase()
+          const act = (item.action || '').toLowerCase()
+          if (entity !== 'page-view' && entity !== 'visit' && act !== 'page-view' && act !== 'visit') return false
+        }
+
+        if (domain === 'site-errors') {
+          if (
+            item.status !== 'failed' &&
+            item.status !== 'error' &&
+            item.entityType !== 'system-error' &&
+            !(item.action || '').toLowerCase().includes('error') &&
+            !(item.action || '').toLowerCase().includes('failed')
+          ) return false
+        }
+
+        if (domain === 'telegram') {
+          const payloadKind = String(record(item.payload).kind || '').toLowerCase()
+          if (item.channel !== 'telegram' && !payloadKind.includes('telegram')) return false
+        }
+
+        if (domain === 'ai') {
+          if (item.kind !== 'ai' && (item.entityType || '').toLowerCase() !== 'ai-usage') return false
+        }
+
+        if (domain === 'receipts') {
+          if (!['inventory-receipt', 'point-shift-report'].includes((item.entityType || '').toLowerCase())) return false
+        }
+
+        if (domain === 'debts') {
+          const debtEntities = ['point-debt', 'supplier-debt']
+          if (!debtEntities.includes((item.entityType || '').toLowerCase())) return false
         }
 
         if (domain === 'finance') {
@@ -565,6 +675,7 @@ export async function GET(req: Request) {
         if (
           onlyErrors &&
           item.status !== 'failed' &&
+          item.status !== 'error' &&
           item.entityType !== 'system-error' &&
           !(item.action || '').toLowerCase().includes('error') &&
           !(item.action || '').toLowerCase().includes('failed')
