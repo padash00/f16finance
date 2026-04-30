@@ -267,6 +267,11 @@ export default function StoreReceiptsPage() {
   const [invoiceFileUrl, setInvoiceFileUrl] = useState('')
   const [expenseCategoryId, setExpenseCategoryId] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi'>('cash')
+  const [paymentMode, setPaymentMode] = useState<'now' | 'deferred'>('now')
+  const [paymentReceiptFileUrl, setPaymentReceiptFileUrl] = useState('')
+  const [uploadingPaymentReceipt, setUploadingPaymentReceipt] = useState(false)
+  const [isConsignment, setIsConsignment] = useState(false)
+  const [dueDate, setDueDate] = useState('')
   const [expenseCategoriesFallback, setExpenseCategoriesFallback] = useState<ExpenseCategoryOption[]>([])
   const [uploadingInvoice, setUploadingInvoice] = useState(false)
   const [aiParsing, setAiParsing] = useState(false)
@@ -548,6 +553,10 @@ export default function StoreReceiptsPage() {
             invoice_file_url: invoiceFileUrl,
             expense_category_id: expenseCategoryId || null,
             payment_method: paymentMethod,
+            payment_mode: paymentMode,
+            payment_receipt_file_url: paymentMode === 'now' ? paymentReceiptFileUrl || null : null,
+            is_consignment: isConsignment,
+            due_date: paymentMode === 'deferred' && dueDate ? dueDate : null,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -568,6 +577,10 @@ export default function StoreReceiptsPage() {
       setAiParseResult(null)
       setExpenseCategoryId('')
       setPaymentMethod('cash')
+      setPaymentMode('now')
+      setPaymentReceiptFileUrl('')
+      setIsConsignment(false)
+      setDueDate('')
       setComment('')
       setLines([emptyLine()])
       setSuccess('Приемка проведена. Остатки и цены обновлены везде.')
@@ -615,6 +628,10 @@ export default function StoreReceiptsPage() {
             invoice_file_url: invoiceFileUrl || null,
             expense_category_id: expenseCategoryId || null,
             payment_method: paymentMethod,
+            payment_mode: paymentMode,
+            payment_receipt_file_url: paymentReceiptFileUrl || null,
+            is_consignment: isConsignment,
+            due_date: dueDate || null,
             comment: comment.trim() || null,
             items: payloadItems,
           },
@@ -641,6 +658,10 @@ export default function StoreReceiptsPage() {
     setAiParseResult(null)
     setExpenseCategoryId(String(payload.expense_category_id || ''))
     setPaymentMethod(payload.payment_method === 'kaspi' ? 'kaspi' : 'cash')
+    setPaymentMode((payload as any).payment_mode === 'deferred' ? 'deferred' : 'now')
+    setPaymentReceiptFileUrl(String((payload as any).payment_receipt_file_url || ''))
+    setIsConsignment(Boolean((payload as any).is_consignment))
+    setDueDate(String((payload as any).due_date || ''))
     setComment(String(payload.comment || ''))
     if (payload.supplier_create?.bin_iin || payload.supplier_create?.organization_name || payload.supplier_create?.name) {
       setSupplierMode('new')
@@ -790,6 +811,27 @@ export default function StoreReceiptsPage() {
       setError(err?.message || 'Не удалось загрузить накладную')
     } finally {
       setUploadingInvoice(false)
+    }
+  }
+
+  const uploadPaymentReceipt = async (file: File | null) => {
+    if (!file) return
+    setError(null)
+    setUploadingPaymentReceipt(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/admin/store/receipts/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить чек')
+      setPaymentReceiptFileUrl(String(json.document_url || ''))
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось загрузить чек')
+    } finally {
+      setUploadingPaymentReceipt(false)
     }
   }
 
@@ -1359,18 +1401,79 @@ export default function StoreReceiptsPage() {
                 </p>
               </div>
               <div className="space-y-1.5 md:col-span-2">
-                <Label>Способ оплаты</Label>
-                <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value === 'kaspi' ? 'kaspi' : 'cash')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Наличные</SelectItem>
-                    <SelectItem value="kaspi">Kaspi</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Сумма приемки запишется в расход в выбранную графу оплаты.
-                </p>
+                <Label>Оплата</Label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMode('now')}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200' : 'border-white/10 text-muted-foreground hover:bg-white/5'}`}
+                  >
+                    Сразу
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMode('deferred')}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-200' : 'border-white/10 text-muted-foreground hover:bg-white/5'}`}
+                  >
+                    В долг / Под реализацию
+                  </button>
+                </div>
               </div>
+
+              {paymentMode === 'now' ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Способ оплаты</Label>
+                    <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value === 'kaspi' ? 'kaspi' : 'cash')}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Наличные</SelectItem>
+                        <SelectItem value="kaspi">Kaspi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Чек об оплате (обязательно)</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={(event) => void uploadPaymentReceipt(event.target.files?.[0] || null)}
+                        disabled={uploadingPaymentReceipt}
+                      />
+                      {uploadingPaymentReceipt ? <Loader2 className="h-4 w-4 animate-spin text-emerald-300" /> : null}
+                    </div>
+                    {paymentReceiptFileUrl ? (
+                      <a href={paymentReceiptFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                        Чек загружен — открыть файл
+                      </a>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Этот чек попадет в расход (не накладная).</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Срок оплаты (опционально)</Label>
+                    <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5 flex items-end">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-white/20 bg-transparent"
+                        checked={isConsignment}
+                        onChange={(event) => setIsConsignment(event.target.checked)}
+                      />
+                      Под реализацию (consignment)
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground md:col-span-2">
+                    Расход не создается. Долг повиснет в разделе «Долги и накладные» и закроется при оплате.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="space-y-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-3">

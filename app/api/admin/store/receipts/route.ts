@@ -33,6 +33,10 @@ type Body = {
     invoice_file_url?: string | null
     expense_category_id?: string | null
     payment_method?: 'cash' | 'kaspi' | null
+    payment_mode?: 'now' | 'deferred' | null
+    payment_receipt_file_url?: string | null
+    is_consignment?: boolean | null
+    due_date?: string | null
     comment?: string | null
     items: Array<{
       item_id: string
@@ -190,6 +194,10 @@ export async function POST(request: Request) {
         invoice_file_url: String(payload.invoice_file_url || '').trim() || null,
         expense_category_id: String(payload.expense_category_id || '').trim() || null,
         payment_method: payload.payment_method === 'kaspi' ? 'kaspi' : 'cash',
+        payment_mode: payload.payment_mode === 'deferred' ? 'deferred' : 'now',
+        payment_receipt_file_url: String(payload.payment_receipt_file_url || '').trim() || null,
+        is_consignment: Boolean(payload.is_consignment),
+        due_date: String(payload.due_date || '').trim() || null,
         comment: String(payload.comment || '').trim() || null,
         items: Array.isArray(payload.items) ? payload.items : [],
       }
@@ -383,36 +391,77 @@ export async function POST(request: Request) {
     const autoExpenseComment = autoExpenseCommentParts.join('\n')
 
     const receiptTotal = Number(result?.total_amount || 0)
-    const existingExpenseQuery: any = supabase
-      .from('expenses')
-      .select('id')
-      .eq('source_type', 'inventory_receipt')
-      .eq('source_id', receiptId)
-      .limit(1)
-    const { data: existingExpense, error: existingExpenseError } = await existingExpenseQuery.maybeSingle()
-    if (existingExpenseError) throw existingExpenseError
-    if (!existingExpense?.id) {
-      const paymentMethod = body.payload.payment_method === 'kaspi' ? 'kaspi' : 'cash'
-      const expenseInsertPayload: Record<string, unknown> = {
-        date: body.payload.received_at,
-        company_id: companyId,
-        operator_id: null,
-        category: String(expenseCategory.name || '').trim(),
-        cash_amount: paymentMethod === 'cash' ? receiptTotal : 0,
-        kaspi_amount: paymentMethod === 'kaspi' ? receiptTotal : 0,
-        comment: autoExpenseComment || 'Авто из приемки',
-        attachment_url: invoiceFileUrl,
-        document_kind: 'invoice',
-        document_url: invoiceFileUrl,
-        status: 'confirmed',
-        source_type: 'inventory_receipt',
-        source_id: receiptId,
-      }
-      const { error: autoExpenseError } = await supabase
-        .from('expenses')
-        .insert([expenseInsertPayload])
-      if (autoExpenseError) throw autoExpenseError
+    const paymentMode = body.payload.payment_mode === 'deferred' ? 'deferred' : 'now'
+    const paymentMethod = body.payload.payment_method === 'kaspi' ? 'kaspi' : 'cash'
+    const paymentReceiptFileUrl = String(body.payload.payment_receipt_file_url || '').trim() || null
+    const isConsignment = Boolean(body.payload.is_consignment)
+    const dueDate = String(body.payload.due_date || '').trim() || null
+
+    if (paymentMode === 'now' && !paymentReceiptFileUrl) {
+      return json({ error: 'Загрузите чек об оплате (для приемки с оплатой сразу)' }, 400)
     }
+
+    let createdExpenseId: string | null = null
+    if (paymentMode === 'now') {
+      const existingExpenseQuery: any = supabase
+        .from('expenses')
+        .select('id')
+        .eq('source_type', 'inventory_receipt')
+        .eq('source_id', receiptId)
+        .limit(1)
+      const { data: existingExpense, error: existingExpenseError } = await existingExpenseQuery.maybeSingle()
+      if (existingExpenseError) throw existingExpenseError
+      if (existingExpense?.id) {
+        createdExpenseId = String(existingExpense.id)
+      } else {
+        const expenseInsertPayload: Record<string, unknown> = {
+          date: body.payload.received_at,
+          company_id: companyId,
+          operator_id: null,
+          category: String(expenseCategory.name || '').trim(),
+          cash_amount: paymentMethod === 'cash' ? receiptTotal : 0,
+          kaspi_amount: paymentMethod === 'kaspi' ? receiptTotal : 0,
+          comment: autoExpenseComment || 'Авто из приемки',
+          attachment_url: paymentReceiptFileUrl,
+          document_kind: 'receipt',
+          document_url: paymentReceiptFileUrl,
+          status: 'confirmed',
+          source_type: 'inventory_receipt',
+          source_id: receiptId,
+        }
+        const { data: insertedExpense, error: autoExpenseError } = await supabase
+          .from('expenses')
+          .insert([expenseInsertPayload])
+          .select('id')
+          .single()
+        if (autoExpenseError) throw autoExpenseError
+        createdExpenseId = String(insertedExpense?.id || '')
+      }
+    }
+
+    // upsert supplier_debts for this receipt (one debt per receipt)
+    const debtPayload: Record<string, unknown> = {
+      receipt_id: receiptId,
+      supplier_id: supplierId,
+      company_id: companyId,
+      organization_id: locationOrganizationId,
+      expense_category_id: expenseCategory.id,
+      total_amount: receiptTotal,
+      status: paymentMode === 'now' ? 'paid' : 'open',
+      due_date: dueDate,
+      is_consignment: isConsignment,
+      payment_paid_at: paymentMode === 'now' ? body.payload.received_at : null,
+      payment_cash_amount: paymentMode === 'now' && paymentMethod === 'cash' ? receiptTotal : 0,
+      payment_kaspi_amount: paymentMode === 'now' && paymentMethod === 'kaspi' ? receiptTotal : 0,
+      payment_receipt_file_url: paymentMode === 'now' ? paymentReceiptFileUrl : null,
+      payment_comment: paymentMode === 'now' ? body.payload.comment || null : null,
+      expense_id: createdExpenseId,
+      created_by: actorUserId,
+    }
+    const { error: debtError } = await supabase
+      .from('supplier_debts')
+      .upsert([debtPayload], { onConflict: 'receipt_id' })
+    if (debtError) throw debtError
 
     // Always update sale/default purchase prices globally from receipt lines
     if (Array.isArray(body.payload.items)) {

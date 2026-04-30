@@ -119,6 +119,7 @@ export const navSections: NavSection[] = [
       { href: '/store/showcase', label: 'Витрина', icon: Store, note: 'Остатки на витрине, заявки на пополнение' },
       { href: '/store/catalog', label: 'Каталог', icon: Tags, note: 'Товары, категории и поставщики' },
       { href: '/store/receipts', label: 'Приемка', icon: PackagePlus, note: 'Документы прихода на склад' },
+      { href: '/store/billing', label: 'Долги и накладные', icon: Wallet, note: 'Долги поставщикам и история накладных' },
       { href: '/store/requests', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек и одобрение' },
       { href: '/store/requests-journal', label: 'Журнал заявок', icon: History, note: 'История всех заявок с переходами' },
       { href: '/store/analytics', label: 'Аналитика точек', icon: Store, note: 'Остатки и движение по витринам' },
