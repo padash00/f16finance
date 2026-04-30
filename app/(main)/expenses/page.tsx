@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
@@ -2045,6 +2045,26 @@ function ListTab({
   deletingExpenseId,
   onPreview,
 }: any) {
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore) return
+    const sentinel = loadMoreSentinelRef.current
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMore()
+        }
+      },
+      { rootMargin: '600px 0px 600px 0px', threshold: 0 },
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loadMore, loading, loadingMore])
+
   return (
     <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -2187,6 +2207,7 @@ function ListTab({
 
       {hasMore && (
         <div className="flex justify-center p-4 border-t border-gray-800">
+          <div ref={loadMoreSentinelRef} aria-hidden className="h-px w-px" />
           <Button
             variant="outline"
             onClick={loadMore}
