@@ -2644,8 +2644,8 @@ export async function POST(req: Request) {
   try {
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET
     const secretHeader = req.headers.get('x-telegram-bot-api-secret-token')
-    // Если TELEGRAM_WEBHOOK_SECRET задан — проверяем. Если не задан — пропускаем (webhook open).
-    if (secret && secretHeader !== secret) return json({ error: 'Forbidden' }, 403)
+    if (!secret) return json({ error: 'TELEGRAM_WEBHOOK_SECRET is required' }, 503)
+    if (secretHeader !== secret) return json({ error: 'Forbidden' }, 403)
     if (!hasAdminSupabaseCredentials()) return json({ error: 'SUPABASE_SERVICE_ROLE_KEY is required' }, 500)
 
     const supabase = createAdminSupabaseClient()

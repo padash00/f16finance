@@ -1,4 +1,5 @@
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -90,7 +91,7 @@ export async function checkAndNotifyLowStock(
       // 3d. Fetch all staff with telegram_chat_id and role in ('owner', 'manager')
       const { data: staff } = await supabase
         .from('staff')
-        .select('telegram_chat_id, full_name')
+        .select('id, telegram_chat_id, full_name')
         .in('role', ['owner', 'manager'])
         .not('telegram_chat_id', 'is', null)
 
@@ -99,10 +100,28 @@ export async function checkAndNotifyLowStock(
       // 3e. Send Telegram message to each
       for (const member of staff) {
         if (!member.telegram_chat_id) continue
-        await sendTelegramMessage(Number(member.telegram_chat_id), text).catch(() => null)
+        await sendTelegramMessage(Number(member.telegram_chat_id), text).catch((error) =>
+          writeSystemErrorLogSafe({
+            area: 'low-stock-notifier',
+            scope: 'server',
+            message: error instanceof Error ? error.message : String(error),
+            payload: {
+              itemIds,
+              locationId,
+              staffId: member.id || null,
+              telegramChatId: member.telegram_chat_id,
+            },
+          }),
+        )
       }
     }
-  } catch {
+  } catch (error) {
+    await writeSystemErrorLogSafe({
+      area: 'low-stock-notifier',
+      scope: 'server',
+      message: error instanceof Error ? error.message : String(error),
+      payload: { itemIds, locationId },
+    })
     // Never throw — background task, don't break main flow
   }
 }

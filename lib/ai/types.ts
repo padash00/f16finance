@@ -41,4 +41,9 @@ export type AssistantRequest = {
 export type AssistantResponse = {
   text?: string
   error?: string
+  usage?: {
+    prompt_tokens?: number | null
+    completion_tokens?: number | null
+    total_tokens?: number | null
+  }
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 
 type Body = {
@@ -70,6 +70,19 @@ export async function POST(request: Request) {
   })
 
   if (openErr) {
+    await writeSystemErrorLogSafe({
+      area: 'point-shift-handover',
+      scope: 'server',
+      message: openErr.message,
+      payload: {
+        company_id: device.company_id,
+        point_device_id: device.id,
+        previous_shift_id: prevId,
+        next_operator_id: body.next_operator_id || null,
+        totals,
+        risk: 'previous shift was closed before opening next shift failed',
+      },
+    })
     return json({ error: 'point-shift-handover-open-failed', detail: openErr.message }, 400)
   }
 

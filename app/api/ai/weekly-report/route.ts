@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { getAnalysisServerSnapshot, getReportsServerSnapshot, getCashFlowServerSnapshot } from '@/lib/ai/server-snapshots'
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
@@ -34,6 +36,12 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`ai-weekly-report:${access.user?.id || ip}`, 30, 60_000)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'too-many-requests' }, { status: 429 })
+    }
 
     const body = await request.json().catch(() => ({}))
     const dateTo = body.dateTo || todayISO()
@@ -92,11 +100,25 @@ export async function POST(request: Request) {
 
     const json = await response.json().catch(() => null)
     if (!response.ok || json?.error) {
+      await logAiUsageSafe(access.supabase, {
+        userId: access.user?.id || null,
+        endpoint: '/api/ai/weekly-report',
+        model: OPENAI_MODEL,
+        status: 'error',
+        error: json?.error?.message || `OpenAI API error (${response.status})`,
+      })
       return NextResponse.json({ error: json?.error?.message || `OpenAI API error (${response.status})` }, { status: 500 })
     }
 
     const text = json?.choices?.[0]?.message?.content?.trim() || ''
     if (!text) return NextResponse.json({ error: 'ИИ не вернул отчёт.' }, { status: 500 })
+
+    await logAiUsageSafe(access.supabase, {
+      userId: access.user?.id || null,
+      endpoint: '/api/ai/weekly-report',
+      model: OPENAI_MODEL,
+      usage: json?.usage,
+    })
 
     return NextResponse.json({ text, dateFrom, dateTo })
   } catch (error) {

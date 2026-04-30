@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { PDFParse } from 'pdf-parse'
 
+import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { matchInvoiceItems, parseInvoiceWithGPT, type ParsedInvoice } from '@/lib/server/invoice-parser'
 import { fetchInventoryItemsForMatching, fetchInvoiceNameMappings } from '@/lib/server/repositories/invoice'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -205,6 +207,11 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const ip = getClientIp(req)
+    const rl = checkRateLimit(`ai-store-receipts-parse:${access.user?.id || ip}`, 30, 60_000)
+    if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
+
     if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
     }
@@ -258,6 +265,13 @@ export async function POST(req: Request) {
     const unmatchedCount = matched.length - matchedCount
     const total = matched.reduce((sum, item) => sum + Number(item.total_cost || Number(item.quantity || 0) * Number(item.unit_cost || 0)), 0)
 
+    await logAiUsageSafe(supabase, {
+      userId: access.user?.id || null,
+      endpoint: '/api/admin/store/receipts/ai-parse',
+      model,
+      payload: { mime: fileData.mime, matchedCount, unmatchedCount },
+    })
+
     return json({
       ok: true,
       data: {
@@ -282,6 +296,16 @@ export async function POST(req: Request) {
       },
     })
   } catch (error: any) {
+    const access = await getRequestAccessContext(req).catch(() => null)
+    if (access && !('response' in access)) {
+      await logAiUsageSafe(access.supabase, {
+        userId: access.user?.id || null,
+        endpoint: '/api/admin/store/receipts/ai-parse',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        status: 'error',
+        error: error?.message || String(error),
+      })
+    }
     return json({ error: error?.message || 'Не удалось распознать накладную' }, 500)
   }
 }

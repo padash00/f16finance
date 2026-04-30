@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
+import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -12,6 +14,10 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`ai-pos-hint:${access.user?.id || ip}`, 30, 60_000)
+    if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
 
     const url = new URL(request.url)
     const companyId = url.searchParams.get('company_id')?.trim()
@@ -129,7 +135,21 @@ export async function GET(request: Request) {
 
       if (aiRes?.ok) {
         const aiData = await aiRes.json().catch(() => null)
+        await logAiUsageSafe(supabase, {
+          userId: access.user?.id || null,
+          endpoint: '/api/pos/ai-hint',
+          model: 'gpt-4o-mini',
+          usage: aiData?.usage,
+        })
         hint = aiData?.choices?.[0]?.message?.content?.trim() || hint
+      } else if (aiRes) {
+        await logAiUsageSafe(supabase, {
+          userId: access.user?.id || null,
+          endpoint: '/api/pos/ai-hint',
+          model: 'gpt-4o-mini',
+          status: 'error',
+          error: `OpenAI error (${aiRes.status})`,
+        })
       }
     }
 

@@ -269,6 +269,10 @@ export async function writeSystemErrorLog(client: any, entry: SystemErrorEntry) 
 }
 
 export async function writeSystemErrorLogSafe(entry: SystemErrorEntry) {
-  if (!hasAdminSupabaseCredentials()) return
-  await writeSystemErrorLog(createAdminSupabaseClient(), entry)
+  try {
+    if (!hasAdminSupabaseCredentials()) return
+    await writeSystemErrorLog(createAdminSupabaseClient(), entry)
+  } catch (error) {
+    console.warn('System error log write skipped', error)
+  }
 }

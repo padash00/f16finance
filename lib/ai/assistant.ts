@@ -253,7 +253,7 @@ export async function runAssistant(request: AssistantRequest, context: Assistant
       return { error: 'ИИ не вернул осмысленный ответ.' }
     }
 
-    return { text }
+    return { text, usage: result.data?.usage || null }
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Не удалось собрать AI-контекст.',

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
+import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { writeAuditLog } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 const OPENAI_MODEL = process.env.OPENAI_QUIZ_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini'
@@ -37,6 +39,11 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`ai-knowledge-quiz-generate:${access.user?.id || ip}`, 30, 60_000)
+    if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
+
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
 
     const body = (await request.json().catch(() => ({}))) as Body
@@ -124,10 +131,24 @@ export async function POST(request: Request) {
 
     if (!aiRes.ok) {
       const detail = await aiRes.text()
+      await logAiUsageSafe(supabase, {
+        userId: access.user?.id || null,
+        endpoint: '/api/admin/knowledge/quiz/generate',
+        model: OPENAI_MODEL,
+        status: 'error',
+        error: detail,
+      })
       return json({ error: 'ai-failed', detail }, 502)
     }
 
     const aiJson = (await aiRes.json()) as any
+    await logAiUsageSafe(supabase, {
+      userId: access.user?.id || null,
+      endpoint: '/api/admin/knowledge/quiz/generate',
+      model: OPENAI_MODEL,
+      usage: aiJson?.usage,
+      payload: { questionCount },
+    })
     const rawContent: string = aiJson?.choices?.[0]?.message?.content || ''
     let parsed: any
     try {

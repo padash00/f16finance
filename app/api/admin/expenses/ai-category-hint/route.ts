@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
+import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -55,6 +57,10 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const ip = getClientIp(req)
+    const rl = checkRateLimit(`ai-expense-category-hint:${access.user?.id || ip}`, 30, 60_000)
+    if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
 
     const canUse = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
     if (!canUse) return json({ error: 'forbidden' }, 403)
@@ -131,12 +137,26 @@ export async function POST(req: Request) {
     })
     const openaiJson = await openaiRes.json().catch(() => null)
     if (!openaiRes.ok || openaiJson?.error) {
+      await logAiUsageSafe(access.supabase, {
+        userId: access.user?.id || null,
+        endpoint: '/api/admin/expenses/ai-category-hint',
+        model,
+        status: 'error',
+        error: openaiJson?.error?.message || `OpenAI error (${openaiRes.status})`,
+      })
       return json({ error: openaiJson?.error?.message || `OpenAI error (${openaiRes.status})` }, 500)
     }
 
     const rawText = String(openaiJson?.choices?.[0]?.message?.content || '').trim()
     const parsed = parseHintPayload(rawText)
     if (!parsed) return json({ error: 'ИИ вернул некорректный формат подсказки.' }, 500)
+
+    await logAiUsageSafe(access.supabase, {
+      userId: access.user?.id || null,
+      endpoint: '/api/admin/expenses/ai-category-hint',
+      model,
+      usage: openaiJson?.usage,
+    })
 
     const validNames = new Set(categories.map((c) => c.name.toLowerCase()))
     const recommended = categories.find((c) => c.name.toLowerCase() === parsed.recommended_category.toLowerCase())?.name || ''
