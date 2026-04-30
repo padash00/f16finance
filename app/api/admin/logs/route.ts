@@ -160,17 +160,37 @@ function compact(parts: Array<string | null | undefined>) {
   return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ')
 }
 
-function renderValue(value: unknown): string {
+const MONEY_DETAIL_LABELS = new Set(['Наличные', 'Kaspi', 'Online', 'Карта', 'Итого', 'Сумма', 'Цена за единицу', 'Стоимость', 'Старт кассы', 'Монеты', 'Долги', 'Wipon', 'Расхождение'])
+
+const VALUE_LABELS: Record<string, string> = {
+  success: 'успешно',
+  sent: 'отправлено',
+  delivered: 'доставлено',
+  failed: 'ошибка',
+  error: 'ошибка',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  ai: 'ИИ',
+  'client-navigation': 'переход по сайту',
+  'react-error-boundary': 'ошибка React-интерфейса',
+  'unhandledrejection': 'необработанная ошибка браузера',
+}
+
+function renderValue(value: unknown, label?: string): string {
   if (value == null || value === '') return ''
-  if (typeof value === 'number') return money(value) || String(value)
+  if (typeof value === 'number') {
+    if (label && MONEY_DETAIL_LABELS.has(label)) return money(value) || '0 ₸'
+    return value.toLocaleString('ru-RU', { maximumFractionDigits: 3 })
+  }
   if (typeof value === 'boolean') return value ? 'да' : 'нет'
-  if (Array.isArray(value)) return value.map(renderValue).filter(Boolean).join(', ')
+  if (Array.isArray(value)) return value.map((item) => renderValue(item, label)).filter(Boolean).join(', ')
   if (typeof value === 'object') return ''
-  return String(value).trim()
+  const raw = String(value).trim()
+  return VALUE_LABELS[raw.toLowerCase()] || raw
 }
 
 function addDetail(parts: string[], label: string, value: unknown) {
-  const rendered = renderValue(value)
+  const rendered = renderValue(value, label)
   if (rendered) parts.push(`${label}: ${rendered}`)
 }
 
@@ -205,6 +225,14 @@ const FIELD_LABELS: Record<string, string> = {
   reason: 'Причина',
   message: 'Сообщение',
   source: 'Источник',
+  endpoint: 'Раздел',
+  provider: 'Сервис',
+  model: 'Модель',
+  status: 'Статус',
+  total_tokens: 'Токены всего',
+  prompt_tokens: 'Токены запроса',
+  completion_tokens: 'Токены ответа',
+  cost_estimate: 'Стоимость',
   point_mode: 'Режим точки',
   low_stock_threshold: 'Минимальный остаток',
 }
@@ -228,9 +256,10 @@ function describeChanges(previous: Record<string, unknown>, next: Record<string,
 
   for (const key of keys) {
     if (normalizeForCompare(previous[key]) === normalizeForCompare(next[key])) continue
-    const before = renderValue(previous[key]) || 'пусто'
-    const after = renderValue(next[key]) || 'пусто'
-    rows.push(`${fieldLabel(key)}: было "${before}", стало "${after}"`)
+    const label = fieldLabel(key)
+    const before = renderValue(previous[key], label) || 'пусто'
+    const after = renderValue(next[key], label) || 'пусто'
+    rows.push(`${label}: было "${before}", стало "${after}"`)
   }
 
   return rows
@@ -241,7 +270,7 @@ function addScalarDetails(rows: string[], source: Record<string, unknown>) {
   for (const [key, value] of Object.entries(source)) {
     if (ignored.has(key) || key.endsWith('_id') || key.endsWith('_ids')) continue
     if (rows.some((row) => row.startsWith(`${fieldLabel(key)}:`))) continue
-    const rendered = renderValue(value)
+    const rendered = renderValue(value, fieldLabel(key))
     if (rendered) rows.push(`${fieldLabel(key)}: ${rendered}`)
   }
 }
@@ -303,17 +332,17 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
   }
 
   if (item.kind === 'ai' || et === 'ai-usage') {
-    addDetail(details, 'Endpoint', p.endpoint)
-    addDetail(details, 'Провайдер', p.provider)
+    addDetail(details, 'Раздел', p.endpoint)
+    addDetail(details, 'Сервис', p.provider)
     addDetail(details, 'Модель', p.model)
     addDetail(details, 'Статус', p.status)
     addDetail(details, 'Токены всего', p.total_tokens)
     addDetail(details, 'Стоимость', p.cost_estimate)
     addDetail(details, 'Ошибка', p.error)
-    const statusLabel = text(p.status) === 'error' ? 'ошибка AI' : 'AI запрос выполнен'
+    const statusLabel = text(p.status) === 'error' ? 'ошибка ИИ' : 'ИИ-запрос выполнен'
     return {
       title: `${who}: ${statusLabel} ${text(p.endpoint) || ''}`.trim(),
-      subtitle: compact([text(p.provider), text(p.model)]),
+      subtitle: compact([renderValue(p.provider), text(p.model)]),
       details: compact(details),
       detailRows: details,
     }
@@ -420,7 +449,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     const page = text(p.pathname || p.path || p.page || p.url || item.subtitle)
     const source = text(p.source)
     const rows = [`Страница: ${page || 'не указана'}`]
-    if (source) rows.push(`Источник: ${source}`)
+    if (source) rows.push(`Источник: ${renderValue(source)}`)
     return { title: `${who} открыл страницу ${page || ''}`.trim(), subtitle: page || item.subtitle, details: rows.join(' · '), detailRows: rows }
   }
 

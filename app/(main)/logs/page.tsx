@@ -54,6 +54,37 @@ const fmtDate = (d: unknown) => {
   try { return new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) } catch { return String(d) }
 }
 
+const VALUE_LABELS: Record<string, string> = {
+  success: 'успешно',
+  sent: 'отправлено',
+  delivered: 'доставлено',
+  failed: 'ошибка',
+  error: 'ошибка',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  ai: 'ИИ',
+  'client-navigation': 'переход по сайту',
+  'react-error-boundary': 'ошибка React-интерфейса',
+  'unhandledrejection': 'необработанная ошибка браузера',
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  telegram: 'Telegram',
+  email: 'Email',
+  ai: 'ИИ',
+}
+
+function humanValue(value: unknown): string {
+  if (value == null || value === '') return ''
+  const raw = String(value).trim()
+  return VALUE_LABELS[raw.toLowerCase()] || raw
+}
+
+function humanDetailRow(row: string) {
+  const [label, ...rest] = row.split(': ')
+  return { label, value: humanValue(rest.join(': ')) }
+}
+
 const ENTITY_LABELS: Record<string, string> = {
   income: 'Доход',
   expense: 'Расход',
@@ -68,7 +99,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'auth-attempt': 'Вход в систему',
   'auth-session': 'Сессия',
   'system-error': 'Ошибка системы',
-  'ai-usage': 'AI запрос',
+  'ai-usage': 'ИИ-запрос',
   'task': 'Задача',
   'shift': 'Смена',
   'operator-company-assignment': 'Назначение в компанию',
@@ -145,8 +176,8 @@ function humanTitle(item: LogItem): string {
     const endpoint = String(p.endpoint || item.subtitle || '')
     const status = String(p.status || item.status || '')
     return status === 'error'
-      ? `${who}: ошибка AI в ${endpoint}`
-      : `${who}: AI запрос выполнен ${endpoint}`
+      ? `${who}: ошибка ИИ в ${endpoint}`
+      : `${who}: ИИ-запрос выполнен ${endpoint}`
   }
 
   if (et === 'income') {
@@ -345,11 +376,11 @@ function PayloadRows({ item }: { item: LogItem }) {
   }
 
   if (et === 'ai-usage') {
-    add('Endpoint', p.endpoint || item.subtitle)
-    add('Провайдер', p.provider || item.channel)
+    add('Раздел', p.endpoint || item.subtitle)
+    add('Сервис', humanValue(p.provider || item.channel))
     add('Модель', p.model)
-    add('Статус', p.status || item.status)
-    add('Токены', p.total_tokens)
+    add('Статус', humanValue(p.status || item.status))
+    add('Токены', typeof p.total_tokens === 'number' ? p.total_tokens.toLocaleString('ru-RU') : p.total_tokens)
     add('Стоимость', p.cost_estimate)
     add('Ошибка', p.error)
   }
@@ -657,7 +688,7 @@ export default function LogsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Kind badge */}
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isNotif ? 'bg-emerald-500/10 text-emerald-400' : item.kind === 'ai' ? 'bg-violet-500/10 text-violet-300' : 'bg-sky-500/10 text-sky-400'}`}>
-                        {isNotif ? 'уведомление' : item.kind === 'ai' ? 'AI' : 'аудит'}
+                        {isNotif ? 'уведомление' : item.kind === 'ai' ? 'ИИ' : 'аудит'}
                       </span>
 
                       {/* Action badge */}
@@ -686,8 +717,7 @@ export default function LogsPage() {
                     {item.detailRows?.length ? (
                       <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
                         {item.detailRows.map((row, index) => {
-                          const [label, ...rest] = row.split(': ')
-                          const value = rest.join(': ')
+                          const { label, value } = humanDetailRow(row)
                           return (
                             <div key={`${item.id}:${index}`} className="rounded-md border border-white/8 bg-white/[0.03] px-2.5 py-1.5 text-xs">
                               {value ? (
@@ -714,7 +744,7 @@ export default function LogsPage() {
                       {item.actorEmail && <span>👤 {item.actorEmail}</span>}
                       <span>🕐 {new Date(item.createdAt).toLocaleString('ru-RU')}</span>
                       {item.recipient && <span>→ {item.recipient}</span>}
-                      {item.channel && <span>via {item.channel}</span>}
+                      {item.channel && <span>Канал: {CHANNEL_LABELS[item.channel] || humanValue(item.channel)}</span>}
                     </div>
                   </div>
                 </div>
