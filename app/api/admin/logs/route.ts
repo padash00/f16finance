@@ -226,6 +226,7 @@ function recipientLabel(item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
 function renderValue(value: unknown, label?: string): string {
   if (value == null || value === '') return ''
   if (typeof value === 'number') {
+    if (label === 'Цена за единицу') return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 4 })} ₸`
     if (label && MONEY_DETAIL_LABELS.has(label)) return money(value) || '0 ₸'
     return value.toLocaleString('ru-RU', { maximumFractionDigits: 3 })
   }
@@ -280,6 +281,19 @@ const FIELD_LABELS: Record<string, string> = {
   prompt_tokens: 'Токены запроса',
   completion_tokens: 'Токены ответа',
   cost_estimate: 'Стоимость',
+  supplier_name: 'Поставщик',
+  supplier_organization_name: 'Организация поставщика',
+  supplier_bin_iin: 'БИН/ИИН поставщика',
+  invoice_number: 'Накладная',
+  received_at: 'Дата приемки',
+  location_name: 'Склад/точка',
+  location_type: 'Тип локации',
+  item_count: 'Позиций',
+  payment_mode: 'Способ оплаты',
+  payment_method: 'Метод оплаты',
+  supplier_debt_status: 'Статус долга поставщика',
+  due_date: 'Срок оплаты',
+  is_consignment: 'Реализация',
   point_mode: 'Режим точки',
   low_stock_threshold: 'Минимальный остаток',
 }
@@ -445,6 +459,41 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Wipon', meta.wipon)
     addDetail(details, 'Расхождение', meta.diff)
     return { title: `${who} добавил отчет смены ${money(p.total_amount)}`, subtitle: text(p.point_device_name) || text(p.company_code) || item.subtitle, details: compact(details), detailRows: details }
+  }
+
+  if (et === 'inventory-receipt') {
+    addDetail(details, 'Поставщик', p.supplier_name || p.supplier_organization_name)
+    addDetail(details, 'Организация поставщика', p.supplier_organization_name)
+    addDetail(details, 'БИН/ИИН поставщика', p.supplier_bin_iin)
+    addDetail(details, 'Накладная', p.invoice_number)
+    addDetail(details, 'Дата приемки', dateLabel(p.received_at))
+    addDetail(details, 'Склад/точка', p.location_name || p.company_name)
+    addDetail(details, 'Позиций', p.item_count)
+    addDetail(details, 'Итого', p.total_amount)
+    addDetail(details, 'Оплата', p.payment_mode === 'deferred' ? 'отсрочка' : 'оплачено сразу')
+    addDetail(details, 'Метод оплаты', p.payment_method === 'kaspi' ? 'Kaspi' : p.payment_method === 'cash' ? 'наличные' : p.payment_method)
+    addDetail(details, 'Долг поставщика', p.supplier_debt_status === 'open' ? 'открыт' : p.supplier_debt_status === 'paid' ? 'закрыт' : p.supplier_debt_status)
+    addDetail(details, 'Срок оплаты', dateLabel(p.due_date))
+    addDetail(details, 'Категория расхода', p.auto_expense_category_name)
+    const preview = Array.isArray(p.items_preview)
+      ? p.items_preview
+        .map((item) => record(item))
+        .map((item) => {
+          const name = text(item.invoice_name) || text(item.item_name) || 'товар'
+          const qty = renderValue(item.quantity)
+          const cost = renderValue(item.unit_cost, 'Цена за единицу')
+          return `${name}${qty ? ` x ${qty}` : ''}${cost ? ` по ${cost}` : ''}`
+        })
+        .filter(Boolean)
+        .slice(0, 5)
+      : []
+    if (preview.length) details.push(`Товары: ${preview.join('; ')}`)
+    return {
+      title: `${who} провел приемку ${money(p.total_amount) || ''}`.trim(),
+      subtitle: compact([text(p.supplier_name || p.supplier_organization_name), text(p.invoice_number)]),
+      details: compact(details),
+      detailRows: details,
+    }
   }
 
   if (et === 'point-device') {

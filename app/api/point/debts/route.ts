@@ -498,6 +498,7 @@ export async function POST(request: Request) {
             payload: {
               kind: 'point-debt-notify',
               operator_id: operator.id,
+              operator_name: operator.short_name || operator.name || clientName,
               point_device_id: device.id,
               point_device_name: device.name,
               company_id: device.company_id,
@@ -516,7 +517,15 @@ export async function POST(request: Request) {
             payload: {
               kind: 'point-debt-notify',
               operator_id: operator.id,
+              operator_name: operator.short_name || operator.name || clientName,
               point_device_id: device.id,
+              point_device_name: device.name,
+              company_id: device.company_id,
+              company_name: device.company?.name || null,
+              item_name: itemName,
+              quantity,
+              total_amount: totalAmount,
+              week_start: weekStart,
               error: notificationError?.message || 'telegram-send-failed',
             },
           })
@@ -559,7 +568,7 @@ export async function POST(request: Request) {
               point_device_name: device.name,
               company_id: device.company_id,
               company_name: device.company?.name || null,
-              client_name: safeName,
+              client_name: (staffName || clientName || 'Сотрудник').trim(),
               item_name: itemName,
               quantity,
               total_amount: totalAmount,
@@ -574,6 +583,14 @@ export async function POST(request: Request) {
             payload: {
               kind: 'point-debt-notify-staff',
               point_device_id: device.id,
+              point_device_name: device.name,
+              company_id: device.company_id,
+              company_name: device.company?.name || null,
+              client_name: (staffName || clientName || 'Сотрудник').trim(),
+              item_name: itemName,
+              quantity,
+              total_amount: totalAmount,
+              week_start: weekStart,
               error: notificationError?.message || 'telegram-send-failed',
             },
           })

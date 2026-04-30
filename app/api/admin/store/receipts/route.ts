@@ -374,7 +374,7 @@ export async function POST(request: Request) {
 
     const { data: locationRow, error: locationError } = await supabase
       .from('inventory_locations')
-      .select('id, company_id')
+      .select('id, name, location_type, company_id, company:company_id(name, code)')
       .eq('id', String(body.payload.location_id || '').trim())
       .maybeSingle()
     if (locationError) throw locationError
@@ -382,6 +382,13 @@ export async function POST(request: Request) {
     if (!companyId) {
       return json({ error: 'Для автодобавления расхода нужна локация с привязкой к точке (company_id)' }, 400)
     }
+
+    const { data: supplierRow, error: supplierError } = await supabase
+      .from('inventory_suppliers')
+      .select('id, name, organization_name, bin_iin')
+      .eq('id', supplierId)
+      .maybeSingle()
+    if (supplierError) throw supplierError
 
     const autoExpenseCommentParts = [
       `Авто из приемки №${invoiceNumber || receiptId}`,
@@ -558,8 +565,37 @@ export async function POST(request: Request) {
       action: 'create',
       payload: {
         ...result,
+        receipt_id: receiptId,
+        invoice_number: invoiceNumber || null,
+        received_at: body.payload.received_at,
+        supplier_id: supplierId,
+        supplier_name: supplierRow?.name || supplierCreate?.name || null,
+        supplier_organization_name: supplierRow?.organization_name || supplierCreate?.organization_name || null,
+        supplier_bin_iin: supplierRow?.bin_iin || supplierCreate?.bin_iin || null,
+        location_id: locationId,
+        location_name: locationRow?.name || null,
+        location_type: locationRow?.location_type || null,
+        company_id: companyId,
+        company_name: (locationRow?.company as any)?.name || (locationRow?.company as any)?.code || null,
+        item_count: Array.isArray(body.payload.items) ? body.payload.items.length : 0,
+        items_preview: Array.isArray(body.payload.items)
+          ? body.payload.items.slice(0, 8).map((item) => ({
+              invoice_name: item.invoice_name || null,
+              item_id: item.item_id,
+              quantity: normalizeQty(item.quantity),
+              unit_cost: normalizeUnitCost(item.unit_cost),
+              sale_price: item.sale_price != null ? normalizeMoney(item.sale_price) : null,
+            }))
+          : [],
+        payment_mode: paymentMode,
+        payment_method: paymentMethod,
+        supplier_debt_status: paymentMode === 'now' ? 'paid' : 'open',
+        due_date: dueDate,
+        is_consignment: isConsignment,
+        auto_expense_id: createdExpenseId,
         auto_expense: true,
         auto_expense_category_id: expenseCategoryId,
+        auto_expense_category_name: expenseCategory.name || null,
         update_sale_price: true,
       },
     })
