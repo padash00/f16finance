@@ -27,6 +27,7 @@ const errorMessages: Record<string, string> = {
   'operator-inactive': 'Учётная запись оператора отключена. Обратитесь к руководителю.',
   'operator-not-assigned-to-device-point': 'Оператор не прикреплён к этой точке.',
   'operator-not-assigned-to-any-point': 'Оператор не прикреплён ни к одной точке.',
+  'operator-not-scheduled-today': 'Вы не назначены на сегодня по графику. Обратитесь к руководителю.',
   'super-admin-only': 'Требуется вход супер-администратора.',
 }
 

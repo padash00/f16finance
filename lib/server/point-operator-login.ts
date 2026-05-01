@@ -96,6 +96,43 @@ export async function resolvePointOperatorLoginForDevice(params: {
     return { ok: false, error: 'operator-not-assigned-to-any-point', status: 403 }
   }
 
+  // Schedule enforcement: when this week's schedule is published AND at least one
+  // shift slot already has operator_id set, only allow the scheduled operator to log in.
+  const deviceCompanyIds = Array.from(projectCompanyIds)
+  if (deviceCompanyIds.length > 0) {
+    const nowKZ = new Date(Date.now() + 5 * 3600_000)
+    const todayKZ = `${nowKZ.getUTCFullYear()}-${String(nowKZ.getUTCMonth() + 1).padStart(2, '0')}-${String(nowKZ.getUTCDate()).padStart(2, '0')}`
+
+    const { data: publications } = await supabase
+      .from('shift_week_publications')
+      .select('id, company_id')
+      .in('company_id', deviceCompanyIds)
+      .lte('week_start', todayKZ)
+      .gte('week_end', todayKZ)
+
+    if (publications && publications.length > 0) {
+      const publishedCompanyIds = (publications as Array<{ company_id: string }>).map((p) => p.company_id)
+
+      // Only enforce when shifts already have operator_id populated (new data).
+      // If operator_id is still null on all shifts (legacy rows) we skip to stay backward-compatible.
+      const { data: todayShifts } = await supabase
+        .from('shifts')
+        .select('id, operator_id')
+        .in('company_id', publishedCompanyIds)
+        .eq('date', todayKZ)
+        .not('operator_id', 'is', null)
+
+      if (todayShifts && todayShifts.length > 0) {
+        const isScheduled = (todayShifts as Array<{ operator_id: string }>).some(
+          (s) => s.operator_id === operatorAuth.operator_id,
+        )
+        if (!isScheduled) {
+          return { ok: false, error: 'operator-not-scheduled-today', status: 403 }
+        }
+      }
+    }
+  }
+
   /** Основная точка среди всех назначений оператора (не только в этом проекте). */
   const globalPrimaryCompanyId = (assignments.find((a: any) => a.is_primary === true) as { company_id?: string } | undefined)
     ?.company_id

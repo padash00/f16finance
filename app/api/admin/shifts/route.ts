@@ -356,11 +356,17 @@ async function upsertShift(
 
   await ensureNoOperatorConflict(supabase, payload, ignoredShiftIds)
 
+  const resolvedOp = trimmedName
+    ? await findOperatorForShiftName(supabase, trimmedName, companyId)
+    : null
+  const resolvedOperatorId = resolvedOp?.id || null
+
   if (shiftId && trimmedName) {
     const { error } = await supabase
       .from('shifts')
       .update({
         operator_name: trimmedName,
+        operator_id: resolvedOperatorId,
         comment: comment?.trim() || null,
       })
       .eq('id', shiftId)
@@ -377,20 +383,22 @@ async function upsertShift(
     const { error } = await supabase
       .from('shifts')
       .update({
-          operator_name: trimmedName,
-          comment: comment?.trim() || null,
-        })
-        .eq('id', existingForSlot.id)
+        operator_name: trimmedName,
+        operator_id: resolvedOperatorId,
+        comment: comment?.trim() || null,
+      })
+      .eq('id', existingForSlot.id)
 
-      if (error) throw error
-      return { ok: true, mode: 'updated-existing' as const }
-    }
+    if (error) throw error
+    return { ok: true, mode: 'updated-existing' as const }
+  }
 
   const { error } = await supabase.from('shifts').insert({
     company_id: companyId,
     date,
     shift_type: shiftType,
     operator_name: trimmedName,
+    operator_id: resolvedOperatorId,
     cash_amount: 0,
     kaspi_amount: 0,
     card_amount: 0,
