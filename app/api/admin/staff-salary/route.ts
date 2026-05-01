@@ -417,7 +417,11 @@ export async function POST(req: Request) {
       }
 
       // Get staff name for expense comment
-      const { data: staffMember } = await supabase.from('staff').select('full_name').eq('id', staff_id).single()
+      const { data: staffMember } = await supabase
+        .from('staff')
+        .select('full_name, monthly_salary')
+        .eq('id', staff_id)
+        .single()
       const slotLabel = normalizedSlot === 'first' ? '1–15' : normalizedSlot === 'second' ? '16–конец месяца' : ''
       const payDate = new Date(pay_date)
       const monthLabel = payDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -471,13 +475,13 @@ export async function POST(req: Request) {
       // 3. Mark active adjustments since previous payout up to current payout date as paid.
       const { data: candidateAdjustments, error: adjFetchError } = await supabase
         .from('staff_adjustments')
-        .select('id, date, created_at')
+        .select('id, kind, amount, date, created_at')
         .eq('staff_id', staff_id)
         .eq('status', 'active')
         .lte('date', pay_date)
       if (adjFetchError) throw adjFetchError
 
-      const idsToClose = (candidateAdjustments || [])
+      const adjustmentsToClose = (candidateAdjustments || [])
         .filter((row: any) => {
           if (!previousPayDate) return true
           const rowDate = String(row?.date || '')
@@ -489,6 +493,7 @@ export async function POST(req: Request) {
           if (!rowCreatedAt && previousPayCreatedAt) return false
           return false
         })
+      const idsToClose = adjustmentsToClose
         .map((row: any) => String(row.id))
 
       if (idsToClose.length > 0) {
@@ -499,8 +504,75 @@ export async function POST(req: Request) {
         if (adjPayError) throw adjPayError
       }
 
-      await writeAuditLog(supabase, { entityType: 'staff-payment', entityId: String(payment.id), action: 'create', payload: { staff_id, total, pay_date, slot, expense_id: expenseId } })
-      return json({ ok: true, payment, expense_id: expenseId })
+      const halfSalary = Math.round(Number(staffMember?.monthly_salary || 0) / 2)
+      const adjustmentTotals = adjustmentsToClose.reduce(
+        (acc, row: any) => {
+          const kind = String(row?.kind || '')
+          const amount = Math.round(Number(row?.amount || 0))
+          if (kind === 'bonus') acc.bonuses += amount
+          if (kind === 'debt') acc.debts += amount
+          if (kind === 'fine') acc.fines += amount
+          if (kind === 'advance') acc.advances += amount
+          return acc
+        },
+        { bonuses: 0, debts: 0, fines: 0, advances: 0 },
+      )
+      const calculatedToPay =
+        halfSalary +
+        adjustmentTotals.bonuses -
+        adjustmentTotals.debts -
+        adjustmentTotals.fines -
+        adjustmentTotals.advances
+      const overpaymentAmount = Math.max(0, total - calculatedToPay)
+      let overpaymentAdjustmentId: string | null = null
+
+      if (overpaymentAmount > 0) {
+        const { data: overpaymentAdjustment, error: overpaymentError } = await supabase
+          .from('staff_adjustments')
+          .insert({
+            staff_id,
+            kind: 'advance',
+            amount: overpaymentAmount,
+            date: pay_date,
+            comment: `Переплата по выплате ${pay_date}: выдано ${total.toLocaleString('ru-RU')} ₸, по расчету ${calculatedToPay.toLocaleString('ru-RU')} ₸`,
+            status: 'active',
+          })
+          .select('id')
+          .single()
+        if (overpaymentError) throw overpaymentError
+        overpaymentAdjustmentId = String(overpaymentAdjustment.id)
+
+        await writeAuditLog(supabase, {
+          entityType: 'staff-adjustment',
+          entityId: overpaymentAdjustmentId,
+          action: 'create',
+          payload: {
+            staff_id,
+            kind: 'advance',
+            amount: overpaymentAmount,
+            date: pay_date,
+            source: 'salary_overpayment',
+            payment_id: payment.id,
+          },
+        })
+      }
+
+      await writeAuditLog(supabase, {
+        entityType: 'staff-payment',
+        entityId: String(payment.id),
+        action: 'create',
+        payload: {
+          staff_id,
+          total,
+          calculated_to_pay: calculatedToPay,
+          overpayment_amount: overpaymentAmount,
+          overpayment_adjustment_id: overpaymentAdjustmentId,
+          pay_date,
+          slot,
+          expense_id: expenseId,
+        },
+      })
+      return json({ ok: true, payment, expense_id: expenseId, overpayment_adjustment_id: overpaymentAdjustmentId })
     }
 
     // ── Delete payment ──────────────────────────────────────────────────────
