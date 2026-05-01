@@ -963,6 +963,56 @@ export async function notifyArena5min(
   ).catch(() => null)
 }
 
+// ─── Point Shift Open / Close ─────────────────────────────────────────────────
+
+export type OpenShiftInfo = {
+  id: string
+  opened_at: string | null
+  shift_type: string
+}
+
+export async function openPointShift(
+  config: AppConfig,
+  operatorId: string | null,
+  shiftType: 'day' | 'night',
+  companyId?: string | null,
+): Promise<OpenShiftInfo | null> {
+  try {
+    const data = await request<{ shift_id: string }>(
+      config,
+      'POST',
+      '/api/point/shift/open',
+      { operator_id: operatorId, shift_type: shiftType },
+      companyHeader(companyId),
+    )
+    return { id: data.shift_id, opened_at: new Date().toISOString(), shift_type: shiftType }
+  } catch (err: unknown) {
+    const payload = (err as any)?.payload
+    if ((err as any)?.status === 409 && payload?.shift) {
+      return {
+        id: payload.shift.id,
+        opened_at: payload.shift.opened_at ?? null,
+        shift_type: payload.shift.shift_type || shiftType,
+      }
+    }
+    return null
+  }
+}
+
+export async function closePointShift(
+  config: AppConfig,
+  data: {
+    closing_cash?: number
+    closing_kaspi?: number
+    kaspi_before_midnight?: number
+    kaspi_after_midnight?: number
+    closed_by?: string | null
+  },
+  companyId?: string | null,
+): Promise<void> {
+  await request(config, 'POST', '/api/point/shift/close', data, companyHeader(companyId)).catch(() => null)
+}
+
 export async function createPointInventoryReturn(
   config: AppConfig,
   session: OperatorSession,

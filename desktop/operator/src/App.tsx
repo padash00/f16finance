@@ -3,6 +3,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { loadConfig, saveConfig } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
+import type { OpenShiftInfo } from '@/lib/api'
+import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastInfo } from '@/lib/toast'
 import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState } from '@/types'
 
@@ -284,6 +286,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [isOffline, setIsOffline] = useState(false)
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null)
+  const [openShift, setOpenShift] = useState<OpenShiftInfo | null>(null)
   const seenTaskIdsRef = useRef<Set<string> | null>(null)
   const latestViewRef = useRef<AppView>({ screen: 'booting' })
   const bootstrapNonce = useRef(0)
@@ -514,6 +517,14 @@ export default function App() {
     const updatedSession = { ...session, bootstrap }
     saveOperatorSession(updatedSession).catch(() => null)
 
+    // Auto-open shift on login — fire-and-forget, never blocks navigation
+    if (config && updatedSession.operator.operator_id) {
+      const { shift } = resolveRuntimeShift()
+      api.openPointShift(config, updatedSession.operator.operator_id, shift, updatedSession.company.id)
+        .then((info) => { if (info) setOpenShift(info) })
+        .catch(() => null)
+    }
+
     if (canUseScannerForSession(updatedSession)) {
       setView({ screen: 'scanner', bootstrap, session: updatedSession })
     } else {
@@ -568,6 +579,7 @@ export default function App() {
 
   // ─── Выход ────────────────────────────────────────────────────────────────
   async function handleLogout() {
+    setOpenShift(null)
     await clearOperatorSession().catch(() => null)
     showLogin(config)
   }
@@ -696,6 +708,7 @@ export default function App() {
         bootstrap={view.bootstrap}
         session={view.session}
         isOffline={isOffline}
+        openShift={openShift}
         onLogout={handleLogout}
         onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
         onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}

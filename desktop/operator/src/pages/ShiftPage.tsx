@@ -31,6 +31,7 @@ import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
 import { syncQueue, getPendingCount, queueShiftReport } from '@/lib/offline'
 import QueueViewer from '@/components/QueueViewer'
+import type { OpenShiftInfo } from '@/lib/api'
 import type {
   AppConfig,
   BootstrapData,
@@ -48,6 +49,7 @@ interface Props {
   bootstrap: BootstrapData
   session: OperatorSession
   isOffline?: boolean
+  openShift?: OpenShiftInfo | null
   onLogout: () => void
   onSwitchToSale?: () => void
   onSwitchToReturn?: () => void
@@ -124,6 +126,7 @@ export default function ShiftPage({
   bootstrap,
   session,
   isOffline,
+  openShift,
   onLogout,
   onSwitchToSale,
   onSwitchToReturn,
@@ -497,6 +500,16 @@ export default function ShiftPage({
       }
       const sendResult = await sendOne(fullForm)
       if (sendResult === 'success' || sendResult === 'queued') {
+        // Auto-close the point shift with financial totals for /shifts/reports
+        await api.closePointShift(config, {
+          closing_cash: parseMoney(fullForm.cash),
+          closing_kaspi: isNightKaspiSplit
+            ? parseMoney(fullForm.kaspi_before_midnight) + parseMoney(fullForm.kaspi_pos)
+            : parseMoney(fullForm.kaspi_pos),
+          kaspi_before_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_before_midnight) : 0,
+          kaspi_after_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_pos) : 0,
+          closed_by: session.operator.operator_id || null,
+        }, session.company.id)
         resetForm()
         onLogout()
       } else {
@@ -612,6 +625,12 @@ export default function ShiftPage({
             <Badge variant="destructive" className="cursor-pointer gap-1" onClick={() => setDraftLost(false)}>
               <AlertTriangle className="h-3 w-3" />
               Черновик повреждён, данные сброшены
+            </Badge>
+          ) : null}
+          {openShift?.opened_at ? (
+            <Badge variant="secondary" className="gap-1 text-emerald-500 border-emerald-500/20 bg-emerald-500/10">
+              <Clock className="h-3 w-3" />
+              {`с ${new Date(openShift.opened_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
             </Badge>
           ) : null}
           {isOffline ? (
