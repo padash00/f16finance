@@ -79,6 +79,14 @@ function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
   return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
 }
 
+function getStaffPaymentAdjustmentPeriod(payDate: string, slot: 'first' | 'second') {
+  const slotRange = getSalarySlotRange(payDate, slot)
+  if (!slotRange) return null
+  const payDateValue = String(payDate || '')
+  const cutoff = /^\d{4}-\d{2}-\d{2}$/.test(payDateValue) ? payDateValue : slotRange.to
+  return { from: slotRange.from, to: cutoff }
+}
+
 function monthPrefixFromIsoDate(isoDate: string) {
   return isoDate.slice(0, 7)
 }
@@ -106,8 +114,7 @@ function filterStaffAdjustmentsForSlot(
   return adjs.filter((a) => {
     if (a.staff_id !== staffId || a.status !== 'active') return false
     if (!period) return true
-    if (a.date < period.from) return false
-    if (a.date > period.to) return false
+    if (a.date > periodEnd) return false
     if (!lastPayment) return true
     const lastPayDate = String(lastPayment.pay_date || '')
     if (a.date < lastPayDate) return false
@@ -492,7 +499,7 @@ export default function SalaryPage() {
   const currentStaffSalaryMonthPrefix = useMemo(() => monthPrefixFromIsoDate(todayISO()), [])
   const staffPayPreview = useMemo(() => {
     if (!staffPayModal || !staffSalary) return null
-    const period = getSalarySlotRange(staffPayDate, staffPaySlot)
+    const period = getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot)
     const closingAdjustments = filterStaffAdjustmentsForSlot(
       staffSalary.adjustments,
       staffPayModal.id,
@@ -1674,7 +1681,7 @@ export default function SalaryPage() {
       ) : null}
 
       {staffPayModal ? (
-        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], staffSalary?.payments || [], getSalarySlotRange(staffPayDate, staffPaySlot)).toPay)}`} onClose={() => setStaffPayModal(null)}>
+        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], staffSalary?.payments || [], getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot)).toPay)}`} onClose={() => setStaffPayModal(null)}>
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
