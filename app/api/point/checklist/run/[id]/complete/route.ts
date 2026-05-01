@@ -94,7 +94,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if ((item.requires_photo || item.answer_type === 'photo') && !response.photo_data_url) {
         return true
       }
-      if (item.answer_type === 'boolean') return item.is_required && typeof response.passed !== 'boolean'
+      if (item.answer_type === 'boolean') {
+        const hasBooleanAnswer = typeof response.passed === 'boolean' || typeof response.value === 'boolean'
+        return item.is_required && !hasBooleanAnswer
+      }
       return item.is_required && String(response.value ?? response.note ?? '').trim().length === 0
     })
 
@@ -146,7 +149,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const passed = r?.passed === true || r?.value === true
       const fine = Number(item.fine_amount || 0)
       const bonus = Number(item.bonus_amount || 0)
-      if (!passed && item.is_required && fine > 0) {
+      const photoUrls = typeof r?.photo_data_url === 'string' && r.photo_data_url.trim()
+        ? [r.photo_data_url]
+        : []
+      const failedResponse = r?.passed === false || r?.value === false
+      const isProblem = failedResponse && item.is_required
+      const shouldCreateProblemIncident =
+        isProblem && (fine > 0 || item.severity === 'warning' || item.severity === 'critical')
+      if (shouldCreateProblemIncident) {
         incidents.push({
           kind: 'violation',
           title: item.title || 'Нарушение чек-листа',
@@ -156,6 +166,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           severity: item.severity || 'normal',
           checklist_item_id: item.id,
           knowledge_article_id: item.knowledge_article_id || null,
+          photo_urls: photoUrls,
         })
       }
       if (passed && bonus > 0) {
@@ -168,6 +179,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           severity: item.severity || 'normal',
           checklist_item_id: item.id,
           knowledge_article_id: item.knowledge_article_id || null,
+          photo_urls: photoUrls,
         })
       }
     }
@@ -185,7 +197,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         p_severity: inc.severity,
         p_fine_amount: inc.fine,
         p_bonus_amount: inc.bonus,
-        p_photo_urls: [],
+        p_photo_urls: inc.photo_urls || [],
         p_shift_id: (shift as any).id,
         p_source: 'checklist',
         p_checklist_run_id: id,

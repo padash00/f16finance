@@ -17,7 +17,6 @@ import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import * as api from '@/lib/api'
 import { formatDate, formatMoney, todayISO } from '@/lib/utils'
 import type {
@@ -107,6 +106,24 @@ function SectionError({ message }: { message?: string }) {
   )
 }
 
+function normalizeShiftRows(rows: unknown[], fallbackCompanyName: string): ShiftRow[] {
+  return (rows || []).map((row: any) => {
+    const cash = Number(row.cash_amount ?? row.cash ?? 0)
+    const kaspi = Number(row.kaspi_amount ?? row.kaspi_pos ?? row.kaspi ?? 0)
+    const kaspiOnline = Number(row.online_amount ?? row.kaspi_online ?? 0)
+    return {
+      id: String(row.id),
+      date: String(row.date),
+      shift: String(row.shift || 'day'),
+      company_name: row.company_name || fallbackCompanyName,
+      cash,
+      kaspi,
+      kaspi_online: kaspiOnline,
+      total: Number(row.total ?? cash + kaspi + kaspiOnline),
+    }
+  })
+}
+
 export default function OperatorCabinetPage({
   config,
   bootstrap,
@@ -117,16 +134,10 @@ export default function OperatorCabinetPage({
 }: Props) {
   const CACHE_KEY = `cabinet_cache_${session.operator.operator_id}`
 
-  const [activeTab, setActiveTab] = useState<CabinetTab>('shifts')
+  const [activeTab, setActiveTab] = useState<CabinetTab>('knowledge')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState(false)
-
-  // Оплата долга (admin-only)
-  const [payDebtId, setPayDebtId] = useState<string | null>(null)
-  const [adminTokenInput, setAdminTokenInput] = useState('')
-  const [payDebtSaving, setPayDebtSaving] = useState(false)
-  const [payDebtError, setPayDebtError] = useState<string | null>(null)
   const [sectionErrors, setSectionErrors] = useState<Partial<Record<'shifts' | 'debts' | 'tasks' | 'knowledge', string>>>({})
   const [shifts, setShifts] = useState<ShiftRow[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
@@ -155,21 +166,7 @@ export default function OperatorCabinetPage({
     const nextErrors: Partial<Record<'shifts' | 'debts' | 'tasks' | 'knowledge', string>> = {}
 
     if (cabinetResult.status === 'fulfilled') {
-      const ownShifts = (cabinetResult.value.shifts || []).map((row: any) => {
-        const cash = Number(row.cash_amount || row.cash || 0)
-        const kaspi = Number(row.kaspi_amount || row.kaspi_pos || 0)
-        const kaspiOnline = Number(row.online_amount || row.kaspi_online || 0)
-        return {
-          id: String(row.id),
-          date: String(row.date),
-          shift: String(row.shift || 'day'),
-          company_name: row.company_name || session.company.name,
-          cash,
-          kaspi,
-          kaspi_online: kaspiOnline,
-          total: Number(row.total || cash + kaspi + kaspiOnline),
-        }
-      })
+      const ownShifts = normalizeShiftRows(cabinetResult.value.shifts || [], session.company.name)
       setShifts(ownShifts)
       setDebts(cabinetResult.value.debts || [])
       setIsOffline(false)
@@ -179,7 +176,7 @@ export default function OperatorCabinetPage({
         const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
           const { shifts: cs, debts: cd } = JSON.parse(cached)
-          setShifts(cs || [])
+          setShifts(normalizeShiftRows(cs || [], session.company.name))
           setDebts(cd || [])
           setIsOffline(true)
         } else {
@@ -216,7 +213,7 @@ export default function OperatorCabinetPage({
     if (cabinetResult.status === 'fulfilled' && tasksResult.status === 'fulfilled') {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({
-          shifts: cabinetResult.value.shifts || [],
+          shifts: normalizeShiftRows(cabinetResult.value.shifts || [], session.company.name),
           debts: cabinetResult.value.debts || [],
           tasks: tasksResult.value.tasks || [],
           savedAt: Date.now(),
@@ -235,30 +232,15 @@ export default function OperatorCabinetPage({
     void load()
   }, [])
 
-  async function handleMarkDebtPaid(debtId: string) {
-    const token = adminTokenInput.trim()
-    if (!token) { setPayDebtError('Введите токен администратора'); return }
-    setPayDebtSaving(true)
-    setPayDebtError(null)
-    try {
-      await api.markPointDebtPaid(config, session, debtId, token)
-      setPayDebtId(null)
-      setAdminTokenInput('')
-      void load()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Ошибка'
-      setPayDebtError(msg === 'admin-token-required' ? 'Неверный или истёкший токен' : msg)
-    } finally {
-      setPayDebtSaving(false)
-    }
-  }
-
   const filteredShifts = useMemo(
     () => shifts.filter((row) => row.date >= from && row.date <= to).sort((a, b) => b.date.localeCompare(a.date)),
     [from, shifts, to],
   )
   const filteredDebts = useMemo(
-    () => debts.filter((item) => item.created_at.slice(0, 10) >= from && item.created_at.slice(0, 10) <= to),
+    () => debts.filter((item) => {
+      const debtDate = item.week_start || item.created_at.slice(0, 10)
+      return debtDate >= from && debtDate <= to
+    }),
     [debts, from, to],
   )
 
@@ -334,10 +316,19 @@ export default function OperatorCabinetPage({
         <div className="flex items-center gap-2 no-drag">
           <WorkModeSwitch
             active="cabinet"
+            showSale={returnTo === 'sale'}
+            showReturn={returnTo === 'return'}
             showScanner={returnTo === 'scanner'}
             onShift={returnTo === 'shift' ? onBackToWork : undefined}
+            onSale={returnTo === 'sale' ? onBackToWork : undefined}
+            onReturn={returnTo === 'return' ? onBackToWork : undefined}
             onScanner={returnTo === 'scanner' ? onBackToWork : undefined}
           />
+          {returnTo === 'checklists' ? (
+            <Button variant="outline" size="sm" onClick={onBackToWork}>
+              К чек-листам
+            </Button>
+          ) : null}
           <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
@@ -574,6 +565,9 @@ export default function OperatorCabinetPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <SectionError message={sectionErrors.debts} />
+                  <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    Здесь только просмотр долгов. Оператор не закрывает долг вручную: удержание и погашение делает руководитель через зарплату/админку.
+                  </div>
                   {debtsByWeek.length === 0 ? (
                     <div className="text-sm text-muted-foreground">За выбранный период долгов нет.</div>
                   ) : (
@@ -605,41 +599,6 @@ export default function OperatorCabinetPage({
                             </Badge>
                           </div>
                         </div>
-                        {item.status === 'active' ? (
-                          payDebtId === item.id ? (
-                            <div className="space-y-2 border-t border-white/10 pt-3">
-                              <p className="text-xs text-muted-foreground">Токен администратора:</p>
-                              <Input
-                                type="password"
-                                value={adminTokenInput}
-                                onChange={e => setAdminTokenInput(e.target.value)}
-                                placeholder="Вставьте токен..."
-                                className="text-xs h-8"
-                                onKeyDown={e => e.key === 'Enter' && void handleMarkDebtPaid(item.id)}
-                                autoFocus
-                              />
-                              {payDebtError && <p className="text-xs text-destructive-foreground">{payDebtError}</p>}
-                              <div className="flex gap-2">
-                                <Button size="sm" variant="outline" className="flex-1 text-xs h-8" onClick={() => { setPayDebtId(null); setAdminTokenInput(''); setPayDebtError(null) }}>
-                                  Отмена
-                                </Button>
-                                <Button size="sm" className="flex-1 text-xs h-8 gap-1" onClick={() => void handleMarkDebtPaid(item.id)} disabled={payDebtSaving}>
-                                  {payDebtSaving ? <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" /> : <CheckCircle2 className="h-3 w-3" />}
-                                  Подтвердить
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full text-xs h-8 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
-                              onClick={() => { setPayDebtId(item.id); setAdminTokenInput(''); setPayDebtError(null) }}
-                            >
-                              <CheckCircle2 className="h-3 w-3 mr-1.5" /> Оплатил долг
-                            </Button>
-                          )
-                        ) : null}
                       </div>
                         ))}
                       </div>

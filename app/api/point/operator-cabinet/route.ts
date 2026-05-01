@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { requirePointDevice } from '@/lib/server/point-devices'
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { validateAdminToken } from '@/lib/server/admin-tokens'
-import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
-import { sendTelegramMessage } from '@/lib/telegram/send'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -169,84 +166,11 @@ export async function POST(request: Request) {
     const context = await requirePointOperator(request)
     if ('response' in context) return context.response
 
-    const { supabase, operator } = context
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'invalid-action' }, 400)
 
-    const token = String(body.token || '').trim()
-    if (!validateAdminToken(token)) return json({ error: 'admin-token-required' }, 403)
-
     if (body.action === 'markDebtPaid') {
-      // debtId здесь — это id из point_debt_items
-      const debtItemId = String(body.debtId || '').trim()
-      if (!debtItemId) return json({ error: 'debtId-required' }, 400)
-
-      const { data: item, error: fetchError } = await supabase
-        .from('point_debt_items')
-        .select('id, operator_id, total_amount, week_start, status, company_id, item_name')
-        .eq('id', debtItemId)
-        .eq('operator_id', String(operator.id))
-        .maybeSingle()
-
-      if (fetchError) throw fetchError
-      if (!item) return json({ error: 'debt-not-found' }, 404)
-      if (item.status !== 'active') return json({ ok: true, already: true })
-
-      const paidAt = new Date().toISOString()
-
-      // Убираем из сканера — инвентарь НЕ возвращаем (оплата деньгами, товар потреблён)
-      const { error: itemUpdateError } = await supabase
-        .from('point_debt_items')
-        .update({ status: 'deleted', deleted_at: paidAt })
-        .eq('id', debtItemId)
-
-      if (itemUpdateError) throw itemUpdateError
-
-      // Уменьшаем агрегат в debts
-      const { data: aggDebt } = await supabase
-        .from('debts')
-        .select('id, amount')
-        .eq('operator_id', String(operator.id))
-        .eq('week_start', item.week_start)
-        .eq('status', 'active')
-        .maybeSingle()
-
-      if (aggDebt) {
-        const nextAmount = Math.max(0, Number(aggDebt.amount || 0) - Number(item.total_amount || 0))
-        if (nextAmount <= 0) {
-          await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
-        } else {
-          await supabase.from('debts').update({ amount: nextAmount }).eq('id', aggDebt.id)
-        }
-      }
-
-      await writeAuditLog(supabase, {
-        entityType: 'point-debt-item',
-        entityId: debtItemId,
-        action: 'mark-paid',
-        payload: {
-          operator_id: String(operator.id),
-          week_start: item.week_start,
-          total_amount: item.total_amount,
-          source: 'point-cabinet',
-          admin_token: token.slice(0, 8) + '…',
-        },
-      })
-
-      // Notify operator via Telegram that their debt was marked as paid
-      if (operator.telegram_chat_id) {
-        const item_name_for_tg = (item as any).item_name || 'Товар'
-        const amt = Number(item.total_amount).toLocaleString('ru-RU')
-        const text = [
-          `<b>✅ Долг погашен</b>`,
-          ``,
-          `${escapeTelegramHtml(item_name_for_tg)}`,
-          `<b>${amt} ₸</b>`,
-        ].join('\n')
-        await sendTelegramMessage(String(operator.telegram_chat_id), text).catch(() => null)
-      }
-
-      return json({ ok: true })
+      return json({ error: 'operator-debt-payment-disabled' }, 403)
     }
 
     return json({ error: 'unknown-action' }, 400)
