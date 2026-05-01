@@ -662,7 +662,13 @@ export default function SalaryPage() {
     if (cash + kaspi <= 0) return setError('Сумма выплаты должна быть > 0')
     setStaffPaySaving(true); setError(null)
     try {
-      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, company_id: staffPayCompanyId, cash_amount: cash, kaspi_amount: kaspi, comment: staffPayComment.trim() || null }) })
+      const expectedAmount = calcStaffToPay(
+        staffPayModal,
+        staffSalary?.adjustments || [],
+        staffSalary?.payments || [],
+        getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot),
+      ).toPay
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, company_id: staffPayCompanyId, cash_amount: cash, kaspi_amount: kaspi, expected_amount: expectedAmount, comment: staffPayComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
       setStaffPayModal(null); setStaffPayCash(''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId('')

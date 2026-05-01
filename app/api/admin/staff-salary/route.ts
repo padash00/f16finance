@@ -366,7 +366,7 @@ export async function POST(req: Request) {
 
     // ── Create payment (1st or 15th) ────────────────────────────────────────
     if (action === 'createPayment') {
-      const { staff_id, pay_date, slot, cash_amount, kaspi_amount, comment, company_id } = body
+      const { staff_id, pay_date, slot, cash_amount, kaspi_amount, expected_amount, comment, company_id } = body
       if (!staff_id || !pay_date) return json({ error: 'staff_id и pay_date обязательны' }, 400)
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
@@ -517,12 +517,14 @@ export async function POST(req: Request) {
         },
         { bonuses: 0, debts: 0, fines: 0, advances: 0 },
       )
-      const calculatedToPay =
+      const serverCalculatedToPay =
         halfSalary +
         adjustmentTotals.bonuses -
         adjustmentTotals.debts -
         adjustmentTotals.fines -
         adjustmentTotals.advances
+      const clientExpectedAmount = Math.round(Number(expected_amount))
+      const calculatedToPay = Number.isFinite(clientExpectedAmount) ? clientExpectedAmount : serverCalculatedToPay
       const overpaymentAmount = Math.max(0, total - calculatedToPay)
       let overpaymentAdjustmentId: string | null = null
 
@@ -565,6 +567,7 @@ export async function POST(req: Request) {
           staff_id,
           total,
           calculated_to_pay: calculatedToPay,
+          server_calculated_to_pay: serverCalculatedToPay,
           overpayment_amount: overpaymentAmount,
           overpayment_adjustment_id: overpaymentAdjustmentId,
           pay_date,
