@@ -15,9 +15,9 @@ function canManageStore(access: {
   return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
 }
 
-type Body = { reason?: string | null }
+type Body = { due_date?: string | null; reason?: string | null }
 
-export async function POST(
+export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -29,11 +29,12 @@ export async function POST(
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const body = (await request.json().catch(() => null)) as Body | null
+    const newDueDate = String(body?.due_date || '').trim() || null
     const reason = String(body?.reason || '').trim() || null
 
     let debtQuery: any = supabase
       .from('supplier_debts')
-      .select('id, status, organization_id, total_amount, supplier_id, receipt_id')
+      .select('id, status, organization_id, due_date, supplier_id, receipt_id')
       .eq('id', id)
       .limit(1)
     if (!access.isSuperAdmin && access.activeOrganization?.id) {
@@ -42,15 +43,13 @@ export async function POST(
     const { data: debt, error: debtError } = await debtQuery.maybeSingle()
     if (debtError) throw debtError
     if (!debt?.id) return json({ error: 'Долг не найден' }, 404)
-    if (debt.status === 'paid') return json({ error: 'Оплаченный долг нельзя списать' }, 409)
-    if (debt.status === 'written_off') return json({ error: 'Долг уже списан' }, 409)
+    if (debt.status !== 'open') return json({ error: 'Срок переносится только у открытых долгов' }, 409)
+
+    const previous = debt.due_date
 
     const { error: updateError } = await supabase
       .from('supplier_debts')
-      .update({
-        status: 'written_off',
-        payment_comment: reason,
-      })
+      .update({ due_date: newDueDate })
       .eq('id', debt.id)
     if (updateError) throw updateError
 
@@ -60,14 +59,14 @@ export async function POST(
         debt_id: debt.id,
         organization_id: debt.organization_id || null,
         comment: reason,
-        event_type: 'write_off',
-        event_payload: { total: Number(debt.total_amount || 0) },
+        event_type: 'due_date_change',
+        event_payload: { previous_due_date: previous, new_due_date: newDueDate },
         created_by: access.user?.id || null,
       }])
       .then(() => null, () => null)
 
     await writeAuditLog(supabase as any, {
-      action: 'supplier_debt.write_off',
+      action: 'supplier_debt.due_date_change',
       entityType: 'supplier_debt',
       entityId: debt.id,
       actorUserId: access.user?.id || null,
@@ -75,13 +74,14 @@ export async function POST(
         organization_id: debt.organization_id || null,
         receipt_id: debt.receipt_id,
         supplier_id: debt.supplier_id,
-        total: Number(debt.total_amount || 0),
+        previous_due_date: previous,
+        new_due_date: newDueDate,
         reason,
       },
     })
 
-    return json({ ok: true, data: { id: debt.id } })
+    return json({ ok: true, data: { id: debt.id, due_date: newDueDate } })
   } catch (error: any) {
-    return json({ error: error?.message || 'Не удалось списать долг' }, 500)
+    return json({ error: error?.message || 'Не удалось перенести срок' }, 500)
   }
 }

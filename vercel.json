@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/overdue-debts",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/recurring-expenses",
+      "schedule": "0 5 * * *"
     }
   ]
 }

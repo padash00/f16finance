@@ -36,6 +36,7 @@ type InventorySupplier = {
   name: string
   bin_iin: string | null
   organization_name: string | null
+  preferred_expense_category_id?: string | null
 }
 
 type ExpenseCategoryOption = {
@@ -382,6 +383,18 @@ export default function StoreReceiptsPage() {
       || expenseCategoriesFallback.find((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
     if (first?.id) setExpenseCategoryId(first.id)
   }, [data?.expense_categories, expenseCategoriesFallback, expenseCategoryId])
+
+  // Auto-pick supplier's preferred COGS category when supplier changes.
+  useEffect(() => {
+    if (!supplierId) return
+    const supplier = (data?.suppliers || []).find((s) => s.id === supplierId)
+    const preferred = supplier?.preferred_expense_category_id
+    if (!preferred) return
+    const isCogs = (data?.expense_categories || []).some(
+      (c) => c.id === preferred && String(c.accounting_group || '').trim().toLowerCase() === 'cogs',
+    )
+    if (isCogs) setExpenseCategoryId(preferred)
+  }, [supplierId, data?.suppliers, data?.expense_categories])
 
   useEffect(() => {
     const serverCogs = (data?.expense_categories || []).filter((c) => String(c.accounting_group || '').trim().toLowerCase() === 'cogs')
@@ -1573,9 +1586,24 @@ export default function StoreReceiptsPage() {
               )}
               {aiParseResult ? (
                 <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-3 text-xs text-emerald-100">
-                  <p className="font-medium">
-                    ИИ-черновик: найдено {aiParseResult.items.length} строк, сопоставлено {aiParseResult.matched_count}, без совпадения {aiParseResult.unmatched_count}.
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium">
+                      ИИ-черновик: найдено {aiParseResult.items.length} строк, сопоставлено {aiParseResult.matched_count}, без совпадения {aiParseResult.unmatched_count}.
+                    </p>
+                    {aiParseResult.unmatched_count > 0 ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] gap-1"
+                        onClick={() => void runAiInvoiceParse()}
+                        disabled={aiParsing}
+                      >
+                        {aiParsing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        Дораспознать
+                      </Button>
+                    ) : null}
+                  </div>
                   {(() => {
                     const learned = aiParseResult.items.filter((it) => it.match_source === 'mapping_supplier').length
                     return learned > 0 ? (

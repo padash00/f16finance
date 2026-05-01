@@ -523,6 +523,15 @@ export async function POST(request: Request) {
       .upsert([debtPayload], { onConflict: 'receipt_id' })
     if (debtError) throw debtError
 
+    // Remember this COGS category as the supplier's preferred for next time.
+    if (supplierId && expenseCategory.id) {
+      await supabase
+        .from('inventory_suppliers')
+        .update({ preferred_expense_category_id: expenseCategory.id })
+        .eq('id', supplierId)
+        .then(() => null, () => null)
+    }
+
     // Learn supplier→item aliases from this receipt for the next AI parse run.
     if (locationOrganizationId && Array.isArray(body.payload.items)) {
       const aliasUpserts: Array<{

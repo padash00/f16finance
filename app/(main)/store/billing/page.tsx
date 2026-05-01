@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Receipt, FileText, Wallet, X } from 'lucide-react'
+import { Download, Loader2, Receipt, FileText, Wallet, X } from 'lucide-react'
+
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -82,6 +84,11 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
+
   const [payDebt, setPayDebt] = useState<Debt | null>(null)
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
   const [payMethod, setPayMethod] = useState<'cash' | 'kaspi'>('cash')
@@ -89,10 +96,26 @@ export default function BillingPage() {
   const [payComment, setPayComment] = useState('')
   const [paying, setPaying] = useState(false)
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [parsingReceipt, setParsingReceipt] = useState(false)
+  const [receiptParseHint, setReceiptParseHint] = useState<{ total: number | null; method: 'cash' | 'kaspi' | null; paid_at: string | null; merchant: string | null; warning: string | null } | null>(null)
 
   const [writeOffDebt, setWriteOffDebt] = useState<Debt | null>(null)
   const [writeOffReason, setWriteOffReason] = useState('')
   const [writingOff, setWritingOff] = useState(false)
+
+  const [reschedDebt, setReschedDebt] = useState<Debt | null>(null)
+  const [reschedDate, setReschedDate] = useState('')
+  const [reschedReason, setReschedReason] = useState('')
+  const [rescheduling, setRescheduling] = useState(false)
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkPayOpen, setBulkPayOpen] = useState(false)
+  const [bulkDate, setBulkDate] = useState(new Date().toISOString().slice(0, 10))
+  const [bulkMethod, setBulkMethod] = useState<'cash' | 'kaspi'>('cash')
+  const [bulkReceiptUrl, setBulkReceiptUrl] = useState('')
+  const [bulkComment, setBulkComment] = useState('')
+  const [bulkPaying, setBulkPaying] = useState(false)
+  const [bulkUploading, setBulkUploading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -118,10 +141,53 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter])
 
+  const filterDebt = (d: Debt) => {
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      const supplierMatch =
+        (d.supplier?.organization_name || '').toLowerCase().includes(q)
+        || (d.supplier?.name || '').toLowerCase().includes(q)
+        || (d.supplier?.bin_iin || '').includes(q)
+        || (d.receipt?.invoice_number || '').toLowerCase().includes(q)
+      if (!supplierMatch) return false
+    }
+    const ref = d.receipt?.received_at || d.created_at
+    if (dateFrom && ref && ref < dateFrom) return false
+    if (dateTo && ref && ref > dateTo) return false
+    if (companyFilter && d.company_id !== companyFilter) return false
+    return true
+  }
+
+  const filterReceipt = (r: ReceiptLite) => {
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      const supplierMatch =
+        (r.supplier?.organization_name || '').toLowerCase().includes(q)
+        || (r.supplier?.name || '').toLowerCase().includes(q)
+        || (r.supplier?.bin_iin || '').includes(q)
+        || (r.invoice_number || '').toLowerCase().includes(q)
+      if (!supplierMatch) return false
+    }
+    if (dateFrom && r.received_at && r.received_at < dateFrom) return false
+    if (dateTo && r.received_at && r.received_at > dateTo) return false
+    return true
+  }
+
+  const filteredDebts = useMemo(() => debts.filter(filterDebt), [debts, searchQuery, dateFrom, dateTo, companyFilter])
+  const filteredReceipts = useMemo(() => receipts.filter(filterReceipt), [receipts, searchQuery, dateFrom, dateTo])
+
+  const companies = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of debts) {
+      if (d.company_id && d.company?.name) map.set(d.company_id, d.company.name)
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+  }, [debts])
+
   const totalsByStatus = useMemo(() => {
     const result = { open: 0, openCount: 0, overdue: 0, overdueCount: 0 }
     const now = Date.now()
-    for (const d of debts) {
+    for (const d of filteredDebts) {
       if (d.status === 'open') {
         result.open += Number(d.total_amount || 0)
         result.openCount += 1
@@ -132,11 +198,11 @@ export default function BillingPage() {
       }
     }
     return result
-  }, [debts])
+  }, [filteredDebts])
 
   const groupedReceipts = useMemo(() => {
     const map = new Map<string, ReceiptLite[]>()
-    for (const r of receipts) {
+    for (const r of filteredReceipts) {
       const key = String(r.received_at || '').slice(0, 10) || 'unknown'
       const list = map.get(key) || []
       list.push(r)
@@ -145,7 +211,7 @@ export default function BillingPage() {
     return Array.from(map.entries())
       .sort(([a], [b]) => (a < b ? 1 : -1))
       .map(([date, items]) => ({ date, items }))
-  }, [receipts])
+  }, [filteredReceipts])
 
   const openPay = (debt: Debt) => {
     setPayDebt(debt)
@@ -161,6 +227,46 @@ export default function BillingPage() {
     setPayDate(new Date().toISOString().slice(0, 10))
     setPayReceiptUrl('')
     setPayComment('')
+    setReceiptParseHint(null)
+  }
+
+  const parsePayReceipt = async () => {
+    if (!payReceiptUrl || !payDebt) return
+    setParsingReceipt(true)
+    setReceiptParseHint(null)
+    try {
+      const response = await fetch('/api/admin/store/receipts/ai-parse-payment-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_file_url: payReceiptUrl }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'ИИ не смог распознать чек')
+
+      const total: number | null = json.data?.total_amount ?? null
+      const method: 'cash' | 'kaspi' | null = json.data?.payment_method ?? null
+      const paid_at: string | null = json.data?.paid_at ?? null
+      const merchant: string | null = json.data?.merchant ?? null
+
+      const expected = Number(payDebt.total_amount || 0)
+      const warnings: string[] = []
+      if (total != null && expected > 0 && Math.abs(total - expected) > Math.max(1, expected * 0.005)) {
+        warnings.push(`Сумма в чеке (${Math.round(total)} ₸) не совпадает с долгом (${Math.round(expected)} ₸)`)
+      }
+      if (paid_at && payDate && paid_at !== payDate) {
+        warnings.push(`Дата в чеке (${paid_at}) не совпадает с выбранной датой оплаты`)
+      }
+
+      // auto-apply non-conflicting hints
+      if (method && !warnings.find((w) => w.startsWith('Метод'))) setPayMethod(method)
+      if (paid_at) setPayDate(paid_at)
+
+      setReceiptParseHint({ total, method, paid_at, merchant, warning: warnings.join(' · ') || null })
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось распознать чек')
+    } finally {
+      setParsingReceipt(false)
+    }
   }
 
   const uploadPayReceipt = async (file: File | null) => {
@@ -181,6 +287,189 @@ export default function BillingPage() {
       setError(err?.message || 'Не удалось загрузить чек')
     } finally {
       setUploadingReceipt(false)
+    }
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedSum = useMemo(() => {
+    let sum = 0
+    for (const d of filteredDebts) {
+      if (selectedIds.has(d.id) && d.status === 'open') sum += Number(d.total_amount || 0)
+    }
+    return sum
+  }, [filteredDebts, selectedIds])
+
+  const uploadBulkReceipt = async (file: File | null) => {
+    if (!file) return
+    setBulkUploading(true)
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/admin/store/receipts/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить чек')
+      setBulkReceiptUrl(String(json.document_url || ''))
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось загрузить чек')
+    } finally {
+      setBulkUploading(false)
+    }
+  }
+
+  const submitBulkPay = async () => {
+    if (!bulkReceiptUrl) {
+      setError('Загрузите чек об оплате')
+      return
+    }
+    setBulkPaying(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/store/debts/bulk-pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          debt_ids: Array.from(selectedIds),
+          paid_at: bulkDate,
+          payment_method: bulkMethod,
+          receipt_file_url: bulkReceiptUrl,
+          comment: bulkComment.trim() || null,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось провести объединённую оплату')
+      setSuccess(`Закрыто ${json.data?.closed || 0} долгов`)
+      setBulkPayOpen(false)
+      setBulkReceiptUrl('')
+      setBulkComment('')
+      setSelectedIds(new Set())
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка')
+    } finally {
+      setBulkPaying(false)
+    }
+  }
+
+  const exportDebtsExcel = async () => {
+    try {
+      const wb = createWorkbook('Orda Control')
+
+      const now = Date.now()
+      const ageBucket = (createdAt: string | null | undefined) => {
+        if (!createdAt) return '—'
+        const days = Math.floor((now - new Date(createdAt).getTime()) / 86_400_000)
+        if (days <= 30) return '0–30 дней'
+        if (days <= 60) return '31–60 дней'
+        return '60+ дней'
+      }
+
+      const sheetRows = filteredDebts.map((d) => ({
+        supplier: d.supplier?.organization_name || d.supplier?.name || '—',
+        bin_iin: d.supplier?.bin_iin || '',
+        invoice: d.receipt?.invoice_number || `#${(d.receipt_id || '').slice(0, 8)}`,
+        received_at: d.receipt?.received_at ? new Date(d.receipt.received_at).toLocaleDateString('ru-RU') : '',
+        due_date: d.due_date ? new Date(d.due_date).toLocaleDateString('ru-RU') : '',
+        status:
+          d.status === 'open'
+            ? d.due_date && new Date(d.due_date).getTime() < now
+              ? 'Просрочен'
+              : 'Открыт'
+            : d.status === 'paid'
+            ? 'Оплачен'
+            : 'Списан',
+        is_consignment: d.is_consignment ? 'да' : '',
+        aging: d.status === 'open' ? ageBucket(d.created_at) : '—',
+        total: Number(d.total_amount || 0),
+      }))
+
+      buildStyledSheet(
+        wb,
+        'Долги',
+        'Долги поставщикам',
+        `Всего ${sheetRows.length} строк, на ${formatMoney(sheetRows.reduce((s, r) => s + r.total, 0))} ₸`,
+        [
+          { key: 'supplier', header: 'Поставщик', type: 'text', width: 32 },
+          { key: 'bin_iin', header: 'БИН/ИИН', type: 'text', width: 16 },
+          { key: 'invoice', header: 'Накладная', type: 'text', width: 18 },
+          { key: 'received_at', header: 'Дата приёмки', type: 'text', width: 14 },
+          { key: 'due_date', header: 'Срок оплаты', type: 'text', width: 14 },
+          { key: 'status', header: 'Статус', type: 'text', width: 12 },
+          { key: 'is_consignment', header: 'Реализация', type: 'text', width: 12 },
+          { key: 'aging', header: 'Возраст', type: 'text', width: 14 },
+          { key: 'total', header: 'Сумма', type: 'money', width: 16 },
+        ],
+        sheetRows,
+      )
+
+      // Aging summary by bucket
+      const buckets = new Map<string, { count: number; total: number }>()
+      for (const r of sheetRows) {
+        if (r.status !== 'Открыт' && r.status !== 'Просрочен') continue
+        const cur = buckets.get(r.aging) || { count: 0, total: 0 }
+        cur.count += 1
+        cur.total += r.total
+        buckets.set(r.aging, cur)
+      }
+      const bucketRows = ['0–30 дней', '31–60 дней', '60+ дней'].map((b) => ({
+        bucket: b,
+        count: buckets.get(b)?.count || 0,
+        total: buckets.get(b)?.total || 0,
+      }))
+      buildStyledSheet(
+        wb,
+        'Старение',
+        'Старение долгов',
+        'Распределение открытых долгов по возрасту',
+        [
+          { key: 'bucket', header: 'Возраст', type: 'text', width: 18 },
+          { key: 'count', header: 'Долгов', type: 'number', width: 12 },
+          { key: 'total', header: 'Сумма', type: 'money', width: 18 },
+        ],
+        bucketRows,
+      )
+
+      await downloadWorkbook(wb, `supplier-debts-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось сформировать отчёт')
+    }
+  }
+
+  const submitReschedule = async () => {
+    if (!reschedDebt) return
+    setRescheduling(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/admin/store/debts/${reschedDebt.id}/due-date`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          due_date: reschedDate || null,
+          reason: reschedReason.trim() || null,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось перенести срок')
+      setSuccess('Срок оплаты перенесён')
+      setReschedDebt(null)
+      setReschedDate('')
+      setReschedReason('')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось перенести срок')
+    } finally {
+      setRescheduling(false)
     }
   }
 
@@ -240,7 +529,7 @@ export default function BillingPage() {
 
   return (
     <div className="app-page max-w-[1500px] space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
             <Wallet className="w-6 h-6 text-emerald-300" />
@@ -250,6 +539,11 @@ export default function BillingPage() {
             <p className="text-sm text-muted-foreground">Учёт обязательств перед поставщиками и история приёмок</p>
           </div>
         </div>
+        {activeTab === 'debts' ? (
+          <Button variant="outline" size="sm" onClick={() => void exportDebtsExcel()} disabled={filteredDebts.length === 0}>
+            <Download className="w-4 h-4 mr-1" /> Экспорт Excel
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
@@ -273,6 +567,35 @@ export default function BillingPage() {
       {success ? (
         <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card>
       ) : null}
+
+      <Card className="p-3 bg-gray-900/40 border-gray-800">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Поставщик, БИН/ИИН или № накладной..."
+          />
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="С" />
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="По" />
+          {activeTab === 'debts' && companies.length > 0 ? (
+            <Select value={companyFilter || '__all__'} onValueChange={(v) => setCompanyFilter(v === '__all__' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="Все точки" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Все точки</SelectItem>
+                {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setCompanyFilter('') }}
+              className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground hover:text-white hover:bg-white/5"
+            >
+              Сбросить фильтры
+            </button>
+          )}
+        </div>
+      </Card>
 
       {activeTab === 'debts' ? (
         <>
@@ -301,17 +624,54 @@ export default function BillingPage() {
             </Card>
           </div>
 
+          {selectedIds.size > 0 ? (
+            <Card className="sticky top-2 z-10 p-3 bg-emerald-500/15 border-emerald-500/30 flex items-center justify-between flex-wrap gap-2">
+              <div className="text-sm">
+                Выбрано: <b>{selectedIds.size}</b> · Сумма: <b>{formatMoney(selectedSum)} ₸</b>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Сбросить
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setBulkDate(new Date().toISOString().slice(0, 10))
+                    setBulkMethod('cash')
+                    setBulkReceiptUrl('')
+                    setBulkComment('')
+                    setBulkPayOpen(true)
+                  }}
+                >
+                  Оплатить выбранные
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
           {loading ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> Загрузка...
             </div>
-          ) : debts.length === 0 ? (
+          ) : filteredDebts.length === 0 ? (
             <Card className="p-6 text-sm text-muted-foreground text-center">Долгов нет.</Card>
           ) : (
             <div className="space-y-2">
-              {debts.map((debt) => (
+              {filteredDebts.map((debt) => (
                 <Card key={debt.id} className="p-4 bg-gray-900/60 border-gray-800">
                   <div className="flex flex-wrap items-start justify-between gap-3">
+                    {debt.status === 'open' ? (
+                      <input
+                        type="checkbox"
+                        className="mt-1.5 h-4 w-4 rounded border-white/20 bg-transparent shrink-0"
+                        checked={selectedIds.has(debt.id)}
+                        onChange={() => toggleSelected(debt.id)}
+                      />
+                    ) : null}
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span className="font-semibold">{debt.supplier?.organization_name || debt.supplier?.name || 'Поставщик не указан'}</span>
@@ -356,6 +716,17 @@ export default function BillingPage() {
                       {debt.status === 'open' ? (
                         <div className="flex flex-col gap-1.5">
                           <Button onClick={() => openPay(debt)}>Оплатить</Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setReschedDebt(debt)
+                              setReschedDate(debt.due_date || '')
+                              setReschedReason('')
+                            }}
+                          >
+                            Перенести срок
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -468,9 +839,35 @@ export default function BillingPage() {
                 />
                 {uploadingReceipt ? <p className="text-xs text-muted-foreground"><Loader2 className="w-3 h-3 inline animate-spin mr-1" />Загрузка...</p> : null}
                 {payReceiptUrl ? (
-                  <a href={payReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
-                    Чек загружен — открыть файл
-                  </a>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a href={payReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                      Чек загружен — открыть файл
+                    </a>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px]"
+                      onClick={() => void parsePayReceipt()}
+                      disabled={parsingReceipt}
+                    >
+                      {parsingReceipt ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                      Распознать ИИ
+                    </Button>
+                  </div>
+                ) : null}
+                {receiptParseHint ? (
+                  <div className="rounded-lg border border-emerald-300/20 bg-emerald-500/[0.06] p-2 text-[11px] text-emerald-100 space-y-1">
+                    {receiptParseHint.total != null ? <p>Сумма в чеке: <b>{Math.round(receiptParseHint.total)} ₸</b></p> : null}
+                    {receiptParseHint.method ? <p>Способ: {receiptParseHint.method === 'kaspi' ? 'Kaspi' : 'Наличные'}</p> : null}
+                    {receiptParseHint.paid_at ? <p>Дата: {receiptParseHint.paid_at}</p> : null}
+                    {receiptParseHint.merchant ? <p>Получатель: {receiptParseHint.merchant}</p> : null}
+                    {receiptParseHint.warning ? (
+                      <p className="text-rose-300 mt-1">⚠ {receiptParseHint.warning}</p>
+                    ) : (
+                      <p className="text-emerald-300 mt-1">✓ Совпадает с долгом</p>
+                    )}
+                  </div>
                 ) : null}
               </div>
               <div className="space-y-1.5">
@@ -524,6 +921,118 @@ export default function BillingPage() {
               <Button variant="outline" onClick={() => setWriteOffDebt(null)} disabled={writingOff}>Отмена</Button>
               <Button onClick={submitWriteOff} disabled={writingOff} className="bg-amber-600 hover:bg-amber-500">
                 {writingOff ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Списываю...</> : 'Списать'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bulkPayOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !bulkPaying && setBulkPayOpen(false)}>
+          <div
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Оплата нескольких долгов</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Будет закрыто {selectedIds.size} долгов на сумму {formatMoney(selectedSum)} ₸ одним чеком.
+                </p>
+              </div>
+              <button onClick={() => !bulkPaying && setBulkPayOpen(false)} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Дата оплаты</Label>
+                <Input type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Способ оплаты</Label>
+                <Select value={bulkMethod} onValueChange={(v) => setBulkMethod(v === 'kaspi' ? 'kaspi' : 'cash')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Наличные</SelectItem>
+                    <SelectItem value="kaspi">Kaspi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Чек об оплате (общий, обязательно)</Label>
+                <Input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(e) => void uploadBulkReceipt(e.target.files?.[0] || null)}
+                  disabled={bulkUploading}
+                />
+                {bulkUploading ? <p className="text-xs text-muted-foreground"><Loader2 className="w-3 h-3 inline animate-spin mr-1" />Загрузка...</p> : null}
+                {bulkReceiptUrl ? (
+                  <a href={bulkReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                    Чек загружен — открыть файл
+                  </a>
+                ) : null}
+                <p className="text-[10px] text-muted-foreground">Один и тот же чек прикрепится ко всем выбранным расходам.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Комментарий</Label>
+                <Textarea rows={2} value={bulkComment} onChange={(e) => setBulkComment(e.target.value)} placeholder="Опционально" />
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setBulkPayOpen(false)} disabled={bulkPaying}>Отмена</Button>
+              <Button onClick={submitBulkPay} disabled={bulkPaying || !bulkReceiptUrl}>
+                {bulkPaying ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Сохраняю...</> : `Закрыть ${selectedIds.size} долгов`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {reschedDebt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !rescheduling && setReschedDebt(null)}>
+          <div
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Перенести срок оплаты</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {reschedDebt.supplier?.organization_name || reschedDebt.supplier?.name || '—'} · {formatMoney(reschedDebt.total_amount)} ₸
+                </p>
+                {reschedDebt.due_date ? (
+                  <p className="text-xs text-muted-foreground mt-1">Текущий срок: {fmtDate(reschedDebt.due_date)}</p>
+                ) : null}
+              </div>
+              <button onClick={() => !rescheduling && setReschedDebt(null)} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Новый срок (пусто = снять срок)</Label>
+                <Input type="date" value={reschedDate} onChange={(e) => setReschedDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Причина (опционально)</Label>
+                <Textarea
+                  rows={2}
+                  value={reschedReason}
+                  onChange={(e) => setReschedReason(e.target.value)}
+                  placeholder="Например: договорились с поставщиком о рассрочке"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReschedDebt(null)} disabled={rescheduling}>Отмена</Button>
+              <Button onClick={submitReschedule} disabled={rescheduling}>
+                {rescheduling ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Сохраняю...</> : 'Перенести срок'}
               </Button>
             </div>
           </div>

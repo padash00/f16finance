@@ -72,9 +72,25 @@ export async function POST(
     const total = normalizeMoney(debt.total_amount)
     if (total <= 0) return json({ error: 'Сумма долга равна нулю — нечего оплачивать' }, 400)
 
-    const categoryName = String(debt.category?.name || '').trim()
+    // Fallback: if category was deleted from expense_categories after debt was created,
+    // try to find a generic COGS category instead of failing the payment.
+    let categoryName = String(debt.category?.name || '').trim()
     if (!categoryName) {
-      return json({ error: 'У долга не указана категория COGS — выберите её при создании приёмки' }, 400)
+      const { data: fallbackCategory } = await supabase
+        .from('expense_categories')
+        .select('id, name')
+        .ilike('accounting_group', 'cogs')
+        .order('name', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (fallbackCategory?.name) {
+        categoryName = String(fallbackCategory.name).trim()
+      } else {
+        return json(
+          { error: 'У долга нет категории COGS, и в справочнике не нашлось ни одной COGS-категории. Создайте её в Настройках → Категории расходов.' },
+          400,
+        )
+      }
     }
     if (!debt.company_id) {
       return json({ error: 'Не удалось определить точку (company_id) для расхода' }, 400)
@@ -159,6 +175,23 @@ export async function POST(
       })
       .eq('id', debt.id)
     if (updateError) throw updateError
+
+    // Append to payment history for audit and future reporting.
+    await supabase
+      .from('supplier_debt_payments')
+      .insert([{
+        debt_id: debt.id,
+        organization_id: debt.organization_id || null,
+        paid_at: paidAt,
+        cash_amount: method === 'cash' ? total : 0,
+        kaspi_amount: method === 'kaspi' ? total : 0,
+        receipt_file_url: receiptFileUrl,
+        comment,
+        expense_id: expenseId,
+        event_type: 'payment',
+        created_by: access.user?.id || null,
+      }])
+      .then(() => null, () => null)
 
     await writeAuditLog(supabase as any, {
       action: 'supplier_debt.pay',
