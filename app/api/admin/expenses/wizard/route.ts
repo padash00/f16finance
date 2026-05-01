@@ -22,6 +22,7 @@ type WizardPayload = {
   backdated_confirmed?: boolean | null
   document_kind?: 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off' | null
   document_url?: string | null
+  document_urls?: string[] | null
   whitelist_vendor_id?: string | null
   one_off_payee?: string | null
   one_off_reason?: string | null

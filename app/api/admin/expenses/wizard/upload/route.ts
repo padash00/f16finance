@@ -89,9 +89,17 @@ export async function POST(request: Request) {
 
     const documentUrl = urlData.publicUrl
 
+    const currentPayload = (session.payload || {}) as { document_url?: string | null; document_urls?: unknown }
+    const currentUrls = Array.isArray(currentPayload.document_urls)
+      ? currentPayload.document_urls.map((url) => String(url || '')).filter(Boolean)
+      : currentPayload.document_url
+        ? [String(currentPayload.document_url)]
+        : []
+    const documentUrls = [...currentUrls, documentUrl]
     const mergedPayload = {
-      ...(session.payload || {}),
-      document_url: documentUrl,
+      ...currentPayload,
+      document_url: documentUrls[0] || documentUrl,
+      document_urls: documentUrls,
     }
 
     const { error: updateError } = await supabase
@@ -116,7 +124,7 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ ok: true, document_url: documentUrl })
+    return NextResponse.json({ ok: true, document_url: documentUrl, document_urls: documentUrls })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',

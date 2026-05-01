@@ -52,6 +52,7 @@ type WizardPayload = {
   backdated_confirmed: boolean
   document_kind: DocumentKind | null
   document_url: string | null
+  document_urls: string[]
   whitelist_vendor_id: string | null
   one_off_payee: string
   one_off_reason: string
@@ -67,6 +68,7 @@ const fmtMoney = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
 const inputBaseClass = 'w-full h-10 px-3 rounded-md border bg-background'
 const inputErrorClass = 'border-destructive ring-1 ring-destructive/30'
 const validHintClass = 'text-[11px] text-emerald-400 mt-1'
+const EXPENSE_WIZARD_DRAFT_KEY = 'expense_wizard_draft_v1'
 
 function emptyPayload(): WizardPayload {
   return {
@@ -82,6 +84,7 @@ function emptyPayload(): WizardPayload {
     backdated_confirmed: false,
     document_kind: null,
     document_url: null,
+    document_urls: [],
     whitelist_vendor_id: null,
     one_off_payee: '',
     one_off_reason: '',
@@ -111,8 +114,11 @@ function ExpenseWizardPageContent() {
   const [categoryQuery, setCategoryQuery] = useState('')
   const [operatorsLoaded, setOperatorsLoaded] = useState(false)
   const [whitelistLoaded, setWhitelistLoaded] = useState(false)
+  const [whitelistReloadKey, setWhitelistReloadKey] = useState(0)
   const [loadingOperators, setLoadingOperators] = useState(false)
   const [loadingWhitelist, setLoadingWhitelist] = useState(false)
+  const [operatorsError, setOperatorsError] = useState<string | null>(null)
+  const [whitelistError, setWhitelistError] = useState<string | null>(null)
 
   const [loadingCatalogs, setLoadingCatalogs] = useState(true)
   const [canSeeCogs, setCanSeeCogs] = useState(false)
@@ -126,6 +132,7 @@ function ExpenseWizardPageContent() {
   const [aiHintError, setAiHintError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const draftRestoredRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -159,6 +166,54 @@ function ExpenseWizardPageContent() {
   }, [])
 
   useEffect(() => {
+    if (draftRestoredRef.current) return
+    draftRestoredRef.current = true
+    try {
+      const raw = localStorage.getItem(EXPENSE_WIZARD_DRAFT_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as { step?: number; payload?: Partial<WizardPayload> } | null
+      if (!saved || !saved.payload) return
+      const documentUrls = Array.isArray(saved.payload.document_urls)
+        ? saved.payload.document_urls.filter(Boolean)
+        : saved.payload.document_url
+          ? [saved.payload.document_url]
+          : []
+      const nextStep = Number(saved.step || 1)
+      setPayload((prev) => ({ ...prev, ...saved.payload, document_urls: documentUrls, document_url: documentUrls[0] || saved.payload?.document_url || null }))
+      if (nextStep === 2 || nextStep === 3) {
+        setStep(nextStep)
+      }
+    } catch {
+      // ignore corrupted draft
+    }
+  }, [])
+
+  useEffect(() => {
+    if (done) {
+      try {
+        localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY)
+      } catch {
+        // ignore localStorage errors
+      }
+      return
+    }
+    const id = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          EXPENSE_WIZARD_DRAFT_KEY,
+          JSON.stringify({
+            step,
+            payload,
+          }),
+        )
+      } catch {
+        // ignore localStorage errors
+      }
+    }, 250)
+    return () => window.clearTimeout(id)
+  }, [payload, step, done])
+
+  useEffect(() => {
     if (payload.company_id || companies.length === 0) return
     const preferred = companies.find((c) => String(c.code || '').toLowerCase() === 'arena') || companies[0]
     if (preferred?.id) {
@@ -189,12 +244,19 @@ function ExpenseWizardPageContent() {
     let cancelled = false
     const loadOperators = async () => {
       setLoadingOperators(true)
+      setOperatorsError(null)
       try {
-        const opRes = await fetch('/api/admin/operators?active_only=true', { cache: 'no-store' })
-        const ops = opRes.ok ? (await opRes.json()).data || [] : []
+        const opRes = await fetch('/api/admin/expenses/operators', { cache: 'no-store' })
+        if (!opRes.ok) {
+          const body = await opRes.json().catch(() => null)
+          throw new Error(body?.error || 'Не удалось загрузить операторов')
+        }
+        const ops = (await opRes.json()).data || []
         if (cancelled) return
         setOperators(ops)
         setOperatorsLoaded(true)
+      } catch (e: any) {
+        if (!cancelled) setOperatorsError(e?.message || 'Не удалось загрузить операторов')
       } finally {
         if (!cancelled) setLoadingOperators(false)
       }
@@ -210,12 +272,19 @@ function ExpenseWizardPageContent() {
     let cancelled = false
     const loadWhitelist = async () => {
       setLoadingWhitelist(true)
+      setWhitelistError(null)
       try {
         const wlRes = await fetch('/api/admin/expenses/whitelist', { cache: 'no-store' })
-        const wl = wlRes.ok ? (await wlRes.json()).data || [] : []
+        if (!wlRes.ok) {
+          const body = await wlRes.json().catch(() => null)
+          throw new Error(body?.error || 'Не удалось загрузить доверенных поставщиков')
+        }
+        const wl = (await wlRes.json()).data || []
         if (cancelled) return
         setWhitelist(wl)
         setWhitelistLoaded(true)
+      } catch (e: any) {
+        if (!cancelled) setWhitelistError(e?.message || 'Не удалось загрузить доверенных поставщиков')
       } finally {
         if (!cancelled) setLoadingWhitelist(false)
       }
@@ -224,7 +293,21 @@ function ExpenseWizardPageContent() {
     return () => {
       cancelled = true
     }
-  }, [whitelistLoaded, loadingWhitelist, step])
+  }, [whitelistLoaded, loadingWhitelist, step, whitelistReloadKey])
+
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (step < 2 || document.visibilityState !== 'visible') return
+      setWhitelistLoaded(false)
+      setWhitelistReloadKey((value) => value + 1)
+    }
+    document.addEventListener('visibilitychange', refreshOnFocus)
+    window.addEventListener('focus', refreshOnFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', refreshOnFocus)
+      window.removeEventListener('focus', refreshOnFocus)
+    }
+  }, [step])
 
   const total = payload.amount_cash + payload.amount_kaspi
   const dateMs = useMemo(() => new Date(payload.date).getTime(), [payload.date])
@@ -286,7 +369,7 @@ function ExpenseWizardPageContent() {
   const step2Valid = (() => {
     const k = payload.document_kind
     if (!k) return false
-    if (k === 'receipt' || k === 'invoice' || k === 'bill') return !!payload.document_url
+    if (k === 'receipt' || k === 'invoice' || k === 'bill') return payload.document_urls.length > 0 || !!payload.document_url
     if (k === 'whitelist') return !!payload.whitelist_vendor_id
     if (k === 'one_off') {
       return payload.one_off_payee.trim().length >= 3 && payload.one_off_reason.trim().length >= 30
@@ -297,13 +380,12 @@ function ExpenseWizardPageContent() {
   const isCategoryValid = !!payload.category_id
   const isItemNameValid = payload.item_name.trim().length >= 5
   const isCommentValid = payload.comment.trim().length >= 20
-  const isAmountValid = total > 0
   const isDateValid = !!payload.date && (!isBackdated || payload.backdated_confirmed)
   const step2Errors: string[] = []
   if (!payload.document_kind) {
     step2Errors.push('Выберите тип подтверждения расхода')
   } else if (payload.document_kind === 'receipt' || payload.document_kind === 'invoice' || payload.document_kind === 'bill') {
-    if (!payload.document_url) step2Errors.push('Загрузите чек / накладную / счет')
+    if (payload.document_urls.length === 0 && !payload.document_url) step2Errors.push('Загрузите чек / накладную / счет')
   } else if (payload.document_kind === 'whitelist') {
     if (!payload.whitelist_vendor_id) step2Errors.push('Выберите доверенного поставщика')
   } else if (payload.document_kind === 'one_off') {
@@ -353,8 +435,19 @@ function ExpenseWizardPageContent() {
     setSaving(true)
     try {
       await patchSession(2, {
+        date: payload.date,
+        company_id: payload.company_id,
+        operator_id: payload.operator_id,
+        category_id: payload.category_id,
+        category_name: payload.category_name,
+        amount_cash: payload.amount_cash,
+        amount_kaspi: payload.amount_kaspi,
+        item_name: payload.item_name,
+        comment: payload.comment,
+        backdated_confirmed: payload.backdated_confirmed,
         document_kind: payload.document_kind,
         document_url: payload.document_url,
+        document_urls: payload.document_urls,
         whitelist_vendor_id: payload.whitelist_vendor_id,
         one_off_payee: payload.one_off_payee,
         one_off_reason: payload.one_off_reason,
@@ -372,6 +465,24 @@ function ExpenseWizardPageContent() {
     setError(null)
     setSaving(true)
     try {
+      await patchSession(3, {
+        date: payload.date,
+        company_id: payload.company_id,
+        operator_id: payload.operator_id,
+        category_id: payload.category_id,
+        category_name: payload.category_name,
+        amount_cash: payload.amount_cash,
+        amount_kaspi: payload.amount_kaspi,
+        item_name: payload.item_name,
+        comment: payload.comment,
+        backdated_confirmed: payload.backdated_confirmed,
+        document_kind: payload.document_kind,
+        document_url: payload.document_url,
+        document_urls: payload.document_urls,
+        whitelist_vendor_id: payload.whitelist_vendor_id,
+        one_off_payee: payload.one_off_payee,
+        one_off_reason: payload.one_off_reason,
+      })
       const response = await fetch('/api/admin/expenses/wizard/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -434,26 +545,44 @@ function ExpenseWizardPageContent() {
     }
   }
 
-  async function handleFile(file: File | null) {
-    if (!file || !sessionId) return
+  async function handleFiles(files: File[]) {
+    if (files.length === 0 || !sessionId) return
     setError(null)
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('session_id', sessionId)
-      const response = await fetch('/api/admin/expenses/wizard/upload', {
-        method: 'POST',
-        body: fd,
-      })
-      const json = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(json.error || 'Не удалось загрузить файл')
-      setPayload((prev) => ({ ...prev, document_url: json.document_url }))
+      let latestUrls = payload.document_urls.length > 0
+        ? payload.document_urls
+        : payload.document_url
+          ? [payload.document_url]
+          : []
+      for (const file of files) {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('session_id', sessionId)
+        const response = await fetch('/api/admin/expenses/wizard/upload', {
+          method: 'POST',
+          body: fd,
+        })
+        const json = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(json.error || 'Не удалось загрузить файл')
+        latestUrls = Array.isArray(json.document_urls) && json.document_urls.length > 0
+          ? json.document_urls
+          : [...latestUrls, json.document_url].filter(Boolean)
+      }
+      setPayload((prev) => ({ ...prev, document_urls: latestUrls, document_url: latestUrls[0] || null }))
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {
       setUploading(false)
     }
+  }
+
+  function removeDocumentUrl(index: number) {
+    setPayload((prev) => {
+      const urls = (prev.document_urls.length > 0 ? prev.document_urls : prev.document_url ? [prev.document_url] : [])
+        .filter((_, itemIndex) => itemIndex !== index)
+      return { ...prev, document_urls: urls, document_url: urls[0] || null }
+    })
   }
 
   if (done) {
@@ -751,6 +880,21 @@ function ExpenseWizardPageContent() {
             {loadingOperators ? (
               <div className="text-xs text-muted-foreground mb-1">Загружаю операторов...</div>
             ) : null}
+            {operatorsError ? (
+              <div className="text-xs text-amber-500 mb-2 flex items-center gap-2">
+                <span>{operatorsError}</span>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => {
+                    setOperatorsLoaded(false)
+                    setLoadingOperators(false)
+                  }}
+                >
+                  Повторить
+                </button>
+              </div>
+            ) : null}
             <select
               value={payload.operator_id || ''}
               onChange={(e) => setPayload((p) => ({ ...p, operator_id: e.target.value || null }))}
@@ -817,20 +961,38 @@ function ExpenseWizardPageContent() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
-                onChange={(e) => handleFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => {
+                  handleFiles(Array.from(e.target.files || []))
+                  e.currentTarget.value = ''
+                }}
                 className="hidden"
               />
-              {payload.document_url ? (
-                <div className="p-3 rounded-md border bg-muted/30 flex items-center justify-between">
-                  <a href={payload.document_url} target="_blank" rel="noreferrer" className="text-sm text-primary underline">
-                    Открыть загруженный документ
-                  </a>
+              {(payload.document_urls.length > 0 || payload.document_url) ? (
+                <div className="space-y-2">
+                  {(payload.document_urls.length > 0 ? payload.document_urls : payload.document_url ? [payload.document_url] : []).map((url, index) => (
+                    <div key={`${url}-${index}`} className="p-3 rounded-md border bg-muted/30 flex items-center justify-between gap-3">
+                      <a href={url} target="_blank" rel="noreferrer" className="min-w-0 truncate text-sm text-primary underline">
+                        Документ {index + 1}
+                      </a>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeDocumentUrl(index)}
+                        aria-label={`Удалить документ ${index + 1}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setPayload((p) => ({ ...p, document_url: null }))}
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="w-full"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    Добавить ещё чек / файл
                   </Button>
                 </div>
               ) : (
@@ -841,16 +1003,18 @@ function ExpenseWizardPageContent() {
                   className="w-full"
                 >
                   {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                  Загрузить файл (до 10 МБ)
+                  Загрузить файл или несколько файлов (до 10 МБ каждый)
                 </Button>
               )}
-              {payload.document_url ? <p className={validHintClass}>Документ загружен</p> : null}
+              {(payload.document_urls.length > 0 || payload.document_url) ? (
+                <p className={validHintClass}>Загружено документов: {payload.document_urls.length || 1}</p>
+              ) : null}
             </div>
           )}
 
           <button
             type="button"
-            onClick={() => setPayload((p) => ({ ...p, document_kind: 'whitelist', document_url: null }))}
+            onClick={() => setPayload((p) => ({ ...p, document_kind: 'whitelist', document_url: null, document_urls: [] }))}
             className={`w-full text-left p-4 rounded-lg border transition ${
               payload.document_kind === 'whitelist' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
             }`}
@@ -866,11 +1030,42 @@ function ExpenseWizardPageContent() {
 
           {payload.document_kind === 'whitelist' && (
             <div className="ml-8">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">Список обновляется при возврате на вкладку</div>
+                <button
+                  type="button"
+                  className="text-xs text-primary underline"
+                  onClick={() => {
+                    setWhitelistLoaded(false)
+                    setLoadingWhitelist(false)
+                    setWhitelistReloadKey((value) => value + 1)
+                  }}
+                >
+                  Обновить список
+                </button>
+              </div>
               {loadingWhitelist ? <p className="text-xs text-muted-foreground mb-2">Загружаю доверенных поставщиков...</p> : null}
+              {whitelistError ? (
+                <p className="text-xs text-amber-500 mb-2 flex items-center gap-2">
+                  <span>{whitelistError}</span>
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      setWhitelistLoaded(false)
+                      setLoadingWhitelist(false)
+                    }}
+                  >
+                    Повторить
+                  </button>
+                </p>
+              ) : null}
               {eligibleWhitelist.length === 0 ? (
                 <p className="text-sm text-amber-500">
                   Доверенных поставщиков нет.{' '}
-                  <Link href="/expense-whitelist" className="underline">Добавить</Link>
+                  <Link href="/expense-whitelist" target="_blank" rel="noopener noreferrer" className="underline">
+                    Добавить в новой вкладке
+                  </Link>
                 </p>
               ) : (
                 <>
@@ -892,7 +1087,7 @@ function ExpenseWizardPageContent() {
 
           <button
             type="button"
-            onClick={() => setPayload((p) => ({ ...p, document_kind: 'one_off', document_url: null, whitelist_vendor_id: null }))}
+            onClick={() => setPayload((p) => ({ ...p, document_kind: 'one_off', document_url: null, document_urls: [], whitelist_vendor_id: null }))}
             className={`w-full text-left p-4 rounded-lg border transition ${
               payload.document_kind === 'one_off' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
             }`}

@@ -28,6 +28,7 @@ type WizardPayload = {
   backdated_confirmed?: boolean
   document_kind?: 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off'
   document_url?: string | null
+  document_urls?: string[] | null
   whitelist_vendor_id?: string | null
   one_off_payee?: string | null
   one_off_reason?: string | null
@@ -61,7 +62,8 @@ function validatePayload(p: WizardPayload, role: string, isSuperAdmin: boolean):
   if (!kind) return 'Выберите тип документа'
 
   if (kind === 'receipt' || kind === 'invoice' || kind === 'bill') {
-    if (!p.document_url) return 'Прикрепите чек/накладную'
+    const documentUrls = Array.isArray(p.document_urls) ? p.document_urls.filter(Boolean) : []
+    if (documentUrls.length === 0 && !p.document_url) return 'Прикрепите чек/накладную'
   } else if (kind === 'whitelist') {
     if (!p.whitelist_vendor_id) return 'Выберите доверенного поставщика'
   } else if (kind === 'one_off') {
@@ -138,6 +140,16 @@ export async function POST(request: Request) {
 
     const isOwner = access.isSuperAdmin || role === 'owner'
     const status = payload.document_kind === 'one_off' && !isOwner ? 'pending_approval' : 'confirmed'
+    const documentUrls = Array.isArray(payload.document_urls)
+      ? payload.document_urls.map((url) => String(url || '')).filter(Boolean)
+      : payload.document_url
+        ? [String(payload.document_url)]
+        : []
+    const primaryDocumentUrl = documentUrls[0] || payload.document_url || null
+    const commentWithDocuments =
+      documentUrls.length > 1
+        ? `${(payload.comment || '').trim()}\n\nДокументы:\n${documentUrls.map((url, index) => `${index + 1}. ${url}`).join('\n')}`
+        : (payload.comment || '').trim()
 
     const insertRow: Record<string, unknown> = {
       date: payload.date,
@@ -146,11 +158,11 @@ export async function POST(request: Request) {
       category: String(categoryRow.name || '').trim(),
       cash_amount: Number(payload.amount_cash || 0),
       kaspi_amount: Number(payload.amount_kaspi || 0),
-      comment: (payload.comment || '').trim(),
-      attachment_url: payload.document_url || null,
+      comment: commentWithDocuments,
+      attachment_url: primaryDocumentUrl,
       wizard_session_id: sessionId,
       document_kind: payload.document_kind,
-      document_url: payload.document_url || null,
+      document_url: primaryDocumentUrl,
       whitelist_vendor_id: payload.whitelist_vendor_id || null,
       one_off_payee: payload.one_off_payee || null,
       one_off_reason: payload.one_off_reason || null,
@@ -189,6 +201,7 @@ export async function POST(request: Request) {
         expense_id: inserted.id,
         status,
         document_kind: payload.document_kind,
+        document_urls: documentUrls,
         backdated,
         item_name: payload.item_name,
         amount_total: Number(payload.amount_cash || 0) + Number(payload.amount_kaspi || 0),
