@@ -548,11 +548,20 @@ function findRolePermissionOverride(
   return bestMatch
 }
 
+const MANDATORY_MANAGER_FINANCE_CREATE_PATHS = ['/income/add', '/expenses/add', '/expenses/new'] as const
+
+function isMandatoryStaffPath(role: StaffRole, pathname: string): boolean {
+  if (role !== 'manager') return false
+  return MANDATORY_MANAGER_FINANCE_CREATE_PATHS.some((rule) => matchesConfiguredPath(pathname, rule))
+}
+
 export function canStaffRoleAccessPath(
   role: StaffRole,
   pathname: string,
   rolePermissionOverrides?: readonly RolePermissionOverride[] | null,
 ): boolean {
+  if (isMandatoryStaffPath(role, pathname)) return true
+
   const override = findRolePermissionOverride(pathname, rolePermissionOverrides)
   if (override) return override.enabled
 
