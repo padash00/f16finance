@@ -1402,13 +1402,13 @@ export default function WarehousePage() {
       {showPrintLabels && (
         <LabelPrintDialog
           items={balances
-            .filter((b) => selectedIds.has(b.item_id))
+            .filter((b) => selectedIds.has(b.item_id) && b.item != null)
             .map((b): LabelItem => ({
               item_id: b.item_id,
-              name: b.item.name,
-              barcode: b.item.barcode,
-              sale_price: b.item.sale_price ?? null,
-              unit: b.item.unit ?? 'шт',
+              name: b.item!.name,
+              barcode: b.item!.barcode,
+              sale_price: b.item!.sale_price ?? null,
+              unit: b.item!.unit ?? 'шт',
             }))}
           onClose={() => setShowPrintLabels(false)}
         />
