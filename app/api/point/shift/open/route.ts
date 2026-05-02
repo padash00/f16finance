@@ -60,54 +60,6 @@ export async function POST(request: Request) {
     )
   }
 
-  // Enforce shift schedule when the current week is published.
-  // Operators can only open a shift if they appear in the schedule for today.
-  if (body.operator_id) {
-    const nowKZ = new Date(Date.now() + 5 * 3600_000)
-    const todayKZ = `${nowKZ.getUTCFullYear()}-${String(nowKZ.getUTCMonth() + 1).padStart(2, '0')}-${String(nowKZ.getUTCDate()).padStart(2, '0')}`
-
-    const { data: publication } = await supabase
-      .from('shift_week_publications')
-      .select('id')
-      .eq('company_id', device.company_id)
-      .lte('week_start', todayKZ)
-      .gte('week_end', todayKZ)
-      .maybeSingle()
-
-    if (publication) {
-      // Only enforce if today's shifts already have operator_id populated.
-      // If they're all NULL (old schedule data), skip — don't block everyone.
-      const { data: anyScheduled } = await supabase
-        .from('shifts')
-        .select('id')
-        .eq('company_id', device.company_id)
-        .eq('date', todayKZ)
-        .not('operator_id', 'is', null)
-        .limit(1)
-        .maybeSingle()
-
-      if (anyScheduled) {
-        const { data: scheduledShift } = await supabase
-          .from('shifts')
-          .select('id')
-          .eq('company_id', device.company_id)
-          .eq('date', todayKZ)
-          .eq('operator_id', body.operator_id)
-          .maybeSingle()
-
-        if (!scheduledShift) {
-          return json(
-            {
-              error: 'point-shift-not-scheduled',
-              detail: 'Вы не назначены на сегодня по графику. Обратитесь к руководителю.',
-            },
-            403,
-          )
-        }
-      }
-    }
-  }
-
   const staffId = await resolveStaffIdForOperator(supabase, body.operator_id)
 
   const { data, error } = await supabase.rpc('point_shift_open', {
