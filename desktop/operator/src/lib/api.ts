@@ -1081,7 +1081,7 @@ export async function openPointShift(
         opening_cash: Number(payload.shift.opening_cash || 0),
       }
     }
-    return null
+    throw err
   }
 }
 
