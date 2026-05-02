@@ -150,6 +150,63 @@ function getStaffPaymentClosingWindow(
   }
 }
 
+function isStaffAdjustmentInsideClosingWindow(
+  adj: StaffAdjustment,
+  closingWindow: ReturnType<typeof getStaffPaymentClosingWindow>,
+) {
+  const date = String(adj.date || '')
+  if (!date || date > closingWindow.to) return false
+  if (closingWindow.from && date < closingWindow.from) return false
+  return true
+}
+
+function getStaffPaymentClosedAdjustments(params: {
+  staffId: string
+  adjustments: StaffAdjustment[]
+  payment: StaffPayment
+  closingWindow: ReturnType<typeof getStaffPaymentClosingWindow>
+}) {
+  const paymentId = String(params.payment.id)
+  const seen = new Set<string>()
+  const result: StaffAdjustment[] = []
+
+  for (const adj of params.adjustments) {
+    if (adj.staff_id !== params.staffId) continue
+    const linkedToPayment = String(adj.closed_by_payment_id || '') === paymentId
+    const paidInsideWindow =
+      !adj.closed_by_payment_id &&
+      String(adj.status || '') === 'paid' &&
+      isStaffAdjustmentInsideClosingWindow(adj, params.closingWindow)
+
+    if (!linkedToPayment && !paidInsideWindow) continue
+    if (seen.has(String(adj.id))) continue
+    seen.add(String(adj.id))
+    result.push(adj)
+  }
+
+  return result.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+}
+
+function getStaffPaymentGeneratedAdjustments(params: {
+  staffId: string
+  adjustments: StaffAdjustment[]
+  payment: StaffPayment
+}) {
+  const paymentId = String(params.payment.id)
+  const paymentDate = String(params.payment.pay_date || '')
+  return params.adjustments.filter((adj) => {
+    if (adj.staff_id !== params.staffId) return false
+    if (String(adj.source_payment_id || '') === paymentId) return true
+    if (adj.source_payment_id) return false
+    return (
+      adj.kind === 'advance' &&
+      String(adj.status || '') === 'active' &&
+      String(adj.date || '') === paymentDate &&
+      String(adj.comment || '').includes(`Переплата по выплате ${paymentDate}`)
+    )
+  })
+}
+
 function filterStaffAdjustmentsForSlot(
   adjs: StaffAdjustment[],
   staffId: string,
@@ -1420,14 +1477,18 @@ export default function SalaryPage() {
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
                     .slice(0, 3)
                   const recentPaymentDetails = recentPayments.map((payment) => {
-                    const paymentId = String(payment.id)
-                    const closedAdjustments = staffSalary.adjustments.filter(
-                      (adj) => adj.staff_id === s.id && String(adj.closed_by_payment_id || '') === paymentId,
-                    )
-                    const generatedAdjustments = staffSalary.adjustments.filter(
-                      (adj) => adj.staff_id === s.id && String(adj.source_payment_id || '') === paymentId,
-                    )
                     const closingWindow = getStaffPaymentClosingWindow(s.id, staffSalary.payments, payment.pay_date, payment.id)
+                    const closedAdjustments = getStaffPaymentClosedAdjustments({
+                      staffId: s.id,
+                      adjustments: staffSalary.adjustments,
+                      payment,
+                      closingWindow,
+                    })
+                    const generatedAdjustments = getStaffPaymentGeneratedAdjustments({
+                      staffId: s.id,
+                      adjustments: staffSalary.adjustments,
+                      payment,
+                    })
                     return { payment, closedAdjustments, generatedAdjustments, closingWindow }
                   })
                   const recentlyClosedAdjustmentsCount = recentPaymentDetails.reduce(
