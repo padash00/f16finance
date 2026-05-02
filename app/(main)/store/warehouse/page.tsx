@@ -17,6 +17,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Trash2,
@@ -50,6 +51,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { isAbortError } from '@/lib/is-abort-error'
+import { LabelPrintDialog } from '@/components/store/label-print-dialog'
+import type { LabelItem } from '@/components/store/label-print-dialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,6 +163,7 @@ export default function WarehousePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<'selected' | 'all' | null>(null)
+  const [showPrintLabels, setShowPrintLabels] = useState(false)
 
   const [editingWh, setEditingWh] = useState<string | null>(null)
   const [editWhVal, setEditWhVal] = useState('')
@@ -801,6 +805,17 @@ export default function WarehousePage() {
             Выбрано: {selectedIds.size}
           </span>
         )}
+        {selectedIds.size > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5"
+            onClick={() => setShowPrintLabels(true)}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Ценники ({selectedIds.size})
+          </Button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" className="h-9 gap-1.5">
@@ -1382,6 +1397,21 @@ export default function WarehousePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showPrintLabels && (
+        <LabelPrintDialog
+          items={balances
+            .filter((b) => selectedIds.has(b.item_id))
+            .map((b): LabelItem => ({
+              item_id: b.item_id,
+              name: b.item.name,
+              barcode: b.item.barcode,
+              sale_price: b.item.sale_price ?? null,
+              unit: b.item.unit ?? 'шт',
+            }))}
+          onClose={() => setShowPrintLabels(false)}
+        />
       )}
     </div>
     </TooltipProvider>
