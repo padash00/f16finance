@@ -373,10 +373,10 @@ function TasksContent() {
 
   useEffect(() => {
     const scheduleRefresh = () => {
+      if (isCreateModalOpen || isTaskModalOpen) return
       if (realtimeRefreshRef.current) {
         clearTimeout(realtimeRefreshRef.current)
       }
-
       realtimeRefreshRef.current = setTimeout(() => {
         loadData(true)
       }, 250)
@@ -409,6 +409,7 @@ function TasksContent() {
 
     const refreshIfVisible = async () => {
       if (document.visibilityState !== 'visible' || isRefreshing) return
+      if (isCreateModalOpen || isTaskModalOpen) return
       isRefreshing = true
       try {
         await loadData(true)
@@ -1867,7 +1868,8 @@ function CreateTaskModal({
     }
     setForm(base)
     setSubmitError(null)
-  }, [isOpen, companies])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   const buildTaskData = (taskNumber: number) => {
     const payload: {
