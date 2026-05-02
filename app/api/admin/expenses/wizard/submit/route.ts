@@ -177,6 +177,19 @@ export async function POST(request: Request) {
 
     if (insertError) throw insertError
 
+    if (documentUrls.length > 0) {
+      const { error: attachmentsError } = await supabase
+        .from('expense_attachments')
+        .insert(documentUrls.map((url, index) => ({
+          expense_id: inserted.id,
+          wizard_session_id: sessionId,
+          document_url: url,
+          sort_order: index,
+          uploaded_by: access.user?.id || null,
+        })))
+      if (attachmentsError && attachmentsError.code !== '42P01') throw attachmentsError
+    }
+
     const { error: consumeError } = await supabase
       .from('expense_wizard_sessions')
       .update({

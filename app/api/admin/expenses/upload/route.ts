@@ -80,15 +80,39 @@ export async function POST(request: Request) {
 
     const publicUrl = urlData.publicUrl
 
-    // Update expense record using admin client so RLS does not silently drop the UPDATE
-    const { error: updateError } = await adminClient
+    // Keep legacy attachment_url as the first uploaded file, while all files live in expense_attachments.
+    const { data: existingExpense, error: existingExpenseError } = await adminClient
       .from('expenses')
-      .update({ attachment_url: publicUrl })
+      .select('attachment_url')
       .eq('id', expenseId)
+      .maybeSingle()
+    if (existingExpenseError) throw existingExpenseError
+    if (!existingExpense?.attachment_url) {
+      const { error: updateError } = await adminClient
+        .from('expenses')
+        .update({ attachment_url: publicUrl })
+        .eq('id', expenseId)
+      if (updateError) throw updateError
+    }
 
-    if (updateError) throw updateError
+    const attachmentRow = {
+      expense_id: expenseId,
+      document_url: publicUrl,
+      file_name: fileName,
+      mime_type: detectedMime,
+      file_size: file.size,
+      uploaded_by: access.user?.id || null,
+    }
+    const { data: insertedAttachment, error: attachmentInsertError } = await adminClient
+      .from('expense_attachments')
+      .insert(attachmentRow)
+      .select('id, expense_id, document_url, file_name, mime_type, file_size, sort_order, created_at')
+      .single()
+    if (attachmentInsertError && attachmentInsertError.code !== '42P01') {
+      throw attachmentInsertError
+    }
 
-    return NextResponse.json({ ok: true, url: publicUrl })
+    return NextResponse.json({ ok: true, url: publicUrl, attachment: insertedAttachment || { ...attachmentRow, id: '', sort_order: 0, created_at: null } })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Upload failed' }, { status: 500 })
   }

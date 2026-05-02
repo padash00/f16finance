@@ -124,6 +124,8 @@ const ACTION_LABELS: Record<string, string> = {
   'server-error': 'получил ошибку сервера',
   visit: 'открыл',
   'page-view': 'открыл',
+  'point-debt-notify': 'уведомил о долге точки',
+  notification: 'отправил уведомление',
 }
 
 function actorName(email: string | null) {
@@ -667,6 +669,39 @@ export async function GET(req: Request) {
       }
     }
 
+    const notificationRecipients = Array.from(
+      new Set(((notificationRows || []) as NotificationRow[])
+        .map((row) => String(row.recipient || '').trim())
+        .filter(Boolean)),
+    )
+    const recipientNameMap = new Map<string, string>()
+    if (notificationRecipients.length > 0) {
+      const recipientSet = new Set(notificationRecipients)
+      const [operatorsByTelegram, staffByTelegram] = await Promise.all([
+        supabase
+          .from('operators')
+          .select('name, short_name, telegram_chat_id')
+          .in('telegram_chat_id', notificationRecipients)
+          .then((res: any) => res, () => ({ data: [], error: null })),
+        supabase
+          .from('staff')
+          .select('full_name, short_name, telegram_chat_id')
+          .in('telegram_chat_id', notificationRecipients)
+          .then((res: any) => res, () => ({ data: [], error: null })),
+      ])
+
+      for (const row of (operatorsByTelegram?.data || []) as any[]) {
+        const chatId = String(row.telegram_chat_id || '').trim()
+        const name = text(row.short_name || row.name)
+        if (chatId && name && recipientSet.has(chatId)) recipientNameMap.set(chatId, name)
+      }
+      for (const row of (staffByTelegram?.data || []) as any[]) {
+        const chatId = String(row.telegram_chat_id || '').trim()
+        const name = text(row.short_name || row.full_name)
+        if (chatId && name && recipientSet.has(chatId)) recipientNameMap.set(chatId, name)
+      }
+    }
+
     const combined = [
       ...((auditRows || []) as AuditRow[]).map((row) => ({
         id: `audit:${row.id}`,
@@ -685,23 +720,30 @@ export async function GET(req: Request) {
         recipient: null,
         payload: row.payload || null,
       })),
-      ...((notificationRows || []) as NotificationRow[]).map((row) => ({
-        id: `notification:${row.id}`,
-        kind: 'notification' as const,
-        createdAt: row.created_at,
-        title: `${row.channel} • ${row.status}`,
-        subtitle: row.recipient,
-        details: null,
-        detailRows: [],
-        entityType: null,
-        action: row.payload?.kind ? String(row.payload.kind) : 'notification',
-        actorUserId: null,
-        actorEmail: null,
-        channel: row.channel,
-        status: row.status,
-        recipient: row.recipient,
-        payload: row.payload || null,
-      })),
+      ...((notificationRows || []) as NotificationRow[]).map((row) => {
+        const recipientKey = String(row.recipient || '').trim()
+        const recipientName = recipientNameMap.get(recipientKey) || null
+        const payload: Record<string, unknown> = row.payload ? { ...row.payload } : {}
+        if (recipientName && !payload.recipient_name) payload.recipient_name = recipientName
+        if (recipientKey && !payload.recipient_chat_id) payload.recipient_chat_id = recipientKey
+        return {
+          id: `notification:${row.id}`,
+          kind: 'notification' as const,
+          createdAt: row.created_at,
+          title: `${row.channel} • ${row.status}`,
+          subtitle: recipientName || row.recipient,
+          details: null,
+          detailRows: [],
+          entityType: null,
+          action: row.payload?.kind ? String(row.payload.kind) : 'notification',
+          actorUserId: null,
+          actorEmail: null,
+          channel: row.channel,
+          status: row.status,
+          recipient: row.recipient,
+          payload,
+        }
+      }),
       ...aiUsageRows.map((row) => ({
         id: `ai:${row.id}`,
         kind: 'ai' as const,

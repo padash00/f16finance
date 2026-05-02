@@ -42,7 +42,19 @@ type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: st
 
 // ─── Admin staff salary types ─────────────────────────────────────────────────
 type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator' }
-type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string; created_at?: string | null }
+type StaffAdjustment = {
+  id: string
+  staff_id: string
+  kind: 'debt' | 'fine' | 'bonus' | 'advance'
+  amount: number
+  date: string
+  comment: string | null
+  status: string
+  created_at?: string | null
+  closed_by_payment_id?: string | null
+  source_payment_id?: string | null
+  closed_at?: string | null
+}
 type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null; created_at?: string | null }
 type StaffTimelineEvent = {
   id: string

@@ -87,7 +87,7 @@ function UnauthorizedPageContent() {
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <Badge variant={isPlanLock ? 'default' : 'destructive'}>
-                    {isPlanLock ? 'Upgrade Required' : 'Access Blocked'}
+                    {isPlanLock ? 'Нужен другой тариф' : 'Доступ закрыт'}
                   </Badge>
                   {featureMeta ? <Badge variant="outline">{featureMeta.label}</Badge> : null}
                   {session?.activeOrganization?.name ? <Badge variant="secondary">{activeOrganizationName}</Badge> : null}
@@ -198,7 +198,7 @@ function UnauthorizedPageContent() {
           ) : null}
 
           <p className="text-[10px] text-muted-foreground/70">
-            Orda Control · SaaS access layer
+            Orda Control · слой доступа
           </p>
         </div>
       </div>

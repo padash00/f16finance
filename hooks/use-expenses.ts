@@ -16,6 +16,16 @@ export type ExpenseRow = {
   document_kind?: 'receipt' | 'invoice' | 'bill' | 'whitelist' | 'one_off' | null
   one_off_payee?: string | null
   created_at?: string | null
+  attachments?: Array<{
+    id: string
+    expense_id: string
+    document_url: string
+    file_name: string | null
+    mime_type: string | null
+    file_size: number | null
+    sort_order: number | null
+    created_at: string | null
+  }>
 }
 
 export type UseExpensesOptions = {

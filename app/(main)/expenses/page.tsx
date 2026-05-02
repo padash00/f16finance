@@ -751,28 +751,45 @@ export default function ExpensesPage() {
   }
 
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !editingExpense) return
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0 || !editingExpense) return
     setUploadingAttachment(true)
     setUploadError(null)
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('expenseId', editingExpense.id)
     try {
-      const res = await fetch('/api/admin/expenses/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.ok) {
-        setRows((prev) =>
-          prev.map((row) =>
-            row.id === editingExpense.id ? { ...row, attachment_url: data.url } : row,
-          ),
-        )
-        setEditingExpense((prev) => (prev ? { ...prev, attachment_url: data.url } : prev))
-      } else {
-        setUploadError(data.error || 'Ошибка загрузки')
+      const uploads: any[] = []
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('expenseId', editingExpense.id)
+        const res = await fetch('/api/admin/expenses/upload', { method: 'POST', body: formData })
+        const data = await res.json()
+        if (!data.ok) {
+          throw new Error(data.error || 'Ошибка загрузки')
+        }
+        uploads.push(data)
       }
-    } catch {
-      setUploadError('Ошибка загрузки')
+
+      const applyUploads = (row: ExpenseRow): ExpenseRow => {
+        const existingAttachments = row.attachments?.length
+          ? row.attachments
+          : row.attachment_url
+            ? [{ id: `legacy:${row.attachment_url}`, expense_id: row.id, document_url: row.attachment_url, file_name: null, mime_type: null, file_size: null, sort_order: 0, created_at: null }]
+            : []
+        const nextAttachments = [
+          ...existingAttachments,
+          ...uploads.map((upload) => upload.attachment || { id: `upload:${upload.url}`, expense_id: row.id, document_url: upload.url, file_name: null, mime_type: null, file_size: null, sort_order: 0, created_at: null }),
+        ]
+        return {
+          ...row,
+          attachment_url: row.attachment_url || uploads[0]?.url || null,
+          attachments: nextAttachments,
+        }
+      }
+
+      setRows((prev) => prev.map((row) => (row.id === editingExpense.id ? applyUploads(row) : row)))
+      setEditingExpense((prev) => (prev ? applyUploads(prev) : prev))
+    } catch (err: any) {
+      setUploadError(err?.message || 'Ошибка загрузки')
     }
     setUploadingAttachment(false)
     // Reset input so same file can be re-selected
@@ -792,9 +809,9 @@ export default function ExpensesPage() {
       })
       if (res.ok) {
         setRows((prev) =>
-          prev.map((row) => (row.id === editingExpense.id ? { ...row, attachment_url: null } : row)),
+          prev.map((row) => (row.id === editingExpense.id ? { ...row, attachment_url: null, attachments: [] } : row)),
         )
-        setEditingExpense((prev) => (prev ? { ...prev, attachment_url: null } : prev))
+        setEditingExpense((prev) => (prev ? { ...prev, attachment_url: null, attachments: [] } : prev))
       }
     } catch {
       // ignore
@@ -1551,23 +1568,42 @@ export default function ExpensesPage() {
 
             {/* Attachment section */}
             <div className="mt-3 border-t border-gray-800 pt-3">
-              <p className="text-xs text-gray-500 mb-2">Вложение (фото чека, накладной)</p>
-              {editingExpense?.attachment_url ? (
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setPreviewUrl(editingExpense.attachment_url!)}
-                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                    <Paperclip className="w-3.5 h-3.5" />
-                    Посмотреть вложение
-                  </button>
-                  <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить</button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Прикрепить файл</span>
-                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleAttachmentUpload} />
-                </label>
-              )}
+              <p className="text-xs text-gray-500 mb-2">Вложения (фото чеков, накладные)</p>
+              {editingExpense ? (() => {
+                const urls = editingExpense.attachments?.length
+                  ? editingExpense.attachments.map((item) => item.document_url).filter(Boolean)
+                  : editingExpense.attachment_url
+                    ? [editingExpense.attachment_url]
+                    : []
+                return urls.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {urls.map((url, index) => (
+                        <button
+                          key={`${url}-${index}`}
+                          onClick={() => setPreviewUrl(url)}
+                          className="flex items-center gap-1.5 rounded-md border border-blue-500/30 px-2 py-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          Документ {index + 1}
+                        </button>
+                      ))}
+                      <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить все</button>
+                    </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Добавить ещё</span>
+                      <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
+                    </label>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Прикрепить файл или несколько файлов</span>
+                    <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
+                  </label>
+                )
+              })() : null}
               {uploadingAttachment && <p className="text-xs text-blue-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Загрузка...</p>}
               {uploadError && <p className="text-xs text-red-400 mt-1">{uploadError}</p>}
             </div>
@@ -2135,10 +2171,15 @@ function ListTab({
                   : row.document_kind === 'bill'
                   ? 'Счет'
                   : row.document_kind === 'whitelist'
-                  ? 'Whitelist'
+                  ? 'Доверенный'
                   : row.document_kind === 'one_off'
-                  ? 'One-off'
+                  ? 'Разовый'
                   : '—'
+              const attachmentUrls = row.attachments?.length
+                ? row.attachments.map((item) => item.document_url).filter(Boolean)
+                : row.attachment_url
+                  ? [row.attachment_url]
+                  : []
 
               return (
                 <tr
@@ -2190,9 +2231,10 @@ function ListTab({
                     {row.comment || '—'}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {row.attachment_url ? (
-                      <button onClick={() => onPreview(row.attachment_url)} title="Посмотреть вложение" className="inline-flex text-blue-400 hover:text-blue-300 transition-colors">
+                    {attachmentUrls.length > 0 ? (
+                      <button onClick={() => onPreview(attachmentUrls[0])} title="Посмотреть вложение" className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors">
                         <Paperclip className="h-3.5 w-3.5" />
+                        {attachmentUrls.length > 1 ? <span className="text-[10px]">{attachmentUrls.length}</span> : null}
                       </button>
                     ) : null}
                   </td>

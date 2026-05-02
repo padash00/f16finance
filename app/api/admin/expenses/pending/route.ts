@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
     }
 

@@ -127,7 +127,37 @@ export async function GET(req: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    return json({ data: data ?? [] })
+    const rows = data ?? []
+    const expenseIds = rows.map((row: any) => String(row.id)).filter(Boolean)
+    if (expenseIds.length === 0) return json({ data: rows })
+
+    const { data: attachments, error: attachmentsError } = await supabase
+      .from('expense_attachments')
+      .select('id, expense_id, document_url, file_name, mime_type, file_size, sort_order, created_at')
+      .in('expense_id', expenseIds)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+    if (attachmentsError && attachmentsError.code !== '42P01') throw attachmentsError
+
+    const attachmentsByExpense = new Map<string, any[]>()
+    for (const attachment of attachments || []) {
+      const key = String((attachment as any).expense_id || '')
+      if (!key) continue
+      const list = attachmentsByExpense.get(key) || []
+      list.push(attachment)
+      attachmentsByExpense.set(key, list)
+    }
+
+    return json({
+      data: rows.map((row: any) => {
+        const rowAttachments = attachmentsByExpense.get(String(row.id)) || []
+        return {
+          ...row,
+          attachments: rowAttachments,
+          attachment_url: row.attachment_url || rowAttachments[0]?.document_url || null,
+        }
+      }),
+    })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expenses GET', message: error?.message || 'error' })
     return json({ error: humanizeDbError(error, 'Ошибка сервера') }, 500)
@@ -148,8 +178,8 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
-    const canCreateFinance = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
-    const canManageFinance = access.isSuperAdmin || access.staffRole === 'owner'
+    const canUpdateFinance = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    const canDeleteFinance = access.isSuperAdmin || access.staffRole === 'owner'
 
     if (body.action === 'createExpense') {
       return json({
@@ -159,7 +189,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateExpense') {
-      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
+      if (!canUpdateFinance) return json({ error: 'forbidden' }, 403)
       if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
       const validationError = validatePayload(body.payload)
       if (validationError) return json({ error: validationError }, 400)
@@ -199,7 +229,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'removeAttachment') {
-      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
+      if (!canUpdateFinance) return json({ error: 'forbidden' }, 403)
       if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
       const { data: existing, error: existingError } = await supabase
         .from('expenses')
@@ -214,10 +244,17 @@ export async function POST(req: Request) {
       })
       const { error } = await supabase.from('expenses').update({ attachment_url: null }).eq('id', body.expenseId)
       if (error) throw error
+
+      const { error: attachmentDeleteError } = await supabase
+        .from('expense_attachments')
+        .delete()
+        .eq('expense_id', body.expenseId)
+      if (attachmentDeleteError && attachmentDeleteError.code !== '42P01') throw attachmentDeleteError
+
       return json({ ok: true })
     }
 
-    if (!canManageFinance) return json({ error: 'forbidden' }, 403)
+    if (!canDeleteFinance) return json({ error: 'forbidden' }, 403)
     if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
 
     const { data: existing, error: existingError } = await supabase.from('expenses').select('*').eq('id', body.expenseId).single()

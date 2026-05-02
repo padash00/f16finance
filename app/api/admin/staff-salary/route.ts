@@ -28,21 +28,6 @@ function monthRangeFromDate(payDate: string) {
   }
 }
 
-// Only super_admin and owner can access staff salary
-async function checkAccess(req: Request) {
-  const access = await getRequestAccessContext(req)
-  if ('response' in access) return { error: access.response }
-  if (!access.isSuperAdmin) {
-    // Check if user is owner via staff table
-    const supabase = createAdminSupabaseClient()
-    const { data: { user } } = await createAdminSupabaseClient().auth.admin.listUsers()
-      .then(() => ({ data: { user: null } })).catch(() => ({ data: { user: null } }))
-    // Simplified: allow isSuperAdmin only for now
-    return { error: json({ error: 'forbidden' }, 403) }
-  }
-  return { access }
-}
-
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -60,7 +45,7 @@ export async function GET(req: Request) {
         .order('full_name'),
       supabase
         .from('staff_adjustments')
-        .select('id, staff_id, kind, amount, date, comment, status, created_at')
+        .select('id, staff_id, kind, amount, date, comment, status, created_at, closed_by_payment_id, source_payment_id, closed_at')
         .order('created_at', { ascending: false }),
       supabase
         .from('staff_salary_payments')
@@ -209,7 +194,11 @@ export async function GET(req: Request) {
 
     const expectedAdvanceSourceIds = new Set<string>(
       adjustmentRows
-        .filter((row) => String(row?.kind || '') === 'advance' && String(row?.status || 'active') === 'active')
+        .filter((row) =>
+          String(row?.kind || '') === 'advance' &&
+          String(row?.status || 'active') === 'active' &&
+          !row?.source_payment_id
+        )
         .map((row) => `staff-adjustment:${String(row?.id || '')}`)
         .filter((value) => value !== 'staff-adjustment:'),
     )
@@ -223,7 +212,7 @@ export async function GET(req: Request) {
     const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
 
     return json({
-      can_edit: access.isSuperAdmin,
+      can_edit: access.isSuperAdmin || access.staffRole === 'owner',
       staff: [...baseStaff, ...virtualStaffFromOperators],
       adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments],
       payments: paymentsRes.data ?? [],
@@ -249,7 +238,7 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    if (!access.isSuperAdmin && access.staffRole !== 'owner') return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
     const body = await req.json().catch(() => null)
@@ -497,9 +486,14 @@ export async function POST(req: Request) {
         .map((row: any) => String(row.id))
 
       if (idsToClose.length > 0) {
+        const closedAt = new Date().toISOString()
         const { error: adjPayError } = await supabase
           .from('staff_adjustments')
-          .update({ status: 'paid' })
+          .update({
+            status: 'paid',
+            closed_by_payment_id: payment.id,
+            closed_at: closedAt,
+          })
           .in('id', idsToClose)
         if (adjPayError) throw adjPayError
       }
@@ -538,6 +532,7 @@ export async function POST(req: Request) {
             date: pay_date,
             comment: `Переплата по выплате ${pay_date}: выдано ${total.toLocaleString('ru-RU')} ₸, по расчету ${calculatedToPay.toLocaleString('ru-RU')} ₸`,
             status: 'active',
+            source_payment_id: payment.id,
           })
           .select('id')
           .single()
@@ -631,6 +626,28 @@ export async function POST(req: Request) {
         if (expensesDeleteError) throw expensesDeleteError
       }
 
+      const { data: restoredAdjustments, error: restoreAdjustmentsError } = await supabase
+        .from('staff_adjustments')
+        .update({
+          status: 'active',
+          closed_by_payment_id: null,
+          closed_at: null,
+        })
+        .eq('closed_by_payment_id', id)
+        .select('id')
+      if (restoreAdjustmentsError) throw restoreAdjustmentsError
+
+      const { data: voidedOverpayments, error: voidOverpaymentsError } = await supabase
+        .from('staff_adjustments')
+        .update({
+          status: 'voided',
+          closed_by_payment_id: null,
+          closed_at: null,
+        })
+        .eq('source_payment_id', id)
+        .select('id')
+      if (voidOverpaymentsError) throw voidOverpaymentsError
+
       const { error: paymentDeleteError } = await supabase.from('staff_salary_payments').delete().eq('id', id)
       if (paymentDeleteError) throw paymentDeleteError
 
@@ -638,13 +655,20 @@ export async function POST(req: Request) {
         entityType: 'staff-payment',
         entityId: String(id),
         action: 'delete',
-        payload: { source_id: sourceId, deleted_expense_ids: expenseIdsToDelete },
+        payload: {
+          source_id: sourceId,
+          deleted_expense_ids: expenseIdsToDelete,
+          restored_adjustment_ids: (restoredAdjustments || []).map((row: any) => String(row.id)),
+          voided_overpayment_ids: (voidedOverpayments || []).map((row: any) => String(row.id)),
+        },
       })
       return json({
         ok: true,
         deleted_payment_id: id,
         deleted_expense_source_id: sourceId,
         deleted_expense_count: expenseIdsToDelete.length,
+        restored_adjustment_count: restoredAdjustments?.length || 0,
+        voided_overpayment_count: voidedOverpayments?.length || 0,
       })
     }
 

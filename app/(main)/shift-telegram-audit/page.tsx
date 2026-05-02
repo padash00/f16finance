@@ -224,6 +224,12 @@ function buildMatches(reports: TgReport[], data: ApiData | null): MatchRow[] {
   })
 }
 
+function buildUnmatchedIncomes(matches: MatchRow[], data: ApiData | null) {
+  if (!data) return []
+  const matchedIncomeIds = new Set(matches.map((row) => row.income?.id).filter(Boolean) as string[])
+  return data.incomes.filter((income) => !matchedIncomeIds.has(income.id))
+}
+
 export default function ShiftTelegramAuditPage() {
   const [from, setFrom] = useState('2025-11-01')
   const [to, setTo] = useState(todayISO())
@@ -260,23 +266,41 @@ export default function ShiftTelegramAuditPage() {
       const parsed = parseTelegramHtml(html).filter((report) => report.date >= from && report.date <= to)
       setReports(parsed)
     } catch (e: any) {
-      setError(e?.message || 'Не удалось прочитать HTML export')
+      setError(e?.message || 'Не удалось прочитать HTML-файл')
     }
   }
 
   const matches = useMemo(() => buildMatches(reports, data), [reports, data])
+  const unmatchedIncomes = useMemo(() => buildUnmatchedIncomes(matches, data), [matches, data])
   const filteredMatches = useMemo(() => {
     const needle = normalizeText(query)
     if (!needle) return matches
     return matches.filter((row) => normalizeText([row.report.companyText, row.report.pointText, row.report.operatorText, row.report.date, row.status].join(' ')).includes(needle))
   }, [matches, query])
+  const filteredUnmatchedIncomes = useMemo(() => {
+    const needle = normalizeText(query)
+    if (!needle) return unmatchedIncomes
+    return unmatchedIncomes.filter((income) => {
+      const company = data?.companies.find((item) => item.id === income.company_id)
+      const operator = data?.operators.find((item) => item.id === income.operator_id)
+      return normalizeText([
+        income.date,
+        income.shift,
+        companyLabel(company),
+        operatorLabel(operator),
+        income.comment,
+        'нет в telegram',
+      ].join(' ')).includes(needle)
+    })
+  }, [data?.companies, data?.operators, query, unmatchedIncomes])
   const summary = useMemo(() => ({
     total: matches.length,
     ok: matches.filter((row) => row.status === 'ok').length,
     diff: matches.filter((row) => row.status === 'diff' || row.status === 'weak').length,
     missing: matches.filter((row) => row.status === 'missing').length,
+    siteMissing: unmatchedIncomes.length,
     changed: matches.filter((row) => row.changes.length > 0).length,
-  }), [matches])
+  }), [matches, unmatchedIncomes.length])
 
   const companies = data?.companies || []
   const operators = data?.operators || []
@@ -310,18 +334,19 @@ export default function ShiftTelegramAuditPage() {
           </div>
           <label className="flex h-10 cursor-pointer items-center justify-center gap-2 self-end rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 text-sm text-cyan-100 hover:bg-cyan-500/20">
             <FileUp className="h-4 w-4" />
-            Telegram HTML
+            HTML Telegram
             <input className="hidden" type="file" accept=".html,text/html" onChange={handleFile} />
           </label>
         </div>
         {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div> : null}
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-6">
         <Metric title="Telegram отчётов" value={summary.total} />
         <Metric title="Совпало" value={summary.ok} tone="ok" />
         <Metric title="Расхождения" value={summary.diff} tone="warn" />
         <Metric title="Нет дохода" value={summary.missing} tone="bad" />
+        <Metric title="Нет в Telegram" value={summary.siteMissing} tone="bad" />
         <Metric title="Меняли на сайте" value={summary.changed} tone="warn" />
       </div>
 
@@ -360,7 +385,7 @@ export default function ShiftTelegramAuditPage() {
                     <td className="py-3 pr-3">
                       <div>{row.report.companyText || row.report.pointText || companyLabel(company)}</div>
                       <div className="text-xs text-slate-500">{row.report.operatorText || operatorLabel(operator)}</div>
-                      {row.score ? <div className="text-[11px] text-slate-600">match {row.score}</div> : null}
+                      {row.score ? <div className="text-[11px] text-slate-600">совпадение {row.score}</div> : null}
                     </td>
                     <td className="py-3 pr-3 tabular-nums">{money(row.report.cash)}</td>
                     <td className="py-3 pr-3 tabular-nums">{row.income ? money(row.income.cash_amount) : '—'}</td>
@@ -383,6 +408,53 @@ export default function ShiftTelegramAuditPage() {
               {filteredMatches.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-10 text-center text-slate-500">Загрузи данные сайта и HTML экспорт Telegram.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card className="border-white/10 bg-slate-950/80 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Доходы сайта без отчёта Telegram</h2>
+            <p className="mt-1 text-xs text-slate-500">Здесь видны смены/доходы, которые есть на сайте, но не нашлись в выгрузке Telegram за выбранный период.</p>
+          </div>
+          <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs text-red-300">{filteredUnmatchedIncomes.length}</span>
+        </div>
+        <div className="overflow-auto">
+          <table className="min-w-[900px] w-full text-left text-sm">
+            <thead className="text-xs uppercase text-slate-500">
+              <tr className="border-b border-white/10">
+                <th className="py-2 pr-3">Дата</th>
+                <th className="py-2 pr-3">Смена</th>
+                <th className="py-2 pr-3">Точка</th>
+                <th className="py-2 pr-3">Оператор</th>
+                <th className="py-2 pr-3">Наличные</th>
+                <th className="py-2 pr-3">Kaspi</th>
+                <th className="py-2 pr-3">Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUnmatchedIncomes.map((income) => {
+                const company = companies.find((item) => item.id === income.company_id)
+                const operator = operators.find((item) => item.id === income.operator_id)
+                return (
+                  <tr key={income.id} className="border-b border-white/5 align-top text-slate-200">
+                    <td className="py-3 pr-3 font-medium">{income.date}</td>
+                    <td className="py-3 pr-3 text-slate-400">{income.shift === 'night' ? 'Ночь' : income.shift === 'day' ? 'День' : '—'}</td>
+                    <td className="py-3 pr-3">{companyLabel(company)}</td>
+                    <td className="py-3 pr-3">{operatorLabel(operator)}</td>
+                    <td className="py-3 pr-3 tabular-nums">{money(income.cash_amount)}</td>
+                    <td className="py-3 pr-3 tabular-nums">{money(incomeKaspi(income))}</td>
+                    <td className="py-3 pr-3 text-slate-500">{income.comment || '—'}</td>
+                  </tr>
+                )
+              })}
+              {filteredUnmatchedIncomes.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500">Лишних доходов сайта по текущему фильтру нет.</td>
                 </tr>
               ) : null}
             </tbody>

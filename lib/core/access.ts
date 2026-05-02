@@ -552,11 +552,19 @@ function findRolePermissionOverride(
   return bestMatch
 }
 
-const MANDATORY_MANAGER_FINANCE_CREATE_PATHS = ['/income/add', '/expenses/add', '/expenses/new'] as const
+const MANDATORY_MANAGER_OPERATIONAL_FINANCE_PATHS = [
+  '/income/add',
+  '/expenses',
+  '/expenses/add',
+  '/expenses/new',
+  '/expenses/pending',
+  '/expenses/analysis',
+  '/expense-whitelist',
+] as const
 
 function isMandatoryStaffPath(role: StaffRole, pathname: string): boolean {
   if (role !== 'manager') return false
-  return MANDATORY_MANAGER_FINANCE_CREATE_PATHS.some((rule) => matchesConfiguredPath(pathname, rule))
+  return MANDATORY_MANAGER_OPERATIONAL_FINANCE_PATHS.some((rule) => matchesConfiguredPath(pathname, rule))
 }
 
 export function canStaffRoleAccessPath(
