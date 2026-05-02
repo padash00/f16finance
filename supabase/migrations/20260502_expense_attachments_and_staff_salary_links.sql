@@ -21,8 +21,8 @@ create index if not exists idx_expense_attachments_wizard_session
   where wizard_session_id is not null;
 
 alter table if exists public.staff_adjustments
-  add column if not exists closed_by_payment_id uuid null references public.staff_salary_payments(id) on delete set null,
-  add column if not exists source_payment_id uuid null references public.staff_salary_payments(id) on delete set null,
+  add column if not exists closed_by_payment_id bigint null references public.staff_salary_payments(id) on delete set null,
+  add column if not exists source_payment_id bigint null references public.staff_salary_payments(id) on delete set null,
   add column if not exists closed_at timestamptz null;
 
 create index if not exists idx_staff_adjustments_closed_by_payment
