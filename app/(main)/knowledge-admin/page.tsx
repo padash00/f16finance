@@ -146,6 +146,9 @@ type ChecklistRunResponseItem = {
   failed: boolean
   value: unknown
   note: string | null
+  photo_data_url?: string | null
+  photo_name?: string | null
+  photo_captured_at?: string | null
 }
 
 type KnowledgeResponse = {
@@ -215,7 +218,7 @@ const CHECKLIST_PRESETS = [
     schedule_type: 'periodic' as const,
     shift_scope: 'any',
     role_scope: 'operator',
-    recurrence_minutes: 60,
+    recurrence_minutes: 120,
     blocks_shift: false,
   },
   {
@@ -328,6 +331,8 @@ export default function KnowledgeAdminPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'published' | 'draft' | 'confirmation'>('all')
   const [filterCompany, setFilterCompany] = useState<string>('all')
   const [checklistScheduleFilter, setChecklistScheduleFilter] = useState<'all' | ChecklistTemplate['schedule_type']>('all')
+  const [runStatusFilter, setRunStatusFilter] = useState<'all' | ChecklistRun['status']>('all')
+  const [runEvidenceFilter, setRunEvidenceFilter] = useState<'all' | 'missing-photo' | 'with-problems'>('all')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -443,19 +448,32 @@ export default function KnowledgeAdminPage() {
     return data.runs.filter((run) => {
       if (filterCompany === 'global' && run.company_id) return false
       if (filterCompany !== 'all' && filterCompany !== 'global' && run.company_id !== filterCompany) return false
+      if (runStatusFilter !== 'all' && run.status !== runStatusFilter) return false
+      if (runEvidenceFilter === 'with-problems' && Number(run.failed_count || 0) <= 0) return false
+      if (
+        runEvidenceFilter === 'missing-photo' &&
+        !(run.response_items || []).some((item) => item.requires_photo && !item.photo_data_url)
+      ) {
+        return false
+      }
       if (!needle) return true
       return [run.template_title, run.company_name, run.run_by_name, run.co_signed_by_name, run.status, run.shift_type]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle))
     })
-  }, [data.runs, query, filterCompany])
+  }, [data.runs, query, filterCompany, runStatusFilter, runEvidenceFilter])
 
   const runStats = useMemo(() => {
+    const responseItems = filteredRuns.flatMap((run) => run.response_items || [])
     return {
       total: filteredRuns.length,
       completed: filteredRuns.filter((run) => run.status === 'completed').length,
       inProgress: filteredRuns.filter((run) => run.status === 'in_progress').length,
       failedItems: filteredRuns.reduce((sum, run) => sum + Number(run.failed_count || 0), 0),
+      withPhotos: responseItems.filter((item) => item.photo_data_url).length,
+      missingPhotos: responseItems.filter((item) => item.requires_photo && !item.photo_data_url).length,
+      finesTotal: filteredRuns.reduce((sum, run) => sum + Number(run.fines_total || 0), 0),
+      bonusesTotal: filteredRuns.reduce((sum, run) => sum + Number(run.bonuses_total || 0), 0),
     }
   }, [filteredRuns])
 
@@ -771,7 +789,7 @@ export default function KnowledgeAdminPage() {
   const tabs = [
     { id: 'articles' as const, label: 'Статьи и FAQ', icon: FileText, count: data.articles.length },
     { id: 'checklists' as const, label: 'Чек-листы', icon: ClipboardList, count: data.templates.length },
-    { id: 'runs' as const, label: 'Журнал чек-листов', icon: History, count: data.runs.length },
+    { id: 'runs' as const, label: 'Журнал и дисциплина', icon: History, count: data.runs.length },
     { id: 'categories' as const, label: 'Категории', icon: Layers3, count: data.categories.length },
   ]
 
@@ -1097,7 +1115,7 @@ export default function KnowledgeAdminPage() {
 
             {tab === 'runs' && (
               <div className="min-w-0">
-                <Panel title="Журнал прохождений чек-листов" icon={History}>
+                <Panel title="Журнал и дисциплина чек-листов" icon={History}>
                   <TabHint
                     title="Что здесь контролировать?"
                     text="Это история прохождения чек-листов операторами: кто начал, кто завершил, по какой точке, сколько пунктов выполнено и где были проблемы, штрафы или бонусы."
@@ -1126,13 +1144,38 @@ export default function KnowledgeAdminPage() {
                         </option>
                       ))}
                     </SelectInput>
+                    <SelectInput
+                      value={runStatusFilter}
+                      onChange={(event) => setRunStatusFilter(event.target.value as typeof runStatusFilter)}
+                      className="!w-auto !py-3 !text-sm"
+                    >
+                      <option value="all">Все статусы</option>
+                      {Object.entries(RUN_STATUS_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </SelectInput>
+                    <SelectInput
+                      value={runEvidenceFilter}
+                      onChange={(event) => setRunEvidenceFilter(event.target.value as typeof runEvidenceFilter)}
+                      className="!w-auto !py-3 !text-sm"
+                    >
+                      <option value="all">Все ответы</option>
+                      <option value="with-problems">Только с проблемами</option>
+                      <option value="missing-photo">Требовали фото, но фото нет</option>
+                    </SelectInput>
                   </div>
 
-                  <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
                     <MiniMetric label="Всего прохождений" value={runStats.total} />
                     <MiniMetric label="Завершено" value={runStats.completed} />
                     <MiniMetric label="В работе" value={runStats.inProgress} />
                     <MiniMetric label="Проблемных пунктов" value={runStats.failedItems} tone="danger" />
+                    <MiniMetric label="Фото приложено" value={runStats.withPhotos} tone="success" />
+                    <MiniMetric label="Фото не хватает" value={runStats.missingPhotos} tone={runStats.missingPhotos ? 'danger' : 'default'} />
+                    <MiniMetric label="Штрафы" value={formatMoneyText(runStats.finesTotal)} tone="danger" />
+                    <MiniMetric label="Бонусы" value={formatMoneyText(runStats.bonusesTotal)} tone="success" />
                   </div>
 
                   <div className="grid gap-3">
@@ -1216,8 +1259,32 @@ export default function KnowledgeAdminPage() {
                                             Комментарий: {item.note}
                                           </div>
                                         )}
+                                        {item.photo_data_url ? (
+                                          <div className="mt-3">
+                                            <a href={item.photo_data_url} target="_blank" rel="noreferrer" className="inline-block">
+                                              <img
+                                                src={item.photo_data_url}
+                                                alt={item.photo_name || `Фото пункта ${index + 1}`}
+                                                className="max-h-44 rounded-2xl border border-slate-700 object-cover"
+                                              />
+                                            </a>
+                                            <div className="mt-1 text-[11px] text-slate-500">
+                                              {item.photo_name || 'Фото подтверждение'}
+                                              {item.photo_captured_at ? ` · ${formatDateTime(item.photo_captured_at)}` : ''}
+                                            </div>
+                                          </div>
+                                        ) : item.requires_photo ? (
+                                          <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                                            Фото требовалось, но не приложено.
+                                          </div>
+                                        ) : null}
                                       </div>
                                       <div className="flex shrink-0 flex-wrap gap-2 text-xs font-black">
+                                        {item.photo_data_url && (
+                                          <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-sky-100">
+                                            Есть фото
+                                          </span>
+                                        )}
                                         {Number(item.fine_amount || 0) > 0 && (
                                           <span className="rounded-full border border-red-400/30 bg-red-400/10 px-2 py-1 text-red-100">
                                             Штраф {formatMoneyText(item.fine_amount)}

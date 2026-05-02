@@ -464,7 +464,17 @@ export default function ShiftPage({
       toastSuccess('Смена открыта')
       void loadKnowledgeContext()
     } catch (openError) {
-      const message = openError instanceof Error ? openError.message : 'Не удалось открыть смену'
+      const payload = (openError as any)?.payload
+      const errorCode = payload?.error || ''
+      const shiftErrorMessages: Record<string, string> = {
+        'point-shift-not-scheduled': payload?.detail || 'Вы не назначены на сегодня по графику. Обратитесь к руководителю.',
+        'opening-cash-required': 'Укажите старт кассы перед открытием смены.',
+        'point-shift-already-open': 'Смена уже открыта.',
+        'point-shift-operator-not-onboarded': 'Оператор не привязан к этой точке.',
+        'point-company-required': 'Не удалось определить точку. Перезайдите в программу.',
+      }
+      const message = shiftErrorMessages[errorCode]
+        || (openError instanceof Error ? openError.message : 'Не удалось открыть смену')
       setOpeningError(message)
       toastError(message)
     } finally {

@@ -75,22 +75,35 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (publication) {
-      const { data: scheduledShift } = await supabase
+      // Only enforce if today's shifts already have operator_id populated.
+      // If they're all NULL (old schedule data), skip — don't block everyone.
+      const { data: anyScheduled } = await supabase
         .from('shifts')
         .select('id')
         .eq('company_id', device.company_id)
         .eq('date', todayKZ)
-        .eq('operator_id', body.operator_id)
+        .not('operator_id', 'is', null)
+        .limit(1)
         .maybeSingle()
 
-      if (!scheduledShift) {
-        return json(
-          {
-            error: 'point-shift-not-scheduled',
-            detail: 'Вы не назначены на сегодня по графику. Обратитесь к руководителю.',
-          },
-          403,
-        )
+      if (anyScheduled) {
+        const { data: scheduledShift } = await supabase
+          .from('shifts')
+          .select('id')
+          .eq('company_id', device.company_id)
+          .eq('date', todayKZ)
+          .eq('operator_id', body.operator_id)
+          .maybeSingle()
+
+        if (!scheduledShift) {
+          return json(
+            {
+              error: 'point-shift-not-scheduled',
+              detail: 'Вы не назначены на сегодня по графику. Обратитесь к руководителю.',
+            },
+            403,
+          )
+        }
       }
     }
   }

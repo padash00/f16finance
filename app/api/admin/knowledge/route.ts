@@ -264,9 +264,20 @@ async function loadKnowledgeData(params: { organizationId: string | null; isSupe
           const response = (responses as Record<string, any>)[String(item.id)] || null
           const hasResponse = response !== null
           const failed = response?.passed === false || response?.value === false
+          const value = response?.value
+          const hasValue =
+            typeof value === 'boolean' ||
+            typeof value === 'number' ||
+            (typeof value === 'string' && value.trim().length > 0) ||
+            (Array.isArray(value) && value.length > 0)
+          const hasPhoto = typeof response?.photo_data_url === 'string' && response.photo_data_url.trim().length > 0
+          const hasNote = typeof response?.note === 'string' && response.note.trim().length > 0
+          const hasComment = typeof response?.comment === 'string' && response.comment.trim().length > 0
+          const isNonBooleanAnswered =
+            item.answer_type === 'photo' ? hasPhoto : hasValue || hasPhoto || hasNote || hasComment
           const passed = failed
             ? false
-            : response?.passed === true || response?.value === true || (hasResponse && item.answer_type !== 'boolean')
+            : response?.passed === true || response?.value === true || (hasResponse && item.answer_type !== 'boolean' && isNonBooleanAnswered)
           return {
             id: item.id,
             title: item.title,
@@ -280,6 +291,9 @@ async function loadKnowledgeData(params: { organizationId: string | null; isSupe
             failed,
             value: response?.value ?? null,
             note: response?.note || response?.comment || null,
+            photo_data_url: response?.photo_data_url || null,
+            photo_name: response?.photo_name || null,
+            photo_captured_at: response?.photo_captured_at || null,
           }
         })
         const runner = run.run_by ? staffById.get(String(run.run_by)) : null
@@ -373,6 +387,40 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
         'Премия — это не подарок, а поощрение за стабильное выполнение правил. Штраф применяется за конкретное нарушение с причиной. Серьёзные случаи должны проходить проверку руководителем. Идеальная смена может давать бонус, а повторные нарушения усиливают ответственность.',
       tags: ['зарплата', 'штраф', 'премия'],
       severity: 'info',
+      requires_confirmation: true,
+    },
+    {
+      category: 'shift-rules',
+      title: 'Неразглашение внутренней информации',
+      slug: 'operator-confidentiality-rules',
+      summary: 'Оператор не передаёт внутренние данные, цены, отчёты, доступы, переписки и данные клиентов третьим лицам.',
+      content:
+        '<p>Оператор получает доступ только для выполнения рабочих задач. Запрещено передавать логины, пароли, скриншоты отчётов, данные клиентов, суммы кассы, внутренние инструкции и переписки третьим лицам.</p><p>Если доступ был потерян, телефон украден или появился подозрительный запрос — нужно сразу сообщить руководителю.</p>',
+      tags: ['конфиденциальность', 'доступы', 'безопасность'],
+      severity: 'critical',
+      requires_confirmation: true,
+    },
+    {
+      category: 'shift-rules',
+      title: 'Техника безопасности и ответственность на смене',
+      slug: 'operator-safety-responsibility',
+      summary: 'Базовые правила безопасности для зала, кассы, техники и конфликтных ситуаций.',
+      content:
+        '<p>Главный принцип: не рисковать собой, клиентами и имуществом клуба. При конфликте оператор не спорит агрессивно, фиксирует ситуацию и зовёт руководителя.</p><p>Нельзя самостоятельно вскрывать опасное оборудование, переносить тяжёлые предметы без помощи, оставлять зал без контроля и игнорировать запах гари, перегрев или повреждения проводов.</p>',
+      tags: ['безопасность', 'ответственность', 'клиенты'],
+      severity: 'warning',
+      requires_confirmation: true,
+    },
+    {
+      category: 'salary-rules',
+      title: 'Долги оператора: только просмотр',
+      slug: 'operator-debts-view-only',
+      summary: 'Оператор видит свои долги, но не закрывает их вручную в программе.',
+      content:
+        '<p>Долги в кабинете оператора нужны для прозрачности: оператор видит, какие позиции и суммы закреплены за ним.</p><p>Оператор не нажимает “оплатил” и не закрывает долг самостоятельно. Погашение выполняет руководитель через расчёт зарплаты или административную часть.</p>',
+      tags: ['долги', 'зарплата', 'правила'],
+      severity: 'warning',
+      requires_confirmation: true,
     },
   ]
 
@@ -398,6 +446,7 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
         tags: item.tags,
         audience: ['operator', 'cashier'],
         severity: item.severity,
+        requires_confirmation: item.requires_confirmation === true,
         sort_order: (index + 1) * 10,
       },
     ])
@@ -421,6 +470,8 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
           description: 'Базовая проверка до принятия ответственности за смену.',
           role_scope: 'operator',
           shift_scope: 'handover',
+          schedule_type: 'handover',
+          blocks_shift: true,
           sort_order: 10,
         },
       ])
@@ -459,6 +510,104 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       },
     ])
     if (error) throw error
+  }
+
+  const templateSeeds = [
+    {
+      title: 'Обход каждые 2 часа',
+      description: 'Периодическая проверка зала, техники, чистоты, клиентов и магазина каждые 120 минут.',
+      schedule_type: 'periodic',
+      shift_scope: 'any',
+      recurrence_minutes: 120,
+      blocks_shift: false,
+      sort_order: 20,
+      items: [
+        { title: 'Проверить чистоту зала, столов, кресел и проходов', requires_photo: false, severity: 'normal' },
+        { title: 'Проверить свободные и занятые места, чтобы не было забытых вещей', requires_photo: false, severity: 'normal' },
+        { title: 'Проверить работу проблемной техники и отметить новые поломки', requires_photo: true, severity: 'warning' },
+        { title: 'Проверить витрину/бар и низкие остатки', requires_photo: false, severity: 'normal' },
+      ],
+    },
+    {
+      title: 'Закрытие смены',
+      description: 'Финальная проверка перед закрытием: касса, отчёт, долги, уборка и оборудование.',
+      schedule_type: 'closing',
+      shift_scope: 'closing',
+      recurrence_minutes: null,
+      blocks_shift: true,
+      sort_order: 30,
+      items: [
+        { title: 'Сверить кассу, Kaspi и итог сменного отчёта', requires_photo: false, severity: 'warning' },
+        { title: 'Проверить активные долги и сканер', requires_photo: false, severity: 'warning' },
+        { title: 'Сделать фото состояния зала после уборки', requires_photo: true, severity: 'normal' },
+        { title: 'Выключить/проверить оборудование по правилам точки', requires_photo: false, severity: 'normal' },
+      ],
+    },
+    {
+      title: 'Онбординг оператора',
+      description: 'Первое ознакомление с правилами смены, FAQ, штрафами, премиями и безопасностью.',
+      schedule_type: 'onboarding',
+      shift_scope: 'any',
+      recurrence_minutes: null,
+      blocks_shift: true,
+      sort_order: 40,
+      items: [
+        { title: 'Ознакомиться с правилами смены и ответственностью', requires_photo: false, severity: 'warning' },
+        { title: 'Ознакомиться с правилами штрафов и премий', requires_photo: false, severity: 'warning' },
+        { title: 'Подтвердить неразглашение внутренней информации', requires_photo: false, severity: 'critical' },
+        { title: 'Открыть FAQ и найти решение тестовой проблемы', requires_photo: false, severity: 'normal' },
+      ],
+    },
+  ]
+
+  for (const seed of templateSeeds) {
+    let seededTemplate = (existingTemplates || []).find((item: any) => item.title === seed.title)
+    if (!seededTemplate) {
+      const { data, error } = await supabase
+        .from('checklist_templates')
+        .insert([
+          {
+            organization_id: organizationId,
+            title: seed.title,
+            description: seed.description,
+            role_scope: 'operator',
+            shift_scope: seed.shift_scope,
+            schedule_type: seed.schedule_type,
+            recurrence_minutes: seed.recurrence_minutes,
+            blocks_shift: seed.blocks_shift,
+            sort_order: seed.sort_order,
+          },
+        ])
+        .select('id, title')
+        .single()
+      if (error) throw error
+      seededTemplate = data
+    }
+
+    const { data: seededItems, error: seededItemsError } = await supabase
+      .from('checklist_items')
+      .select('title')
+      .eq('template_id', seededTemplate.id)
+    if (seededItemsError) throw seededItemsError
+
+    const seededTitles = new Set((seededItems || []).map((item: any) => String(item.title)))
+    for (let index = 0; index < seed.items.length; index += 1) {
+      const item = seed.items[index]
+      if (seededTitles.has(item.title)) continue
+      const { error } = await supabase.from('checklist_items').insert([
+        {
+          template_id: seededTemplate.id,
+          category_id: bySlug.get('checklists')?.id || null,
+          title: item.title,
+          answer_type: item.requires_photo ? 'photo' : 'boolean',
+          is_required: true,
+          requires_photo: item.requires_photo,
+          severity: item.severity,
+          sort_order: (index + 1) * 10,
+        },
+      ])
+      if (error) throw error
+    }
   }
 
   await writeAuditLog(supabase, {

@@ -286,8 +286,23 @@ export function ChecklistEditorDialog({
                         value={templateValue.recurrence_minutes}
                         onChange={(event) => setTemplateValue({ ...templateValue, recurrence_minutes: event.target.value })}
                         inputMode="numeric"
-                        placeholder="60"
+                        placeholder="120"
                       />
+                      <div className="flex flex-wrap gap-2">
+                        {[60, 120, 180, 1440].map((minutes) => (
+                          <button
+                            key={minutes}
+                            type="button"
+                            onClick={() => setTemplateValue({ ...templateValue, recurrence_minutes: String(minutes) })}
+                            className="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-bold text-slate-300 hover:border-amber-300/60 hover:text-amber-100"
+                          >
+                            {minutes === 1440 ? 'Раз в день' : `${minutes} мин`}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs leading-5 text-slate-500">
+                        Для обхода каждые 2 часа используйте 120 минут. Если чек-лист блокирующий, закрытие смены не пройдёт без выполнения.
+                      </p>
                     </div>
                   )}
                 </Section>

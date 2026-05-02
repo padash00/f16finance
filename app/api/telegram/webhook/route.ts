@@ -790,7 +790,7 @@ async function clearCallbackButtons(chatId: string | number, messageId: number) 
 }
 
 async function loadTaskById(supabase: ReturnType<typeof createAdminSupabaseClient>, taskId: string) {
-  const { data, error } = await supabase.from('tasks').select('id, task_number, title, status, operator_id').eq('id', taskId).maybeSingle()
+  const { data, error } = await supabase.from('tasks').select('id, task_number, title, status, operator_id, created_by').eq('id', taskId).maybeSingle()
   if (error) throw error
   return data
 }
@@ -799,7 +799,7 @@ async function loadTaskByNumberForOperator(supabase: ReturnType<typeof createAdm
   const { data: operator, error: operatorError } = await supabase.from('operators').select('id').eq('telegram_chat_id', telegramUserId).maybeSingle()
   if (operatorError) throw operatorError
   if (!operator?.id) return null
-  const { data, error } = await supabase.from('tasks').select('id, task_number, title, status, operator_id').eq('task_number', taskNumber).eq('operator_id', operator.id).maybeSingle()
+  const { data, error } = await supabase.from('tasks').select('id, task_number, title, status, operator_id, created_by').eq('task_number', taskNumber).eq('operator_id', operator.id).maybeSingle()
   if (error) throw error
   return data
 }
@@ -851,6 +851,32 @@ async function processTaskResponse(params: {
     channel: 'telegram', recipient: String(params.telegramUserId), status: 'received',
     payload: { kind: 'task-response', task_id: task.id, task_number: task.task_number, operator_id: operator.id, operator_name: getOperatorDisplayName(operator, 'Оператор'), response: params.response, status: config.status },
   })
+
+  // Notify task creator
+  if (task.created_by) {
+    try {
+      const { data: creator } = await params.supabase
+        .from('staff')
+        .select('id, full_name, telegram_chat_id')
+        .eq('id', task.created_by)
+        .maybeSingle()
+      if (creator?.telegram_chat_id) {
+        const operatorName = getOperatorDisplayName(operator, 'Оператор')
+        const creatorText = [
+          `📋 <b>Ответ по задаче #${task.task_number}</b>`,
+          ``,
+          `<b>${escapeTelegramHtml(task.title)}</b>`,
+          ``,
+          `${config.emoji} <b>${escapeTelegramHtml(operatorName)}</b>: ${escapeTelegramHtml(config.label)}`,
+          `Новый статус: <b>${escapeTelegramHtml(STATUS_LABELS[config.status])}</b>`,
+          params.note?.trim() ? `\n💬 ${escapeTelegramHtml(params.note.trim())}` : '',
+        ].filter(s => s !== undefined).join('\n')
+        await sendTelegramMessage(String(creator.telegram_chat_id), creatorText).catch(() => null)
+      }
+    } catch {
+      // Не блокируем основной ответ если уведомление создателю не ушло
+    }
+  }
 
   return { taskNumber: task.task_number, title: task.title, responseLabel: config.label, statusLabel: STATUS_LABELS[config.status] }
 }

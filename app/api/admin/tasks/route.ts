@@ -53,6 +53,10 @@ type Body =
       response: TaskResponse
       note?: string | null
     }
+  | {
+      action: 'deleteTask'
+      taskId: string
+    }
 
 type ClientLike = ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>
 type LoadedTask = {
@@ -422,6 +426,23 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const url = new URL(req.url)
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+
+    // Comments sub-route: ?comments=1&taskId=<uuid>
+    if (url.searchParams.get('comments') === '1') {
+      const taskId = url.searchParams.get('taskId')
+      if (!taskId) return json({ error: 'taskId обязателен' }, 400)
+      const { data: comments, error } = await supabase
+        .from('task_comments')
+        .select('id, task_id, operator_id, staff_id, content, created_at')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return json({ comments: comments ?? [] })
+    }
+
     const includeLookups = url.searchParams.get('includeLookups') === '1'
     const status = url.searchParams.get('status') as TaskStatus | null
     const operatorId = url.searchParams.get('operator_id')
@@ -429,9 +450,6 @@ export async function GET(req: Request) {
     const page = Math.max(0, Number(url.searchParams.get('page') || '0'))
     const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get('page_size') || '100')))
 
-    const supabase = hasAdminSupabaseCredentials()
-      ? createAdminSupabaseClient()
-      : createRequestSupabaseClient(req)
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       requestedCompanyId: companyId,
@@ -440,7 +458,7 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('tasks')
-      .select('id, task_number, title, description, status, priority, due_date, operator_id, company_id, created_at')
+      .select('id, task_number, title, description, status, priority, due_date, tags, operator_id, company_id, created_at, updated_at, completed_at, task_comments(count)')
       .order('created_at', { ascending: false })
       .range(page * pageSize, (page + 1) * pageSize - 1)
 
@@ -456,8 +474,15 @@ export async function GET(req: Request) {
     const { data, error } = await query
     if (error) throw error
 
+    const taskRows = (data ?? []).map((row: any) => {
+      const countArr = Array.isArray(row.task_comments) ? row.task_comments : []
+      const commentsCount = countArr.length > 0 ? Number(countArr[0]?.count ?? 0) : 0
+      const { task_comments, ...rest } = row
+      return { ...rest, comments_count: isNaN(commentsCount) ? 0 : commentsCount }
+    })
+
     if (!includeLookups) {
-      return json({ data: data ?? [], page, pageSize, hasMore: (data?.length ?? 0) === pageSize })
+      return json({ data: taskRows, page, pageSize, hasMore: taskRows.length === pageSize })
     }
 
     const [operatorsResult, staffResult, companiesResult] = await Promise.all([
@@ -495,13 +520,13 @@ export async function GET(req: Request) {
     if (companiesResult.error) throw companiesResult.error
 
     return json({
-      data: data ?? [],
+      data: taskRows,
       operators: operatorsResult.data || [],
       staff: staffResult.data || [],
       companies: companiesResult.data || [],
       page,
       pageSize,
-      hasMore: (data?.length ?? 0) === pageSize,
+      hasMore: taskRows.length === pageSize,
     })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/tasks GET', message: error?.message || 'error' })
@@ -855,6 +880,25 @@ export async function POST(req: Request) {
       }
 
       return json({ ok: true, data })
+    }
+
+    if (body.action === 'deleteTask') {
+      if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
+      const existingContext = await loadTaskContext(supabase, body.taskId)
+      await ensureTaskCompanyAccess(
+        { activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin },
+        existingContext.task.company_id,
+      )
+      const { error } = await supabase.from('tasks').delete().eq('id', body.taskId)
+      if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'task',
+        entityId: body.taskId,
+        action: 'delete',
+        payload: { task_number: existingContext.task.task_number, title: existingContext.task.title },
+      })
+      return json({ ok: true })
     }
 
     if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)

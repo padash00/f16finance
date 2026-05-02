@@ -34,6 +34,7 @@ begin
     raise exception 'inventory-receipt-items-required';
   end if;
 
+
   select location_type, company_id
     into v_loc_type, v_company_id
   from public.inventory_locations

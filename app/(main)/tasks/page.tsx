@@ -38,6 +38,7 @@ import {
   EyeOff,
   Tag,
   ArrowUpDown,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
@@ -1315,20 +1316,28 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
         )}
       </div>
 
-      {/* Дедлайн */}
-      {task.due_date && (
-        <div className={cn(
-          "flex items-center gap-1 text-[10px]",
-          isTaskOverdue ? "text-red-400" : "text-gray-500"
-        )}>
-          <Calendar className="w-3 h-3" />
-          <span>{formatDate(task.due_date)}</span>
-          {isTaskOverdue && <span className="text-red-400">(просрочено)</span>}
-          {!isTaskOverdue && daysUntilDue !== null && daysUntilDue <= 3 && daysUntilDue >= 0 && (
-            <span className="text-yellow-400">(осталось {daysUntilDue} дн.)</span>
-          )}
-        </div>
-      )}
+      {/* Дедлайн + комментарии */}
+      <div className="flex items-center justify-between mt-1">
+        {task.due_date ? (
+          <div className={cn(
+            "flex items-center gap-1 text-[10px]",
+            isTaskOverdue ? "text-red-400" : "text-gray-500"
+          )}>
+            <Calendar className="w-3 h-3" />
+            <span>{formatDate(task.due_date)}</span>
+            {isTaskOverdue && <span className="text-red-400">(просрочено)</span>}
+            {!isTaskOverdue && daysUntilDue !== null && daysUntilDue <= 3 && daysUntilDue >= 0 && (
+              <span className="text-yellow-400">(осталось {daysUntilDue} дн.)</span>
+            )}
+          </div>
+        ) : <span />}
+        {(task.comments_count ?? 0) > 0 && (
+          <div className="flex items-center gap-0.5 text-[10px] text-gray-500">
+            <MessageSquare className="w-3 h-3" />
+            {task.comments_count}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1352,30 +1361,25 @@ function TaskDetailModal({
   const [responseNote, setResponseNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [savingTask, setSavingTask] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [responding, setResponding] = useState<TaskResponse | null>(null)
   const [editForm, setEditForm] = useState<TaskFormState>(() => toTaskFormState(task))
 
   const loadComments = useCallback(async () => {
     if (!task?.id) return
-
-    const { data } = await supabase
-      .from('task_comments')
-      .select('*')
-      .eq('task_id', task.id)
-      .order('created_at', { ascending: true })
-
-    if (data) {
-      setComments(data.map((c: any) => ({
-        ...c,
-        author_name:
-          (c.operator_id
-            ? getOperatorDisplayName(operators.find((o: Operator) => o.id === c.operator_id), 'Оператор')
-            : null) ||
-          (c.staff_id ? staff.find((item) => item.id === c.staff_id)?.full_name : null) ||
-          'Система',
-        author_type: c.operator_id ? 'operator' : c.staff_id ? 'staff' : undefined,
-      })))
-    }
+    const res = await fetch(`/api/admin/tasks?comments=1&taskId=${encodeURIComponent(task.id)}`, { cache: 'no-store' })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !Array.isArray(json?.comments)) return
+    setComments(json.comments.map((c: any) => ({
+      ...c,
+      author_name:
+        (c.operator_id
+          ? getOperatorDisplayName(operators.find((o: Operator) => o.id === c.operator_id), 'Оператор')
+          : null) ||
+        (c.staff_id ? staff.find((item) => item.id === c.staff_id)?.full_name : null) ||
+        'Система',
+      author_type: c.operator_id ? 'operator' : c.staff_id ? 'staff' : undefined,
+    })))
   }, [operators, staff, task])
 
   useEffect(() => {
@@ -1497,6 +1501,25 @@ function TaskDetailModal({
     })
   }
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Удалить задачу #${task.task_number} "${task.title}"? Это действие нельзя отменить.`)) return
+    setDeleting(true)
+    const response = await fetch('/api/admin/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteTask', taskId: task.id }),
+    })
+    const json = await response.json().catch(() => null)
+    setDeleting(false)
+    if (response.ok) {
+      await onTaskUpdated()
+      onClose()
+      toast({ title: 'Задача удалена' })
+      return
+    }
+    toast({ title: 'Не удалось удалить задачу', description: json?.error || 'Попробуй ещё раз', variant: 'destructive' })
+  }
+
   const priorityConfig = PRIORITY_CONFIG[task.priority]
   const statusConfig = STATUS_CONFIG[task.status]
   const StatusIcon = statusConfig.icon
@@ -1517,17 +1540,29 @@ function TaskDetailModal({
                 Создано {formatDateTime(task.created_at)}
               </DialogDescription>
             </div>
-            {task.operator_telegram && (
+            <div className="flex items-center gap-2">
+              {task.operator_telegram && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onNotify}
+                  className="gap-2 border-white/10"
+                >
+                  <Send className="w-4 h-4" />
+                  Уведомить
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
-                onClick={onNotify}
-                className="gap-2 border-white/10"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
               >
-                <Send className="w-4 h-4" />
-                Уведомить
+                <Trash2 className="w-4 h-4" />
+                {deleting ? 'Удаляем...' : 'Удалить'}
               </Button>
-            )}
+            </div>
           </div>
         </DialogHeader>
 
