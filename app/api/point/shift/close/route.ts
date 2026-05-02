@@ -19,6 +19,25 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined) {
+  const id = String(operatorId || '').trim()
+  if (!id) return null
+
+  const { data: staff } = await supabase
+    .from('staff')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle()
+  if (staff?.id) return staff.id
+
+  const { data: link } = await supabase
+    .from('operator_staff_links')
+    .select('staff_id')
+    .eq('operator_id', id)
+    .maybeSingle()
+  return link?.staff_id || null
+}
+
 async function getMissingBlockingChecklists(supabase: any, companyId: string, shiftId: string) {
   const { data: templates, error: templatesError } = await supabase
     .from('checklist_templates')
@@ -126,9 +145,11 @@ export async function POST(request: Request) {
     )
   }
 
+  const closedByStaffId = await resolveStaffIdForOperator(supabase, body.closed_by)
+
   const { data, error } = await supabase.rpc('point_shift_close', {
     p_shift_id: shiftId,
-    p_closed_by: body.closed_by || null,
+    p_closed_by: closedByStaffId,
     p_closing_cash: Number(body.closing_cash || 0),
     p_closing_kaspi: Number(body.closing_kaspi || 0),
     p_kaspi_before_midnight: Number(body.kaspi_before_midnight || 0),
@@ -149,6 +170,7 @@ export async function POST(request: Request) {
     payload: {
       company_id: device.company_id,
       closed_by: body.closed_by || null,
+      closed_by_staff_id: closedByStaffId,
       totals: data,
     },
   })

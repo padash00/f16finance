@@ -15,6 +15,25 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined) {
+  const id = String(operatorId || '').trim()
+  if (!id) return null
+
+  const { data: staff } = await supabase
+    .from('staff')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle()
+  if (staff?.id) return staff.id
+
+  const { data: link } = await supabase
+    .from('operator_staff_links')
+    .select('staff_id')
+    .eq('operator_id', id)
+    .maybeSingle()
+  return link?.staff_id || null
+}
+
 export async function POST(request: Request) {
   const point = await requirePointDevice(request)
   if ('response' in point) return point.response
@@ -25,6 +44,21 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => ({}))) as Body
+  const openingCashRaw = (body as any).opening_cash
+  const openingCash =
+    openingCashRaw === undefined || openingCashRaw === null || String(openingCashRaw).trim() === ''
+      ? Number.NaN
+      : Number(openingCashRaw)
+
+  if (!Number.isFinite(openingCash) || openingCash < 0) {
+    return json(
+      {
+        error: 'opening-cash-required',
+        message: 'Перед открытием смены укажите старт кассы.',
+      },
+      400,
+    )
+  }
 
   // Enforce shift schedule when the current week is published.
   // Operators can only open a shift if they appear in the schedule for today.
@@ -61,12 +95,14 @@ export async function POST(request: Request) {
     }
   }
 
+  const staffId = await resolveStaffIdForOperator(supabase, body.operator_id)
+
   const { data, error } = await supabase.rpc('point_shift_open', {
     p_company_id: device.company_id,
-    p_operator_id: body.operator_id || null,
+    p_operator_id: staffId,
     p_point_device_id: device.id,
     p_shift_type: body.shift_type || 'day',
-    p_opening_cash: Number(body.opening_cash || 0),
+    p_opening_cash: openingCash,
     p_opening_notes: body.opening_notes || null,
     p_handover_from: body.handover_from_shift_id || null,
   })
@@ -76,7 +112,7 @@ export async function POST(request: Request) {
     if (code.includes('point-shift-already-open')) {
       const { data: existing } = await supabase
         .from('point_shifts')
-        .select('id, opened_at, operator_id, shift_type')
+        .select('id, opened_at, operator_id, shift_type, opening_cash')
         .eq('company_id', device.company_id)
         .eq('status', 'open')
         .maybeSingle()
@@ -100,10 +136,11 @@ export async function POST(request: Request) {
     payload: {
       company_id: device.company_id,
       operator_id: body.operator_id || null,
-      opening_cash: Number(body.opening_cash || 0),
+      staff_id: staffId,
+      opening_cash: openingCash,
       shift_type: body.shift_type || 'day',
     },
   })
 
-  return json({ shift_id: shiftId })
+  return json({ shift_id: shiftId, opening_cash: openingCash })
 }

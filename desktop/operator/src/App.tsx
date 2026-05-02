@@ -4,7 +4,6 @@ import { loadConfig, saveConfig } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
 import type { OpenShiftInfo } from '@/lib/api'
-import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastInfo } from '@/lib/toast'
 import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState } from '@/types'
 
@@ -448,9 +447,10 @@ export default function App() {
 
       if (cachedSession) {
         const session: typeof cachedSession = { ...cachedSession, bootstrap }
-        setView(canUseScannerForSession(session)
-          ? { screen: 'scanner', bootstrap, session }
-          : { screen: 'shift', bootstrap, session })
+        api.getCurrentPointShift(cfg, session.company.id)
+          .then((info) => setOpenShift(info))
+          .catch(() => setOpenShift(null))
+        setView({ screen: 'shift', bootstrap, session })
         return
       }
 
@@ -517,19 +517,14 @@ export default function App() {
     const updatedSession = { ...session, bootstrap }
     saveOperatorSession(updatedSession).catch(() => null)
 
-    // Auto-open shift on login — fire-and-forget, never blocks navigation
+    // Do not auto-open shifts: the operator must confirm the opening cash first.
     if (config && updatedSession.operator.operator_id) {
-      const { shift } = resolveRuntimeShift()
-      api.openPointShift(config, updatedSession.operator.operator_id, shift, updatedSession.company.id)
-        .then((info) => { if (info) setOpenShift(info) })
-        .catch(() => null)
+      api.getCurrentPointShift(config, updatedSession.company.id)
+        .then((info) => setOpenShift(info))
+        .catch(() => setOpenShift(null))
     }
 
-    if (canUseScannerForSession(updatedSession)) {
-      setView({ screen: 'scanner', bootstrap, session: updatedSession })
-    } else {
-      setView({ screen: 'shift', bootstrap, session: updatedSession })
-    }
+    setView({ screen: 'shift', bootstrap, session: updatedSession })
   }
 
   // ─── Вход оператора ────────────────────────────────────────────────────────
@@ -709,6 +704,7 @@ export default function App() {
         session={view.session}
         isOffline={isOffline}
         openShift={openShift}
+        onOpenShiftChange={setOpenShift}
         onLogout={handleLogout}
         onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
         onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}

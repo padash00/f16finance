@@ -351,6 +351,17 @@ export async function POST(request: Request) {
 
     if (items.length === 0) return json({ error: 'point-return-items-required' }, 400)
 
+    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
+    if (!shiftIdAttach) {
+      return json(
+        {
+          error: 'point-shift-no-open',
+          message: 'Сначала откройте смену и укажите старт кассы.',
+        },
+        409,
+      )
+    }
+
     const cashAmount = normalizeMoney(body.payload?.cash_amount)
     const kaspiAmount = normalizeMoney(body.payload?.kaspi_amount)
     const kaspiBeforeMidnightAmount = normalizeMoney(body.payload?.kaspi_before_midnight_amount)
@@ -375,9 +386,7 @@ export async function POST(request: Request) {
       items,
     })
 
-    // Phase 1: best-effort привязка возврата к открытой смене.
-    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
-    if (shiftIdAttach && pointReturn?.return_id) {
+    if (pointReturn?.return_id) {
       await supabase
         .from('point_returns')
         .update({ shift_id: shiftIdAttach })

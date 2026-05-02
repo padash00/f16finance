@@ -50,6 +50,7 @@ interface Props {
   session: OperatorSession
   isOffline?: boolean
   openShift?: OpenShiftInfo | null
+  onOpenShiftChange?: (shift: OpenShiftInfo | null) => void
   onLogout: () => void
   onSwitchToSale?: () => void
   onSwitchToReturn?: () => void
@@ -127,6 +128,7 @@ export default function ShiftPage({
   session,
   isOffline,
   openShift,
+  onOpenShiftChange,
   onLogout,
   onSwitchToSale,
   onSwitchToReturn,
@@ -168,24 +170,10 @@ export default function ShiftPage({
 
   const [confirmDialog, setConfirmDialog] = useState(false)
   const [splitDialog, setSplitDialog] = useState(false)
-  const startCashSessionKey = `start_cash_prompted_${session.operator.operator_id}`
-  const [startCashDialog, setStartCashDialog] = useState(() => {
-    if (!bootstrap.device.feature_flags?.start_cash_prompt) return false
-    // Already dismissed this session (skip or confirm)
-    if (sessionStorage.getItem(`start_cash_prompted_${session.operator.operator_id}`)) return false
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if ('kaspi_online' in parsed) {
-          const hasMeaningful = !!(parsed.cash || parsed.coins || parsed.kaspi_pos || parsed.kaspi_online || parsed.debts || parsed.start || parsed.wipon || parsed.comment)
-          return !hasMeaningful
-        }
-      }
-    } catch {}
-    return true
-  })
   const [startCashInput, setStartCashInput] = useState('')
+  const [activeOpenShift, setActiveOpenShift] = useState<OpenShiftInfo | null>(openShift || null)
+  const [openingShift, setOpeningShift] = useState(false)
+  const [openingError, setOpeningError] = useState<string | null>(null)
   const [splitAfter, setSplitAfter] = useState({ cash: '', kaspi_pos: '', kaspi_online: '' })
   const [viewMode, setViewMode] = useState<'shift' | 'daily'>('shift')
   const [dailyDate, setDailyDate] = useState(todayISO())
@@ -214,16 +202,47 @@ export default function ShiftPage({
       )
     : []
 
-  /** F16 Ramen: классическая смена с ручным налом/Kaspi; витрина только для учёта товара, не в ФАКТ смены. */
-  const isRamenCompany = (session.company.code || '').trim().toLowerCase() === 'ramen'
-  const mergeInventorySalesIntoShift = hasInventorySale && !isRamenCompany
+  /** POS-продажи формируют поле "Система"; факт кассы оператор вводит руками. */
+  const mergeInventorySalesIntoShift = hasInventorySale
   /**
    * Сводка смены из сессий зон/арены отключена: всегда классический ручной отчёт (как на остальных точках).
    * Флаг arena_shift_auto_totals в API оставлен на будущее.
    */
   const useArenaShiftDashboard = false
-  const wiponLabel = useArenaShiftDashboard ? 'Senet (система)' : 'Wipon (система)'
+  const wiponLabel = mergeInventorySalesIntoShift
+    ? 'Продажи POS (система)'
+    : useArenaShiftDashboard
+      ? 'Senet (система)'
+      : 'Wipon (система)'
   const kaspiLabel = useArenaShiftDashboard ? 'Kaspi POS' : 'Kaspi'
+
+  useEffect(() => {
+    setActiveOpenShift(openShift || null)
+    if (openShift) {
+      setForm((current) => ({
+        ...current,
+        shift: openShift.shift_type === 'night' ? 'night' : 'day',
+        start: String(Number(openShift.opening_cash || 0)),
+      }))
+    }
+  }, [openShift?.id, openShift?.opening_cash, openShift?.shift_type])
+
+  const refreshOpenShift = useCallback(async () => {
+    try {
+      const info = await api.getCurrentPointShift(config, session.company.id)
+      setActiveOpenShift(info)
+      onOpenShiftChange?.(info)
+      if (info) {
+        setForm((current) => ({
+          ...current,
+          shift: info.shift_type === 'night' ? 'night' : 'day',
+          start: String(Number(info.opening_cash || 0)),
+        }))
+      }
+    } catch {
+      // Keep the local state: a temporary network error must not hide an already open shift.
+    }
+  }, [config, onOpenShiftChange, session.company.id])
 
   useEffect(() => {
     // Устанавливаем время смены только при свежей форме (нет значимого черновика)
@@ -239,6 +258,10 @@ export default function ShiftPage({
       }))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    void refreshOpenShift()
+  }, [refreshOpenShift])
 
   useEffect(() => {
     const timeout = setTimeout(() => localStorage.setItem(DRAFT_KEY, JSON.stringify(form)), 500)
@@ -311,21 +334,27 @@ export default function ShiftPage({
   }, [dailyDate, kaspiDailySplitEnabled, loadDailyReport, viewMode])
 
   const loadSalesSummary = useCallback(async (date: string, shift: 'day' | 'night') => {
-    if (!mergeInventorySalesIntoShift) {
+    if (!mergeInventorySalesIntoShift || !activeOpenShift) {
       setSalesSummary(null)
       return
     }
 
     setSalesSummaryLoading(true)
     try {
-      const summary = await api.getPointInventorySaleShiftSummary(config, date, shift, session.company.id)
+      const summary = await api.getPointInventorySaleShiftSummary(
+        config,
+        date,
+        shift,
+        session.company.id,
+        activeOpenShift?.id || null,
+      )
       setSalesSummary(summary)
     } catch {
       setSalesSummary(null)
     } finally {
       setSalesSummaryLoading(false)
     }
-  }, [config, mergeInventorySalesIntoShift, session.company.id])
+  }, [activeOpenShift?.id, config, mergeInventorySalesIntoShift, session.company.id])
 
   useEffect(() => {
     if (viewMode !== 'shift') return
@@ -377,14 +406,15 @@ export default function ShiftPage({
   const autoSalesKaspiAfterMidnight = mergeInventorySalesIntoShift ? salesSummary?.kaspi_after_midnight_amount || 0 : 0
   const autoSalesKaspiTotal = mergeInventorySalesIntoShift ? salesSummary?.kaspi_amount || 0 : 0
   const vKaspiTotal = isNightKaspiSplit
-    ? vKaspiBeforeMidnight + vKaspi + autoSalesKaspiBeforeMidnight + autoSalesKaspiAfterMidnight
-    : vKaspi + autoSalesKaspiTotal
+    ? vKaspiBeforeMidnight + vKaspi
+    : vKaspi
   const vKaspiOnline = parseMoney(form.kaspi_online)
   const vDebts = parseMoney(form.debts)
   const vStart = parseMoney(form.start)
-  const vWipon = parseMoney(form.wipon)
+  const autoSalesSystemTotal = mergeInventorySalesIntoShift ? salesSummary?.total_amount || 0 : 0
+  const vWipon = mergeInventorySalesIntoShift ? autoSalesSystemTotal : parseMoney(form.wipon)
 
-  const fact = vCash + autoSalesCash + vCoins + vKaspiTotal + vDebts - vStart
+  const fact = vCash + vCoins + vKaspiTotal + vDebts - vStart
   const itog = fact - vWipon
 
   function setField(key: keyof ShiftForm, value: string) {
@@ -393,17 +423,53 @@ export default function ShiftPage({
     setError(null)
   }
 
-  function dismissStartCashDialog() {
-    sessionStorage.setItem(startCashSessionKey, '1')
-    setStartCashDialog(false)
-  }
-
   function resetForm() {
     localStorage.removeItem(DRAFT_KEY)
-    sessionStorage.removeItem(startCashSessionKey)
     setForm(emptyForm())
     setResult(null)
     setError(null)
+  }
+
+  async function handleOpenShift() {
+    setOpeningError(null)
+    if (!session.operator.operator_id) {
+      setOpeningError('Оператор не определён. Перезайдите в программу.')
+      return
+    }
+    if (startCashInput.trim() === '') {
+      setOpeningError('Введите старт кассы. Если мелочи нет, укажите 0.')
+      return
+    }
+
+    const openingCash = parseMoney(startCashInput)
+    if (!Number.isFinite(openingCash) || openingCash < 0) {
+      setOpeningError('Старт кассы должен быть числом от 0 и выше.')
+      return
+    }
+
+    setOpeningShift(true)
+    try {
+      const info = await api.openPointShift(
+        config,
+        session.operator.operator_id,
+        form.shift,
+        session.company.id,
+        openingCash,
+      )
+      if (!info) throw new Error('Не удалось открыть смену')
+
+      setActiveOpenShift(info)
+      onOpenShiftChange?.(info)
+      setField('start', String(openingCash))
+      toastSuccess('Смена открыта')
+      void loadKnowledgeContext()
+    } catch (openError) {
+      const message = openError instanceof Error ? openError.message : 'Не удалось открыть смену'
+      setOpeningError(message)
+      toastError(message)
+    } finally {
+      setOpeningShift(false)
+    }
   }
 
   async function sendOne(formToSend: ShiftForm): Promise<'success' | 'queued'> {
@@ -445,6 +511,11 @@ export default function ShiftPage({
     setError(null)
     setResult(null)
 
+    if (!activeOpenShift) {
+      setError('Сначала откройте смену и зафиксируйте старт кассы.')
+      return
+    }
+
     const missingBlockingTemplates = dueBlockingChecklists
 
     if (missingBlockingTemplates.length > 0) {
@@ -464,6 +535,11 @@ export default function ShiftPage({
 
     if (!session.operator.operator_id) {
       setError('Выберите оператора')
+      return
+    }
+
+    if (form.start.trim() === '') {
+      setError('Старт кассы должен быть заполнен из открытия смены.')
       return
     }
 
@@ -488,27 +564,24 @@ export default function ShiftPage({
       const fullForm: ShiftForm = {
         ...form,
         operator_id: session.operator.operator_id,
-        cash: String(vCash + autoSalesCash),
-        kaspi_pos: String(
-          isNightKaspiSplit
-            ? vKaspi + autoSalesKaspiAfterMidnight
-            : vKaspi + autoSalesKaspiTotal,
-        ),
-        kaspi_before_midnight: isNightKaspiSplit
-          ? String(vKaspiBeforeMidnight + autoSalesKaspiBeforeMidnight)
-          : '',
+        cash: String(vCash),
+        kaspi_pos: String(vKaspi),
+        kaspi_before_midnight: isNightKaspiSplit ? String(vKaspiBeforeMidnight) : '',
+        wipon: String(vWipon),
       }
       const sendResult = await sendOne(fullForm)
       if (sendResult === 'success' || sendResult === 'queued') {
         // Auto-close the point shift with financial totals for /shifts/reports
         await api.closePointShift(config, {
-          closing_cash: parseMoney(fullForm.cash),
+          shift_id: activeOpenShift?.id || null,
+          closing_cash: vCash + vCoins,
           closing_kaspi: isNightKaspiSplit
             ? parseMoney(fullForm.kaspi_before_midnight) + parseMoney(fullForm.kaspi_pos)
             : parseMoney(fullForm.kaspi_pos),
           kaspi_before_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_before_midnight) : 0,
           kaspi_after_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_pos) : 0,
           closed_by: session.operator.operator_id || null,
+          closing_notes: form.comment || null,
         }, session.company.id)
         resetForm()
         onLogout()
@@ -627,10 +700,10 @@ export default function ShiftPage({
               Черновик повреждён, данные сброшены
             </Badge>
           ) : null}
-          {openShift?.opened_at ? (
+          {activeOpenShift?.opened_at ? (
             <Badge variant="secondary" className="gap-1 text-emerald-500 border-emerald-500/20 bg-emerald-500/10">
               <Clock className="h-3 w-3" />
-              {`с ${new Date(openShift.opened_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+              {`с ${new Date(activeOpenShift.opened_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
             </Badge>
           ) : null}
           {isOffline ? (
@@ -1227,7 +1300,7 @@ export default function ShiftPage({
                             Товарный контур этой смены
                           </div>
                           <p className="mt-1 text-xs text-emerald-100/80">
-                            Продажи добавляются в итог автоматически, возвраты уменьшают его автоматически. В поля прихода их повторно вносить не нужно.
+                            Продажи и возвраты автоматически формируют поле «Система». Наличные, мелочь и Kaspi введите по факту кассы.
                           </p>
                         </div>
                         <div className="flex gap-2">
@@ -1266,12 +1339,12 @@ export default function ShiftPage({
                           tone="warning"
                         />
                         <TerminalMiniStat
-                          label="Чистый нал"
+                          label="POS нал"
                           value={salesSummaryLoading ? '...' : formatMoney(autoSalesCash)}
                           tone={autoSalesCash >= 0 ? 'success' : 'warning'}
                         />
                         <TerminalMiniStat
-                          label={isNightKaspiSplit ? 'Чистый Kaspi до / после 00:00' : 'Чистый Kaspi'}
+                          label={isNightKaspiSplit ? 'POS Kaspi до / после 00:00' : 'POS Kaspi'}
                           value={
                             salesSummaryLoading
                               ? '...'
@@ -1282,16 +1355,11 @@ export default function ShiftPage({
                           tone={autoSalesKaspiTotal >= 0 ? 'info' : 'warning'}
                         />
                         <TerminalMiniStat
-                          label="Чистый итог"
+                          label="Система"
                           value={salesSummaryLoading ? '...' : formatMoney(salesSummary?.total_amount || 0)}
                           tone={(salesSummary?.total_amount || 0) >= 0 ? 'warning' : 'destructive'}
                         />
                       </div>
-                    </div>
-                  ) : hasInventorySale && isRamenCompany ? (
-                    <div className="rounded-2xl border border-border/70 bg-muted/25 px-4 py-3 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">Ручной отчёт по смене.</span>{' '}
-                      Введите наличные, Kaspi и остальное по факту кассы. Суммы с вкладки «Продажи» в ФАКТ смены не подмешиваются.
                     </div>
                   ) : null}
 
@@ -1375,8 +1443,22 @@ export default function ShiftPage({
                       </p>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <MoneyInput label="Старт кассы" value={form.start} onChange={(value) => setField('start', value)} disabled={submitting} labelWidth="w-32" />
-                      <MoneyInput label={wiponLabel} value={form.wipon} onChange={(value) => setField('wipon', value)} disabled={submitting} labelWidth="w-32" />
+                      <MoneyInput
+                        label="Старт кассы"
+                        value={form.start}
+                        onChange={(value) => setField('start', value)}
+                        disabled={submitting || !!activeOpenShift}
+                        labelWidth="w-32"
+                        note={activeOpenShift ? 'зафиксировано при открытии смены' : undefined}
+                      />
+                      <MoneyInput
+                        label={wiponLabel}
+                        value={mergeInventorySalesIntoShift ? String(autoSalesSystemTotal) : form.wipon}
+                        onChange={(value) => setField('wipon', value)}
+                        disabled={submitting || mergeInventorySalesIntoShift}
+                        labelWidth="w-32"
+                        note={mergeInventorySalesIntoShift ? 'собирается из вкладки «Продажи»' : undefined}
+                      />
                     </CardContent>
                   </Card>
 
@@ -1581,43 +1663,58 @@ export default function ShiftPage({
         </div>
       </div>
 
-      {startCashDialog ? (
+      {!activeOpenShift ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <Card className="mx-4 w-full max-w-sm border-primary/20">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Calculator className="h-4 w-4 text-primary" />
-                Мелочь на начало смены
+                Открытие смены
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Сколько мелочи (разменных монет) находится в кассе на старте смены? Значение подставится в поле «Старт кассы».
+                Укажите старт кассы перед продажами и закрытием отчёта. Если мелочи нет, введите 0.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Смена</Label>
+                <Select value={form.shift} onValueChange={(value) => setField('shift', value)}>
+                  <SelectTrigger disabled={openingShift}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">☀️ Дневная</SelectItem>
+                    <SelectItem value="night">🌙 Ночная</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <MoneyInput
-                label="Сумма мелочи"
+                label="Старт кассы"
                 value={startCashInput}
                 onChange={setStartCashInput}
+                disabled={openingShift}
                 labelWidth="w-32"
               />
+              {openingError ? (
+                <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive-foreground">
+                  {openingError}
+                </p>
+              ) : null}
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={dismissStartCashDialog}
+                  onClick={onLogout}
+                  disabled={openingShift}
                 >
-                  Пропустить
+                  Выйти
                 </Button>
                 <Button
                   className="flex-1"
-                  onClick={() => {
-                    if (startCashInput.trim()) {
-                      setField('start', startCashInput)
-                    }
-                    dismissStartCashDialog()
-                  }}
+                  onClick={handleOpenShift}
+                  disabled={openingShift}
                 >
-                  Подтвердить
+                  {openingShift ? 'Открываю...' : 'Открыть смену'}
                 </Button>
               </div>
             </CardContent>

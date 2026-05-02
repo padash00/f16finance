@@ -664,11 +664,13 @@ export async function getPointInventorySaleShiftSummary(
   date: string,
   shift: 'day' | 'night',
   companyId?: string | null,
+  shiftId?: string | null,
 ): Promise<PointInventorySaleShiftSummary> {
+  const shiftIdPart = shiftId ? `&shift_id=${encodeURIComponent(shiftId)}` : ''
   const data = await request<{ ok: boolean; data: PointInventorySaleShiftSummary }>(
     config,
     'GET',
-    `/api/point/inventory-sales?view=shift-summary&date=${encodeURIComponent(date)}&shift=${encodeURIComponent(shift)}`,
+    `/api/point/inventory-sales?view=shift-summary&date=${encodeURIComponent(date)}&shift=${encodeURIComponent(shift)}${shiftIdPart}`,
     undefined,
     companyHeader(companyId),
   )
@@ -969,6 +971,34 @@ export type OpenShiftInfo = {
   id: string
   opened_at: string | null
   shift_type: string
+  opening_cash: number | null
+}
+
+export async function getCurrentPointShift(
+  config: AppConfig,
+  companyId?: string | null,
+): Promise<OpenShiftInfo | null> {
+  const data = await request<{
+    shift: {
+      id: string
+      opened_at: string | null
+      shift_type: string | null
+      opening_cash: number | null
+    } | null
+  }>(
+    config,
+    'GET',
+    '/api/point/shift/current',
+    undefined,
+    companyHeader(companyId),
+  )
+  if (!data.shift) return null
+  return {
+    id: data.shift.id,
+    opened_at: data.shift.opened_at ?? null,
+    shift_type: data.shift.shift_type || 'day',
+    opening_cash: Number(data.shift.opening_cash || 0),
+  }
 }
 
 export async function openPointShift(
@@ -976,16 +1006,28 @@ export async function openPointShift(
   operatorId: string | null,
   shiftType: 'day' | 'night',
   companyId?: string | null,
+  openingCash?: number,
+  openingNotes?: string | null,
 ): Promise<OpenShiftInfo | null> {
   try {
-    const data = await request<{ shift_id: string }>(
+    const data = await request<{ shift_id: string; opening_cash?: number | null }>(
       config,
       'POST',
       '/api/point/shift/open',
-      { operator_id: operatorId, shift_type: shiftType },
+      {
+        operator_id: operatorId,
+        shift_type: shiftType,
+        opening_cash: openingCash,
+        opening_notes: openingNotes || null,
+      },
       companyHeader(companyId),
     )
-    return { id: data.shift_id, opened_at: new Date().toISOString(), shift_type: shiftType }
+    return {
+      id: data.shift_id,
+      opened_at: new Date().toISOString(),
+      shift_type: shiftType,
+      opening_cash: Number(data.opening_cash || openingCash || 0),
+    }
   } catch (err: unknown) {
     const payload = (err as any)?.payload
     if ((err as any)?.status === 409 && payload?.shift) {
@@ -993,6 +1035,7 @@ export async function openPointShift(
         id: payload.shift.id,
         opened_at: payload.shift.opened_at ?? null,
         shift_type: payload.shift.shift_type || shiftType,
+        opening_cash: Number(payload.shift.opening_cash || 0),
       }
     }
     return null
@@ -1002,15 +1045,17 @@ export async function openPointShift(
 export async function closePointShift(
   config: AppConfig,
   data: {
+    shift_id?: string | null
     closing_cash?: number
     closing_kaspi?: number
     kaspi_before_midnight?: number
     kaspi_after_midnight?: number
     closed_by?: string | null
+    closing_notes?: string | null
   },
   companyId?: string | null,
 ): Promise<void> {
-  await request(config, 'POST', '/api/point/shift/close', data, companyHeader(companyId)).catch(() => null)
+  await request(config, 'POST', '/api/point/shift/close', data, companyHeader(companyId))
 }
 
 export async function createPointInventoryReturn(

@@ -355,20 +355,28 @@ async function fetchShiftSummary(params: {
   locationId: string
   saleDate: string
   shift: 'day' | 'night'
+  shiftId?: string | null
 }) {
+  const salesQuery = params.supabase
+    .from('point_sales')
+    .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
+    .eq('location_id', params.locationId)
+  const returnsQuery = params.supabase
+    .from('point_returns')
+    .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
+    .eq('location_id', params.locationId)
+
+  if (params.shiftId) {
+    salesQuery.eq('shift_id', params.shiftId)
+    returnsQuery.eq('shift_id', params.shiftId)
+  } else {
+    salesQuery.eq('sale_date', params.saleDate).eq('shift', params.shift)
+    returnsQuery.eq('return_date', params.saleDate).eq('shift', params.shift)
+  }
+
   const [{ data: sales, error: salesError }, { data: returns, error: returnsError }] = await Promise.all([
-    params.supabase
-      .from('point_sales')
-      .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
-      .eq('location_id', params.locationId)
-      .eq('sale_date', params.saleDate)
-      .eq('shift', params.shift),
-    params.supabase
-      .from('point_returns')
-      .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
-      .eq('location_id', params.locationId)
-      .eq('return_date', params.saleDate)
-      .eq('shift', params.shift),
+    salesQuery,
+    returnsQuery,
   ])
 
   if (salesError) throw salesError
@@ -457,6 +465,7 @@ export async function GET(request: Request) {
     if (view === 'shift-summary') {
       const saleDate = String(url.searchParams.get('date') || '').trim()
       const shift = String(url.searchParams.get('shift') || '').trim() as 'day' | 'night'
+      const shiftId = String(url.searchParams.get('shift_id') || '').trim() || null
       if (!saleDate) return json({ error: 'date-required' }, 400)
       if (shift !== 'day' && shift !== 'night') return json({ error: 'shift-required' }, 400)
 
@@ -465,6 +474,7 @@ export async function GET(request: Request) {
         locationId: location.id,
         saleDate,
         shift,
+        shiftId,
       })
 
       return json({
@@ -582,6 +592,17 @@ export async function POST(request: Request) {
 
     const itemIds = [...new Set(requestedItems.map((item) => item.item_id))]
     const stock = await resolveStockLocations(supabase, device.company_id)
+    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
+    if (!shiftIdAttach) {
+      return json(
+        {
+          error: 'point-shift-no-open',
+          message: 'Сначала откройте смену и укажите старт кассы.',
+        },
+        409,
+      )
+    }
+
     const [{ data: dbItems, error: itemError }, showcaseBalances, customerContext] = await Promise.all([
       supabase
         .from('inventory_items')
@@ -649,9 +670,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // Phase 1: best-effort привязка к открытой смене (без 409 пока операторка не обновлена).
-    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
-    if (shiftIdAttach && sale?.sale_id) {
+    if (sale?.sale_id) {
       await supabase.from('point_sales').update({ shift_id: shiftIdAttach }).eq('id', sale.sale_id)
     }
 
