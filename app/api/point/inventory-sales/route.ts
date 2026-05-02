@@ -6,7 +6,7 @@ import { requirePointDevice } from '@/lib/server/point-devices'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
 
-type SaleBody = {
+type CreateSaleBody = {
   action: 'createSale'
   payload: {
     sale_date: string
@@ -30,6 +30,21 @@ type SaleBody = {
     }>
   }
 }
+
+type CorrectPaymentBody = {
+  action: 'correctPayment'
+  payload: {
+    sale_id: string
+    payment_method: 'cash' | 'kaspi' | 'mixed'
+    cash_amount?: number | null
+    kaspi_amount?: number | null
+    kaspi_before_midnight_amount?: number | null
+    kaspi_after_midnight_amount?: number | null
+    reason?: string | null
+  }
+}
+
+type SaleBody = CreateSaleBody | CorrectPaymentBody
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -350,6 +365,173 @@ async function applyCustomerSaleEffects(params: {
   return { pointsEarned, pointsSpent, customerId: params.customer.id }
 }
 
+function validatePaymentBreakdown(params: {
+  paymentMethod: string | undefined
+  cashAmount: number
+  kaspiAmount: number
+  kaspiBeforeMidnightAmount: number
+  kaspiAfterMidnightAmount: number
+  totalAmount: number
+}) {
+  if (!['cash', 'kaspi', 'mixed'].includes(String(params.paymentMethod || ''))) {
+    return { error: 'sale-payment-method-invalid', message: 'Выберите корректный способ оплаты.' }
+  }
+  if (
+    params.cashAmount < 0 ||
+    params.kaspiAmount < 0 ||
+    params.kaspiBeforeMidnightAmount < 0 ||
+    params.kaspiAfterMidnightAmount < 0
+  ) {
+    return { error: 'sale-payment-negative', message: 'Суммы оплаты не могут быть отрицательными.' }
+  }
+  if (Math.abs(params.cashAmount + params.kaspiAmount - params.totalAmount) > 0.01) {
+    return {
+      error: 'sale-payment-total-mismatch',
+      message: 'Сумма оплаты должна совпадать с итогом продажи.',
+    }
+  }
+  if (Math.abs(params.kaspiAmount - (params.kaspiBeforeMidnightAmount + params.kaspiAfterMidnightAmount)) > 0.01) {
+    return {
+      error: 'sale-kaspi-split-mismatch',
+      message: 'Разделение Kaspi до/после полуночи не совпадает с общей суммой Kaspi.',
+    }
+  }
+  if (params.paymentMethod === 'cash' && (Math.abs(params.cashAmount - params.totalAmount) > 0.01 || params.kaspiAmount > 0)) {
+    return { error: 'sale-cash-payment-invalid', message: 'Для наличной оплаты вся сумма должна быть в наличных.' }
+  }
+  if (params.paymentMethod === 'kaspi' && (params.cashAmount > 0 || Math.abs(params.kaspiAmount - params.totalAmount) > 0.01)) {
+    return { error: 'sale-kaspi-payment-invalid', message: 'Для Kaspi-оплаты вся сумма должна быть в Kaspi.' }
+  }
+  if (params.paymentMethod === 'mixed' && (params.cashAmount <= 0 || params.kaspiAmount <= 0)) {
+    return { error: 'sale-mixed-payment-invalid', message: 'Для смешанной оплаты должны быть и наличные, и Kaspi.' }
+  }
+  return null
+}
+
+async function handleCorrectPayment(params: {
+  request: Request
+  supabase: any
+  device: any
+  body: CorrectPaymentBody
+}) {
+  const actor = await resolveActor({ request: params.request, supabase: params.supabase, companyId: params.device.company_id })
+  const saleId = String(params.body.payload?.sale_id || '').trim()
+  const reason = String(params.body.payload?.reason || '').trim()
+  if (!saleId) return json({ error: 'sale-id-required', message: 'Не найдена продажа для исправления оплаты.' }, 400)
+  if (reason.length < 3) {
+    return json({ error: 'sale-payment-correction-reason-required', message: 'Укажите причину исправления оплаты.' }, 400)
+  }
+
+  const { data: sale, error: saleError } = await params.supabase
+    .from('point_sales')
+    .select(
+      'id, company_id, location_id, shift_id, sale_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount',
+    )
+    .eq('id', saleId)
+    .eq('company_id', params.device.company_id)
+    .maybeSingle()
+
+  if (saleError) throw saleError
+  if (!sale?.id) return json({ error: 'point-sale-not-found', message: 'Продажа не найдена.' }, 404)
+
+  if (sale.shift_id) {
+    const { data: shiftRow, error: shiftError } = await params.supabase
+      .from('point_shifts')
+      .select('id, status')
+      .eq('id', sale.shift_id)
+      .maybeSingle()
+
+    if (shiftError) throw shiftError
+    if (shiftRow?.status && shiftRow.status !== 'open') {
+      return json(
+        {
+          error: 'point-sale-shift-closed',
+          message: 'Оплату можно исправлять только пока смена открыта.',
+        },
+        409,
+      )
+    }
+  }
+
+  const { count: returnsCount, error: returnsError } = await params.supabase
+    .from('point_returns')
+    .select('id', { count: 'exact', head: true })
+    .eq('sale_id', saleId)
+
+  if (returnsError) throw returnsError
+  if (Number(returnsCount || 0) > 0) {
+    return json(
+      {
+        error: 'point-sale-has-returns',
+        message: 'У этой продажи уже есть возврат. Оплату такой продажи исправьте через администратора.',
+      },
+      409,
+    )
+  }
+
+  const paymentMethod = params.body.payload.payment_method
+  const cashAmount = normalizeMoney(params.body.payload?.cash_amount)
+  const kaspiAmount = normalizeMoney(params.body.payload?.kaspi_amount)
+  const kaspiBeforeMidnightAmount = normalizeMoney(params.body.payload?.kaspi_before_midnight_amount)
+  const kaspiAfterMidnightAmount = normalizeMoney(params.body.payload?.kaspi_after_midnight_amount)
+  const totalAmount = normalizeMoney(sale.total_amount)
+
+  const paymentError = validatePaymentBreakdown({
+    paymentMethod,
+    cashAmount,
+    kaspiAmount,
+    kaspiBeforeMidnightAmount,
+    kaspiAfterMidnightAmount,
+    totalAmount,
+  })
+  if (paymentError) return json(paymentError, 400)
+
+  const previous = {
+    payment_method: sale.payment_method,
+    cash_amount: normalizeMoney(sale.cash_amount),
+    kaspi_amount: normalizeMoney(sale.kaspi_amount),
+    kaspi_before_midnight_amount: normalizeMoney(sale.kaspi_before_midnight_amount),
+    kaspi_after_midnight_amount: normalizeMoney(sale.kaspi_after_midnight_amount),
+  }
+  const next = {
+    payment_method: paymentMethod,
+    cash_amount: cashAmount,
+    kaspi_amount: kaspiAmount,
+    kaspi_before_midnight_amount: kaspiBeforeMidnightAmount,
+    kaspi_after_midnight_amount: kaspiAfterMidnightAmount,
+  }
+
+  const { error: updateError } = await params.supabase
+    .from('point_sales')
+    .update(next)
+    .eq('id', saleId)
+    .eq('company_id', params.device.company_id)
+
+  if (updateError) throw updateError
+
+  await writeAuditLog(params.supabase, {
+    actorUserId: actor.actorUserId,
+    entityType: 'point-sale',
+    entityId: saleId,
+    action: 'payment.correct',
+    payload: {
+      point_device_id: params.device.id,
+      company_id: params.device.company_id,
+      operator_id: actor.operatorId,
+      location_id: sale.location_id,
+      shift_id: sale.shift_id || null,
+      sale_date: sale.sale_date,
+      shift: sale.shift,
+      reason,
+      total_amount: totalAmount,
+      previous,
+      next,
+    },
+  })
+
+  return json({ ok: true, data: { sale_id: saleId, ...next } })
+}
+
 async function fetchShiftSummary(params: {
   supabase: any
   locationId: string
@@ -548,6 +730,9 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => null)) as SaleBody | null
+    if (body?.action === 'correctPayment') {
+      return await handleCorrectPayment({ request, supabase, device, body })
+    }
     if (body?.action !== 'createSale') return json({ error: 'invalid-action' }, 400)
 
     const location = await resolvePointSaleLocation(supabase, device.company_id)

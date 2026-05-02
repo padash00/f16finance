@@ -732,6 +732,49 @@ export async function createPointInventorySale(
   return data.data
 }
 
+export async function correctPointInventorySalePayment(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: {
+    sale_id: string
+    payment_method: 'cash' | 'kaspi' | 'mixed'
+    cash_amount: number
+    kaspi_amount: number
+    kaspi_before_midnight_amount: number
+    kaspi_after_midnight_amount: number
+    reason: string
+  },
+): Promise<{
+  sale_id: string
+  payment_method: 'cash' | 'kaspi' | 'mixed'
+  cash_amount: number
+  kaspi_amount: number
+  kaspi_before_midnight_amount: number
+  kaspi_after_midnight_amount: number
+}> {
+  const data = await request<{
+    ok: boolean
+    data: {
+      sale_id: string
+      payment_method: 'cash' | 'kaspi' | 'mixed'
+      cash_amount: number
+      kaspi_amount: number
+      kaspi_before_midnight_amount: number
+      kaspi_after_midnight_amount: number
+    }
+  }>(
+    config,
+    'POST',
+    '/api/point/inventory-sales',
+    {
+      action: 'correctPayment',
+      payload,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
 export async function getPointInventoryReturns(
   config: AppConfig,
   session: OperatorSession,

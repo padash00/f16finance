@@ -4,6 +4,7 @@ import {
   LogOut,
   Minus,
   Percent,
+  PencilLine,
   Plus,
   Printer,
   RefreshCw,
@@ -34,6 +35,7 @@ import type {
   OperatorSession,
   PointInventorySaleContext,
   PointInventorySaleItem,
+  PointInventorySaleRow,
 } from '@/types'
 
 interface Props {
@@ -91,6 +93,28 @@ function paymentBadge(paymentMethod: string) {
 
 function formatShiftLabel(shift: 'day' | 'night') {
   return shift === 'night' ? 'Ночь' : 'День'
+}
+
+function formatSaleTime(soldAt: string | null | undefined) {
+  if (!soldAt) return '—'
+  return new Date(soldAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+function salePaymentDetails(sale: PointInventorySaleRow) {
+  if (sale.payment_method === 'cash') return `Наличные: ${formatMoney(Number(sale.cash_amount || 0))}`
+  if (sale.payment_method === 'kaspi') return `Kaspi: ${formatMoney(Number(sale.kaspi_amount || 0))}`
+  return `Наличные: ${formatMoney(Number(sale.cash_amount || 0))} · Kaspi: ${formatMoney(Number(sale.kaspi_amount || 0))}`
+}
+
+function splitKaspiForSale(sale: PointInventorySaleRow, kaspiAmount: number) {
+  const currentBefore = Number(sale.kaspi_before_midnight_amount || 0)
+  const currentAfter = Number(sale.kaspi_after_midnight_amount || 0)
+  if (sale.shift !== 'night') return { before: kaspiAmount, after: 0 }
+  if (currentBefore > 0 && currentAfter <= 0) return { before: kaspiAmount, after: 0 }
+  if (currentAfter > 0 && currentBefore <= 0) return { before: 0, after: kaspiAmount }
+
+  const soldDate = sale.sold_at ? new Date(sale.sold_at).toISOString().slice(0, 10) : sale.sale_date
+  return soldDate === sale.sale_date ? { before: kaspiAmount, after: 0 } : { before: 0, after: kaspiAmount }
 }
 
 function escapeHtml(value: string) {
@@ -228,6 +252,11 @@ export default function InventorySalesPage({
   const [mixedCash, setMixedCash] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [receiptPreview, setReceiptPreview] = useState<SaleReceiptPreview | null>(null)
+  const [correctionSale, setCorrectionSale] = useState<PointInventorySaleRow | null>(null)
+  const [correctionMethod, setCorrectionMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
+  const [correctionCash, setCorrectionCash] = useState('')
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [correctionSaving, setCorrectionSaving] = useState(false)
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState('')
@@ -600,6 +629,76 @@ export default function InventorySalesPage({
       toastError(err?.message || 'Не удалось провести продажу')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const recentSales = useMemo(() => (context?.sales || []).slice(0, 6), [context?.sales])
+
+  const correctionTotal = correctionSale ? Number(correctionSale.total_amount || 0) : 0
+  const correctionCashAmount = correctionSale
+    ? correctionMethod === 'cash'
+      ? correctionTotal
+      : correctionMethod === 'mixed'
+        ? Math.min(correctionTotal, Math.max(0, parseMoney(correctionCash)))
+        : 0
+    : 0
+  const correctionKaspiAmount = correctionSale
+    ? correctionMethod === 'kaspi'
+      ? correctionTotal
+      : correctionMethod === 'mixed'
+        ? Math.max(0, correctionTotal - correctionCashAmount)
+        : 0
+    : 0
+  const correctionKaspiSplit = correctionSale
+    ? splitKaspiForSale(correctionSale, correctionKaspiAmount)
+    : { before: 0, after: 0 }
+
+  function openPaymentCorrection(sale: PointInventorySaleRow) {
+    setCorrectionSale(sale)
+    setCorrectionMethod(sale.payment_method)
+    setCorrectionCash(String(Number(sale.cash_amount || 0)))
+    setCorrectionReason('')
+  }
+
+  function closePaymentCorrection() {
+    if (correctionSaving) return
+    setCorrectionSale(null)
+    setCorrectionReason('')
+  }
+
+  async function handlePaymentCorrectionSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!correctionSale) return
+
+    if (correctionMethod === 'mixed' && (correctionCashAmount <= 0 || correctionKaspiAmount <= 0)) {
+      toastError('Для смешанной оплаты укажите часть наличными, остальное будет Kaspi')
+      return
+    }
+
+    if (!correctionReason.trim()) {
+      toastError('Укажите причину исправления оплаты')
+      return
+    }
+
+    setCorrectionSaving(true)
+    try {
+      await api.correctPointInventorySalePayment(config, session, {
+        sale_id: correctionSale.id,
+        payment_method: correctionMethod,
+        cash_amount: correctionCashAmount,
+        kaspi_amount: correctionKaspiAmount,
+        kaspi_before_midnight_amount: correctionKaspiSplit.before,
+        kaspi_after_midnight_amount: correctionKaspiSplit.after,
+        reason: correctionReason.trim(),
+      })
+      toastSuccess('Оплата продажи исправлена')
+      setCorrectionSale(null)
+      setCorrectionReason('')
+      await load()
+    } catch (err: any) {
+      toastError(err?.message || 'Не удалось исправить оплату')
+    } finally {
+      setCorrectionSaving(false)
     }
   }
 
@@ -1041,6 +1140,44 @@ export default function InventorySalesPage({
             )}
           </div>
 
+          {recentSales.length > 0 ? (
+            <div className="shrink-0 border-t border-white/10">
+              <div className="flex items-center justify-between px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Последние продажи</p>
+                <span className="text-[10px] text-muted-foreground">исправление оплаты</span>
+              </div>
+              <div className="max-h-44 space-y-1.5 overflow-y-auto px-3 pb-3">
+                {recentSales.map((sale) => (
+                  <div key={sale.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-semibold">{formatMoney(Number(sale.total_amount || 0))}</p>
+                          <Badge variant="secondary" className="text-[10px]">{paymentBadge(sale.payment_method)}</Badge>
+                        </div>
+                        <p className="mt-1 truncate text-[10px] text-muted-foreground">{salePaymentDetails(sale)}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {formatSaleTime(sale.sold_at)} · {formatShiftLabel(sale.shift)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        onClick={() => openPaymentCorrection(sale)}
+                        title="Исправить оплату"
+                        aria-label="Исправить оплату продажи"
+                      >
+                        <PencilLine className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {/* Checkout form */}
           <form onSubmit={handleSubmit} className="shrink-0 space-y-2.5 border-t border-white/10 p-3">
             {/* Payment method */}
@@ -1112,6 +1249,118 @@ export default function InventorySalesPage({
           </form>
         </div>
       </div>
+
+      {correctionSale ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <Card className="w-full max-w-lg border-white/10 bg-slate-950/95 shadow-2xl">
+            <CardHeader className="border-b border-white/10 pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <PencilLine className="h-4 w-4 text-amber-300" />
+                    Исправить оплату
+                  </CardTitle>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Продажа #{correctionSale.id.slice(-6)} · {formatSaleTime(correctionSale.sold_at)}
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={closePaymentCorrection} disabled={correctionSaving}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5">
+              <form onSubmit={handlePaymentCorrectionSubmit} className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Итого продажи</span>
+                    <span className="text-lg font-semibold">{formatMoney(correctionTotal)}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Сейчас: {salePaymentDetails(correctionSale)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Правильная оплата</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => setCorrectionMethod(method)}
+                        className={`rounded-xl border px-2 py-2 text-center text-sm font-medium transition ${
+                          correctionMethod === method
+                            ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
+                            : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {paymentBadge(method)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {correctionMethod === 'mixed' ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="mb-1 text-xs text-muted-foreground">Наличными</p>
+                      <Input
+                        value={correctionCash}
+                        onChange={(e) => setCorrectionCash(e.target.value)}
+                        placeholder="0"
+                        className="h-10"
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs text-muted-foreground">Kaspi</p>
+                      <Input value={String(correctionKaspiAmount)} readOnly className="h-10" />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Наличные</span>
+                    <span className="font-semibold">{formatMoney(correctionCashAmount)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-muted-foreground">Kaspi</span>
+                    <span className="font-semibold">{formatMoney(correctionKaspiAmount)}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Причина исправления</p>
+                  <textarea
+                    value={correctionReason}
+                    onChange={(e) => setCorrectionReason(e.target.value)}
+                    rows={3}
+                    placeholder="Например: клиент оплатил 500 наличными и 700 Kaspi, оператор выбрал Kaspi"
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-emerald-400/50"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button type="submit" className="flex-1 min-w-[180px]" disabled={correctionSaving}>
+                    {correctionSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />}
+                    Сохранить исправление
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 min-w-[140px]"
+                    onClick={closePaymentCorrection}
+                    disabled={correctionSaving}
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {receiptPreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
