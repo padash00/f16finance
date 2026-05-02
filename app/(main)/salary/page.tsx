@@ -107,6 +107,49 @@ function monthPrefixFromPaymentDate(paymentDate: string | null | undefined) {
   return String(paymentDate || '').slice(0, 7)
 }
 
+function staffPaymentSlotLabel(slot: string | null | undefined) {
+  if (slot === 'first') return 'выплата 1-го числа'
+  if (slot === 'second') return 'выплата 15-го числа'
+  return 'разово'
+}
+
+function getStaffPaymentClosingWindow(
+  staffId: string,
+  payments: StaffPayment[],
+  payDate: string,
+  currentPaymentId?: string | null,
+) {
+  const to = String(payDate || '')
+  const previousPayment =
+    payments
+      .filter((p) => p.staff_id === staffId)
+      .filter((p) => (currentPaymentId ? String(p.id) !== String(currentPaymentId) : true))
+      .filter((p) => String(p.pay_date || '') <= to)
+      .sort((a, b) => {
+        const byDate = String(b.pay_date || '').localeCompare(String(a.pay_date || ''))
+        if (byDate !== 0) return byDate
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      })[0] || null
+
+  if (!previousPayment) {
+    return {
+      from: '',
+      to,
+      label: to ? `до ${formatRuDate(to)}` : 'до даты выплаты',
+      previousPayment,
+    }
+  }
+
+  const nextDayAfterPrevious = addDaysISO(String(previousPayment.pay_date || ''), 1)
+  const from = nextDayAfterPrevious && nextDayAfterPrevious <= to ? nextDayAfterPrevious : to
+  return {
+    from,
+    to,
+    label: `${formatRuDate(from)} - ${formatRuDate(to)}`,
+    previousPayment,
+  }
+}
+
 function filterStaffAdjustmentsForSlot(
   adjs: StaffAdjustment[],
   staffId: string,
@@ -543,6 +586,7 @@ export default function SalaryPage() {
 
     return {
       period,
+      closingWindow: getStaffPaymentClosingWindow(staffPayModal.id, staffSalary.payments, staffPayDate),
       calc,
       closingAdjustments,
       payCashAmount,
@@ -1383,7 +1427,8 @@ export default function SalaryPage() {
                     const generatedAdjustments = staffSalary.adjustments.filter(
                       (adj) => adj.staff_id === s.id && String(adj.source_payment_id || '') === paymentId,
                     )
-                    return { payment, closedAdjustments, generatedAdjustments }
+                    const closingWindow = getStaffPaymentClosingWindow(s.id, staffSalary.payments, payment.pay_date, payment.id)
+                    return { payment, closedAdjustments, generatedAdjustments, closingWindow }
                   })
                   const recentlyClosedAdjustmentsCount = recentPaymentDetails.reduce(
                     (sum, item) => sum + item.closedAdjustments.length,
@@ -1449,14 +1494,15 @@ export default function SalaryPage() {
                         <div className="mt-3">
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
                           <div className="flex flex-wrap gap-2">
-                            {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments }) => (
+                            {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments, closingWindow }) => (
                               <div key={payment.id} className="min-w-[260px] rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span>{payment.pay_date} · {money(payment.amount)} · {payment.slot === 'first' ? '1–15' : payment.slot === 'second' ? '16–конец' : 'разово'}</span>
+                                  <span>{payment.pay_date} · {money(payment.amount)} · {staffPaymentSlotLabel(payment.slot)}</span>
                                   {canEditStaffSalary ? (
                                     <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(payment.id, payment.amount)} className="ml-1 shrink-0 text-slate-600 transition hover:text-rose-400"><X className="h-3.5 w-3.5" /></button>
                                   ) : null}
                                 </div>
+                                <div className="mt-1 text-[11px] text-slate-500">Период закрытия: {closingWindow.label}</div>
                                 {closedAdjustments.length > 0 ? (
                                   <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
                                     {closedAdjustments.slice(0, 4).map((adj) => (
@@ -1769,8 +1815,8 @@ export default function SalaryPage() {
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Слот</label>
                 <select className={selectCls} value={staffPaySlot} onChange={e => setStaffPaySlot(e.target.value as 'first' | 'second')}>
-                  <option value="first">1–15 числа</option>
-                  <option value="second">16 — конец месяца</option>
+                  <option value="first">Выплата 1-го числа</option>
+                  <option value="second">Выплата 15-го числа</option>
                 </select>
               </div>
               <div>
@@ -1799,7 +1845,8 @@ export default function SalaryPage() {
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
                 <div className="mb-2 text-sm font-medium text-white">Предпросмотр проводки</div>
                 <div className="grid gap-2 md:grid-cols-2">
-                  <div>Период: <span className="text-white">{staffPayPreview.period ? `${staffPayPreview.period.from} - ${staffPayPreview.period.to}` : '—'}</span></div>
+                  <div>Период закрытия: <span className="text-white">{staffPayPreview.closingWindow.label}</span></div>
+                  <div>Очередь: <span className="text-white">{staffPaymentSlotLabel(staffPaySlot)}</span></div>
                   <div>Закроется корректировок: <span className="text-white">{staffPayPreview.closingAdjustments.length}</span></div>
                   <div>Расход (компания): <span className="text-white">{staffPayPreview.companyName}</span></div>
                   <div>Расход (нал/Kaspi): <span className="text-white">{money(staffPayPreview.payCashAmount)} / {money(staffPayPreview.payKaspiAmount)}</span></div>
@@ -1810,7 +1857,7 @@ export default function SalaryPage() {
                   <div className="mt-3 max-h-28 space-y-1 overflow-y-auto pr-1">
                     {staffPayPreview.closingAdjustments.map((adj) => (
                       <div key={adj.id} className="flex items-center justify-between rounded-lg border border-white/10 px-2 py-1">
-                        <span className="text-slate-400">{adj.date} · {adj.kind}</span>
+                        <span className="text-slate-400">{adj.date} · {staffAdjustmentKindLabel(adj.kind)}</span>
                         <span className="text-white">{money(adj.amount)}</span>
                       </div>
                     ))}

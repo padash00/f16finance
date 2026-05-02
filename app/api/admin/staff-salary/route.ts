@@ -28,6 +28,33 @@ function monthRangeFromDate(payDate: string) {
   }
 }
 
+function addDaysISO(isoDate: string, days: number) {
+  const [yearRaw, monthRaw, dayRaw] = String(isoDate || '').split('-')
+  const year = Number(yearRaw)
+  const month = Number(monthRaw)
+  const day = Number(dayRaw)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return ''
+  const value = new Date(Date.UTC(year, month - 1, day + days))
+  const yyyy = value.getUTCFullYear()
+  const mm = String(value.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(value.getUTCDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function salaryPaymentSlotLabel(slot: string) {
+  if (slot === 'first') return 'выплата 1-го числа'
+  if (slot === 'second') return 'выплата 15-го числа'
+  return 'разовая выплата'
+}
+
+function salaryPaymentClosingPeriodLabel(payDate: string, previousPayDate: string | null) {
+  const to = String(payDate || '')
+  if (!previousPayDate) return `до ${to}`
+  const nextDayAfterPrevious = addDaysISO(previousPayDate, 1)
+  const from = nextDayAfterPrevious && nextDayAfterPrevious <= to ? nextDayAfterPrevious : to
+  return `${from} - ${to}`
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -411,10 +438,6 @@ export async function POST(req: Request) {
         .select('full_name, monthly_salary')
         .eq('id', staff_id)
         .single()
-      const slotLabel = normalizedSlot === 'first' ? '1–15' : normalizedSlot === 'second' ? '16–конец месяца' : ''
-      const payDate = new Date(pay_date)
-      const monthLabel = payDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-
       const { data: previousPayments, error: previousPaymentsError } = await supabase
         .from('staff_salary_payments')
         .select('pay_date, created_at')
@@ -426,9 +449,11 @@ export async function POST(req: Request) {
       if (previousPaymentsError) throw previousPaymentsError
       const previousPayDate = previousPayments?.[0]?.pay_date ? String(previousPayments[0].pay_date) : null
       const previousPayCreatedAt = previousPayments?.[0]?.created_at ? String(previousPayments[0].created_at) : null
+      const slotLabel = salaryPaymentSlotLabel(normalizedSlot)
+      const closingPeriodLabel = salaryPaymentClosingPeriodLabel(pay_date, previousPayDate)
 
       // 1. Create expense record (required for consistency with salary expenses flow)
-      const expenseComment = `Зарплата: ${staffMember?.full_name || 'сотрудник'}${slotLabel ? ` (${slotLabel} ${monthLabel})` : ''}`
+      const expenseComment = `Зарплата: ${staffMember?.full_name || 'сотрудник'} (${slotLabel}, период ${closingPeriodLabel})`
       const expenseResult = await supabase
         .from('expenses')
         .insert({
@@ -567,6 +592,10 @@ export async function POST(req: Request) {
           overpayment_adjustment_id: overpaymentAdjustmentId,
           pay_date,
           slot,
+          slot_label: slotLabel,
+          closing_period: closingPeriodLabel,
+          previous_pay_date: previousPayDate,
+          closed_adjustment_ids: idsToClose,
           expense_id: expenseId,
         },
       })
