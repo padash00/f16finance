@@ -155,6 +155,19 @@ function calcStaffToPay(
   return { half, bonuses, debts, fines, advances, toPay: half + bonuses - debts - fines - advances }
 }
 
+function staffAdjustmentKindLabel(kind: StaffAdjustment['kind']) {
+  if (kind === 'bonus') return 'бонус'
+  if (kind === 'advance') return 'аванс'
+  if (kind === 'fine') return 'штраф'
+  return 'долг'
+}
+
+function staffAdjustmentTone(kind: StaffAdjustment['kind']) {
+  if (kind === 'bonus') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+  if (kind === 'advance') return 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+  return 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+}
+
 function buildStaffTimelineEvents(params: {
   staffId: string
   adjustments: StaffAdjustment[]
@@ -498,7 +511,7 @@ export default function SalaryPage() {
   const [staffPaySaving, setStaffPaySaving] = useState(false)
   const [eventsStaffId, setEventsStaffId] = useState<'all' | string>('all')
   const [eventsKind, setEventsKind] = useState<'all' | StaffTimelineEvent['kind']>('all')
-  const [eventsStatus, setEventsStatus] = useState<'all' | 'active' | 'voided'>('all')
+  const [eventsStatus, setEventsStatus] = useState<'all' | 'active' | 'paid' | 'voided'>('all')
   const [eventsQuery, setEventsQuery] = useState('')
   const [eventsDateFrom, setEventsDateFrom] = useState('')
   const [eventsDateTo, setEventsDateTo] = useState('')
@@ -585,8 +598,7 @@ export default function SalaryPage() {
       .filter((ev) => (eventsKind === 'all' ? true : ev.kind === eventsKind))
       .filter((ev) => {
         if (eventsStatus === 'all') return true
-        if (eventsStatus === 'voided') return ev.status === 'voided'
-        return ev.status !== 'voided'
+        return String(ev.status || 'active') === eventsStatus
       })
       .filter((ev) => (eventsDateFrom ? ev.date >= eventsDateFrom : true))
       .filter((ev) => (eventsDateTo ? ev.date <= eventsDateTo : true))
@@ -1363,6 +1375,20 @@ export default function SalaryPage() {
                   const recentPayments = staffSalary.payments
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
                     .slice(0, 3)
+                  const recentPaymentDetails = recentPayments.map((payment) => {
+                    const paymentId = String(payment.id)
+                    const closedAdjustments = staffSalary.adjustments.filter(
+                      (adj) => adj.staff_id === s.id && String(adj.closed_by_payment_id || '') === paymentId,
+                    )
+                    const generatedAdjustments = staffSalary.adjustments.filter(
+                      (adj) => adj.staff_id === s.id && String(adj.source_payment_id || '') === paymentId,
+                    )
+                    return { payment, closedAdjustments, generatedAdjustments }
+                  })
+                  const recentlyClosedAdjustmentsCount = recentPaymentDetails.reduce(
+                    (sum, item) => sum + item.closedAdjustments.length,
+                    0,
+                  )
                   const isOperatorBased = s.source_type === 'operator'
                   return (
                     <div key={s.id} className="p-5">
@@ -1402,7 +1428,7 @@ export default function SalaryPage() {
                             <div key={adj.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${adj.kind === 'bonus' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : adj.kind === 'advance' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`}>
-                                  {adj.kind === 'bonus' ? 'бонус' : adj.kind === 'advance' ? 'аванс' : adj.kind === 'fine' ? 'штраф' : 'долг'}
+                                  {staffAdjustmentKindLabel(adj.kind)}
                                 </span>
                                 <span className="font-medium text-white">{money(adj.amount)}</span>
                                 <span className="text-slate-500">{adj.date}</span>
@@ -1414,16 +1440,52 @@ export default function SalaryPage() {
                             </div>
                           ))}
                         </div>
+                      ) : recentlyClosedAdjustmentsCount > 0 ? (
+                        <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-200">
+                          Долги и другие корректировки не пропали: они закрыты выплатой и показаны ниже в последних выплатах.
+                        </div>
                       ) : null}
                       {recentPayments.length > 0 ? (
                         <div className="mt-3">
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
                           <div className="flex flex-wrap gap-2">
-                            {recentPayments.map(p => (
-                              <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
-                                <span>{p.pay_date} · {money(p.amount)} · {p.slot === 'first' ? '1–15' : p.slot === 'second' ? '16–конец' : 'разово'}</span>
-                                {canEditStaffSalary ? (
-                                  <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="ml-1 text-slate-600 hover:text-rose-400 transition"><X className="h-3.5 w-3.5" /></button>
+                            {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments }) => (
+                              <div key={payment.id} className="min-w-[260px] rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span>{payment.pay_date} · {money(payment.amount)} · {payment.slot === 'first' ? '1–15' : payment.slot === 'second' ? '16–конец' : 'разово'}</span>
+                                  {canEditStaffSalary ? (
+                                    <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(payment.id, payment.amount)} className="ml-1 shrink-0 text-slate-600 transition hover:text-rose-400"><X className="h-3.5 w-3.5" /></button>
+                                  ) : null}
+                                </div>
+                                {closedAdjustments.length > 0 ? (
+                                  <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                                    {closedAdjustments.slice(0, 4).map((adj) => (
+                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>
+                                          закрыто: {staffAdjustmentKindLabel(adj.kind)}
+                                        </span>
+                                        <span className="font-medium text-white">{money(adj.amount)}</span>
+                                        <span>{adj.date}</span>
+                                        {adj.comment ? <span className="truncate">{adj.comment}</span> : null}
+                                      </div>
+                                    ))}
+                                    {closedAdjustments.length > 4 ? (
+                                      <div className="text-[11px] text-slate-500">Ещё закрыто: {closedAdjustments.length - 4}</div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                                {generatedAdjustments.length > 0 ? (
+                                  <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                                    {generatedAdjustments.map((adj) => (
+                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-amber-200">
+                                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>
+                                          создано: {staffAdjustmentKindLabel(adj.kind)}
+                                        </span>
+                                        <span className="font-medium text-white">{money(adj.amount)}</span>
+                                        <span>на следующую выплату</span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 ) : null}
                               </div>
                             ))}
@@ -1483,6 +1545,7 @@ export default function SalaryPage() {
                   <select className={selectCls} value={eventsStatus} onChange={(e) => setEventsStatus(e.target.value as any)}>
                     <option value="all">Любой статус</option>
                     <option value="active">Активные</option>
+                    <option value="paid">Закрытые выплатой</option>
                     <option value="voided">Аннулированные</option>
                   </select>
                   <input className={input} type="date" value={eventsDateFrom} onChange={(e) => setEventsDateFrom(e.target.value)} />
@@ -1554,6 +1617,7 @@ export default function SalaryPage() {
                               <div className="flex min-w-0 items-center gap-2">
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
                                 <span className="text-slate-300">{ev.staff_name}</span>
+                                {ev.status === 'paid' ? <span className="text-sky-400">(закрыто выплатой)</span> : null}
                                 {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
                                 {ev.comment ? <span className="truncate text-slate-400">{ev.comment}</span> : null}
                               </div>
