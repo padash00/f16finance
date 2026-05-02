@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase.rpc('point_shift_open', {
     p_company_id: device.company_id,
     p_operator_id: staffId,
-    p_point_device_id: device.id,
+    p_point_device_id: null,
     p_shift_type: body.shift_type || 'day',
     p_opening_cash: openingCash,
     p_opening_notes: body.opening_notes || null,
