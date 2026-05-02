@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         409,
       )
     }
-    return json({ error: 'point-shift-open-failed', detail: (error as any).message }, 400)
+    return json({ error: 'point-shift-open-failed', message: (error as any).message, detail: (error as any).message }, 400)
   }
 
   const shiftId = (data as unknown as string) || ''
