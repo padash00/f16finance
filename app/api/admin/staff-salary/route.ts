@@ -159,17 +159,24 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → created_at of the most recent payment.
-    const lastPaymentCreatedAtByStaff = new Map<string, string>()
+    // Map staffId → { payDate, createdAt } of the most recent payment by pay_date.
+    const lastPaymentByStaff = new Map<string, { payDate: string; createdAt: string }>()
     for (const payment of (paymentsRes.data ?? []) as any[]) {
       const staffId = String(payment?.staff_id || '')
+      const payDate = String(payment?.pay_date || '')
       const createdAt = String(payment?.created_at || '')
-      if (!staffId || !createdAt) continue
-      const existing = lastPaymentCreatedAtByStaff.get(staffId)
-      if (!existing || createdAt > existing) lastPaymentCreatedAtByStaff.set(staffId, createdAt)
+      if (!staffId || !payDate) continue
+      const existing = lastPaymentByStaff.get(staffId)
+      if (!existing || payDate > existing.payDate) {
+        lastPaymentByStaff.set(staffId, { payDate, createdAt })
+      }
     }
 
-    // Aggregate point_debt_items per staffId, counting only items created AFTER the last payment.
+    // Aggregate point_debt_items per staffId.
+    // Include only items created AFTER the last pay_date:
+    //   item.date > pay_date  → include
+    //   item.date < pay_date  → exclude (covered by previous payment)
+    //   item.date = pay_date  → compare timestamps for same-day precision
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
@@ -189,8 +196,12 @@ export async function GET(req: Request) {
       }
       if (!staffId) continue
 
-      const lastPayAt = lastPaymentCreatedAtByStaff.get(staffId)
-      if (lastPayAt && itemCreatedAt && itemCreatedAt <= lastPayAt) continue
+      const lastPay = lastPaymentByStaff.get(staffId)
+      if (lastPay && itemCreatedAt) {
+        const itemDate = itemCreatedAt.slice(0, 10)
+        if (itemDate < lastPay.payDate) continue
+        if (itemDate === lastPay.payDate && lastPay.createdAt && itemCreatedAt <= lastPay.createdAt) continue
+      }
 
       const amount = Math.round(Number(row.total_amount || 0))
       if (amount <= 0) continue
