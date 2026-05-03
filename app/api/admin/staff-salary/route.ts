@@ -90,8 +90,8 @@ export async function GET(req: Request) {
         .eq('is_admin_staff', true)
         .order('name'),
       supabase
-        .from('debts')
-        .select('id, operator_id, amount, status, created_at, client_name, week_start, comment')
+        .from('point_debt_items')
+        .select('id, operator_id, total_amount, status, created_at, client_name, week_start, comment')
         .eq('status', 'active'),
       supabase
         .from('expenses')
@@ -104,7 +104,7 @@ export async function GET(req: Request) {
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
-    if (adminOpDebtsRes.error && (adminOpDebtsRes.error as any).code !== 'PGRST116') throw adminOpDebtsRes.error
+    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
     if (expensesRes.error) throw expensesRes.error
 
     const baseStaff = (staffRes.data ?? []).map((row: any) => ({
@@ -159,30 +159,17 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → pay_date of the most recent payment.
-    const lastPayDateByStaff = new Map<string, string>()
+    // Map staffId → created_at of the most recent payment.
+    const lastPaymentCreatedAtByStaff = new Map<string, string>()
     for (const payment of (paymentsRes.data ?? []) as any[]) {
       const staffId = String(payment?.staff_id || '')
-      const payDate = String(payment?.pay_date || '')
-      if (!staffId || !payDate) continue
-      const existing = lastPayDateByStaff.get(staffId)
-      if (!existing || payDate > existing) lastPayDateByStaff.set(staffId, payDate)
+      const createdAt = String(payment?.created_at || '')
+      if (!staffId || !createdAt) continue
+      const existing = lastPaymentCreatedAtByStaff.get(staffId)
+      if (!existing || createdAt > existing) lastPaymentCreatedAtByStaff.set(staffId, createdAt)
     }
 
-    // Returns the ISO date of the Monday of the week containing dateStr.
-    function getMondayOfWeek(dateStr: string): string {
-      const [y, m, d] = String(dateStr || '').split('-').map(Number)
-      if (!y || !m || !d) return dateStr
-      const date = new Date(Date.UTC(y, m - 1, d))
-      const day = date.getUTCDay() // 0=Sun
-      date.setUTCDate(d - (day === 0 ? 6 : day - 1))
-      return date.toISOString().slice(0, 10)
-    }
-
-    // Aggregate active debts per staffId from the debts table.
-    // Only include weeks that start on or after the Monday of the last payment week.
-    // The debts table groups by week (Mon–Sun); we cannot filter within a single week,
-    // so we include the full payment week (may contain a few pre-payment debts) and all later weeks.
+    // Aggregate point_debt_items per staffId, counting only items created AFTER the last payment.
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
@@ -202,14 +189,10 @@ export async function GET(req: Request) {
       }
       if (!staffId) continue
 
-      const lastPayDate = lastPayDateByStaff.get(staffId)
-      if (lastPayDate) {
-        const weekStart = String(row.week_start || '')
-        const minWeekStart = getMondayOfWeek(lastPayDate)
-        if (weekStart && weekStart < minWeekStart) continue
-      }
+      const lastPayAt = lastPaymentCreatedAtByStaff.get(staffId)
+      if (lastPayAt && itemCreatedAt && itemCreatedAt <= lastPayAt) continue
 
-      const amount = Math.round(Number(row.amount || 0))
+      const amount = Math.round(Number(row.total_amount || 0))
       if (amount <= 0) continue
 
       const existing = debtByStaff.get(staffId)
