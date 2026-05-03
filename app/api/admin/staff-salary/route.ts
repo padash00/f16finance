@@ -90,8 +90,8 @@ export async function GET(req: Request) {
         .eq('is_admin_staff', true)
         .order('name'),
       supabase
-        .from('debts')
-        .select('id, operator_id, amount, status, week_start, comment, client_name, created_at')
+        .from('point_debt_items')
+        .select('id, operator_id, total_amount, status, created_at, client_name, week_start, comment')
         .eq('status', 'active'),
       supabase
         .from('expenses')
@@ -159,8 +159,7 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → created_at of the most recent payment.
-    // Only debts created strictly AFTER the last payment are shown in the salary card.
+    // Map staffId → created_at of the most recent payment (to filter post-payment debts only).
     const lastPaymentCreatedAtByStaff = new Map<string, string>()
     for (const payment of (paymentsRes.data ?? []) as any[]) {
       const staffId = String(payment?.staff_id || '')
@@ -170,50 +169,61 @@ export async function GET(req: Request) {
       if (!existing || createdAt > existing) lastPaymentCreatedAtByStaff.set(staffId, createdAt)
     }
 
+    // Aggregate point_debt_items per staffId, counting only items created AFTER the last payment.
+    // Each item has its own created_at, so we can filter precisely regardless of week aggregation.
+    // latestCreatedAt is used as `date` so the client-side filterStaffAdjustmentsForSlot correctly
+    // treats the synthetic debt as post-payment.
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
-    const syntheticDebtAdjustments = ((adminOpDebtsRes.data ?? []) as any[])
-      .map((row) => {
-        const debtCreatedAt = row.created_at ? String(row.created_at) : null
-        const operatorId = row.operator_id ? String(row.operator_id) : null
+    type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
+    const debtByStaff = new Map<string, DebtAccum>()
 
-        if (operatorId && adminOperatorIdSet.has(operatorId)) {
-          const staffId = canonicalStaffIdByOperatorId.get(operatorId) || operatorId
-          const lastPayAt = lastPaymentCreatedAtByStaff.get(staffId)
-          if (lastPayAt && debtCreatedAt && debtCreatedAt <= lastPayAt) return null
-          return {
-            id: `operator-debt:${String(row.id)}`,
-            staff_id: staffId,
-            kind: 'debt',
-            amount: Number(row.amount || 0),
-            date: String(row.week_start || new Date().toISOString().slice(0, 10)),
-            created_at: debtCreatedAt,
-            comment: row.comment || row.client_name || 'Долг из операторской программы',
-            status: String(row.status || 'active'),
-          }
-        }
+    for (const row of (adminOpDebtsRes.data ?? []) as any[]) {
+      const itemCreatedAt = row.created_at ? String(row.created_at) : null
+      const operatorId = row.operator_id ? String(row.operator_id) : null
 
-        // Debts created for staff/owners from point app come as operator_id = null + client_name.
+      let staffId: string | null = null
+      if (operatorId && adminOperatorIdSet.has(operatorId)) {
+        staffId = canonicalStaffIdByOperatorId.get(operatorId) || operatorId
+      } else if (!operatorId) {
         const clientNameKey = normalizePersonName(row.client_name || '')
-        const matchedStaffId = clientNameKey
+        staffId = clientNameKey
           ? staffByName.get(clientNameKey) || canonicalByAdminOpName.get(clientNameKey) || null
           : null
-        if (matchedStaffId) {
-          const lastPayAt = lastPaymentCreatedAtByStaff.get(matchedStaffId)
-          if (lastPayAt && debtCreatedAt && debtCreatedAt <= lastPayAt) return null
-          return {
-            id: `operator-debt:${String(row.id)}`,
-            staff_id: matchedStaffId,
-            kind: 'debt',
-            amount: Number(row.amount || 0),
-            date: String(row.week_start || new Date().toISOString().slice(0, 10)),
-            created_at: debtCreatedAt,
-            comment: row.comment || row.client_name || 'Долг из операторской программы',
-            status: String(row.status || 'active'),
-          }
-        }
-        return null
-      })
-      .filter(Boolean)
+      }
+      if (!staffId) continue
+
+      const lastPayAt = lastPaymentCreatedAtByStaff.get(staffId)
+      if (lastPayAt && itemCreatedAt && itemCreatedAt <= lastPayAt) continue
+
+      const amount = Math.round(Number(row.total_amount || 0))
+      if (amount <= 0) continue
+
+      const existing = debtByStaff.get(staffId)
+      if (existing) {
+        existing.amount += amount
+        if (itemCreatedAt && itemCreatedAt > existing.latestCreatedAt) existing.latestCreatedAt = itemCreatedAt
+        if (row.comment) existing.comments.push(String(row.comment))
+      } else {
+        debtByStaff.set(staffId, {
+          amount,
+          latestCreatedAt: itemCreatedAt || new Date().toISOString(),
+          comments: row.comment ? [String(row.comment)] : [],
+        })
+      }
+    }
+
+    const syntheticDebtAdjustments = Array.from(debtByStaff.entries()).map(([staffId, accum]) => ({
+      id: `operator-debt:${staffId}`,
+      staff_id: staffId,
+      kind: 'debt',
+      amount: accum.amount,
+      // Use the latest item's timestamp (date part) so filterStaffAdjustmentsForSlot
+      // correctly places this debt after the last payment.
+      date: accum.latestCreatedAt.slice(0, 10),
+      created_at: accum.latestCreatedAt,
+      comment: accum.comments.slice(0, 5).join(' · ') || 'Долги из операторской программы',
+      status: 'active',
+    }))
 
     const paymentRows = (paymentsRes.data ?? []) as any[]
     const adjustmentRows = (adjRes.data ?? []) as any[]
