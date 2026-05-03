@@ -90,8 +90,8 @@ export async function GET(req: Request) {
         .eq('is_admin_staff', true)
         .order('name'),
       supabase
-        .from('point_debt_items')
-        .select('id, operator_id, total_amount, status, created_at, client_name, week_start, comment')
+        .from('debts')
+        .select('id, operator_id, amount, status, created_at, client_name, week_start, comment')
         .eq('status', 'active'),
       supabase
         .from('expenses')
@@ -104,7 +104,7 @@ export async function GET(req: Request) {
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
-    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
+    if (adminOpDebtsRes.error && (adminOpDebtsRes.error as any).code !== 'PGRST116') throw adminOpDebtsRes.error
     if (expensesRes.error) throw expensesRes.error
 
     const baseStaff = (staffRes.data ?? []).map((row: any) => ({
@@ -181,7 +181,7 @@ export async function GET(req: Request) {
       }
       if (!staffId) continue
 
-      const amount = Math.round(Number(row.total_amount || 0))
+      const amount = Math.round(Number(row.amount || 0))
       if (amount <= 0) continue
 
       const existing = debtByStaff.get(staffId)
