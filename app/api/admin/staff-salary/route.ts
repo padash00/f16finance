@@ -159,26 +159,9 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → { pay_date, created_at } of the most recent payment.
-    // We compare item dates against pay_date (not created_at) because a payment
-    // recorded late (e.g. pay_date=Apr 15 recorded on Apr 22) should still include
-    // all debts taken from Apr 16 onwards.
-    const lastPaymentByStaff = new Map<string, { payDate: string; createdAt: string }>()
-    for (const payment of (paymentsRes.data ?? []) as any[]) {
-      const staffId = String(payment?.staff_id || '')
-      const payDate = String(payment?.pay_date || '')
-      const createdAt = String(payment?.created_at || '')
-      if (!staffId || !payDate) continue
-      const existing = lastPaymentByStaff.get(staffId)
-      if (!existing || payDate > existing.payDate || (payDate === existing.payDate && createdAt > existing.createdAt)) {
-        lastPaymentByStaff.set(staffId, { payDate, createdAt })
-      }
-    }
-
-    // Aggregate point_debt_items per staffId, counting only items created AFTER the last payment.
-    // Each item has its own created_at, so we can filter precisely regardless of week aggregation.
-    // latestCreatedAt is used as `date` so the client-side filterStaffAdjustmentsForSlot correctly
-    // treats the synthetic debt as post-payment.
+    // Aggregate ALL active point_debt_items per staffId.
+    // Operator debts are NOT closed by salary payments — they have their own lifecycle
+    // in the operator program (active/paid/deleted). We show the full outstanding balance.
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
@@ -198,13 +181,6 @@ export async function GET(req: Request) {
       }
       if (!staffId) continue
 
-      const lastPay = lastPaymentByStaff.get(staffId)
-      if (lastPay && itemCreatedAt) {
-        const itemDate = itemCreatedAt.slice(0, 10)
-        if (itemDate < lastPay.payDate) continue
-        if (itemDate === lastPay.payDate && lastPay.createdAt && itemCreatedAt <= lastPay.createdAt) continue
-      }
-
       const amount = Math.round(Number(row.total_amount || 0))
       if (amount <= 0) continue
 
@@ -222,15 +198,16 @@ export async function GET(req: Request) {
       }
     }
 
+    const todayISO = new Date().toISOString().slice(0, 10)
     const syntheticDebtAdjustments = Array.from(debtByStaff.entries()).map(([staffId, accum]) => ({
       id: `operator-debt:${staffId}`,
       staff_id: staffId,
       kind: 'debt',
       amount: accum.amount,
-      // Use the latest item's timestamp (date part) so filterStaffAdjustmentsForSlot
-      // correctly places this debt after the last payment.
-      date: accum.latestCreatedAt.slice(0, 10),
-      created_at: accum.latestCreatedAt,
+      // Use today as date so filterStaffAdjustmentsForSlot always includes this
+      // in the current active period, regardless of when individual items were created.
+      date: todayISO,
+      created_at: new Date().toISOString(),
       comment: accum.comments.slice(0, 5).join(' · ') || 'Долги из операторской программы',
       status: 'active',
     }))
