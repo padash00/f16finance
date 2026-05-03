@@ -163,16 +163,13 @@ export async function GET(req: Request) {
     const syntheticDebtAdjustments = ((adminOpDebtsRes.data ?? []) as any[])
       .map((row) => {
         const operatorId = row.operator_id ? String(row.operator_id) : null
-        const debtDate = (row.created_at ? String(row.created_at).slice(0, 10) : null)
-          || String(row.week_start || new Date().toISOString().slice(0, 10))
-
         if (operatorId && adminOperatorIdSet.has(operatorId)) {
           return {
             id: `operator-debt:${String(row.id)}`,
             staff_id: canonicalStaffIdByOperatorId.get(operatorId) || operatorId,
             kind: 'debt',
             amount: Number(row.amount || 0),
-            date: debtDate,
+            date: String(row.week_start || new Date().toISOString().slice(0, 10)),
             created_at: row.created_at ? String(row.created_at) : null,
             comment: row.comment || row.client_name || 'Долг из операторской программы',
             status: String(row.status || 'active'),
@@ -190,7 +187,7 @@ export async function GET(req: Request) {
             staff_id: matchedStaffId,
             kind: 'debt',
             amount: Number(row.amount || 0),
-            date: debtDate,
+            date: String(row.week_start || new Date().toISOString().slice(0, 10)),
             created_at: row.created_at ? String(row.created_at) : null,
             comment: row.comment || row.client_name || 'Долг из операторской программы',
             status: String(row.status || 'active'),
@@ -524,50 +521,6 @@ export async function POST(req: Request) {
           })
           .in('id', idsToClose)
         if (adjPayError) throw adjPayError
-      }
-
-      // Close point debts for admin operators linked to this staff member.
-      // Debts from the operator desktop are aggregated in the `debts` table and must be
-      // explicitly closed when a salary payment is made; otherwise new debts added in
-      // the same week (with the same week_start) become invisible after the payment.
-      try {
-        const { data: staffForDebt } = await supabase
-          .from('staff')
-          .select('full_name, short_name, telegram_chat_id')
-          .eq('id', staff_id)
-          .maybeSingle()
-        if (staffForDebt) {
-          const { data: adminOpsForDebt } = await supabase
-            .from('operators')
-            .select('id, name, short_name, telegram_chat_id')
-            .eq('is_admin_staff', true)
-            .eq('is_active', true)
-          if (adminOpsForDebt && adminOpsForDebt.length > 0) {
-            const staffTg = String(staffForDebt.telegram_chat_id || '').trim()
-            const staffName = normalizePersonName(staffForDebt.full_name || '')
-            const staffShort = normalizePersonName(staffForDebt.short_name || '')
-            const linkedOpIds: string[] = []
-            for (const op of adminOpsForDebt) {
-              const opTg = String((op as any).telegram_chat_id || '').trim()
-              const opName = normalizePersonName((op as any).name || (op as any).short_name || '')
-              const linked =
-                (staffTg && opTg && staffTg === opTg) ||
-                (staffName && opName && staffName === opName) ||
-                (staffShort && opName && staffShort === opName)
-              if (linked) linkedOpIds.push(String((op as any).id))
-            }
-            if (linkedOpIds.length > 0) {
-              await supabase
-                .from('debts')
-                .update({ status: 'paid' })
-                .in('operator_id', linkedOpIds)
-                .eq('status', 'active')
-                .lte('week_start', pay_date)
-            }
-          }
-        }
-      } catch {
-        // Non-critical: don't block the payment
       }
 
       const halfSalary = Math.round(Number(staffMember?.monthly_salary || 0) / 2)
