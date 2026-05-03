@@ -64,7 +64,7 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, expensesRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
       supabase
         .from('staff')
         .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active')
@@ -91,7 +91,11 @@ export async function GET(req: Request) {
         .order('name'),
       supabase
         .from('debts')
-        .select('id, operator_id, amount, status, created_at, client_name, week_start, comment')
+        .select('id, operator_id, amount, client_name, week_start, comment')
+        .eq('status', 'active'),
+      supabase
+        .from('point_debt_items')
+        .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
         .eq('status', 'active'),
       supabase
         .from('expenses')
@@ -105,6 +109,7 @@ export async function GET(req: Request) {
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
     if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
+    if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
     if (expensesRes.error) throw expensesRes.error
 
     const baseStaff = (staffRes.data ?? []).map((row: any) => ({
@@ -159,69 +164,84 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → pay_date of the most recent payment.
-    const lastPayDateByStaff = new Map<string, string>()
+    // Map staffId → { payDate, createdAt } of the most recent payment.
+    const lastPaymentByStaff = new Map<string, { payDate: string; createdAt: string }>()
     for (const payment of (paymentsRes.data ?? []) as any[]) {
       const staffId = String(payment?.staff_id || '')
       const payDate = String(payment?.pay_date || '')
+      const createdAt = String(payment?.created_at || '')
       if (!staffId || !payDate) continue
-      const existing = lastPayDateByStaff.get(staffId)
-      if (!existing || payDate > existing) lastPayDateByStaff.set(staffId, payDate)
+      const existing = lastPaymentByStaff.get(staffId)
+      if (!existing || payDate > existing.payDate) {
+        lastPaymentByStaff.set(staffId, { payDate, createdAt })
+      }
     }
 
-    // Returns Monday of the week containing dateStr (ISO date).
-    function getMondayOfWeek(dateStr: string): string {
-      const [y, m, d] = String(dateStr || '').split('-').map(Number)
-      if (!y || !m || !d) return dateStr
-      const date = new Date(Date.UTC(y, m - 1, d))
-      const day = date.getUTCDay()
-      date.setUTCDate(d - (day === 0 ? 6 : day - 1))
-      return date.toISOString().slice(0, 10)
-    }
-
-    // Aggregate debts per staffId.
-    // Include weeks that start on or after the Monday of the last payment week.
-    // The debts table groups Mon–Sun; this is the finest granularity available.
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
 
-    for (const row of (adminOpDebtsRes.data ?? []) as any[]) {
-      const itemCreatedAt = row.created_at ? String(row.created_at) : null
-      const operatorId = row.operator_id ? String(row.operator_id) : null
-
-      let staffId: string | null = null
+    function resolveDebtStaffId(operatorId: string | null, clientName: string | null): string | null {
       if (operatorId && adminOperatorIdSet.has(operatorId)) {
-        staffId = canonicalStaffIdByOperatorId.get(operatorId) || operatorId
-      } else if (!operatorId) {
-        const clientNameKey = normalizePersonName(row.client_name || '')
-        staffId = clientNameKey
-          ? staffByName.get(clientNameKey) || canonicalByAdminOpName.get(clientNameKey) || null
-          : null
+        return canonicalStaffIdByOperatorId.get(operatorId) || operatorId
       }
-      if (!staffId) continue
-
-      const lastPayDate = lastPayDateByStaff.get(staffId)
-      if (lastPayDate) {
-        const weekStart = String(row.week_start || '')
-        if (weekStart && weekStart < getMondayOfWeek(lastPayDate)) continue
+      if (!operatorId) {
+        const key = normalizePersonName(clientName || '')
+        return key ? staffByName.get(key) || canonicalByAdminOpName.get(key) || null : null
       }
+      return null
+    }
 
-      const amount = Math.round(Number(row.amount || 0))
-      if (amount <= 0) continue
-
+    function accumDebt(staffId: string, amount: number, comment: string | null, createdAt: string | null) {
+      if (amount <= 0) return
+      const now = createdAt || new Date().toISOString()
       const existing = debtByStaff.get(staffId)
       if (existing) {
         existing.amount += amount
-        if (itemCreatedAt && itemCreatedAt > existing.latestCreatedAt) existing.latestCreatedAt = itemCreatedAt
-        if (row.comment) existing.comments.push(String(row.comment))
+        if (now > existing.latestCreatedAt) existing.latestCreatedAt = now
+        if (comment) existing.comments.push(String(comment))
       } else {
-        debtByStaff.set(staffId, {
-          amount,
-          latestCreatedAt: itemCreatedAt || new Date().toISOString(),
-          comments: row.comment ? [String(row.comment)] : [],
-        })
+        debtByStaff.set(staffId, { amount, latestCreatedAt: now, comments: comment ? [String(comment)] : [] })
       }
+    }
+
+    // Step 1: full weeks from debts table — only weeks that started AFTER pay_date.
+    // These weeks are entirely post-payment so we use the full aggregate amount.
+    for (const row of (adminOpDebtsRes.data ?? []) as any[]) {
+      const operatorId = row.operator_id ? String(row.operator_id) : null
+      const staffId = resolveDebtStaffId(operatorId, row.client_name)
+      if (!staffId) continue
+
+      const lastPay = lastPaymentByStaff.get(staffId)
+      if (lastPay) {
+        const weekStart = String(row.week_start || '')
+        if (!weekStart || weekStart <= lastPay.payDate) continue  // skip weeks on/before pay_date
+      }
+
+      accumDebt(staffId, Math.round(Number(row.amount || 0)), row.comment, null)
+    }
+
+    // Step 2: partial week from point_debt_items — items created AFTER pay_date
+    // in the week that contains the payment date (week_start <= pay_date).
+    // This gives sub-week precision for the payment week itself.
+    for (const row of (adminOpDebtItemsRes.data ?? []) as any[]) {
+      const operatorId = row.operator_id ? String(row.operator_id) : null
+      const staffId = resolveDebtStaffId(operatorId, row.client_name)
+      if (!staffId) continue
+
+      const lastPay = lastPaymentByStaff.get(staffId)
+      if (!lastPay) continue  // no payment → already covered by step 1 (no filter there)
+
+      const weekStart = String(row.week_start || '')
+      if (weekStart > lastPay.payDate) continue  // full week → already counted in step 1
+
+      const itemCreatedAt = row.created_at ? String(row.created_at) : null
+      if (!itemCreatedAt) continue
+      const itemDate = itemCreatedAt.slice(0, 10)
+      if (itemDate < lastPay.payDate) continue
+      if (itemDate === lastPay.payDate && itemCreatedAt <= lastPay.createdAt) continue
+
+      accumDebt(staffId, Math.round(Number(row.total_amount || 0)), row.comment, itemCreatedAt)
     }
 
     const todayISO = new Date().toISOString().slice(0, 10)
