@@ -159,9 +159,30 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Aggregate ALL active point_debt_items per staffId.
-    // Operator debts are NOT closed by salary payments — they have their own lifecycle
-    // in the operator program (active/paid/deleted). We show the full outstanding balance.
+    // Map staffId → pay_date of the most recent payment.
+    const lastPayDateByStaff = new Map<string, string>()
+    for (const payment of (paymentsRes.data ?? []) as any[]) {
+      const staffId = String(payment?.staff_id || '')
+      const payDate = String(payment?.pay_date || '')
+      if (!staffId || !payDate) continue
+      const existing = lastPayDateByStaff.get(staffId)
+      if (!existing || payDate > existing) lastPayDateByStaff.set(staffId, payDate)
+    }
+
+    // Returns the ISO date of the Monday of the week containing dateStr.
+    function getMondayOfWeek(dateStr: string): string {
+      const [y, m, d] = String(dateStr || '').split('-').map(Number)
+      if (!y || !m || !d) return dateStr
+      const date = new Date(Date.UTC(y, m - 1, d))
+      const day = date.getUTCDay() // 0=Sun
+      date.setUTCDate(d - (day === 0 ? 6 : day - 1))
+      return date.toISOString().slice(0, 10)
+    }
+
+    // Aggregate active debts per staffId from the debts table.
+    // Only include weeks that start on or after the Monday of the last payment week.
+    // The debts table groups by week (Mon–Sun); we cannot filter within a single week,
+    // so we include the full payment week (may contain a few pre-payment debts) and all later weeks.
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
@@ -180,6 +201,13 @@ export async function GET(req: Request) {
           : null
       }
       if (!staffId) continue
+
+      const lastPayDate = lastPayDateByStaff.get(staffId)
+      if (lastPayDate) {
+        const weekStart = String(row.week_start || '')
+        const minWeekStart = getMondayOfWeek(lastPayDate)
+        if (weekStart && weekStart < minWeekStart) continue
+      }
 
       const amount = Math.round(Number(row.amount || 0))
       if (amount <= 0) continue
