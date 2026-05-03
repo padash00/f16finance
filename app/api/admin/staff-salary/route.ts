@@ -159,14 +159,20 @@ export async function GET(req: Request) {
         source_type: 'operator',
       }))
 
-    // Map staffId → created_at of the most recent payment (to filter post-payment debts only).
-    const lastPaymentCreatedAtByStaff = new Map<string, string>()
+    // Map staffId → { pay_date, created_at } of the most recent payment.
+    // We compare item dates against pay_date (not created_at) because a payment
+    // recorded late (e.g. pay_date=Apr 15 recorded on Apr 22) should still include
+    // all debts taken from Apr 16 onwards.
+    const lastPaymentByStaff = new Map<string, { payDate: string; createdAt: string }>()
     for (const payment of (paymentsRes.data ?? []) as any[]) {
       const staffId = String(payment?.staff_id || '')
+      const payDate = String(payment?.pay_date || '')
       const createdAt = String(payment?.created_at || '')
-      if (!staffId || !createdAt) continue
-      const existing = lastPaymentCreatedAtByStaff.get(staffId)
-      if (!existing || createdAt > existing) lastPaymentCreatedAtByStaff.set(staffId, createdAt)
+      if (!staffId || !payDate) continue
+      const existing = lastPaymentByStaff.get(staffId)
+      if (!existing || payDate > existing.payDate || (payDate === existing.payDate && createdAt > existing.createdAt)) {
+        lastPaymentByStaff.set(staffId, { payDate, createdAt })
+      }
     }
 
     // Aggregate point_debt_items per staffId, counting only items created AFTER the last payment.
@@ -192,8 +198,12 @@ export async function GET(req: Request) {
       }
       if (!staffId) continue
 
-      const lastPayAt = lastPaymentCreatedAtByStaff.get(staffId)
-      if (lastPayAt && itemCreatedAt && itemCreatedAt <= lastPayAt) continue
+      const lastPay = lastPaymentByStaff.get(staffId)
+      if (lastPay && itemCreatedAt) {
+        const itemDate = itemCreatedAt.slice(0, 10)
+        if (itemDate < lastPay.payDate) continue
+        if (itemDate === lastPay.payDate && lastPay.createdAt && itemCreatedAt <= lastPay.createdAt) continue
+      }
 
       const amount = Math.round(Number(row.total_amount || 0))
       if (amount <= 0) continue
