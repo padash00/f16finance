@@ -11,6 +11,7 @@ export type SalaryCompany = {
 }
 
 export type SalaryRule = {
+  id?: number | null
   company_code: string
   shift_type: ShiftType
   base_per_shift: number | null
@@ -20,6 +21,29 @@ export type SalaryRule = {
   threshold1_bonus: number | null
   threshold2_turnover: number | null
   threshold2_bonus: number | null
+  effective_from?: string | null
+  base_per_shift_prev?: number | null
+  low_turnover_threshold?: number | null
+  low_turnover_base?: number | null
+  versions?: SalaryRuleVersion[]
+}
+
+export type SalaryRuleVersion = {
+  id?: string | null
+  rule_id: number
+  effective_from: string
+  base_per_shift: number | null
+  low_turnover_threshold?: number | null
+  low_turnover_base?: number | null
+  comment?: string | null
+  created_at?: string | null
+}
+
+export type SalarySeniorityTier = {
+  id?: string | null
+  min_months: number
+  bonus_percent: number
+  is_active?: boolean | null
 }
 
 export type SalaryOperatorCompanyAssignment = {
@@ -77,6 +101,7 @@ export type SalaryOperatorMeta = {
 export type SalarySummary = {
   shifts: number
   baseSalary: number
+  seniorityBonuses: number
   autoBonuses: number
   roleBonuses: number
   manualBonuses: number
@@ -123,6 +148,8 @@ export type SalaryShiftBreakdown = {
   zones: string[]
   comments: string[]
   baseSalary: number
+  seniorityBonus: number
+  seniorityPercent: number
   autoBonus: number
   roleBonus: number
   salary: number
@@ -153,6 +180,7 @@ export type SalaryWeekSummary = {
   companyAllocations: SalaryWeekCompanyAllocation[]
   shiftsCount: number
   autoBonusTotal: number
+  seniorityBonusTotal: number
   shifts: SalaryShiftBreakdown[]
 }
 
@@ -190,6 +218,38 @@ function isActiveStatus(value: string | null | undefined) {
 
 function roundMoney(value: number) {
   return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100
+}
+
+function parseISODate(value: string | null | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = new Date(`${value}T12:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function fullMonthsBetween(startISO: string | null | undefined, endISO: string | null | undefined) {
+  const start = parseISODate(startISO)
+  const end = parseISODate(endISO)
+  if (!start || !end || end < start) return 0
+
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+  if (end.getDate() < start.getDate()) months -= 1
+  return Math.max(0, months)
+}
+
+function resolveSeniorityPercent(
+  tiers: SalarySeniorityTier[] | undefined,
+  hireDate: string | null | undefined,
+  shiftDate: string | null | undefined,
+) {
+  if (!tiers?.length || !hireDate || !shiftDate) return 0
+  const workedMonths = fullMonthsBetween(hireDate, shiftDate)
+  const matched = tiers
+    .filter((tier) => tier.is_active !== false)
+    .filter((tier) => Number(tier.min_months || 0) <= workedMonths)
+    .sort((left, right) => Number(right.min_months || 0) - Number(left.min_months || 0))[0]
+
+  if (!matched) return 0
+  return Math.min(15, Math.max(0, Number(matched.bonus_percent || 0)))
 }
 
 function distributeAmountByWeights<T extends { key: string; weight: number }>(
@@ -273,6 +333,54 @@ function calculateThresholdBonus(rule: SalaryRule | undefined, turnover: number)
   return bonus
 }
 
+function resolveRevenueBase(params: {
+  base: number | null | undefined
+  lowTurnoverThreshold?: number | null
+  lowTurnoverBase?: number | null
+  turnover: number
+}) {
+  if (params.lowTurnoverThreshold != null && params.lowTurnoverBase != null) {
+    if (params.turnover < toAmount(params.lowTurnoverThreshold)) {
+      return toAmount(params.lowTurnoverBase)
+    }
+  }
+
+  return toAmount(params.base ?? DEFAULT_SHIFT_BASE_PAY)
+}
+
+function resolveRuleVersion(rule: SalaryRule, shiftDate: string | undefined) {
+  if (!shiftDate || !rule.versions?.length) return null
+  return [...rule.versions]
+    .filter((version) => version.effective_from && version.effective_from <= shiftDate)
+    .sort((left, right) => right.effective_from.localeCompare(left.effective_from))[0] || null
+}
+
+function resolveBasePerShift(rule: SalaryRule | undefined, shiftDate: string | undefined, turnover: number): number {
+  if (!rule) return DEFAULT_SHIFT_BASE_PAY
+
+  const version = resolveRuleVersion(rule, shiftDate)
+  if (version) {
+    return resolveRevenueBase({
+      base: version.base_per_shift,
+      lowTurnoverThreshold: version.low_turnover_threshold,
+      lowTurnoverBase: version.low_turnover_base,
+      turnover,
+    })
+  }
+
+  // Date-effective fallback for databases that only have the legacy columns.
+  if (rule.effective_from && shiftDate && shiftDate < rule.effective_from) {
+    return toAmount(rule.base_per_shift_prev ?? rule.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
+  }
+
+  return resolveRevenueBase({
+    base: rule.base_per_shift,
+    lowTurnoverThreshold: rule.low_turnover_threshold,
+    lowTurnoverBase: rule.low_turnover_base,
+    turnover,
+  })
+}
+
 function computeShiftCompensation(params: {
   rule: SalaryRule | undefined
   shiftRules: PointRuleRow[] | undefined
@@ -280,6 +388,9 @@ function computeShiftCompensation(params: {
   shiftType: ShiftType
   turnover: number
   assignmentRole: SalaryOperatorCompanyAssignment['role_in_company'] | undefined
+  shiftDate?: string
+  operator?: SalaryOperatorMeta | null
+  seniorityTiers?: SalarySeniorityTier[]
 }) {
   const override = params.shiftRules && params.shiftRules.length > 0
     ? resolveShiftOverrides({
@@ -293,7 +404,7 @@ function computeShiftCompensation(params: {
   const basePerShift =
     override?.basePerShift != null
       ? override.basePerShift
-      : toAmount(params.rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
+      : resolveBasePerShift(params.rule, params.shiftDate, params.turnover)
 
   const seniorOperatorBonus =
     override?.seniorOperatorBonus != null
@@ -314,7 +425,21 @@ function computeShiftCompensation(params: {
   const autoBonus =
     calculateThresholdBonus(params.rule, params.turnover) + (override?.thresholdBonusDelta || 0)
 
-  return { basePerShift, roleBonus, autoBonus, matchedRules: override?.matchedRules || [] }
+  const seniorityPercent = resolveSeniorityPercent(
+    params.seniorityTiers,
+    params.operator?.hire_date,
+    params.shiftDate,
+  )
+  const seniorityBonus = roundMoney((basePerShift * seniorityPercent) / 100)
+
+  return {
+    basePerShift,
+    roleBonus,
+    autoBonus,
+    seniorityBonus,
+    seniorityPercent,
+    matchedRules: override?.matchedRules || [],
+  }
 }
 
 function createOperatorCompanyRoleMap(params: {
@@ -380,8 +505,10 @@ function aggregateShifts(params: {
 
 export function calculateOperatorSalarySummary(params: {
   operatorId: string
+  operator?: SalaryOperatorMeta | null
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  seniorityTiers?: SalarySeniorityTier[]
   shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
@@ -402,23 +529,28 @@ export function calculateOperatorSalarySummary(params: {
 
   let shifts = 0
   let baseSalary = 0
+  let seniorityBonuses = 0
   let autoBonuses = 0
   let roleBonuses = 0
 
   for (const shift of aggregated.values()) {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
-    const { basePerShift, roleBonus, autoBonus } = computeShiftCompensation({
+    const { basePerShift, roleBonus, autoBonus, seniorityBonus } = computeShiftCompensation({
       rule,
       shiftRules: params.shiftRules,
       companyId: shift.companyId,
       shiftType: shift.shift,
       turnover: shift.turnover,
       assignmentRole,
+      shiftDate: shift.date,
+      operator: params.operator || null,
+      seniorityTiers: params.seniorityTiers,
     })
 
     shifts += 1
     baseSalary += basePerShift
+    seniorityBonuses += seniorityBonus
     autoBonuses += autoBonus
     roleBonuses += roleBonus
   }
@@ -445,12 +577,13 @@ export function calculateOperatorSalarySummary(params: {
     if (amount > 0) autoDebts += amount
   }
 
-  const totalAccrued = baseSalary + autoBonuses + roleBonuses + manualBonuses
+  const totalAccrued = baseSalary + seniorityBonuses + autoBonuses + roleBonuses + manualBonuses
   const totalDeductions = autoDebts + totalFines + totalAdvances
 
   return {
     shifts,
     baseSalary,
+    seniorityBonuses: roundMoney(seniorityBonuses),
     autoBonuses,
     roleBonuses,
     manualBonuses,
@@ -468,8 +601,10 @@ export function calculateOperatorSalarySummary(params: {
 
 export function calculateOperatorShiftBreakdown(params: {
   operatorId: string
+  operator?: SalaryOperatorMeta | null
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  seniorityTiers?: SalarySeniorityTier[]
   shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
@@ -489,7 +624,10 @@ export function calculateOperatorShiftBreakdown(params: {
   const allowedCodes = new Set((params.options?.companyCodes || DEFAULT_COMPANY_CODES).map((item) => item.toLowerCase()))
   const aggregated = new Map<
     string,
-    Omit<SalaryShiftBreakdown, 'baseSalary' | 'autoBonus' | 'roleBonus' | 'salary' | 'matchedRules'>
+    Omit<
+      SalaryShiftBreakdown,
+      'baseSalary' | 'seniorityBonus' | 'seniorityPercent' | 'autoBonus' | 'roleBonus' | 'salary' | 'matchedRules'
+    >
   >()
 
   for (const row of params.incomes) {
@@ -540,21 +678,26 @@ export function calculateOperatorShiftBreakdown(params: {
   const breakdown = Array.from(aggregated.values()).map((shift) => {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const assignmentRole = operatorCompanyRoleMap.get(`${params.operatorId}_${shift.companyCode}`)
-    const { basePerShift, roleBonus, autoBonus, matchedRules } = computeShiftCompensation({
+    const { basePerShift, roleBonus, autoBonus, seniorityBonus, seniorityPercent, matchedRules } = computeShiftCompensation({
       rule,
       shiftRules: params.shiftRules,
       companyId: shift.companyId,
       shiftType: shift.shift,
       turnover: shift.totalIncome,
       assignmentRole,
+      shiftDate: shift.date,
+      operator: params.operator || null,
+      seniorityTiers: params.seniorityTiers,
     })
 
     return {
       ...shift,
       baseSalary: basePerShift,
+      seniorityBonus,
+      seniorityPercent,
       autoBonus,
       roleBonus,
-      salary: basePerShift + autoBonus + roleBonus,
+      salary: basePerShift + seniorityBonus + autoBonus + roleBonus,
       matchedRules,
     }
   })
@@ -565,8 +708,10 @@ export function calculateOperatorShiftBreakdown(params: {
 
 export function calculateOperatorWeekSummary(params: {
   operatorId: string
+  operator?: SalaryOperatorMeta | null
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  seniorityTiers?: SalarySeniorityTier[]
   shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
@@ -576,8 +721,10 @@ export function calculateOperatorWeekSummary(params: {
 }): SalaryWeekSummary {
   const shifts = calculateOperatorShiftBreakdown({
     operatorId: params.operatorId,
+    operator: params.operator || null,
     companies: params.companies,
     rules: params.rules,
+    seniorityTiers: params.seniorityTiers,
     shiftRules: params.shiftRules,
     assignments: params.assignments,
     incomes: params.incomes,
@@ -617,9 +764,9 @@ export function calculateOperatorWeekSummary(params: {
   for (const shift of shifts) {
     const company = ensureCompany(shift.companyId)
     // "Начислено" on the weekly board is the fixed part for the shift
-    // (base + role premium). Auto bonuses are shown in a separate column
+    // (base + seniority + role premium). Auto bonuses are shown in a separate column
     // and added explicitly into the final weekly/net formula below.
-    company.accruedAmount += shift.baseSalary + shift.roleBonus
+    company.accruedAmount += shift.baseSalary + shift.seniorityBonus + shift.roleBonus
     company.bonusAmount += shift.autoBonus
   }
 
@@ -728,6 +875,7 @@ export function calculateOperatorWeekSummary(params: {
     .sort((left, right) => (right.accruedAmount - left.accruedAmount) || left.companyName?.localeCompare(right.companyName || '', 'ru') || 0)
 
   const autoBonusTotal = roundMoney(shifts.reduce((sum, s) => sum + s.autoBonus, 0))
+  const seniorityBonusTotal = roundMoney(shifts.reduce((sum, s) => sum + s.seniorityBonus, 0))
 
   return {
     operatorId: params.operatorId,
@@ -742,6 +890,7 @@ export function calculateOperatorWeekSummary(params: {
     companyAllocations: allocations,
     shiftsCount: shifts.length,
     autoBonusTotal,
+    seniorityBonusTotal,
     shifts,
   }
 }
@@ -750,6 +899,7 @@ export function calculateSalaryBoard(params: {
   operators: SalaryOperatorMeta[]
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  seniorityTiers?: SalarySeniorityTier[]
   shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
@@ -782,6 +932,7 @@ export function calculateSalaryBoard(params: {
       shifts: 0,
       basePerShift: DEFAULT_SHIFT_BASE_PAY,
       baseSalary: 0,
+      seniorityBonuses: 0,
       autoBonuses: 0,
       roleBonuses: 0,
       manualBonuses: 0,
@@ -818,22 +969,26 @@ export function calculateSalaryBoard(params: {
   for (const shift of aggregated.values()) {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
-    const { basePerShift, roleBonus, autoBonus } = computeShiftCompensation({
+    const { basePerShift, roleBonus, autoBonus, seniorityBonus } = computeShiftCompensation({
       rule,
       shiftRules: params.shiftRules,
       companyId: shift.companyId,
       shiftType: shift.shift,
       turnover: shift.turnover,
       assignmentRole,
+      shiftDate: shift.date,
+      operator: operatorMap[shift.operatorId] || null,
+      seniorityTiers: params.seniorityTiers,
     })
 
     const stat = ensureOperator(shift.operatorId)
     stat.basePerShift = basePerShift
     stat.shifts += 1
     stat.baseSalary += basePerShift
+    stat.seniorityBonuses += seniorityBonus
     stat.autoBonuses += autoBonus
     stat.roleBonuses += roleBonus
-    stat.totalSalary += basePerShift + autoBonus + roleBonus
+    stat.totalSalary += basePerShift + seniorityBonus + autoBonus + roleBonus
   }
 
   for (const adjustment of params.adjustments) {
@@ -865,7 +1020,7 @@ export function calculateSalaryBoard(params: {
   let totalSalary = 0
   const operators = Array.from(board.values())
     .map((stat) => {
-      stat.totalAccrued = stat.baseSalary + stat.autoBonuses + stat.roleBonuses + stat.manualBonuses
+      stat.totalAccrued = stat.baseSalary + stat.seniorityBonuses + stat.autoBonuses + stat.roleBonuses + stat.manualBonuses
       stat.totalDeductions = stat.autoDebts + stat.totalFines + stat.totalAdvances
       stat.remainingAmount = stat.totalAccrued - stat.totalDeductions
       stat.finalSalary = stat.totalSalary + stat.manualPlus - stat.manualMinus - stat.autoDebts - stat.advances

@@ -3,7 +3,7 @@ import 'server-only'
 import { addDaysISO, mondayOfISO } from '@/lib/core/date'
 import { escapeHtml, formatMoney } from '@/lib/core/format'
 import { calculateOperatorSalarySummary } from '@/lib/domain/salary'
-import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
+import { findOperatorByKey, listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
 import type { AdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegram } from '@/lib/server/telegram'
 
@@ -18,7 +18,7 @@ export async function getOperatorSalarySnapshot(
   },
 ) {
   const normalizedWeekStart = mondayOfISO(params.weekStart || params.dateFrom)
-  const [reference, payload] = await Promise.all([
+  const [reference, payload, operatorRow] = await Promise.all([
     listSalaryReferenceData(supabase),
     listOperatorSalaryData(supabase, {
       operatorId: params.operatorId,
@@ -27,12 +27,25 @@ export async function getOperatorSalarySnapshot(
       weekStart: normalizedWeekStart,
       companyCode: params.companyCode,
     }),
+    findOperatorByKey(supabase, params.operatorId),
   ])
+  const profile = Array.isArray((operatorRow as any)?.operator_profiles)
+    ? (operatorRow as any).operator_profiles[0]
+    : (operatorRow as any)?.operator_profiles
 
   const summary = calculateOperatorSalarySummary({
     operatorId: params.operatorId,
+    operator: operatorRow
+      ? {
+          id: params.operatorId,
+          name: (operatorRow as any).name || 'Оператор',
+          short_name: (operatorRow as any).short_name || null,
+          hire_date: profile?.hire_date || null,
+        }
+      : null,
     companies: reference.companies,
     rules: reference.rules,
+    seniorityTiers: reference.seniorityTiers,
     assignments: reference.assignments,
     incomes: payload.incomes,
     adjustments: payload.adjustments,
@@ -79,6 +92,7 @@ export function buildSalaryTelegramMessage(params: {
 
   text += `📌 Смен: <b>${summary.shifts}</b>\n`
   text += `💼 База: <b>${formatMoney(summary.baseSalary)}</b>\n`
+  if (summary.seniorityBonuses > 0) text += `📈 Стаж: <b>${formatMoney(summary.seniorityBonuses)}</b>\n`
   text += `✅ Авто-бонусы: <b>${formatMoney(summary.autoBonuses)}</b>\n`
   if (summary.roleBonuses > 0) text += `⭐ Надбавка за роль: <b>${formatMoney(summary.roleBonuses)}</b>\n`
   if (summary.autoDebts > 0) text += `🧾 Долги недели: <b>${formatMoney(summary.autoDebts)}</b>\n`

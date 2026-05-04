@@ -9,10 +9,45 @@ import type {
   SalaryOperatorCompanyAssignment,
   SalaryOperatorMeta,
   SalaryRule,
+  SalaryRuleVersion,
+  SalarySeniorityTier,
 } from '@/lib/domain/salary'
 
 type MaybeRoleOperator = SalaryOperatorMeta & {
   role?: string | null
+}
+
+function isOptionalSalarySchemaError(error: any) {
+  const message = String(error?.message || error?.details || '')
+  return (
+    error?.code === '42P01' ||
+    error?.code === '42703' ||
+    /does not exist/i.test(message) ||
+    /Could not find/i.test(message)
+  )
+}
+
+async function listActiveSalaryRules(supabase: AdminSupabaseClient): Promise<SalaryRule[]> {
+  const newSelect =
+    'id,company_code,shift_type,base_per_shift,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus,effective_from,base_per_shift_prev,low_turnover_threshold,low_turnover_base'
+
+  const { data, error } = await supabase
+    .from('operator_salary_rules')
+    .select(newSelect)
+    .eq('is_active', true)
+
+  if (!error) return (data || []) as SalaryRule[]
+  if (!isOptionalSalarySchemaError(error)) throw error
+
+  const fallback = await supabase
+    .from('operator_salary_rules')
+    .select(
+      'company_code,shift_type,base_per_shift,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
+    )
+    .eq('is_active', true)
+
+  if (fallback.error) throw fallback.error
+  return (fallback.data || []) as SalaryRule[]
 }
 
 export async function findOperatorByKey(
@@ -54,29 +89,67 @@ export async function listSalaryReferenceData(
 
   const [
     { data: companies, error: companiesError },
-    { data: rules, error: rulesError },
+    rules,
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
     companyIds.length > 0
       ? supabase.from('companies').select('id,code,name').in('id', companyIds)
       : supabase.from('companies').select('id,code,name'),
-    supabase
-      .from('operator_salary_rules')
-      .select(
-        'company_code,shift_type,base_per_shift,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
-      )
-      .eq('is_active', true),
+    listActiveSalaryRules(supabase),
     assignmentsQuery,
   ])
 
   if (companiesError) throw companiesError
-  if (rulesError) throw rulesError
   if (assignmentsError) throw assignmentsError
+
+  const ruleIds = (rules || [])
+    .map((rule: any) => Number(rule.id || 0))
+    .filter((id) => Number.isFinite(id) && id > 0)
+
+  let versions: SalaryRuleVersion[] = []
+  if (ruleIds.length > 0) {
+    const { data, error } = await supabase
+      .from('operator_salary_rule_versions')
+      .select('id,rule_id,effective_from,base_per_shift,low_turnover_threshold,low_turnover_base,comment,created_at')
+      .in('rule_id', ruleIds)
+      .order('effective_from', { ascending: false })
+
+    if (error) {
+      if (!isOptionalSalarySchemaError(error)) throw error
+    } else {
+      versions = (data || []) as SalaryRuleVersion[]
+    }
+  }
+
+  const { data: seniorityTiersData, error: seniorityTiersError } = await supabase
+    .from('operator_salary_seniority_tiers')
+    .select('id,min_months,bonus_percent,is_active')
+    .eq('is_active', true)
+    .order('min_months', { ascending: true })
+
+  if (seniorityTiersError && !isOptionalSalarySchemaError(seniorityTiersError)) {
+    throw seniorityTiersError
+  }
+
+  const versionsByRuleId = new Map<number, SalaryRuleVersion[]>()
+  for (const version of versions) {
+    const key = Number(version.rule_id || 0)
+    if (!key) continue
+    const list = versionsByRuleId.get(key) || []
+    list.push(version)
+    versionsByRuleId.set(key, list)
+  }
+
+  const rulesWithVersions = (rules || []).map((rule: any) => ({
+    ...rule,
+    versions: versionsByRuleId.get(Number(rule.id || 0)) || [],
+  }))
 
   return {
     companies: (companies || []) as SalaryCompany[],
-    rules: (rules || []) as SalaryRule[],
+    rules: rulesWithVersions as SalaryRule[],
     assignments: (assignments || []) as SalaryOperatorCompanyAssignment[],
+    seniorityTiers: (seniorityTiersError ? [] : seniorityTiersData || []) as SalarySeniorityTier[],
   }
 }
 

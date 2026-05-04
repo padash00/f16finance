@@ -23,6 +23,8 @@ type PreviewShift = {
   companyName: string | null
   totalIncome: number
   baseSalary: number
+  seniorityBonus: number
+  seniorityPercent: number
   autoBonus: number
   roleBonus: number
   salary: number
@@ -44,6 +46,7 @@ type PreviewResponse = {
       advanceAmount: number
       netAmount: number
       autoBonusTotal: number
+      seniorityBonusTotal: number
       shiftsCount: number
     }
     shifts: PreviewShift[]
@@ -196,7 +199,7 @@ export function SalaryPreviewTab() {
 
       {data ? (
         <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
             <Card className="border-cyan-500/20 bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-gray-400">Смен</p>
               <p className="mt-2 text-2xl font-semibold text-white">{data.summary.shiftsCount}</p>
@@ -208,6 +211,10 @@ export function SalaryPreviewTab() {
             <Card className="border-violet-500/20 bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-gray-400">Авто-бонусы</p>
               <p className="mt-2 text-xl font-semibold text-white">{formatMoney(data.summary.autoBonusTotal)}</p>
+            </Card>
+            <Card className="border-cyan-500/20 bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-gray-400">Стаж</p>
+              <p className="mt-2 text-xl font-semibold text-white">{formatMoney(data.summary.seniorityBonusTotal || 0)}</p>
             </Card>
             <Card className="border-amber-500/20 bg-gray-900/40 p-4">
               <p className="text-xs uppercase tracking-wider text-gray-400">Штрафы</p>
@@ -295,6 +302,12 @@ export function SalaryPreviewTab() {
                           <div className="flex items-center justify-between gap-6 text-gray-300">
                             <span className="text-gray-500">Авто-бонус</span>
                             <span>{formatMoney(shift.autoBonus)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-6 text-gray-300">
+                            <span className="text-gray-500">
+                              Стаж{shift.seniorityPercent ? ` ${shift.seniorityPercent}%` : ''}
+                            </span>
+                            <span>{formatMoney(shift.seniorityBonus || 0)}</span>
                           </div>
                           <div className="flex items-center justify-between gap-6 text-gray-300">
                             <span className="text-gray-500">Роль</span>

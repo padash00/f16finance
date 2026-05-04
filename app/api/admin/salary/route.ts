@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { addDaysISO } from '@/lib/core/date'
-import { calculateOperatorWeekSummary } from '@/lib/domain/salary'
+import { calculateOperatorWeekSummary, type SalaryOperatorMeta } from '@/lib/domain/salary'
 import { evaluatePointRules, type PointRuleRow } from '@/lib/domain/point-rules'
 import {
   ensureOrganizationOperatorAccess,
@@ -102,6 +102,24 @@ function normalizeIsoDate(value: string | null | undefined) {
 
 function roundMoney(value: number) {
   return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100
+}
+
+function mapOperatorMeta(row: any): SalaryOperatorMeta | null {
+  if (!row) return null
+  const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] : row.operator_profiles
+  return {
+    id: String(row.id),
+    name: row.name || 'Без имени',
+    short_name: row.short_name || null,
+    is_active: row.is_active !== false,
+    telegram_chat_id: row.telegram_chat_id || null,
+    full_name: profile?.full_name || null,
+    photo_url: profile?.photo_url || null,
+    position: profile?.position || null,
+    phone: profile?.phone || null,
+    email: profile?.email || null,
+    hire_date: profile?.hire_date || null,
+  }
 }
 
 type SalaryPointRule = Pick<
@@ -311,11 +329,23 @@ async function ensureSalaryWeekSnapshot(params: {
   weekStart: string
   actorUserId: string | null
   companyIds?: string[] | null
+  operator?: SalaryOperatorMeta | null
   references?: Awaited<ReturnType<typeof listSalaryReferenceData>>
   pointRules?: SalaryRulesBundle
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const references = params.references || (await listSalaryReferenceData(params.supabase, { companyIds: params.companyIds || null }))
+  let operator = params.operator || null
+  if (!operator) {
+    const { data: operatorRow, error: operatorError } = await params.supabase
+      .from('operators')
+      .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
+      .eq('id', params.operatorId)
+      .maybeSingle()
+
+    if (operatorError) throw operatorError
+    operator = mapOperatorMeta(operatorRow)
+  }
   const operatorData = await listOperatorSalaryData(params.supabase, {
     operatorId: params.operatorId,
     dateFrom: params.weekStart,
@@ -326,8 +356,10 @@ async function ensureSalaryWeekSnapshot(params: {
 
   const rawSummary = calculateOperatorWeekSummary({
     operatorId: params.operatorId,
+    operator,
     companies: references.companies,
     rules: references.rules,
+    seniorityTiers: references.seniorityTiers,
     shiftRules: (params.pointRules?.shiftRules || []) as PointRuleRow[],
     assignments: references.assignments,
     incomes: operatorData.incomes,
@@ -628,6 +660,7 @@ export async function GET(req: Request) {
             weekStart,
             actorUserId: null,
             companyIds: allowedCompanyIds || null,
+            operator,
             references,
             pointRules,
           }),
@@ -741,6 +774,7 @@ export async function GET(req: Request) {
               payments: weekPayments,
               shiftsCount: snapshot.summary.shiftsCount,
               autoBonusTotal: snapshot.summary.autoBonusTotal,
+              seniorityBonusTotal: snapshot.summary.seniorityBonusTotal,
               shifts: snapshot.summary.shifts,
             },
             hasActivity,
@@ -858,7 +892,8 @@ export async function GET(req: Request) {
       if (!operatorRow) return json({ error: 'operator-not-found' }, 404)
 
       const pointRules = await listSalaryPointRules(supabase, allowedCompanyIds || null)
-      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, companyIds: allowedCompanyIds || null, references, pointRules })
+      const operatorMeta = mapOperatorMeta(operatorRow)
+      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, companyIds: allowedCompanyIds || null, operator: operatorMeta, references, pointRules })
 
       const [
         { data: payments, error: paymentsError },
@@ -921,6 +956,7 @@ export async function GET(req: Request) {
             full_name: (profile as any)?.full_name || null,
             photo_url: (profile as any)?.photo_url || null,
             position: (profile as any)?.position || null,
+            hire_date: (profile as any)?.hire_date || null,
             telegram_chat_id: (operatorRow as any).telegram_chat_id || null,
           },
           companies: references.companies,
@@ -937,6 +973,10 @@ export async function GET(req: Request) {
             paidAmount: snapshot.paidAmount,
             remainingAmount: snapshot.remainingAmount,
             status: snapshot.status,
+            shiftsCount: snapshot.summary.shiftsCount,
+            autoBonusTotal: snapshot.summary.autoBonusTotal,
+            seniorityBonusTotal: snapshot.summary.seniorityBonusTotal,
+            shifts: snapshot.summary.shifts,
             companyAllocations: allocations,
             payments: (payments || []).map((p: any) => ({
               id: String(p.id),
@@ -996,7 +1036,7 @@ export async function GET(req: Request) {
     let rulesQuery = supabase
       .from('operator_salary_rules')
       .select(
-        'company_code, shift_type, base_per_shift, senior_operator_bonus, senior_cashier_bonus, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus',
+        'id, company_code, shift_type, base_per_shift, senior_operator_bonus, senior_cashier_bonus, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus, effective_from, base_per_shift_prev, low_turnover_threshold, low_turnover_base',
       )
       .eq('is_active', true)
     if (allowedCompanyCodes) rulesQuery = rulesQuery.in('company_code', allowedCompanyCodes)

@@ -24,6 +24,16 @@ function normalizeIsoDate(value: string | null | undefined) {
   return Number.isNaN(d.getTime()) ? null : trimmed
 }
 
+function mapOperatorMeta(row: any) {
+  const profile = Array.isArray(row?.operator_profiles) ? row.operator_profiles[0] : row?.operator_profiles
+  return {
+    id: String(row?.id || ''),
+    name: row?.name || 'Оператор',
+    short_name: row?.short_name || null,
+    hire_date: profile?.hire_date || null,
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
@@ -72,7 +82,7 @@ export async function GET(req: Request) {
     }
 
     const [operatorRow, references, operatorData, shiftRulesRes] = await Promise.all([
-      supabase.from('operators').select('id,name,short_name').eq('id', operatorId).maybeSingle(),
+      supabase.from('operators').select('id,name,short_name,operator_profiles(*)').eq('id', operatorId).maybeSingle(),
       listSalaryReferenceData(supabase, { companyIds: scopedCompanyIds }),
       listOperatorSalaryData(supabase, {
         operatorId,
@@ -92,8 +102,10 @@ export async function GET(req: Request) {
 
     const summary = calculateOperatorWeekSummary({
       operatorId,
+      operator: mapOperatorMeta(operatorRow.data),
       companies: references.companies,
       rules: references.rules,
+      seniorityTiers: references.seniorityTiers,
       shiftRules,
       assignments: references.assignments,
       incomes: operatorData.incomes,
@@ -120,6 +132,7 @@ export async function GET(req: Request) {
           advanceAmount: summary.advanceAmount,
           netAmount: summary.netAmount,
           autoBonusTotal: summary.autoBonusTotal,
+          seniorityBonusTotal: summary.seniorityBonusTotal,
           shiftsCount: summary.shiftsCount,
         },
         shifts: summary.shifts.map((shift) => ({
@@ -131,6 +144,8 @@ export async function GET(req: Request) {
           companyName: shift.companyName,
           totalIncome: shift.totalIncome,
           baseSalary: shift.baseSalary,
+          seniorityBonus: shift.seniorityBonus,
+          seniorityPercent: shift.seniorityPercent,
           autoBonus: shift.autoBonus,
           roleBonus: shift.roleBonus,
           salary: shift.salary,

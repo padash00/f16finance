@@ -22,6 +22,16 @@ function normalizeIsoDate(value: string | null) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
 }
 
+function mapOperatorMeta(operator: any) {
+  const profile = Array.isArray(operator?.operator_profiles) ? operator.operator_profiles[0] : operator?.operator_profiles
+  return {
+    id: String(operator?.id || ''),
+    name: operator?.name || 'Оператор',
+    short_name: operator?.short_name || null,
+    hire_date: profile?.hire_date || null,
+  }
+}
+
 function currentWeekStart() {
   return toISODateLocal(mondayOfDate(new Date()))
 }
@@ -54,6 +64,7 @@ async function ensureSalaryWeekSnapshotLite(params: {
   references: Awaited<ReturnType<typeof listSalaryReferenceData>>
   companyIds: string[]
   shiftRules?: PointRuleRow[]
+  operator?: ReturnType<typeof mapOperatorMeta> | null
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const operatorData = await listOperatorSalaryData(params.supabase, {
@@ -66,8 +77,10 @@ async function ensureSalaryWeekSnapshotLite(params: {
 
   const summary = calculateOperatorWeekSummary({
     operatorId: params.operatorId,
+    operator: params.operator || null,
     companies: params.references.companies,
     rules: params.references.rules,
+    seniorityTiers: params.references.seniorityTiers,
     shiftRules: params.shiftRules,
     assignments: params.references.assignments,
     incomes: operatorData.incomes,
@@ -209,6 +222,7 @@ export async function GET(request: Request) {
       references,
       companyIds: operatorCompanyIds,
       shiftRules,
+      operator: mapOperatorMeta(context.operator),
     })
 
     const [paymentsRes, allocationsRes, adjustmentsRes, debtsRes, recentWeeksRes] = await Promise.all([
@@ -317,6 +331,9 @@ export async function GET(request: Request) {
         paidAmount: snapshot.paidAmount,
         remainingAmount: snapshot.remainingAmount,
         status: snapshot.status,
+        seniorityBonusTotal: snapshot.summary.seniorityBonusTotal,
+        autoBonusTotal: snapshot.summary.autoBonusTotal,
+        shiftsCount: snapshot.summary.shiftsCount,
         allocations: (allocationsRes.data || []).map((item: any) => ({
           companyId: String(item.company_id),
           companyName: companyMap.get(String(item.company_id))?.name || null,

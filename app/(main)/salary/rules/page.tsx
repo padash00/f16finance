@@ -44,6 +44,10 @@ type RuleRow = {
   threshold2_turnover: number | null
   threshold2_bonus: number | null
   is_active: boolean
+  effective_from: string | null
+  base_per_shift_prev: number | null
+  low_turnover_threshold: number | null
+  low_turnover_base: number | null
 }
 
 type CompanyRow = {
@@ -63,12 +67,20 @@ type RuleHistoryRow = {
   created_at: string
 }
 
+type SeniorityTierRow = {
+  id: string
+  min_months: number | null
+  bonus_percent: number | null
+  is_active: boolean
+}
+
 type SalaryRulesResponse = {
   ok: boolean
   data?: {
     rules: RuleRow[]
     companies: CompanyRow[]
     history: RuleHistoryRow[]
+    seniorityTiers: SeniorityTierRow[]
   }
   error?: string
 }
@@ -180,6 +192,9 @@ const toRuleSummary = (payload: Record<string, unknown> | null | undefined) => {
     ['Бонус 1', formatMoney(parseIntSafe(payload.threshold1_bonus as string | number | null))],
     ['Порог 2', formatMoney(parseIntSafe(payload.threshold2_turnover as string | number | null))],
     ['Бонус 2', formatMoney(parseIntSafe(payload.threshold2_bonus as string | number | null))],
+    ['Старый оклад', formatMoney(parseIntSafe(payload.base_per_shift_prev as string | number | null))],
+    ['Порог усл. оклада', formatMoney(parseIntSafe(payload.low_turnover_threshold as string | number | null))],
+    ['Усл. оклад', formatMoney(parseIntSafe(payload.low_turnover_base as string | number | null))],
   ] as Array<[string, string]>
 
   return items
@@ -198,6 +213,9 @@ const buildHistoryHighlights = (entry: RuleHistoryRow) => {
       ['Бонус 1', 'threshold1_bonus'],
       ['Порог 2', 'threshold2_turnover'],
       ['Бонус 2', 'threshold2_bonus'],
+      ['Старый оклад', 'base_per_shift_prev'],
+      ['Порог усл. оклада', 'low_turnover_threshold'],
+      ['Усл. оклад', 'low_turnover_base'],
     ]
 
     return fields
@@ -254,6 +272,7 @@ function SalaryRulesContent() {
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [history, setHistory] = useState<RuleHistoryRow[]>([])
+  const [seniorityTiers, setSeniorityTiers] = useState<SeniorityTierRow[]>([])
 
   // UI states
   const [savingId, setSavingId] = useState<number | null>(null)
@@ -265,6 +284,11 @@ function SalaryRulesContent() {
   const [filterCompany, setFilterCompany] = useState<string>('all')
   const [filterShift, setFilterShift] = useState<ShiftType | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [newTierMonths, setNewTierMonths] = useState('6')
+  const [newTierPercent, setNewTierPercent] = useState('5')
+  const [savingTierId, setSavingTierId] = useState<string | null>(null)
+  const [addingTier, setAddingTier] = useState(false)
+  const [deletingTierId, setDeletingTierId] = useState<string | null>(null)
 
   // URL sync
   const didInitFromUrl = useRef(false)
@@ -286,6 +310,7 @@ function SalaryRulesContent() {
       setRules((json.data.rules || []) as RuleRow[])
       setCompanies((json.data.companies || []) as CompanyRow[])
       setHistory((json.data.history || []) as RuleHistoryRow[])
+      setSeniorityTiers(((json.data.seniorityTiers || []) as SeniorityTierRow[]).filter((tier) => tier.is_active !== false))
       setDirtyIds(new Set())
     } catch (err) {
       setError('Не удалось загрузить данные')
@@ -440,7 +465,10 @@ function SalaryRulesContent() {
       | 'threshold1_turnover'
       | 'threshold1_bonus'
       | 'threshold2_turnover'
-      | 'threshold2_bonus',
+      | 'threshold2_bonus'
+      | 'base_per_shift_prev'
+      | 'low_turnover_threshold'
+      | 'low_turnover_base',
     value: string,
   ) => {
     const num = parseIntSafe(value)
@@ -458,6 +486,10 @@ function SalaryRulesContent() {
     threshold2_turnover: parseIntSafe(row.threshold2_turnover),
     threshold2_bonus: parseIntSafe(row.threshold2_bonus),
     is_active: row.is_active,
+    effective_from: row.effective_from || null,
+    base_per_shift_prev: parseIntSafe(row.base_per_shift_prev),
+    low_turnover_threshold: parseIntSafe(row.low_turnover_threshold),
+    low_turnover_base: parseIntSafe(row.low_turnover_base),
   })
 
   const handleSaveRow = async (row: RuleRow) => {
@@ -645,6 +677,115 @@ function SalaryRulesContent() {
     }
   }
 
+  const handleTierFieldChange = (
+    id: string,
+    field: 'min_months' | 'bonus_percent',
+    value: string,
+  ) => {
+    const num = parseIntSafe(value)
+    setSeniorityTiers((prev) =>
+      prev.map((tier) => (tier.id === id ? { ...tier, [field]: num } : tier)),
+    )
+    setSuccessMsg(null)
+  }
+
+  const handleAddSeniorityTier = async () => {
+    setError(null)
+    setSuccessMsg(null)
+    setAddingTier(true)
+
+    try {
+      const months = parseIntSafe(newTierMonths)
+      const percent = parseIntSafe(newTierPercent)
+      if (months == null || months < 0) throw new Error('Укажите стаж в месяцах')
+      if (percent == null || percent < 0 || percent > 15) throw new Error('Процент должен быть от 0 до 15')
+
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsertSeniorityTier',
+          payload: {
+            min_months: months,
+            bonus_percent: percent,
+            is_active: true,
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения стажа')
+
+      setSuccessMsg('Правило стажа сохранено')
+      setNewTierMonths(String(months + 6))
+      await loadAll(true)
+    } catch (e: any) {
+      console.error(e)
+      setError(e.message || 'Ошибка сохранения стажа')
+    } finally {
+      setAddingTier(false)
+    }
+  }
+
+  const handleSaveSeniorityTier = async (tier: SeniorityTierRow) => {
+    setError(null)
+    setSuccessMsg(null)
+    setSavingTierId(tier.id)
+
+    try {
+      if (tier.min_months == null || tier.min_months < 0) throw new Error('Укажите стаж в месяцах')
+      if (tier.bonus_percent == null || tier.bonus_percent < 0 || tier.bonus_percent > 15) {
+        throw new Error('Процент должен быть от 0 до 15')
+      }
+
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsertSeniorityTier',
+          payload: tier,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения стажа')
+
+      setSuccessMsg('Правило стажа сохранено')
+      await loadAll(true)
+    } catch (e: any) {
+      console.error(e)
+      setError(e.message || 'Ошибка сохранения стажа')
+    } finally {
+      setSavingTierId(null)
+    }
+  }
+
+  const handleDeleteSeniorityTier = async (id: string) => {
+    if (!confirm('Отключить правило стажа?')) return
+    setError(null)
+    setSuccessMsg(null)
+    setDeletingTierId(id)
+
+    try {
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteSeniorityTier',
+          tierId: id,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка отключения стажа')
+
+      setSuccessMsg('Правило стажа отключено')
+      await loadAll(true)
+    } catch (e: any) {
+      console.error(e)
+      setError(e.message || 'Ошибка отключения стажа')
+    } finally {
+      setDeletingTierId(null)
+    }
+  }
+
   const resetFilters = () => {
     setFilterCompany('all')
     setFilterShift('all')
@@ -708,6 +849,7 @@ function SalaryRulesContent() {
             <TabsList className="bg-gray-900/40 border border-white/5 backdrop-blur-xl">
               <TabsTrigger value="base">Базовые правила</TabsTrigger>
               <TabsTrigger value="variants">Варианты по выручке</TabsTrigger>
+              <TabsTrigger value="seniority">Стаж</TabsTrigger>
               <TabsTrigger value="preview">Предпросмотр</TabsTrigger>
             </TabsList>
 
@@ -919,6 +1061,7 @@ function SalaryRulesContent() {
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Бонус 1</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Порог 2</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Бонус 2</th>
+                    <th className="py-3 px-4 text-left text-xs font-medium text-orange-400">Усл. оклад</th>
                     <th className="py-3 px-4 text-center text-xs font-medium text-gray-400">Статус</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Действия</th>
                   </tr>
@@ -927,7 +1070,7 @@ function SalaryRulesContent() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-gray-500">
+                      <td colSpan={12} className="py-8 text-center text-gray-500">
                         Загрузка правил...
                       </td>
                     </tr>
@@ -935,7 +1078,7 @@ function SalaryRulesContent() {
 
                   {!loading && filteredRules.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-gray-500">
+                      <td colSpan={12} className="py-8 text-center text-gray-500">
                         {rules.length === 0
                           ? 'Правил ещё нет. Нажмите "Добавить правило"'
                           : 'Нет правил, соответствующих фильтрам'}
@@ -1004,7 +1147,7 @@ function SalaryRulesContent() {
 
                           {/* Base per shift */}
                           <td className="py-3 px-4 text-right">
-                            <div className="flex flex-col items-end">
+                            <div className="flex flex-col items-end gap-1">
                               <input
                                 type="number"
                                 value={r.base_per_shift ?? ''}
@@ -1012,9 +1155,29 @@ function SalaryRulesContent() {
                                 className="w-24 px-2 py-1 bg-gray-800/50 border border-white/10 rounded-lg text-xs text-right"
                                 placeholder="8000"
                               />
-                              <span className="text-[10px] text-gray-500 mt-1">
-                                {formatMoneyCompact(r.base_per_shift)}
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-gray-500">с:</span>
+                                <input
+                                  type="date"
+                                  value={r.effective_from ?? ''}
+                                  onChange={(e) => handleFieldChange(r.id, 'effective_from', e.target.value || null)}
+                                  className="px-1.5 py-0.5 bg-gray-800/50 border border-white/10 rounded text-[10px] text-gray-300 focus:border-orange-500/50 focus:outline-none"
+                                  title="С какой даты применяется новый оклад"
+                                />
+                              </div>
+                              {r.effective_from && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-gray-500">до:</span>
+                                  <input
+                                    type="number"
+                                    value={r.base_per_shift_prev ?? ''}
+                                    onChange={(e) => handleNumberChange(r.id, 'base_per_shift_prev', e.target.value)}
+                                    className="w-20 px-1.5 py-0.5 bg-orange-900/20 border border-orange-500/20 rounded text-[10px] text-orange-300 text-right"
+                                    placeholder="старый"
+                                    title="Оклад для смен ДО даты вступления"
+                                  />
+                                </div>
+                              )}
                             </div>
                           </td>
 
@@ -1076,6 +1239,39 @@ function SalaryRulesContent() {
                               className="w-20 px-2 py-1 bg-gray-800/50 border border-white/10 rounded-lg text-xs text-right"
                               placeholder="2000"
                             />
+                          </td>
+
+                          {/* Conditional salary */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-1 min-w-[140px]">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-gray-500 w-10 shrink-0">Порог:</span>
+                                <input
+                                  type="number"
+                                  value={r.low_turnover_threshold ?? ''}
+                                  onChange={(e) => handleNumberChange(r.id, 'low_turnover_threshold', e.target.value)}
+                                  className="w-24 px-1.5 py-0.5 bg-gray-800/50 border border-white/10 rounded text-[10px] text-right"
+                                  placeholder="—"
+                                  title="Если выручка ниже этого значения — применить другой оклад"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-gray-500 w-10 shrink-0">Оклад:</span>
+                                <input
+                                  type="number"
+                                  value={r.low_turnover_base ?? ''}
+                                  onChange={(e) => handleNumberChange(r.id, 'low_turnover_base', e.target.value)}
+                                  className="w-24 px-1.5 py-0.5 bg-gray-800/50 border border-white/10 rounded text-[10px] text-right"
+                                  placeholder="—"
+                                  title="Оклад при выручке ниже порога"
+                                />
+                              </div>
+                              {r.low_turnover_threshold && r.low_turnover_base ? (
+                                <span className="text-[9px] text-orange-400/70">
+                                  &lt;{formatMoneyCompact(r.low_turnover_threshold)} → {formatMoneyCompact(r.low_turnover_base)}
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
 
                           {/* Status */}
@@ -1273,6 +1469,167 @@ function SalaryRulesContent() {
 
             <TabsContent value="variants">
               <SalaryVariantsTab companies={companyOptions} />
+            </TabsContent>
+
+            <TabsContent value="seniority" className="space-y-6">
+              {error && (
+                <Card className="p-4 border border-red-500/30 bg-red-500/10">
+                  <div className="flex items-center gap-2 text-red-300">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="text-sm">{error}</span>
+                  </div>
+                </Card>
+              )}
+
+              {successMsg && (
+                <Card className="p-4 border border-emerald-500/30 bg-emerald-500/10">
+                  <div className="flex items-center gap-2 text-emerald-300">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-sm">{successMsg}</span>
+                  </div>
+                </Card>
+              )}
+
+              <Card className="border-white/5 bg-gray-900/40 p-5 backdrop-blur-xl">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Надбавка за стаж</h2>
+                    <p className="mt-1 text-sm text-gray-400">
+                      Стаж берётся из даты найма в профиле оператора. Надбавка считается от базового оклада смены.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[150px_140px_auto]">
+                    <label className="grid gap-1 text-xs text-gray-400">
+                      Месяцев от
+                      <input
+                        type="number"
+                        min={0}
+                        value={newTierMonths}
+                        onChange={(e) => setNewTierMonths(e.target.value)}
+                        className="h-10 rounded-xl border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-violet-500/60"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs text-gray-400">
+                      Процент
+                      <select
+                        value={newTierPercent}
+                        onChange={(e) => setNewTierPercent(e.target.value)}
+                        className="h-10 rounded-xl border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-violet-500/60"
+                      >
+                        <option value="5">5%</option>
+                        <option value="10">10%</option>
+                        <option value="15">15%</option>
+                      </select>
+                    </label>
+                    <Button
+                      type="button"
+                      className="h-10 gap-2 rounded-xl bg-violet-600 text-white hover:bg-violet-500"
+                      onClick={() => void handleAddSeniorityTier()}
+                      disabled={addingTier}
+                    >
+                      <Plus className="h-4 w-4" />
+                      {addingTier ? '...' : 'Добавить'}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden border-white/5 bg-gray-900/40 p-0 backdrop-blur-xl">
+                <AdminTableViewport maxHeight="min(60vh, 32rem)" className="rounded-none border-0 bg-transparent">
+                  <table className="w-full text-sm">
+                    <thead className={adminTableStickyTheadClass}>
+                      <tr className="border-b border-white/5">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Стаж</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Надбавка</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Как считается</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-400">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-gray-500">
+                            Загрузка правил стажа...
+                          </td>
+                        </tr>
+                      ) : seniorityTiers.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-gray-500">
+                            Правил стажа пока нет.
+                          </td>
+                        </tr>
+                      ) : (
+                        seniorityTiers
+                          .slice()
+                          .sort((left, right) => Number(left.min_months || 0) - Number(right.min_months || 0))
+                          .map((tier) => {
+                            const percentOptions = ['5', '10', '15']
+                            const currentPercent = String(tier.bonus_percent ?? '')
+                            if (currentPercent && !percentOptions.includes(currentPercent)) percentOptions.push(currentPercent)
+
+                            return (
+                              <tr key={tier.id} className="border-t border-white/5 transition-colors hover:bg-white/5">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={tier.min_months ?? ''}
+                                      onChange={(e) => handleTierFieldChange(tier.id, 'min_months', e.target.value)}
+                                      className="h-9 w-28 rounded-xl border border-white/10 bg-gray-950 px-3 text-right text-sm text-white outline-none focus:border-violet-500/60"
+                                    />
+                                    <span className="text-sm text-gray-400">мес.</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <select
+                                    value={currentPercent}
+                                    onChange={(e) => handleTierFieldChange(tier.id, 'bonus_percent', e.target.value)}
+                                    className="h-9 w-28 rounded-xl border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-violet-500/60"
+                                  >
+                                    {percentOptions.map((value) => (
+                                      <option key={value} value={value}>
+                                        {value}%
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-300">
+                                  После {tier.min_months ?? 0} мес. к окладу смены добавится {tier.bonus_percent ?? 0}%.
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      className="h-8 gap-1 rounded-xl bg-violet-500/20 px-3 text-violet-300 hover:bg-violet-500/30"
+                                      onClick={() => void handleSaveSeniorityTier(tier)}
+                                      disabled={savingTierId === tier.id}
+                                    >
+                                      <Save className="h-3.5 w-3.5" />
+                                      {savingTierId === tier.id ? '...' : 'Сохранить'}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="ghost"
+                                      className="h-8 w-8 rounded-xl p-0 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                                      onClick={() => void handleDeleteSeniorityTier(tier.id)}
+                                      disabled={deletingTierId === tier.id}
+                                      title="Отключить"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
+                      )}
+                    </tbody>
+                  </table>
+                </AdminTableViewport>
+              </Card>
             </TabsContent>
 
             <TabsContent value="preview">
