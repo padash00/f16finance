@@ -72,6 +72,7 @@ type SeniorityTierRow = {
   min_months: number | null
   bonus_percent: number | null
   is_active: boolean
+  effective_from: string | null
 }
 
 type SalaryRulesResponse = {
@@ -284,8 +285,16 @@ function SalaryRulesContent() {
   const [filterCompany, setFilterCompany] = useState<string>('all')
   const [filterShift, setFilterShift] = useState<ShiftType | 'all'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const todayISO = useMemo(() => {
+    const now = new Date()
+    const yyyy = now.getFullYear()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const dd = String(now.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }, [])
   const [newTierMonths, setNewTierMonths] = useState('6')
   const [newTierPercent, setNewTierPercent] = useState('5')
+  const [newTierFrom, setNewTierFrom] = useState(todayISO)
   const [savingTierId, setSavingTierId] = useState<string | null>(null)
   const [addingTier, setAddingTier] = useState(false)
   const [deletingTierId, setDeletingTierId] = useState<string | null>(null)
@@ -709,6 +718,7 @@ function SalaryRulesContent() {
             min_months: months,
             bonus_percent: percent,
             is_active: true,
+            effective_from: newTierFrom || todayISO,
           },
         }),
       })
@@ -717,6 +727,7 @@ function SalaryRulesContent() {
 
       setSuccessMsg('Правило стажа сохранено')
       setNewTierMonths(String(months + 6))
+      setNewTierFrom(todayISO)
       await loadAll(true)
     } catch (e: any) {
       console.error(e)
@@ -742,7 +753,10 @@ function SalaryRulesContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'upsertSeniorityTier',
-          payload: tier,
+          payload: {
+            ...tier,
+            effective_from: tier.effective_from || todayISO,
+          },
         }),
       })
       const json = await response.json().catch(() => null)
@@ -1516,7 +1530,7 @@ function SalaryRulesContent() {
                       Стаж берётся из даты найма в профиле оператора. Надбавка считается от базового оклада смены.
                     </p>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-[150px_140px_auto]">
+                  <div className="grid gap-2 sm:grid-cols-[140px_120px_160px_auto]">
                     <label className="grid gap-1 text-xs text-gray-400">
                       Месяцев от
                       <input
@@ -1538,6 +1552,16 @@ function SalaryRulesContent() {
                         <option value="10">10%</option>
                         <option value="15">15%</option>
                       </select>
+                    </label>
+                    <label className="grid gap-1 text-xs text-gray-400">
+                      Применять с
+                      <input
+                        type="date"
+                        value={newTierFrom}
+                        onChange={(e) => setNewTierFrom(e.target.value)}
+                        className="h-10 rounded-xl border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-violet-500/60"
+                        title="Смены до этой даты не получат надбавку, даже если сотрудник проработал нужный срок"
+                      />
                     </label>
                     <Button
                       type="button"
@@ -1613,7 +1637,10 @@ function SalaryRulesContent() {
                                   </select>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-300">
-                                  После {tier.min_months ?? 0} мес. к окладу смены добавится {tier.bonus_percent ?? 0}%.
+                                  <div>После {tier.min_months ?? 0} мес. к окладу смены добавится {tier.bonus_percent ?? 0}%.</div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Применяется с {tier.effective_from || '—'}
+                                  </div>
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <div className="flex justify-end gap-2">

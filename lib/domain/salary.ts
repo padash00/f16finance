@@ -50,6 +50,7 @@ export type SalarySeniorityTier = {
   min_months: number
   bonus_percent: number
   is_active?: boolean | null
+  effective_from?: string | null
 }
 
 export type SalaryOperatorCompanyAssignment = {
@@ -251,6 +252,9 @@ function resolveSeniorityPercent(
   const workedMonths = fullMonthsBetween(hireDate, shiftDate)
   const matched = tiers
     .filter((tier) => tier.is_active !== false)
+    // Tier применяется только если у него есть дата вступления и она <= даты
+    // смены. Это защищает прошлые смены от ретроактивного начисления стажа.
+    .filter((tier) => !!tier.effective_from && tier.effective_from <= shiftDate)
     .filter((tier) => Number(tier.min_months || 0) <= workedMonths)
     .sort((left, right) => Number(right.min_months || 0) - Number(left.min_months || 0))[0]
 

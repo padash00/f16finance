@@ -136,11 +136,30 @@ export async function listSalaryReferenceData(
     }
   }
 
-  const { data: seniorityTiersData, error: seniorityTiersError } = await supabase
-    .from('operator_salary_seniority_tiers')
-    .select('id,min_months,bonus_percent,is_active')
-    .eq('is_active', true)
-    .order('min_months', { ascending: true })
+  let seniorityTiersData: any[] = []
+  let seniorityTiersError: any = null
+  {
+    const fullTierSelect = 'id,min_months,bonus_percent,is_active,effective_from'
+    const result = await supabase
+      .from('operator_salary_seniority_tiers')
+      .select(fullTierSelect)
+      .eq('is_active', true)
+      .order('min_months', { ascending: true })
+
+    if (result.error && isOptionalSalarySchemaError(result.error)) {
+      // effective_from ещё не накатан — пробуем без него.
+      const fallback = await supabase
+        .from('operator_salary_seniority_tiers')
+        .select('id,min_months,bonus_percent,is_active')
+        .eq('is_active', true)
+        .order('min_months', { ascending: true })
+      seniorityTiersData = fallback.data || []
+      seniorityTiersError = fallback.error
+    } else {
+      seniorityTiersData = result.data || []
+      seniorityTiersError = result.error
+    }
+  }
 
   if (seniorityTiersError && !isOptionalSalarySchemaError(seniorityTiersError)) {
     throw seniorityTiersError

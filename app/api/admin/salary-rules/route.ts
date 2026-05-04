@@ -39,6 +39,7 @@ type SeniorityTierPayload = {
   min_months: number | null
   bonus_percent: number | null
   is_active?: boolean | null
+  effective_from?: string | null
 }
 
 type Body =
@@ -136,6 +137,10 @@ function normalizeSeniorityTierPayload(payload: SeniorityTierPayload) {
     min_months: normalizeNumber(payload.min_months),
     bonus_percent: normalizeNumber(payload.bonus_percent),
     is_active: payload.is_active !== false,
+    // По умолчанию tier применяется с сегодняшнего дня. Бэкенд всегда
+    // выставляет дату — UI может её не присылать, главное что прошлые
+    // смены не получат бонус ретроактивно.
+    effective_from: normalizeDate(payload.effective_from) || todayISO(),
   }
 }
 
@@ -468,10 +473,27 @@ export async function GET(req: Request) {
       }
     }
 
-    const { data: seniorityTiersData, error: seniorityTiersError } = await supabase
-      .from('operator_salary_seniority_tiers')
-      .select('id,min_months,bonus_percent,is_active,created_at,updated_at')
-      .order('min_months', { ascending: true })
+    let seniorityTiersData: any[] | null = null
+    let seniorityTiersError: any = null
+    {
+      const fullSelect = 'id,min_months,bonus_percent,is_active,effective_from,created_at,updated_at'
+      const result = await supabase
+        .from('operator_salary_seniority_tiers')
+        .select(fullSelect)
+        .order('min_months', { ascending: true })
+
+      if (result.error && isOptionalSalarySchemaError(result.error)) {
+        const fallback = await supabase
+          .from('operator_salary_seniority_tiers')
+          .select('id,min_months,bonus_percent,is_active,created_at,updated_at')
+          .order('min_months', { ascending: true })
+        seniorityTiersData = fallback.data || []
+        seniorityTiersError = fallback.error
+      } else {
+        seniorityTiersData = result.data || []
+        seniorityTiersError = result.error
+      }
+    }
 
     if (seniorityTiersError && !isOptionalSalarySchemaError(seniorityTiersError)) {
       throw seniorityTiersError
@@ -833,21 +855,34 @@ export async function POST(req: Request) {
         min_months: payload.min_months,
         bonus_percent: payload.bonus_percent,
         is_active: payload.is_active,
+        effective_from: payload.effective_from,
         updated_at: new Date().toISOString(),
       }
 
-      const result = payload.id
-        ? await supabase
-            .from('operator_salary_seniority_tiers')
-            .update(row)
-            .eq('id', payload.id)
-            .select('*')
-            .single()
-        : await supabase
-            .from('operator_salary_seniority_tiers')
-            .upsert([row], { onConflict: 'min_months' })
-            .select('*')
-            .single()
+      const tryWriteTier = async (rowToWrite: Record<string, unknown>) => {
+        return payload.id
+          ? await supabase
+              .from('operator_salary_seniority_tiers')
+              .update(rowToWrite)
+              .eq('id', payload.id)
+              .select('*')
+              .single()
+          : await supabase
+              .from('operator_salary_seniority_tiers')
+              .upsert([rowToWrite], { onConflict: 'min_months' })
+              .select('*')
+              .single()
+      }
+
+      let result = await tryWriteTier(row)
+
+      // Если колонки effective_from в БД ещё нет — миграция не накатана.
+      // Повторяем без этого поля, чтобы не блокировать сохранение.
+      if (result.error && isOptionalSalarySchemaError(result.error)) {
+        const { effective_from: _omit, ...rowWithoutEffectiveFrom } = row
+        void _omit
+        result = await tryWriteTier(rowWithoutEffectiveFrom)
+      }
 
       if (result.error) {
         if (isOptionalSalarySchemaError(result.error)) {
