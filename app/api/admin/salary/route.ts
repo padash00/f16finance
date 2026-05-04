@@ -74,6 +74,11 @@ type MutationBody =
       operatorId: string
       weekStart: string
     }
+  | {
+      action: 'unlockSalaryWeek'
+      operatorId: string
+      weekStart: string
+    }
 
 type PaymentSplit = {
   cashAmount: number
@@ -1694,6 +1699,65 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data: { marked: ids.length } })
+    }
+
+    if (body.action === 'unlockSalaryWeek') {
+      const weekStartUnlock = normalizeIsoDate(body.weekStart)
+      if (!body.operatorId || !weekStartUnlock) {
+        return json({ error: 'operatorId и weekStart обязательны' }, 400)
+      }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
+
+      const { data: existing, error: existingError } = await supabase
+        .from('operator_salary_weeks')
+        .select('id, locked_at, status')
+        .eq('operator_id', body.operatorId)
+        .eq('week_start', weekStartUnlock)
+        .maybeSingle()
+
+      if (existingError) throw existingError
+      if (!existing) return json({ error: 'Неделя не найдена' }, 404)
+      if (!existing.locked_at) {
+        return json({ ok: true, data: { alreadyUnlocked: true } })
+      }
+
+      const { error: updateError } = await supabase
+        .from('operator_salary_weeks')
+        .update({ locked_at: null })
+        .eq('id', existing.id)
+
+      if (updateError) throw updateError
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'operator-salary-week',
+        entityId: String(existing.id),
+        action: 'unlock',
+        payload: {
+          operator_id: body.operatorId,
+          week_start: weekStartUnlock,
+          previous_locked_at: existing.locked_at,
+          previous_status: existing.status,
+        },
+      })
+
+      // Сразу же запускаем пересчёт по актуальным правилам — следующий
+      // GET страницы будет видеть свежие суммы.
+      const pointRules = await listSalaryPointRules(supabase, allowedCompanyIds || null)
+      const refreshed = await ensureSalaryWeekSnapshot({
+        supabase,
+        operatorId: body.operatorId,
+        weekStart: weekStartUnlock,
+        actorUserId: user?.id || null,
+        companyIds: allowedCompanyIds || null,
+        pointRules,
+      })
+
+      return json({ ok: true, data: { week: refreshed } })
     }
 
     if (!body.operatorId) {

@@ -75,6 +75,23 @@ type SeniorityTierRow = {
   effective_from: string | null
 }
 
+type RuleVersionRow = {
+  id: string
+  rule_id: number
+  effective_from: string
+  base_per_shift: number | null
+  low_turnover_threshold: number | null
+  low_turnover_base: number | null
+  senior_operator_bonus: number | null
+  senior_cashier_bonus: number | null
+  threshold1_turnover: number | null
+  threshold1_bonus: number | null
+  threshold2_turnover: number | null
+  threshold2_bonus: number | null
+  comment: string | null
+  created_at: string | null
+}
+
 type SalaryRulesResponse = {
   ok: boolean
   data?: {
@@ -82,6 +99,7 @@ type SalaryRulesResponse = {
     companies: CompanyRow[]
     history: RuleHistoryRow[]
     seniorityTiers: SeniorityTierRow[]
+    ruleVersions?: RuleVersionRow[]
   }
   error?: string
 }
@@ -274,6 +292,14 @@ function SalaryRulesContent() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [history, setHistory] = useState<RuleHistoryRow[]>([])
   const [seniorityTiers, setSeniorityTiers] = useState<SeniorityTierRow[]>([])
+  const [ruleVersions, setRuleVersions] = useState<RuleVersionRow[]>([])
+  const [expandedRuleId, setExpandedRuleId] = useState<number | null>(null)
+  const [savingVersionId, setSavingVersionId] = useState<string | null>(null)
+  const [deletingVersionId, setDeletingVersionId] = useState<string | null>(null)
+  const [versionDrafts, setVersionDrafts] = useState<Record<string, RuleVersionRow>>({})
+  const [newVersionForRule, setNewVersionForRule] = useState<number | null>(null)
+  const [newVersionDraft, setNewVersionDraft] = useState<Partial<RuleVersionRow>>({})
+  const [savingNewVersion, setSavingNewVersion] = useState(false)
 
   // UI states
   const [savingId, setSavingId] = useState<number | null>(null)
@@ -320,6 +346,8 @@ function SalaryRulesContent() {
       setCompanies((json.data.companies || []) as CompanyRow[])
       setHistory((json.data.history || []) as RuleHistoryRow[])
       setSeniorityTiers(((json.data.seniorityTiers || []) as SeniorityTierRow[]).filter((tier) => tier.is_active !== false))
+      setRuleVersions((json.data.ruleVersions || []) as RuleVersionRow[])
+      setVersionDrafts({})
       setDirtyIds(new Set())
     } catch (err) {
       setError('Не удалось загрузить данные')
@@ -501,6 +529,40 @@ function SalaryRulesContent() {
     low_turnover_base: parseIntSafe(row.low_turnover_base),
   })
 
+  // Возвращает массив предупреждений если значения подозрительные.
+  // В отличие от ошибок, предупреждения требуют подтверждения у пользователя.
+  const collectWarnings = (row: RuleRow, payload: ReturnType<typeof buildPayload>) => {
+    const warnings: string[] = []
+
+    if (
+      payload.threshold1_turnover != null &&
+      payload.low_turnover_threshold != null &&
+      payload.threshold1_turnover < payload.low_turnover_threshold
+    ) {
+      warnings.push('Порог 1 ниже порога условного оклада — расчёт может работать неожиданно.')
+    }
+
+    const oldBase = Number(row.base_per_shift_prev || 0)
+    const newBase = Number(payload.base_per_shift || 0)
+    if (oldBase > 0 && newBase > oldBase * 1.5) {
+      warnings.push(`Новый оклад (${newBase} ₸) больше старого (${oldBase} ₸) более чем в 1.5 раза — точно не опечатка?`)
+    }
+    if (oldBase > 0 && newBase < oldBase * 0.5) {
+      warnings.push(`Новый оклад (${newBase} ₸) меньше старого (${oldBase} ₸) более чем в 2 раза — точно не опечатка?`)
+    }
+
+    if (payload.effective_from) {
+      const today = new Date()
+      const effDate = new Date(payload.effective_from + 'T00:00:00')
+      const diffDays = Math.floor((today.getTime() - effDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (diffDays > 30) {
+        warnings.push(`Дата вступления (${payload.effective_from}) в прошлом более 30 дней. Прошлые смены пересчитаются?`)
+      }
+    }
+
+    return warnings
+  }
+
   const handleSaveRow = async (row: RuleRow) => {
     setError(null)
     setSuccessMsg(null)
@@ -518,6 +580,17 @@ function SalaryRulesContent() {
         throw new Error(
           `Дубликат: уже есть правило для "${payload.company_code}" + "${payload.shift_type}"`
         )
+      }
+
+      const warnings = collectWarnings(row, payload)
+      if (warnings.length > 0) {
+        const ok = window.confirm(
+          'Предупреждения:\n\n' + warnings.map((w, i) => `${i + 1}. ${w}`).join('\n\n') + '\n\nВсё равно сохранить?',
+        )
+        if (!ok) {
+          setSavingId(null)
+          return
+        }
       }
 
       const response = await fetch('/api/admin/salary-rules', {
@@ -655,6 +728,183 @@ function SalaryRulesContent() {
     }
   }
 
+  // Версии правил
+  const versionsByRule = useMemo(() => {
+    const map = new Map<number, RuleVersionRow[]>()
+    for (const v of ruleVersions) {
+      const list = map.get(v.rule_id) || []
+      list.push(v)
+      map.set(v.rule_id, list)
+    }
+    for (const [k, list] of map.entries()) {
+      list.sort((a, b) => (b.effective_from || '').localeCompare(a.effective_from || ''))
+      map.set(k, list)
+    }
+    return map
+  }, [ruleVersions])
+
+  const startEditingVersion = (v: RuleVersionRow) => {
+    setVersionDrafts((prev) => ({ ...prev, [v.id]: { ...v } }))
+  }
+
+  const cancelEditingVersion = (id: string) => {
+    setVersionDrafts((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
+  const handleVersionFieldChange = (id: string, field: keyof RuleVersionRow, value: string) => {
+    setVersionDrafts((prev) => {
+      const draft = prev[id]
+      if (!draft) return prev
+      let nextValue: any = value
+      if (field === 'effective_from' || field === 'comment') {
+        nextValue = value || null
+      } else if (field !== 'id' && field !== 'rule_id' && field !== 'created_at') {
+        nextValue = parseIntSafe(value)
+      }
+      return { ...prev, [id]: { ...draft, [field]: nextValue } }
+    })
+  }
+
+  const handleSaveVersion = async (id: string) => {
+    const draft = versionDrafts[id]
+    if (!draft) return
+    if (!draft.effective_from) {
+      setError('Укажите дату вступления версии')
+      return
+    }
+    setError(null); setSuccessMsg(null); setSavingVersionId(id)
+    try {
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsertRuleVersion',
+          payload: {
+            id: draft.id,
+            rule_id: draft.rule_id,
+            effective_from: draft.effective_from,
+            base_per_shift: draft.base_per_shift,
+            low_turnover_threshold: draft.low_turnover_threshold,
+            low_turnover_base: draft.low_turnover_base,
+            senior_operator_bonus: draft.senior_operator_bonus,
+            senior_cashier_bonus: draft.senior_cashier_bonus,
+            threshold1_turnover: draft.threshold1_turnover,
+            threshold1_bonus: draft.threshold1_bonus,
+            threshold2_turnover: draft.threshold2_turnover,
+            threshold2_bonus: draft.threshold2_bonus,
+            comment: draft.comment,
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения версии')
+      cancelEditingVersion(id)
+      setSuccessMsg('Версия сохранена')
+      await loadAll(true)
+    } catch (e: any) {
+      setError(e.message || 'Ошибка сохранения версии')
+    } finally {
+      setSavingVersionId(null)
+    }
+  }
+
+  const handleDeleteVersion = async (versionId: string) => {
+    if (!confirm('Удалить эту версию правила? Прошлые смены, которые на неё опирались, могут пересчитаться.')) return
+    setError(null); setSuccessMsg(null); setDeletingVersionId(versionId)
+    try {
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteRuleVersion', versionId }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка удаления версии')
+      setSuccessMsg('Версия удалена')
+      await loadAll(true)
+    } catch (e: any) {
+      setError(e.message || 'Ошибка удаления версии')
+    } finally {
+      setDeletingVersionId(null)
+    }
+  }
+
+  const startNewVersion = (ruleId: number) => {
+    const rule = rules.find((r) => r.id === ruleId)
+    setNewVersionForRule(ruleId)
+    setNewVersionDraft({
+      rule_id: ruleId,
+      effective_from: todayISO,
+      base_per_shift: rule?.base_per_shift ?? null,
+      low_turnover_threshold: rule?.low_turnover_threshold ?? null,
+      low_turnover_base: rule?.low_turnover_base ?? null,
+      senior_operator_bonus: rule?.senior_operator_bonus ?? null,
+      senior_cashier_bonus: rule?.senior_cashier_bonus ?? null,
+      threshold1_turnover: rule?.threshold1_turnover ?? null,
+      threshold1_bonus: rule?.threshold1_bonus ?? null,
+      threshold2_turnover: rule?.threshold2_turnover ?? null,
+      threshold2_bonus: rule?.threshold2_bonus ?? null,
+      comment: 'Добавлено вручную',
+    })
+  }
+
+  const handleNewVersionFieldChange = (field: keyof RuleVersionRow, value: string) => {
+    setNewVersionDraft((prev) => {
+      let nextValue: any = value
+      if (field === 'effective_from' || field === 'comment') {
+        nextValue = value || null
+      } else if (field !== 'id' && field !== 'rule_id' && field !== 'created_at') {
+        nextValue = parseIntSafe(value)
+      }
+      return { ...prev, [field]: nextValue }
+    })
+  }
+
+  const handleSubmitNewVersion = async () => {
+    if (!newVersionForRule) return
+    if (!newVersionDraft.effective_from) {
+      setError('Укажите дату вступления версии')
+      return
+    }
+    setError(null); setSuccessMsg(null); setSavingNewVersion(true)
+    try {
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsertRuleVersion',
+          payload: {
+            rule_id: newVersionForRule,
+            effective_from: newVersionDraft.effective_from,
+            base_per_shift: newVersionDraft.base_per_shift ?? null,
+            low_turnover_threshold: newVersionDraft.low_turnover_threshold ?? null,
+            low_turnover_base: newVersionDraft.low_turnover_base ?? null,
+            senior_operator_bonus: newVersionDraft.senior_operator_bonus ?? null,
+            senior_cashier_bonus: newVersionDraft.senior_cashier_bonus ?? null,
+            threshold1_turnover: newVersionDraft.threshold1_turnover ?? null,
+            threshold1_bonus: newVersionDraft.threshold1_bonus ?? null,
+            threshold2_turnover: newVersionDraft.threshold2_turnover ?? null,
+            threshold2_bonus: newVersionDraft.threshold2_bonus ?? null,
+            comment: newVersionDraft.comment ?? null,
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения версии')
+      setNewVersionForRule(null)
+      setNewVersionDraft({})
+      setSuccessMsg('Версия создана')
+      await loadAll(true)
+    } catch (e: any) {
+      setError(e.message || 'Ошибка сохранения версии')
+    } finally {
+      setSavingNewVersion(false)
+    }
+  }
+
   const handleDeleteRule = async (id: number) => {
     if (!confirm('Удалить правило? Это действие нельзя отменить.')) return
 
@@ -688,12 +938,16 @@ function SalaryRulesContent() {
 
   const handleTierFieldChange = (
     id: string,
-    field: 'min_months' | 'bonus_percent',
+    field: 'min_months' | 'bonus_percent' | 'effective_from',
     value: string,
   ) => {
-    const num = parseIntSafe(value)
     setSeniorityTiers((prev) =>
-      prev.map((tier) => (tier.id === id ? { ...tier, [field]: num } : tier)),
+      prev.map((tier) => {
+        if (tier.id !== id) return tier
+        if (field === 'effective_from') return { ...tier, effective_from: value || null }
+        const num = parseIntSafe(value)
+        return { ...tier, [field]: num }
+      }),
     )
     setSuccessMsg(null)
   }
@@ -1130,6 +1384,7 @@ function SalaryRulesContent() {
                       const shiftStyle = SHIFT_LABELS[r.shift_type]
 
                       return (
+                        <>
                         <tr
                           key={r.id}
                           className={`border-t border-white/5 hover:bg-white/5 transition-colors ${
@@ -1347,6 +1602,15 @@ function SalaryRulesContent() {
                               <Button
                                 size="xs"
                                 variant="ghost"
+                                className="h-7 px-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                                onClick={() => setExpandedRuleId(expandedRuleId === r.id ? null : r.id)}
+                                title="История версий"
+                              >
+                                {expandedRuleId === r.id ? '▲' : '▼'} Версии ({(versionsByRule.get(r.id) || []).length})
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="ghost"
                                 className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                                 onClick={() => handleDeleteRule(r.id)}
                                 disabled={deletingId === r.id}
@@ -1357,6 +1621,206 @@ function SalaryRulesContent() {
                             </div>
                           </td>
                         </tr>
+                        {expandedRuleId === r.id && (() => {
+                          const versions = versionsByRule.get(r.id) || []
+                          return (
+                            <tr key={`${r.id}-versions`} className="bg-gray-950/60 border-t border-white/5">
+                              <td colSpan={12} className="px-4 py-4">
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="text-sm text-gray-300">
+                                      История версий для {companyOptions.find((c) => c.code === r.company_code)?.name || r.company_code} · {SHIFT_LABELS[r.shift_type].label}
+                                    </div>
+                                    <Button
+                                      size="xs"
+                                      className="h-7 px-2 bg-cyan-600 text-white hover:bg-cyan-500"
+                                      onClick={() => startNewVersion(r.id)}
+                                    >
+                                      <Plus className="w-3 h-3 mr-1" />
+                                      Добавить версию
+                                    </Button>
+                                  </div>
+
+                                  {newVersionForRule === r.id && (
+                                    <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-3">
+                                      <div className="text-xs text-cyan-300 mb-2">Новая версия</div>
+                                      <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 text-xs">
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Применять с</span>
+                                          <input type="date" value={newVersionDraft.effective_from || ''} onChange={(e) => handleNewVersionFieldChange('effective_from', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Оклад</span>
+                                          <input type="number" value={newVersionDraft.base_per_shift ?? ''} onChange={(e) => handleNewVersionFieldChange('base_per_shift', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Старший оператор</span>
+                                          <input type="number" value={newVersionDraft.senior_operator_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('senior_operator_bonus', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Старший кассир</span>
+                                          <input type="number" value={newVersionDraft.senior_cashier_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('senior_cashier_bonus', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Порог 1</span>
+                                          <input type="number" value={newVersionDraft.threshold1_turnover ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold1_turnover', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Бонус 1</span>
+                                          <input type="number" value={newVersionDraft.threshold1_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold1_bonus', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Порог 2</span>
+                                          <input type="number" value={newVersionDraft.threshold2_turnover ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold2_turnover', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Бонус 2</span>
+                                          <input type="number" value={newVersionDraft.threshold2_bonus ?? ''} onChange={(e) => handleNewVersionFieldChange('threshold2_bonus', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Порог усл. оклада</span>
+                                          <input type="number" value={newVersionDraft.low_turnover_threshold ?? ''} onChange={(e) => handleNewVersionFieldChange('low_turnover_threshold', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                        <label className="grid gap-1">
+                                          <span className="text-gray-400">Усл. оклад</span>
+                                          <input type="number" value={newVersionDraft.low_turnover_base ?? ''} onChange={(e) => handleNewVersionFieldChange('low_turnover_base', e.target.value)} className="h-8 rounded-lg border border-white/10 bg-gray-900 px-2 text-white" />
+                                        </label>
+                                      </div>
+                                      <div className="mt-3 flex items-center gap-2">
+                                        <Button size="xs" className="h-8 px-3 bg-cyan-600 text-white hover:bg-cyan-500" onClick={() => void handleSubmitNewVersion()} disabled={savingNewVersion}>
+                                          <Save className="w-3 h-3 mr-1" />
+                                          {savingNewVersion ? 'Сохранение...' : 'Сохранить версию'}
+                                        </Button>
+                                        <Button size="xs" variant="outline" className="h-8 px-3 border-white/10 bg-white/5 text-gray-300 hover:bg-white/10" onClick={() => { setNewVersionForRule(null); setNewVersionDraft({}) }}>
+                                          Отмена
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {versions.length === 0 ? (
+                                    <div className="text-xs text-gray-500 italic">Нет версий — все смены считаются по текущему правилу.</div>
+                                  ) : (
+                                    <div className="overflow-x-auto rounded-xl border border-white/5">
+                                      <table className="w-full text-xs">
+                                        <thead className="bg-white/[0.03]">
+                                          <tr>
+                                            <th className="px-2 py-2 text-left text-gray-400">С даты</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Оклад</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Ст. опер.</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Ст. касс.</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Порог 1 / Бонус</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Порог 2 / Бонус</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Усл. порог / оклад</th>
+                                            <th className="px-2 py-2 text-left text-gray-400">Комментарий</th>
+                                            <th className="px-2 py-2 text-right text-gray-400">Действия</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {versions.map((v) => {
+                                            const draft = versionDrafts[v.id]
+                                            const isEditing = !!draft
+                                            const display = draft || v
+                                            return (
+                                              <tr key={v.id} className="border-t border-white/5">
+                                                <td className="px-2 py-2">
+                                                  {isEditing ? (
+                                                    <input type="date" value={display.effective_from || ''} onChange={(e) => handleVersionFieldChange(v.id, 'effective_from', e.target.value)} className="h-7 rounded border border-white/10 bg-gray-900 px-1 text-white text-[11px]" />
+                                                  ) : (
+                                                    <span className="text-gray-200">{v.effective_from}</span>
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                  {isEditing ? (
+                                                    <input type="number" value={display.base_per_shift ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'base_per_shift', e.target.value)} className="h-7 w-20 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                  ) : (
+                                                    formatMoney(v.base_per_shift)
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                  {isEditing ? (
+                                                    <input type="number" value={display.senior_operator_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'senior_operator_bonus', e.target.value)} className="h-7 w-20 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                  ) : (
+                                                    formatMoney(v.senior_operator_bonus)
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                  {isEditing ? (
+                                                    <input type="number" value={display.senior_cashier_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'senior_cashier_bonus', e.target.value)} className="h-7 w-20 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                  ) : (
+                                                    formatMoney(v.senior_cashier_bonus)
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                  {isEditing ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      <input type="number" value={display.threshold1_turnover ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold1_turnover', e.target.value)} className="h-7 w-20 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                      <span className="text-gray-500">/</span>
+                                                      <input type="number" value={display.threshold1_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold1_bonus', e.target.value)} className="h-7 w-16 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                    </div>
+                                                  ) : (
+                                                    <>{formatMoneyCompact(v.threshold1_turnover)} / {formatMoneyCompact(v.threshold1_bonus)}</>
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                  {isEditing ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      <input type="number" value={display.threshold2_turnover ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold2_turnover', e.target.value)} className="h-7 w-20 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                      <span className="text-gray-500">/</span>
+                                                      <input type="number" value={display.threshold2_bonus ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'threshold2_bonus', e.target.value)} className="h-7 w-16 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                    </div>
+                                                  ) : (
+                                                    <>{formatMoneyCompact(v.threshold2_turnover)} / {formatMoneyCompact(v.threshold2_bonus)}</>
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-right">
+                                                  {isEditing ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      <input type="number" value={display.low_turnover_threshold ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'low_turnover_threshold', e.target.value)} className="h-7 w-20 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                      <span className="text-gray-500">/</span>
+                                                      <input type="number" value={display.low_turnover_base ?? ''} onChange={(e) => handleVersionFieldChange(v.id, 'low_turnover_base', e.target.value)} className="h-7 w-16 rounded border border-white/10 bg-gray-900 px-1 text-right text-white text-[11px]" />
+                                                    </div>
+                                                  ) : (
+                                                    <>{formatMoneyCompact(v.low_turnover_threshold)} / {formatMoneyCompact(v.low_turnover_base)}</>
+                                                  )}
+                                                </td>
+                                                <td className="px-2 py-2 text-gray-400">{v.comment || '—'}</td>
+                                                <td className="px-2 py-2 text-right">
+                                                  <div className="flex items-center justify-end gap-1">
+                                                    {isEditing ? (
+                                                      <>
+                                                        <Button size="xs" className="h-7 px-2 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 border-0" onClick={() => void handleSaveVersion(v.id)} disabled={savingVersionId === v.id}>
+                                                          {savingVersionId === v.id ? '...' : <><Save className="w-3 h-3 mr-1" />Сохранить</>}
+                                                        </Button>
+                                                        <Button size="xs" variant="ghost" className="h-7 px-2 text-gray-400 hover:text-white" onClick={() => cancelEditingVersion(v.id)}>
+                                                          Отмена
+                                                        </Button>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <Button size="xs" variant="ghost" className="h-7 px-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10" onClick={() => startEditingVersion(v)}>
+                                                          Изменить
+                                                        </Button>
+                                                        <Button size="xs" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => void handleDeleteVersion(v.id)} disabled={deletingVersionId === v.id} title="Удалить версию">
+                                                          <Trash2 className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            )
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })()}
+                      </>
                       )
                     })}
                 </tbody>
@@ -1542,16 +2006,16 @@ function SalaryRulesContent() {
                       />
                     </label>
                     <label className="grid gap-1 text-xs text-gray-400">
-                      Процент
-                      <select
+                      Процент (0-15)
+                      <input
+                        type="number"
+                        min={0}
+                        max={15}
+                        step={1}
                         value={newTierPercent}
                         onChange={(e) => setNewTierPercent(e.target.value)}
                         className="h-10 rounded-xl border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-violet-500/60"
-                      >
-                        <option value="5">5%</option>
-                        <option value="10">10%</option>
-                        <option value="15">15%</option>
-                      </select>
+                      />
                     </label>
                     <label className="grid gap-1 text-xs text-gray-400">
                       Применять с
@@ -1605,10 +2069,6 @@ function SalaryRulesContent() {
                           .slice()
                           .sort((left, right) => Number(left.min_months || 0) - Number(right.min_months || 0))
                           .map((tier) => {
-                            const percentOptions = ['5', '10', '15']
-                            const currentPercent = String(tier.bonus_percent ?? '')
-                            if (currentPercent && !percentOptions.includes(currentPercent)) percentOptions.push(currentPercent)
-
                             return (
                               <tr key={tier.id} className="border-t border-white/5 transition-colors hover:bg-white/5">
                                 <td className="px-4 py-3">
@@ -1624,22 +2084,34 @@ function SalaryRulesContent() {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <select
-                                    value={currentPercent}
-                                    onChange={(e) => handleTierFieldChange(tier.id, 'bonus_percent', e.target.value)}
-                                    className="h-9 w-28 rounded-xl border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none focus:border-violet-500/60"
-                                  >
-                                    {percentOptions.map((value) => (
-                                      <option key={value} value={value}>
-                                        {value}%
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={15}
+                                      step={1}
+                                      value={tier.bonus_percent ?? ''}
+                                      onChange={(e) => handleTierFieldChange(tier.id, 'bonus_percent', e.target.value)}
+                                      className="h-9 w-20 rounded-xl border border-white/10 bg-gray-950 px-3 text-right text-sm text-white outline-none focus:border-violet-500/60"
+                                    />
+                                    <span className="text-sm text-gray-400">%</span>
+                                  </div>
                                 </td>
-                                <td className="px-4 py-3 text-sm text-gray-300">
-                                  <div>После {tier.min_months ?? 0} мес. к окладу смены добавится {tier.bonus_percent ?? 0}%.</div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    Применяется с {tier.effective_from || '—'}
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-col gap-2">
+                                    <div className="text-sm text-gray-300">
+                                      После {tier.min_months ?? 0} мес. к окладу смены добавится {tier.bonus_percent ?? 0}%.
+                                    </div>
+                                    <label className="flex items-center gap-2 text-xs text-gray-500">
+                                      Применять с
+                                      <input
+                                        type="date"
+                                        value={tier.effective_from || ''}
+                                        onChange={(e) => handleTierFieldChange(tier.id, 'effective_from', e.target.value)}
+                                        className="h-8 rounded-lg border border-white/10 bg-gray-950 px-2 text-xs text-white outline-none focus:border-violet-500/60"
+                                        title="Смены до этой даты не получат надбавку"
+                                      />
+                                    </label>
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-right">

@@ -31,6 +31,12 @@ type RuleVersionPayload = {
   base_per_shift: number | null
   low_turnover_threshold: number | null
   low_turnover_base: number | null
+  senior_operator_bonus?: number | null
+  senior_cashier_bonus?: number | null
+  threshold1_turnover?: number | null
+  threshold1_bonus?: number | null
+  threshold2_turnover?: number | null
+  threshold2_bonus?: number | null
   comment?: string | null
 }
 
@@ -127,6 +133,12 @@ function normalizeRuleVersionPayload(payload: RuleVersionPayload) {
     base_per_shift: normalizeNumber(payload.base_per_shift),
     low_turnover_threshold: normalizeNumber(payload.low_turnover_threshold),
     low_turnover_base: normalizeNumber(payload.low_turnover_base),
+    senior_operator_bonus: normalizeNumber(payload.senior_operator_bonus),
+    senior_cashier_bonus: normalizeNumber(payload.senior_cashier_bonus),
+    threshold1_turnover: normalizeNumber(payload.threshold1_turnover),
+    threshold1_bonus: normalizeNumber(payload.threshold1_bonus),
+    threshold2_turnover: normalizeNumber(payload.threshold2_turnover),
+    threshold2_bonus: normalizeNumber(payload.threshold2_bonus),
     comment: String(payload.comment || '').trim() || null,
   }
 }
@@ -763,27 +775,51 @@ export async function POST(req: Request) {
       const accessCheck = await getRuleForMutation(supabase, payload.rule_id, allowedCompanyCodes)
       if (accessCheck.error) return accessCheck.error
 
-      const row = {
+      const fullRow = {
         rule_id: payload.rule_id,
         effective_from: payload.effective_from,
         base_per_shift: payload.base_per_shift,
         low_turnover_threshold: payload.low_turnover_threshold,
         low_turnover_base: payload.low_turnover_base,
+        senior_operator_bonus: payload.senior_operator_bonus,
+        senior_cashier_bonus: payload.senior_cashier_bonus,
+        threshold1_turnover: payload.threshold1_turnover,
+        threshold1_bonus: payload.threshold1_bonus,
+        threshold2_turnover: payload.threshold2_turnover,
+        threshold2_bonus: payload.threshold2_bonus,
         comment: payload.comment,
       }
 
-      const result = payload.id
-        ? await supabase
-            .from('operator_salary_rule_versions')
-            .update(row)
-            .eq('id', payload.id)
-            .select('*')
-            .single()
-        : await supabase
-            .from('operator_salary_rule_versions')
-            .upsert([row], { onConflict: 'rule_id,effective_from' })
-            .select('*')
-            .single()
+      const writeVersion = async (rowToWrite: Record<string, unknown>) => {
+        return payload.id
+          ? await supabase
+              .from('operator_salary_rule_versions')
+              .update(rowToWrite)
+              .eq('id', payload.id)
+              .select('*')
+              .single()
+          : await supabase
+              .from('operator_salary_rule_versions')
+              .upsert([rowToWrite], { onConflict: 'rule_id,effective_from' })
+              .select('*')
+              .single()
+      }
+
+      let result = await writeVersion(fullRow)
+
+      // Если новые snapshot-колонки ещё не накатаны (миграция отстала),
+      // повторяем без них.
+      if (result.error && isOptionalSalarySchemaError(result.error)) {
+        const minimalRow = {
+          rule_id: fullRow.rule_id,
+          effective_from: fullRow.effective_from,
+          base_per_shift: fullRow.base_per_shift,
+          low_turnover_threshold: fullRow.low_turnover_threshold,
+          low_turnover_base: fullRow.low_turnover_base,
+          comment: fullRow.comment,
+        }
+        result = await writeVersion(minimalRow)
+      }
 
       if (result.error) {
         if (isOptionalSalarySchemaError(result.error)) {
@@ -798,7 +834,7 @@ export async function POST(req: Request) {
         entityId: String(result.data.id),
         action: payload.id ? 'update' : 'create',
         payload: {
-          ...row,
+          ...fullRow,
           company_code: accessCheck.rule.company_code,
           shift_type: accessCheck.rule.shift_type,
         },

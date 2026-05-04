@@ -135,6 +135,21 @@ function OperatorSalaryDetailPageContent() {
     return json
   }
 
+  const [unlocking, setUnlocking] = useState(false)
+  const unlockWeek = async () => {
+    if (!data) return
+    if (!confirm('Разблокировать эту неделю и пересчитать сумму по актуальным правилам? Старые зафиксированные значения будут перезаписаны.')) return
+    setUnlocking(true)
+    try {
+      await post({ action: 'unlockSalaryWeek', operatorId, weekStart: data.week.weekStart })
+      await load(true)
+    } catch (e: any) {
+      setError(e.message || 'Не удалось разблокировать неделю')
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
   const submitAdvance = async (e: FormEvent) => {
     e.preventDefault()
     const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi)
@@ -257,6 +272,17 @@ function OperatorSalaryDetailPageContent() {
                   Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span>
                 </div>
                 {st ? <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${st.className}`}>{st.label}</span> : null}
+                {data && data.week.status === 'paid' ? (
+                  <button
+                    type="button"
+                    onClick={() => void unlockWeek()}
+                    disabled={unlocking}
+                    title="Разблокировать неделю и пересчитать по актуальным правилам"
+                    className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-60"
+                  >
+                    {unlocking ? 'Разблокировка...' : '🔓 Разблокировать и пересчитать'}
+                  </button>
+                ) : null}
                 {data && !data.operator.is_active ? (
                   <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium text-red-400">неактивен</span>
                 ) : null}
