@@ -108,14 +108,29 @@ export async function listSalaryReferenceData(
 
   let versions: SalaryRuleVersion[] = []
   if (ruleIds.length > 0) {
+    const fullSelect =
+      'id,rule_id,effective_from,base_per_shift,low_turnover_threshold,low_turnover_base,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus,comment,created_at'
     const { data, error } = await supabase
       .from('operator_salary_rule_versions')
-      .select('id,rule_id,effective_from,base_per_shift,low_turnover_threshold,low_turnover_base,comment,created_at')
+      .select(fullSelect)
       .in('rule_id', ruleIds)
       .order('effective_from', { ascending: false })
 
     if (error) {
-      if (!isOptionalSalarySchemaError(error)) throw error
+      if (!isOptionalSalarySchemaError(error)) {
+        throw error
+      }
+      // Колонок снапшота ещё нет — пробуем минимальный select.
+      const fallback = await supabase
+        .from('operator_salary_rule_versions')
+        .select('id,rule_id,effective_from,base_per_shift,low_turnover_threshold,low_turnover_base,comment,created_at')
+        .in('rule_id', ruleIds)
+        .order('effective_from', { ascending: false })
+      if (fallback.error) {
+        if (!isOptionalSalarySchemaError(fallback.error)) throw fallback.error
+      } else {
+        versions = (fallback.data || []) as SalaryRuleVersion[]
+      }
     } else {
       versions = (data || []) as SalaryRuleVersion[]
     }

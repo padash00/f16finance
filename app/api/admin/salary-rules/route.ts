@@ -274,15 +274,66 @@ async function getRuleForMutation(
   return { error: null, rule: data }
 }
 
+type RuleSnapshotInput = {
+  base_per_shift?: number | null
+  low_turnover_threshold?: number | null
+  low_turnover_base?: number | null
+  senior_operator_bonus?: number | null
+  senior_cashier_bonus?: number | null
+  threshold1_turnover?: number | null
+  threshold1_bonus?: number | null
+  threshold2_turnover?: number | null
+  threshold2_bonus?: number | null
+}
+
+function buildVersionSnapshot(source: RuleSnapshotInput) {
+  return {
+    base_per_shift: source.base_per_shift ?? null,
+    low_turnover_threshold: source.low_turnover_threshold ?? null,
+    low_turnover_base: source.low_turnover_base ?? null,
+    senior_operator_bonus: source.senior_operator_bonus ?? null,
+    senior_cashier_bonus: source.senior_cashier_bonus ?? null,
+    threshold1_turnover: source.threshold1_turnover ?? null,
+    threshold1_bonus: source.threshold1_bonus ?? null,
+    threshold2_turnover: source.threshold2_turnover ?? null,
+    threshold2_bonus: source.threshold2_bonus ?? null,
+  }
+}
+
+const MATERIAL_RULE_FIELDS: (keyof RuleSnapshotInput)[] = [
+  'base_per_shift',
+  'low_turnover_threshold',
+  'low_turnover_base',
+  'senior_operator_bonus',
+  'senior_cashier_bonus',
+  'threshold1_turnover',
+  'threshold1_bonus',
+  'threshold2_turnover',
+  'threshold2_bonus',
+]
+
+function hasMaterialSalaryChange(prev: RuleSnapshotInput, next: RuleSnapshotInput) {
+  for (const field of MATERIAL_RULE_FIELDS) {
+    const a = prev[field]
+    const b = next[field]
+    const an = a == null ? null : Number(a)
+    const bn = b == null ? null : Number(b)
+    if (an !== bn) return true
+  }
+  return false
+}
+
+function todayISO() {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 async function syncCurrentRuleVersion(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
-  rule: {
-    id: number
-    effective_from?: string | null
-    base_per_shift?: number | null
-    low_turnover_threshold?: number | null
-    low_turnover_base?: number | null
-  },
+  rule: { id: number; effective_from?: string | null } & RuleSnapshotInput,
 ) {
   if (!rule.effective_from || rule.base_per_shift == null) return
 
@@ -293,13 +344,43 @@ async function syncCurrentRuleVersion(
         {
           rule_id: rule.id,
           effective_from: rule.effective_from,
-          base_per_shift: rule.base_per_shift,
-          low_turnover_threshold: rule.low_turnover_threshold ?? null,
-          low_turnover_base: rule.low_turnover_base ?? null,
-          comment: 'Обновлено из базового правила',
+          ...buildVersionSnapshot(rule),
+          comment: 'Снапшот действующего правила',
         },
       ],
       { onConflict: 'rule_id,effective_from' },
+    )
+
+  if (error && !isOptionalSalarySchemaError(error)) throw error
+}
+
+// Сохраняет снапшот СТАРЫХ значений правила в качестве исторического якоря,
+// чтобы прошлые смены продолжали считаться по старым значениям после правки.
+// Якорная дата = previous.effective_from (если была) или '2020-01-01'.
+// Используется upsert с ignoreDuplicates — если якорь уже есть (от миграции
+// или от прошлой правки), мы его НЕ перезаписываем, иначе потеряем настоящую
+// историю.
+async function ensureHistoricalAnchor(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  ruleId: number,
+  previous: { effective_from?: string | null } & RuleSnapshotInput,
+) {
+  const anchorDate = previous.effective_from || '2020-01-01'
+  const snapshot = buildVersionSnapshot(previous)
+  if (snapshot.base_per_shift == null) return
+
+  const { error } = await supabase
+    .from('operator_salary_rule_versions')
+    .upsert(
+      [
+        {
+          rule_id: ruleId,
+          effective_from: anchorDate,
+          ...snapshot,
+          comment: 'Якорь старого правила',
+        },
+      ],
+      { onConflict: 'rule_id,effective_from', ignoreDuplicates: true },
     )
 
   if (error && !isOptionalSalarySchemaError(error)) throw error
@@ -534,9 +615,28 @@ export async function POST(req: Request) {
         }
       }
 
+      // Если поменялось любое влияющее на зарплату поле — фиксируем старые
+      // значения как исторический якорь и автоматически проставляем дату
+      // вступления, чтобы новые правила применялись только к будущим сменам.
+      const materialChanged = hasMaterialSalaryChange(previous as RuleSnapshotInput, payload as RuleSnapshotInput)
+      const finalPayload = { ...payload }
+      if (materialChanged) {
+        if (!finalPayload.effective_from) {
+          finalPayload.effective_from = todayISO()
+        }
+        if (
+          finalPayload.base_per_shift_prev == null &&
+          previous.base_per_shift != null &&
+          Number(previous.base_per_shift) !== Number(finalPayload.base_per_shift)
+        ) {
+          finalPayload.base_per_shift_prev = Number(previous.base_per_shift)
+        }
+        await ensureHistoricalAnchor(supabase, body.ruleId, previous as any)
+      }
+
       const { data, error } = await supabase
         .from('operator_salary_rules')
-        .update(payload)
+        .update(finalPayload)
         .eq('id', body.ruleId)
         .select('*')
         .single()

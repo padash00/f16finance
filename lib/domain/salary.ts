@@ -35,6 +35,12 @@ export type SalaryRuleVersion = {
   base_per_shift: number | null
   low_turnover_threshold?: number | null
   low_turnover_base?: number | null
+  senior_operator_bonus?: number | null
+  senior_cashier_bonus?: number | null
+  threshold1_turnover?: number | null
+  threshold1_bonus?: number | null
+  threshold2_turnover?: number | null
+  threshold2_bonus?: number | null
   comment?: string | null
   created_at?: string | null
 }
@@ -355,28 +361,50 @@ function resolveRuleVersion(rule: SalaryRule, shiftDate: string | undefined) {
     .sort((left, right) => right.effective_from.localeCompare(left.effective_from))[0] || null
 }
 
+// Возвращает «правило для конкретной даты смены».
+// Если есть подходящая версия в operator_salary_rule_versions — берём все
+// поля из неё (полный снапшот). Иначе если у текущего правила есть
+// effective_from и смена раньше этой даты — применяем legacy fallback:
+// для base используем base_per_shift_prev, low_turnover отключаем
+// (предполагаем, что условие добавлено вместе с новым окладом).
+// Иначе возвращаем текущее правило как есть.
+function resolveEffectiveRule(rule: SalaryRule, shiftDate: string | undefined): SalaryRule {
+  const version = resolveRuleVersion(rule, shiftDate)
+  if (version) {
+    return {
+      ...rule,
+      base_per_shift: version.base_per_shift ?? rule.base_per_shift ?? null,
+      low_turnover_threshold: version.low_turnover_threshold ?? null,
+      low_turnover_base: version.low_turnover_base ?? null,
+      senior_operator_bonus: version.senior_operator_bonus ?? rule.senior_operator_bonus ?? null,
+      senior_cashier_bonus: version.senior_cashier_bonus ?? rule.senior_cashier_bonus ?? null,
+      threshold1_turnover: version.threshold1_turnover ?? rule.threshold1_turnover ?? null,
+      threshold1_bonus: version.threshold1_bonus ?? rule.threshold1_bonus ?? null,
+      threshold2_turnover: version.threshold2_turnover ?? rule.threshold2_turnover ?? null,
+      threshold2_bonus: version.threshold2_bonus ?? rule.threshold2_bonus ?? null,
+    }
+  }
+
+  if (rule.effective_from && shiftDate && shiftDate < rule.effective_from) {
+    return {
+      ...rule,
+      base_per_shift: rule.base_per_shift_prev ?? rule.base_per_shift ?? null,
+      low_turnover_threshold: null,
+      low_turnover_base: null,
+    }
+  }
+
+  return rule
+}
+
 function resolveBasePerShift(rule: SalaryRule | undefined, shiftDate: string | undefined, turnover: number): number {
   if (!rule) return DEFAULT_SHIFT_BASE_PAY
 
-  const version = resolveRuleVersion(rule, shiftDate)
-  if (version) {
-    return resolveRevenueBase({
-      base: version.base_per_shift,
-      lowTurnoverThreshold: version.low_turnover_threshold,
-      lowTurnoverBase: version.low_turnover_base,
-      turnover,
-    })
-  }
-
-  // Date-effective fallback for databases that only have the legacy columns.
-  if (rule.effective_from && shiftDate && shiftDate < rule.effective_from) {
-    return toAmount(rule.base_per_shift_prev ?? rule.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
-  }
-
+  const effective = resolveEffectiveRule(rule, shiftDate)
   return resolveRevenueBase({
-    base: rule.base_per_shift,
-    lowTurnoverThreshold: rule.low_turnover_threshold,
-    lowTurnoverBase: rule.low_turnover_base,
+    base: effective.base_per_shift,
+    lowTurnoverThreshold: effective.low_turnover_threshold,
+    lowTurnoverBase: effective.low_turnover_base,
     turnover,
   })
 }
@@ -401,6 +429,11 @@ function computeShiftCompensation(params: {
       })
     : null
 
+  // Все компоненты зарплаты берём из правила, актуального для даты смены.
+  // Это гарантирует, что прошлые смены не пересчитаются при правке текущего
+  // правила: для них берётся снапшот из operator_salary_rule_versions.
+  const effectiveRule = params.rule ? resolveEffectiveRule(params.rule, params.shiftDate) : undefined
+
   const basePerShift =
     override?.basePerShift != null
       ? override.basePerShift
@@ -409,11 +442,11 @@ function computeShiftCompensation(params: {
   const seniorOperatorBonus =
     override?.seniorOperatorBonus != null
       ? override.seniorOperatorBonus
-      : toAmount(params.rule?.senior_operator_bonus)
+      : toAmount(effectiveRule?.senior_operator_bonus)
   const seniorCashierBonus =
     override?.seniorCashierBonus != null
       ? override.seniorCashierBonus
-      : toAmount(params.rule?.senior_cashier_bonus)
+      : toAmount(effectiveRule?.senior_cashier_bonus)
 
   const roleBonus =
     params.assignmentRole === 'senior_operator'
@@ -423,7 +456,7 @@ function computeShiftCompensation(params: {
         : 0
 
   const autoBonus =
-    calculateThresholdBonus(params.rule, params.turnover) + (override?.thresholdBonusDelta || 0)
+    calculateThresholdBonus(effectiveRule, params.turnover) + (override?.thresholdBonusDelta || 0)
 
   const seniorityPercent = resolveSeniorityPercent(
     params.seniorityTiers,

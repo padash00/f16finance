@@ -878,6 +878,24 @@ function SalaryRulesContent() {
             </Card>
           </div>
 
+          {/* Frozen-history notice */}
+          <Card className="p-4 border border-emerald-500/30 bg-emerald-500/5">
+            <div className="flex items-start gap-3 text-sm">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-medium text-emerald-200">
+                  Изменения применяются только к новым сменам
+                </p>
+                <p className="text-gray-400">
+                  При сохранении правила старые значения автоматически фиксируются и продолжают
+                  действовать на смены до сегодняшнего дня. Прошлые выплаты не пересчитываются.
+                  Если хочешь применить изменение задним числом — сначала разморозь нужную неделю
+                  в карточке зарплаты.
+                </p>
+              </div>
+            </div>
+          </Card>
+
           {/* Info Card */}
           <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
             <Card className="p-4 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 border-white/5">

@@ -373,7 +373,9 @@ async function ensureSalaryWeekSnapshot(params: {
 
   const { data: existingWeek, error: existingWeekError } = await params.supabase
     .from('operator_salary_weeks')
-    .select('id')
+    .select(
+      'id, locked_at, status, gross_amount, bonus_amount, fine_amount, debt_amount, advance_amount, net_amount, paid_amount, remaining_amount, last_payment_date',
+    )
     .eq('operator_id', params.operatorId)
     .eq('week_start', params.weekStart)
     .maybeSingle()
@@ -400,7 +402,35 @@ async function ensureSalaryWeekSnapshot(params: {
 
   const status = paidAmount <= 0 ? 'draft' : remainingAmount <= 0.009 ? 'paid' : 'partial'
 
+  // Если неделя залочена — не пересчитываем сохранённые итоги. Возвращаем
+  // зафиксированные значения из operator_salary_weeks, breakdown по сменам
+  // отдаём свежий (с версионированием правил он стабилен и совпадёт).
+  if (existingWeek?.locked_at) {
+    return {
+      weekId: existingWeek.id as string,
+      weekStart: params.weekStart,
+      weekEnd,
+      summary: {
+        ...summary,
+        grossAmount: roundMoney(Number(existingWeek.gross_amount || 0)),
+        bonusAmount: roundMoney(Number(existingWeek.bonus_amount || 0)),
+        fineAmount: roundMoney(Number(existingWeek.fine_amount || 0)),
+        debtAmount: roundMoney(Number(existingWeek.debt_amount || 0)),
+        advanceAmount: roundMoney(Number(existingWeek.advance_amount || 0)),
+        netAmount: roundMoney(Number(existingWeek.net_amount || 0)),
+      },
+      paidAmount: roundMoney(Number(existingWeek.paid_amount || 0)),
+      remainingAmount: roundMoney(Number(existingWeek.remaining_amount || 0)),
+      status: (existingWeek.status || 'paid') as 'draft' | 'partial' | 'paid',
+    }
+  }
+
   let weekId = existingWeek?.id as string | undefined
+
+  // Автоматически замораживаем неделю при первом переходе в paid:
+  // фиксируем locked_at, чтобы будущие правки правил/корректировок не
+  // меняли уже выплаченную зарплату.
+  const lockedAt = status === 'paid' ? new Date().toISOString() : null
 
   if (!weekId) {
     const { data, error } = await params.supabase
@@ -420,6 +450,7 @@ async function ensureSalaryWeekSnapshot(params: {
           remaining_amount: remainingAmount,
           status,
           last_payment_date: lastPaymentDate,
+          locked_at: lockedAt,
           created_by: params.actorUserId,
         },
       ])
@@ -443,6 +474,8 @@ async function ensureSalaryWeekSnapshot(params: {
         remaining_amount: remainingAmount,
         status,
         last_payment_date: lastPaymentDate,
+        // Залочиваем при первом переходе в paid; не сбрасываем существующий lock.
+        locked_at: lockedAt,
       })
       .eq('id', weekId)
 
