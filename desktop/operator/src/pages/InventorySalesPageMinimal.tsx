@@ -37,7 +37,13 @@ import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
-import { beep, formatShiftLabel, printReceipt, type SaleReceiptPreview } from '@/lib/receipt-html'
+import {
+  beep,
+  buildReceiptHtmlForPreview,
+  formatShiftLabel,
+  printReceiptFromIframe,
+  type SaleReceiptPreview,
+} from '@/lib/receipt-html'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatMoney, localRef, parseMoney } from '@/lib/utils'
@@ -134,6 +140,10 @@ export default function InventorySalesPageMinimal({
 
   // Подтверждение оплаты
   const [showPayConfirm, setShowPayConfirm] = useState(false)
+
+  // Превью чека после успешной продажи (в iframe внутри программы)
+  const [lastReceipt, setLastReceipt] = useState<SaleReceiptPreview | null>(null)
+  const receiptIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   // Корректировка оплаты
   const [correctionMethod, setCorrectionMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
@@ -596,7 +606,8 @@ export default function InventorySalesPageMinimal({
           unit: l.unit || null,
         })),
       }
-      printReceipt(preview)
+      // Показываем превью чека внутри программы — пользователь сам решает печатать или нет
+      setLastReceipt(preview)
 
       clearAll()
       setShowPayConfirm(false)
@@ -1158,6 +1169,70 @@ export default function InventorySalesPageMinimal({
         </>
         )}
       </main>
+
+      {/* Модалка после успешной продажи: подтверждение + превью чека */}
+      {lastReceipt && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3 sm:p-4" onClick={() => setLastReceipt(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-900">
+            {/* Шапка */}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-emerald-50 px-5 py-4 dark:border-slate-800 dark:bg-emerald-950/30">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-white">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+                    <path d="M5 12l5 5L20 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-emerald-700 dark:text-emerald-300">Оплата проведена</h3>
+                  <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">
+                    Чек #{lastReceipt.saleId?.slice(-6) || '—'} · {formatMoney(lastReceipt.totalAmount)} ₸
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLastReceipt(null)}
+                className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 hover:bg-white/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Превью чека */}
+            <div className="flex-1 overflow-auto bg-slate-100 p-3 dark:bg-slate-800 sm:p-5">
+              <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-lg bg-white shadow-md">
+                <iframe
+                  ref={receiptIframeRef}
+                  srcDoc={buildReceiptHtmlForPreview(lastReceipt)}
+                  title="Превью чека"
+                  className="h-[60vh] w-full border-0"
+                />
+              </div>
+            </div>
+
+            {/* Действия */}
+            <div className="flex flex-col gap-2 border-t border-slate-200 p-4 dark:border-slate-800 sm:flex-row sm:justify-end sm:gap-3 sm:p-5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLastReceipt(null)}
+                className="h-12 sm:order-1 sm:px-6"
+              >
+                Закрыть без печати
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  printReceiptFromIframe(receiptIframeRef.current)
+                }}
+                className="h-12 rounded-xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600 sm:order-2 sm:px-8"
+              >
+                🖨 Печатать чек
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модалка подтверждения оплаты */}
       {showPayConfirm && (

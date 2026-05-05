@@ -183,26 +183,33 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
 </html>`
 }
 
-export function printReceipt(preview: SaleReceiptPreview) {
-  const win = window.open('', '_blank', 'width=420,height=720,top=80,left=80')
-  if (!win) return false
-  win.document.open()
-  win.document.write(buildReceiptHtml(preview))
-  win.document.close()
-  // Несколько попыток поднять окно чека на передний план
-  // (Electron + некоторые ОС забирают фокус обратно в основное окно)
-  const focusReceipt = () => {
-    try {
-      win.focus()
-      if ((win as any).moveTo) (win as any).moveTo(80, 80)
-    } catch {
-      /* ignore */
-    }
+/**
+ * Строит HTML для чека БЕЗ авто-печати.
+ * Используется для отображения в iframe внутри программы.
+ */
+export function buildReceiptHtmlForPreview(preview: SaleReceiptPreview) {
+  // Та же разметка, но без window.print() в onload —
+  // печать вызывается явно из родительского окна
+  return buildReceiptHtml(preview).replace(
+    /<script>[\s\S]*?<\/script>/,
+    '',
+  )
+}
+
+/**
+ * Печать iframe (с уже готовым HTML внутри).
+ * Запускает системный диалог печати, привязанный к ОСНОВНОМУ окну
+ * (диалог не уходит «за» программу).
+ */
+export function printReceiptFromIframe(iframe: HTMLIFrameElement | null) {
+  if (!iframe) return false
+  try {
+    iframe.contentWindow?.focus()
+    iframe.contentWindow?.print()
+    return true
+  } catch {
+    return false
   }
-  setTimeout(focusReceipt, 50)
-  setTimeout(focusReceipt, 250)
-  setTimeout(focusReceipt, 600)
-  return true
 }
 
 /** Короткий beep через WebAudio (для подтверждения добавления/ошибки). */
