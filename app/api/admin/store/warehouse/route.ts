@@ -153,11 +153,11 @@ export async function GET(request: Request) {
 
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
+      .select('location_id, item_id, quantity, quantity_reserved, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
       .in('location_id', [warehouse.id, showcase.id, catalog.id])
     if (balErr) throw balErr
 
-    // v2: showcase читается напрямую из point_display, catalog — для отображения «всего»
+    // v2/v7: showcase из point_display; warehouse_reserved для подсветки доступного остатка
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -169,22 +169,28 @@ export async function GET(request: Request) {
           item: row.item,
           showcase_quantity: 0,
           warehouse_quantity: 0,
+          warehouse_reserved: 0,
           catalog_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
       }
-      if (row.location_id === warehouse.id) bucket.warehouse_quantity = Number(row.quantity) || 0
-      else if (row.location_id === catalog.id) bucket.catalog_quantity = Number(row.quantity) || 0
-      else if (row.location_id === showcase.id) bucket.showcase_quantity = Number(row.quantity) || 0
+      if (row.location_id === warehouse.id) {
+        bucket.warehouse_quantity = Number(row.quantity) || 0
+        bucket.warehouse_reserved = Number((row as any).quantity_reserved) || 0
+      } else if (row.location_id === catalog.id) {
+        bucket.catalog_quantity = Number(row.quantity) || 0
+      } else if (row.location_id === showcase.id) {
+        bucket.showcase_quantity = Number(row.quantity) || 0
+      }
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
     const balances = Array.from(byItem.values())
       .map((b) => ({
         ...b,
-        // v2: showcase = реальный point_display, не формула
         showcase_quantity: Number(b.showcase_quantity || 0),
+        warehouse_available: Math.max(0, Number(b.warehouse_quantity || 0) - Number(b.warehouse_reserved || 0)),
         quantity: Number(b.catalog_quantity || 0),
       }))
       .sort((a, b) => b.quantity - a.quantity)

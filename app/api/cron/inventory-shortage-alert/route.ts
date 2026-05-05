@@ -1,0 +1,103 @@
+/**
+ * Cron: алерт регулярной недостачи.
+ *
+ * Раз в неделю анализирует ревизии за последние 30 дней.
+ * Если у товара 3+ ревизий с недостачей — отправляет в Telegram сводку
+ * с подсказкой «возможно, воровство».
+ */
+
+import { NextResponse } from 'next/server'
+
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { sendTelegramMessage } from '@/lib/telegram/send'
+
+export const runtime = 'nodejs'
+
+type ShortageRow = {
+  item_id: string
+  item_name: string
+  item_barcode: string
+  shortage_count: number
+  total_shortage_qty: number
+  total_shortage_cost: number
+  last_shortage_at: string
+  affected_locations: string[] | null
+}
+
+function fmtMoney(v: number) {
+  return Math.round(v).toLocaleString('ru-RU') + ' ₸'
+}
+
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url)
+    const dry = url.searchParams.get('dry') === '1'
+    const days = Math.max(1, Math.min(365, Number(url.searchParams.get('days') || 30)))
+    const minCount = Math.max(2, Math.min(20, Number(url.searchParams.get('min_count') || 3)))
+
+    const auth = req.headers.get('authorization') || ''
+    const cronSecret = process.env.CRON_SECRET || ''
+    const isCron = cronSecret && auth === `Bearer ${cronSecret}`
+
+    if (!isCron) {
+      const access = await getRequestAccessContext(req)
+      if ('response' in access) return access.response
+      if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+    }
+
+    const supabase = createAdminSupabaseClient()
+    const { data, error } = await supabase.rpc('inventory_recurring_shortages', {
+      p_days: days,
+      p_min_count: minCount,
+    })
+    if (error) throw error
+
+    const rows = (data || []) as ShortageRow[]
+    const totalCost = rows.reduce((sum, r) => sum + Number(r.total_shortage_cost || 0), 0)
+
+    if (isCron && !dry && rows.length > 0) {
+      const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID
+      if (chatId) {
+        const top = rows
+          .slice(0, 10)
+          .map((r) => {
+            const locations = (r.affected_locations || []).filter(Boolean).join(', ') || '—'
+            return `• <b>${r.item_name}</b> (${r.item_barcode}): ${r.shortage_count} раз, всего ${r.total_shortage_qty} шт (${fmtMoney(r.total_shortage_cost)}) — ${locations}`
+          })
+          .join('\n')
+        const more = rows.length > 10 ? `\n…ещё ${rows.length - 10} позиций` : ''
+        const message =
+          `⚠ <b>Регулярная недостача за ${days} дней</b>\n` +
+          `Товаров: <b>${rows.length}</b> · Общий ущерб: <b>${fmtMoney(totalCost)}</b>\n\n` +
+          top + more +
+          `\n\nКандидаты для расследования возможного воровства.`
+        try {
+          await sendTelegramMessage(chatId, message, { parseMode: 'HTML' })
+        } catch (tgError: any) {
+          await writeSystemErrorLogSafe({
+            scope: 'server',
+            area: 'cron/inventory-shortage-alert.telegram',
+            message: tgError?.message || 'telegram failed',
+          })
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      summary: { count: rows.length, total_cost: totalCost, days, min_count: minCount },
+      rows,
+    })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'cron/inventory-shortage-alert',
+      message: error?.message || 'shortage alert failed',
+    })
+    return NextResponse.json({ ok: false, error: error?.message || 'error' }, { status: 500 })
+  }
+}

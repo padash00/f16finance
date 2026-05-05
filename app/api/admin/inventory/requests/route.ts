@@ -447,23 +447,28 @@ export async function POST(request: Request) {
 
       const actorUserId = access.user?.id || null
       const nowIso = new Date().toISOString()
-      const patch: Record<string, any> = { status: newStatus, updated_at: nowIso }
+
       if (newStatus === 'issued') {
-        patch.issued_at = nowIso
-        patch.issued_by = actorUserId
+        // Просто меняем статус, балансы не трогаем (товар ещё на складе резервом)
+        const { error: updErr } = await supabase
+          .from('inventory_requests')
+          .update({ status: 'issued', issued_at: nowIso, issued_by: actorUserId, updated_at: nowIso })
+          .eq('id', requestId)
+        if (updErr) throw updErr
+        return json({ ok: true, data: { status: 'issued' } })
       }
+
       if (newStatus === 'received') {
-        patch.received_at = nowIso
-        patch.received_by = actorUserId
+        // v7: получение точкой = атомарно списать со склада + снять резерв + начислить на витрину
+        const { error: rpcErr } = await supabase.rpc('inventory_receive_request', {
+          p_request_id: requestId,
+          p_actor_user_id: actorUserId,
+        })
+        if (rpcErr) throw rpcErr
+        return json({ ok: true, data: { status: 'received' } })
       }
 
-      const { error: updErr } = await supabase
-        .from('inventory_requests')
-        .update(patch)
-        .eq('id', requestId)
-      if (updErr) throw updErr
-
-      return json({ ok: true, data: { status: newStatus } })
+      return json({ error: 'invalid-status' }, 400)
     }
 
     // ── undecideRequest: откат одобренной заявки (вернуть товар на склад) ─────

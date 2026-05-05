@@ -70,22 +70,38 @@ function formatDateTime(value: string | null | undefined) {
 
 function movementTypeLabel(type: string) {
   if (type === 'receipt') return 'Приемка'
+  if (type === 'receipt_cancel') return 'Отмена приёмки'
   if (type === 'transfer_to_point') return 'Выдача на точку'
+  if (type === 'transfer_cancel') return 'Откат выдачи'
+  if (type === 'transfer_warehouse_to_showcase') return 'Получение точкой'
+  if (type === 'transfer_showcase_to_warehouse') return 'Возврат на склад'
+  if (type === 'reservation') return 'Резерв'
+  if (type === 'reservation_release') return 'Снятие резерва'
   if (type === 'sale') return 'Продажа'
   if (type === 'debt') return 'Долг'
-  if (type === 'return') return 'Возврат'
+  if (type === 'return') return 'Возврат с кассы'
   if (type === 'writeoff') return 'Списание'
   if (type === 'inventory_adjustment') return 'Корректировка'
+  if (type === 'set_stock') return 'Синхронизация'
+  if (type === 'posting') return 'Оприходование'
+  if (type === 'migration_initial') return 'Миграция'
+  if (type === 'auto_warehouse_to_showcase') return 'Авто-перенос'
   return type
 }
 
 function movementTypeClass(type: string) {
   if (type === 'receipt') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-  if (type === 'transfer_to_point') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
+  if (type === 'receipt_cancel') return 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+  if (type === 'transfer_to_point' || type === 'transfer_warehouse_to_showcase') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
+  if (type === 'transfer_cancel' || type === 'transfer_showcase_to_warehouse') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
+  if (type === 'reservation') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200'
+  if (type === 'reservation_release') return 'border-yellow-500/20 bg-yellow-500/5 text-yellow-300'
   if (type === 'sale') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
   if (type === 'debt') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (type === 'return') return 'border-violet-500/30 bg-violet-500/10 text-violet-200'
   if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-200'
+  if (type === 'posting') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+  if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-slate-300'
   return 'border-white/10 bg-white/[0.05] text-muted-foreground'
 }
 
