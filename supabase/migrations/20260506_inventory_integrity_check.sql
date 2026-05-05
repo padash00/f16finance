@@ -123,15 +123,15 @@ begin
       ct.id as ct_id
     from public.companies c
     left join lateral (
-      select id from public.inventory_locations
-      where company_id = c.id and location_type = 'warehouse' and is_active
-      order by created_at asc nulls last, id asc
+      select il.id from public.inventory_locations il
+      where il.company_id = c.id and il.location_type = 'warehouse' and il.is_active
+      order by il.created_at asc nulls last, il.id asc
       limit 1
     ) wh on true
     left join lateral (
-      select id from public.inventory_locations
-      where company_id = c.id and location_type = 'catalog_total' and is_active
-      order by created_at asc nulls last, id asc
+      select il.id from public.inventory_locations il
+      where il.company_id = c.id and il.location_type = 'catalog_total' and il.is_active
+      order by il.created_at asc nulls last, il.id asc
       limit 1
     ) ct on true
     where wh.id is not null and ct.id is not null
@@ -142,8 +142,8 @@ begin
            coalesce(bc.quantity, 0) as ct_qty
     from company_locs cl
     cross join lateral (
-      select distinct item_id from public.inventory_balances
-      where location_id = cl.wh_id or location_id = cl.ct_id
+      select distinct ib.item_id from public.inventory_balances ib
+      where ib.location_id = cl.wh_id or ib.location_id = cl.ct_id
     ) b
     left join public.inventory_balances bw on bw.location_id = cl.wh_id and bw.item_id = b.item_id
     left join public.inventory_balances bc on bc.location_id = cl.ct_id and bc.item_id = b.item_id
@@ -152,10 +152,10 @@ begin
     'warning'::text,
     'warehouse_exceeds_catalog'::text,
     p.wh_id,
-    (select name from public.inventory_locations where id = p.wh_id),
+    (select il.name from public.inventory_locations il where il.id = p.wh_id),
     'warehouse'::text,
     p.item_id,
-    (select name from public.inventory_items where id = p.item_id),
+    (select i.name from public.inventory_items i where i.id = p.item_id),
     p.ct_qty,
     p.wh_qty,
     p.wh_qty - p.ct_qty,
