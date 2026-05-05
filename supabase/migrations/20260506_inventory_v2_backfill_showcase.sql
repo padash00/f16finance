@@ -144,7 +144,7 @@ begin
           null,
           'showcase_v2_backfill:' || v_pd_loc_id::text || ':' || v_pair.item_id::text
         )
-        on conflict (idempotency_key) do nothing;
+        on conflict (idempotency_key) where idempotency_key is not null do nothing;
 
         v_movements := v_movements + 1;
       end if;
