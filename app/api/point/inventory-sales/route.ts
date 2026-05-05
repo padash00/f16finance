@@ -206,15 +206,15 @@ async function resolveStockLocations(supabase: any, companyId: string) {
     .from('inventory_locations')
     .select('id, location_type')
     .eq('company_id', companyId)
-    .in('location_type', ['catalog_total', 'warehouse', 'point_display'])
+    .in('location_type', ['warehouse', 'point_display'])
     .eq('is_active', true)
 
   if (error) throw error
-  const catalogId = (data || []).find((row: any) => row.location_type === 'catalog_total')?.id || null
   const warehouseId = (data || []).find((row: any) => row.location_type === 'warehouse')?.id || null
   const showcaseId = (data || []).find((row: any) => row.location_type === 'point_display')?.id || null
-  if (!catalogId) throw new Error('inventory-sale-catalog-location-missing')
-  return { catalogId, warehouseId, showcaseId }
+  if (!showcaseId) throw new Error('point-sale-showcase-location-missing')
+  // catalogId оставлен как null для совместимости с сигнатурой; больше не используется.
+  return { catalogId: null as string | null, warehouseId, showcaseId }
 }
 
 async function fetchShowcaseBalances(params: {
