@@ -1408,6 +1408,42 @@ export default function ShiftPage({
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    {mergeInventorySalesIntoShift && (autoSalesCash > 0 || autoSalesKaspiTotal > 0) ? (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <div className="text-emerald-200/80">
+                            <p className="font-medium text-emerald-100">По продажам этой смены:</p>
+                            <p className="mt-0.5 tabular-nums">
+                              нал {formatMoney(autoSalesCash)} ₸ · Kaspi {formatMoney(autoSalesKaspiTotal)} ₸
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 shrink-0 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/15"
+                            disabled={submitting}
+                            onClick={() => {
+                              const coins = parseMoney(form.coins)
+                              const cashFromSales = Math.max(0, autoSalesCash - coins)
+                              setField('cash', cashFromSales > 0 ? String(Math.round(cashFromSales)) : '')
+                              if (isNightKaspiSplit) {
+                                setField('kaspi_before_midnight', autoSalesKaspiBeforeMidnight > 0 ? String(Math.round(autoSalesKaspiBeforeMidnight)) : '')
+                                setField('kaspi_pos', autoSalesKaspiAfterMidnight > 0 ? String(Math.round(autoSalesKaspiAfterMidnight)) : '')
+                              } else {
+                                setField('kaspi_pos', autoSalesKaspiTotal > 0 ? String(Math.round(autoSalesKaspiTotal)) : '')
+                              }
+                              toastSuccess('Заполнено из продаж' + (coins > 0 ? ` (мелочь ${formatMoney(coins)} ₸ вычтена)` : ''))
+                            }}
+                          >
+                            Заполнить
+                          </Button>
+                        </div>
+                        <p className="mt-1.5 text-[10px] text-emerald-200/60">
+                          Сначала введи мелочь — она вычтется из суммы наличных, чтобы в отчёт ушли только купюры.
+                        </p>
+                      </div>
+                    ) : null}
                     <MoneyInput label="Наличные" value={form.cash} onChange={(value) => setField('cash', value)} disabled={submitting} />
                     <MoneyInput label="Мелочь" value={form.coins} onChange={(value) => setField('coins', value)} disabled={submitting} />
                     {isNightKaspiSplit ? (

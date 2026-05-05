@@ -11,11 +11,14 @@ import {
   Coins,
   ExternalLink,
   Loader2,
+  Printer,
+  Receipt as ReceiptIcon,
   RefreshCw,
   ShieldAlert,
   Sparkles,
   StickyNote,
   Wallet,
+  X,
   XCircle,
 } from 'lucide-react'
 
@@ -159,6 +162,7 @@ export default function ShiftReportDetailPage({
   const [incidentsSummary, setIncidentsSummary] = useState<IncidentsSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showZReport, setShowZReport] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -201,6 +205,12 @@ export default function ShiftReportDetailPage({
         backHref="/shifts/reports"
         actions={
           <div className="flex gap-2">
+            {shift?.closed_at && (
+              <Button variant="outline" size="sm" onClick={() => setShowZReport(true)}>
+                <ReceiptIcon className="h-4 w-4" />
+                Z-отчёт
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Обновить
@@ -578,6 +588,184 @@ export default function ShiftReportDetailPage({
           </Card>
         </>
       )}
+
+      {/* Z-отчёт смены — модалка в стиле кассового чека */}
+      {showZReport && shift && (
+        <ZReportModal
+          shift={shift}
+          totals={totals}
+          sales={sales}
+          returns={returns}
+          incidents={incidents}
+          onClose={() => setShowZReport(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ZReportModal({
+  shift,
+  totals,
+  sales,
+  returns,
+  incidents,
+  onClose,
+}: {
+  shift: ShiftDetail
+  totals: Record<string, any>
+  sales: Sale[]
+  returns: Return[]
+  incidents: Incident[]
+  onClose: () => void
+}) {
+  const fmt = (n: number | null | undefined) =>
+    Math.round(Number(n || 0)).toLocaleString('ru-RU')
+  const dateOpen = new Date(shift.opened_at).toLocaleString('ru-RU')
+  const dateClose = shift.closed_at ? new Date(shift.closed_at).toLocaleString('ru-RU') : '—'
+  const cashSales = sales.reduce((s, x) => s + Number(x.cash_amount || 0), 0)
+  const kaspiSales = sales.reduce((s, x) => s + Number(x.kaspi_amount || 0), 0)
+  const totalSales = sales.reduce((s, x) => s + Number(x.total_amount || 0), 0)
+  const totalReturns = returns.reduce((s, x) => s + Number(x.total_amount || 0), 0)
+  const cashReturns = returns.reduce((s, x) => s + Number(x.cash_amount || 0), 0)
+  const kaspiReturns = returns.reduce((s, x) => s + Number(x.kaspi_amount || 0), 0)
+  const declaredCash = Number(shift.closing_cash || 0)
+  const declaredKaspi = Number(shift.closing_kaspi || 0)
+  const cashDelta = declaredCash - (cashSales - cashReturns)
+  const totalIncidents = incidents.length
+  const finesAmount = incidents.reduce((s, i) => s + Number(i.fine_amount || 0), 0)
+
+  function handlePrint() {
+    window.print()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 print:relative print:bg-transparent print:p-0">
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none dark:bg-slate-50">
+        {/* Шапка диалога — скрыта при печати */}
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 print:hidden">
+          <h3 className="text-sm font-semibold text-slate-900">Z-отчёт смены</h3>
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" onClick={handlePrint}>
+              <Printer className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Z-отчёт — стиль кассового чека */}
+        <div className="overflow-auto bg-white p-5 font-mono text-[13px] leading-snug text-black">
+          <div className="text-center">
+            <div className="text-lg font-bold tracking-wider">Z-ОТЧЁТ</div>
+            <div className="mt-0.5 text-xs">{shift.company?.name || '—'}</div>
+            {shift.company?.code && (
+              <div className="mt-0.5 text-xs">Код: {shift.company.code}</div>
+            )}
+          </div>
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="space-y-0.5 text-xs">
+            <div className="flex justify-between"><span>Открыта:</span><span>{dateOpen}</span></div>
+            <div className="flex justify-between"><span>Закрыта:</span><span>{dateClose}</span></div>
+            <div className="flex justify-between"><span>Смена:</span><span>{shift.shift_type === 'day' ? 'Дневная' : shift.shift_type === 'night' ? 'Ночная' : 'Кастом'}</span></div>
+            <div className="flex justify-between"><span>Открыл:</span><span className="truncate">{shift.operator?.full_name || '—'}</span></div>
+            {shift.closer && (
+              <div className="flex justify-between"><span>Закрыл:</span><span className="truncate">{shift.closer.full_name}</span></div>
+            )}
+          </div>
+
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="text-center text-xs font-semibold">ПРОДАЖИ</div>
+          <div className="mt-1 space-y-0.5 text-xs">
+            <div className="flex justify-between"><span>Чеков</span><span>{sales.length}</span></div>
+            <div className="flex justify-between"><span>Сумма</span><span className="tabular-nums">{fmt(totalSales)} ₸</span></div>
+            <div className="flex justify-between"><span>  ↳ Наличными</span><span className="tabular-nums">{fmt(cashSales)} ₸</span></div>
+            <div className="flex justify-between"><span>  ↳ Kaspi</span><span className="tabular-nums">{fmt(kaspiSales)} ₸</span></div>
+          </div>
+
+          {returns.length > 0 && (
+            <>
+              <div className="my-2 border-t border-dashed border-black" />
+              <div className="text-center text-xs font-semibold">ВОЗВРАТЫ</div>
+              <div className="mt-1 space-y-0.5 text-xs">
+                <div className="flex justify-between"><span>Возвратов</span><span>{returns.length}</span></div>
+                <div className="flex justify-between"><span>Сумма</span><span className="tabular-nums">−{fmt(totalReturns)} ₸</span></div>
+                <div className="flex justify-between"><span>  ↳ Наличными</span><span className="tabular-nums">−{fmt(cashReturns)} ₸</span></div>
+                <div className="flex justify-between"><span>  ↳ Kaspi</span><span className="tabular-nums">−{fmt(kaspiReturns)} ₸</span></div>
+              </div>
+            </>
+          )}
+
+          <div className="my-2 border-t border-dashed border-black" />
+          <div className="text-center text-xs font-semibold">КАССА</div>
+          <div className="mt-1 space-y-0.5 text-xs">
+            <div className="flex justify-between"><span>Старт</span><span className="tabular-nums">{fmt(shift.opening_cash)} ₸</span></div>
+            <div className="flex justify-between"><span>Заявлено налом</span><span className="tabular-nums">{fmt(declaredCash)} ₸</span></div>
+            <div className="flex justify-between"><span>Заявлено Kaspi</span><span className="tabular-nums">{fmt(declaredKaspi)} ₸</span></div>
+            <div className="flex justify-between"><span>Расчётно нал</span><span className="tabular-nums">{fmt(cashSales - cashReturns)} ₸</span></div>
+            <div className={`flex justify-between font-semibold ${cashDelta < 0 ? 'text-red-700' : cashDelta > 0 ? 'text-green-700' : ''}`}>
+              <span>Расхождение</span>
+              <span className="tabular-nums">{cashDelta > 0 ? '+' : ''}{fmt(cashDelta)} ₸</span>
+            </div>
+          </div>
+
+          {totalIncidents > 0 && (
+            <>
+              <div className="my-2 border-t border-dashed border-black" />
+              <div className="text-center text-xs font-semibold">ИНЦИДЕНТЫ</div>
+              <div className="mt-1 space-y-0.5 text-xs">
+                <div className="flex justify-between"><span>Всего</span><span>{totalIncidents}</span></div>
+                {finesAmount > 0 && (
+                  <div className="flex justify-between"><span>Штрафы</span><span className="tabular-nums">{fmt(finesAmount)} ₸</span></div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="my-2 border-t-2 border-double border-black" />
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm font-bold">ИТОГ ПО СМЕНЕ</span>
+            <span className="text-lg font-bold tabular-nums">{fmt(totalSales - totalReturns)} ₸</span>
+          </div>
+
+          {shift.opening_notes && (
+            <div className="mt-3 text-xs">
+              <div className="font-semibold">Открытие:</div>
+              <div className="mt-0.5">{shift.opening_notes}</div>
+            </div>
+          )}
+          {shift.closing_notes && (
+            <div className="mt-2 text-xs">
+              <div className="font-semibold">Закрытие:</div>
+              <div className="mt-0.5">{shift.closing_notes}</div>
+            </div>
+          )}
+
+          <div className="my-3 border-t border-dashed border-black" />
+          <div className="text-center text-[10px] text-slate-500">
+            Документ сгенерирован {new Date().toLocaleString('ru-RU')}
+            <br />
+            ID смены: {shift.id.slice(-8)}
+          </div>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .fixed.inset-0 {
+            position: absolute !important;
+            inset: 0 !important;
+            background: white !important;
+          }
+          .fixed.inset-0 * {
+            visibility: visible;
+          }
+        }
+      `}</style>
     </div>
   )
 }
