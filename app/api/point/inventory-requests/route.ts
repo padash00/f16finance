@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
@@ -173,7 +174,7 @@ export async function GET(request: Request) {
       area: 'point-inventory-requests:get',
       message: error?.message || 'Point inventory requests GET error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить заявки точки' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось загрузить заявки точки') }, 500)
   }
 }
 
@@ -281,6 +282,6 @@ export async function POST(request: Request) {
       area: 'point-inventory-requests:post',
       message: error?.message || 'Point inventory requests POST error',
     })
-    return json({ error: error?.message || 'Не удалось создать заявку точки' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось создать заявку точки') }, 500)
   }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
     return json({ ok: true, data: found })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/pos/return.GET', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка' }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка') }, 500)
   }
 }
 
@@ -156,6 +157,6 @@ export async function POST(request: Request) {
     return json({ ok: true, data: { return_id: returnRow.id, return_amount: returnTotal } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/pos/return.POST', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка возврата' }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка возврата') }, 500)
   }
 }

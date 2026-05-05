@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -451,6 +452,6 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     console.error('[pos/sale]', error)
-    return json({ error: error?.message || 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРІРµСЃС‚Рё РїСЂРѕРґР°Р¶Сѓ' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось провести продажу') }, 500)
   }
 }
