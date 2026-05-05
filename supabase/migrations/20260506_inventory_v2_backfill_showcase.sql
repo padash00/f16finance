@@ -34,15 +34,29 @@ begin
       c.name as company_name,
       c.code as company_code,
       c.organization_id,
-      max(case when l.location_type = 'warehouse' then l.id end) as wh_id,
-      max(case when l.location_type = 'catalog_total' then l.id end) as ct_id,
-      max(case when l.location_type = 'point_display' then l.id end) as pd_id
+      wh.id as wh_id,
+      ct.id as ct_id,
+      pd.id as pd_id
     from public.companies c
-    join public.inventory_locations l on l.company_id = c.id and l.is_active
-    group by c.id, c.name, c.code, c.organization_id
-    having
-      max(case when l.location_type = 'warehouse' then l.id end) is not null
-      and max(case when l.location_type = 'catalog_total' then l.id end) is not null
+    left join lateral (
+      select id from public.inventory_locations
+      where company_id = c.id and location_type = 'warehouse' and is_active
+      order by created_at asc nulls last, id asc
+      limit 1
+    ) wh on true
+    left join lateral (
+      select id from public.inventory_locations
+      where company_id = c.id and location_type = 'catalog_total' and is_active
+      order by created_at asc nulls last, id asc
+      limit 1
+    ) ct on true
+    left join lateral (
+      select id from public.inventory_locations
+      where company_id = c.id and location_type = 'point_display' and is_active
+      order by created_at asc nulls last, id asc
+      limit 1
+    ) pd on true
+    where wh.id is not null and ct.id is not null
   loop
     -- Создаём point_display, если его нет
     if v_company.pd_id is null then

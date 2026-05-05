@@ -118,12 +118,23 @@ begin
   return query
   with company_locs as (
     select
-      l.company_id,
-      max(case when l.location_type = 'warehouse' then l.id end) as wh_id,
-      max(case when l.location_type = 'catalog_total' then l.id end) as ct_id
-    from public.inventory_locations l
-    where l.company_id is not null and l.is_active
-    group by l.company_id
+      c.id as company_id,
+      wh.id as wh_id,
+      ct.id as ct_id
+    from public.companies c
+    left join lateral (
+      select id from public.inventory_locations
+      where company_id = c.id and location_type = 'warehouse' and is_active
+      order by created_at asc nulls last, id asc
+      limit 1
+    ) wh on true
+    left join lateral (
+      select id from public.inventory_locations
+      where company_id = c.id and location_type = 'catalog_total' and is_active
+      order by created_at asc nulls last, id asc
+      limit 1
+    ) ct on true
+    where wh.id is not null and ct.id is not null
   ),
   pairs as (
     select cl.company_id, cl.wh_id, cl.ct_id, b.item_id,
@@ -136,7 +147,6 @@ begin
     ) b
     left join public.inventory_balances bw on bw.location_id = cl.wh_id and bw.item_id = b.item_id
     left join public.inventory_balances bc on bc.location_id = cl.ct_id and bc.item_id = b.item_id
-    where cl.wh_id is not null and cl.ct_id is not null
   )
   select
     'warning'::text,
