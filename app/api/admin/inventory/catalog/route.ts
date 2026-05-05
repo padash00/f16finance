@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveEffectiveOrganizationId } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { bulkSyncInventoryItemsToPointProducts, syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
@@ -207,6 +207,115 @@ export async function POST(request: Request) {
         }
       }
 
+      // ─── Stock diff: считаем как изменится остаток в каталоге для уже существующих товаров ───
+      type StockDiff = {
+        barcode: string
+        name: string
+        current_catalog: number
+        current_warehouse: number
+        current_showcase: number
+        new_catalog: number
+        new_showcase: number
+        delta_catalog: number
+        warehouse_exceeds_new_catalog: boolean
+      }
+      const stock_changes: StockDiff[] = []
+      const stock_warnings: StockDiff[] = []
+      let stock_total_delta_negative = 0
+      let stock_total_delta_positive = 0
+
+      const rowsWithStockBC = rows.filter(
+        (r) => typeof r.stock_qty === 'number' && Number.isFinite(r.stock_qty) && r.stock_qty >= 0,
+      )
+      if (rowsWithStockBC.length > 0) {
+        const requestedCompanyId = String(body.company_id || '').trim() || null
+
+        // catalog_total локации организации
+        const { data: catList } = await supabase
+          .from('inventory_locations')
+          .select('id, company_id')
+          .eq('location_type', 'catalog_total')
+          .eq('is_active', true)
+          .eq('organization_id', orgId)
+
+        // warehouse-локации тех же компаний
+        const { data: whList } = await supabase
+          .from('inventory_locations')
+          .select('id, company_id')
+          .eq('location_type', 'warehouse')
+          .eq('is_active', true)
+          .eq('organization_id', orgId)
+
+        // выбираем catalog (как в confirmImport): если company_id задан — берём его, иначе если ровно один — берём
+        let catalogId: string | undefined
+        let warehouseId: string | undefined
+        if (requestedCompanyId) {
+          const c = (catList || []).find((r: any) => String(r.company_id) === requestedCompanyId)
+          if (c?.id) catalogId = String(c.id)
+          const w = (whList || []).find((r: any) => String(r.company_id) === requestedCompanyId)
+          if (w?.id) warehouseId = String(w.id)
+        } else if ((catList || []).length === 1) {
+          catalogId = String(catList![0].id)
+          const cmp = String(catList![0].company_id)
+          const w = (whList || []).find((r: any) => String(r.company_id) === cmp)
+          if (w?.id) warehouseId = String(w.id)
+        }
+
+        if (catalogId) {
+          // существующие товары организации, для которых есть строки с stock_qty
+          const knownItems: Array<{ id: string; barcode: string; name: string }> = []
+          for (const row of rowsWithStockBC) {
+            const ex = existingMap[row.barcode]
+            if (ex) knownItems.push({ id: ex.id, barcode: ex.barcode, name: ex.name })
+          }
+          if (knownItems.length > 0) {
+            const itemIds = knownItems.map((i) => i.id)
+            const locIds = warehouseId ? [catalogId, warehouseId] : [catalogId]
+            const balByItemLoc = new Map<string, number>()
+            for (const slice of chunkArray(itemIds, 200)) {
+              const { data: bal } = await supabase
+                .from('inventory_balances')
+                .select('location_id, item_id, quantity')
+                .in('location_id', locIds)
+                .in('item_id', slice)
+              for (const b of bal || []) {
+                balByItemLoc.set(`${(b as any).location_id}:${(b as any).item_id}`, Number((b as any).quantity || 0))
+              }
+            }
+
+            const rowByBarcode = new Map<string, ImportRow>()
+            for (const row of rowsWithStockBC) rowByBarcode.set(row.barcode, row)
+
+            for (const it of knownItems) {
+              const row = rowByBarcode.get(it.barcode)
+              if (!row) continue
+              const newCat = Math.round(((row.stock_qty as number) + Number.EPSILON) * 1000) / 1000
+              const curCat = balByItemLoc.get(`${catalogId}:${it.id}`) || 0
+              const curWh = warehouseId ? (balByItemLoc.get(`${warehouseId}:${it.id}`) || 0) : 0
+              const curShowcase = Math.max(0, curCat - curWh)
+              const newShowcase = Math.max(0, newCat - curWh)
+              const delta = newCat - curCat
+              const warn = warehouseId !== undefined && newCat < curWh
+              const diff: StockDiff = {
+                barcode: it.barcode,
+                name: it.name,
+                current_catalog: curCat,
+                current_warehouse: curWh,
+                current_showcase: curShowcase,
+                new_catalog: newCat,
+                new_showcase: newShowcase,
+                delta_catalog: delta,
+                warehouse_exceeds_new_catalog: warn,
+              }
+              if (Math.abs(delta) > 0.0005 || warn) stock_changes.push(diff)
+              if (warn) stock_warnings.push(diff)
+              if (delta < 0) stock_total_delta_negative += Math.abs(delta)
+              else if (delta > 0) stock_total_delta_positive += delta
+            }
+          }
+        }
+      }
+
       return json({
         ok: true,
         data: {
@@ -215,6 +324,10 @@ export async function POST(request: Request) {
           unchanged_count,
           categories_to_create: Array.from(newCatSet),
           stock_rows,
+          stock_changes,
+          stock_warnings,
+          stock_total_delta_positive: Math.round((stock_total_delta_positive + Number.EPSILON) * 1000) / 1000,
+          stock_total_delta_negative: Math.round((stock_total_delta_negative + Number.EPSILON) * 1000) / 1000,
         },
       })
     }
@@ -389,6 +502,7 @@ export async function POST(request: Request) {
       }
 
       let stock_updated = 0
+      let stock_warnings_count = 0
       const rowsWithStock = rows.filter(
         (row) => typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty) && row.stock_qty >= 0,
       )
@@ -421,6 +535,7 @@ export async function POST(request: Request) {
         )
 
         let catalogId: string | undefined
+        let catalogCompanyId: string | undefined
         if (requestedCompanyId) {
           const picked = (catList || []).find((c: any) => String(c?.company_id || '') === requestedCompanyId)
           if (!picked?.id) {
@@ -430,8 +545,10 @@ export async function POST(request: Request) {
             return json({ error: 'store-not-enabled-for-company' }, 400)
           }
           catalogId = String(picked.id)
+          catalogCompanyId = requestedCompanyId
         } else if (eligibleCatalogs.length === 1) {
           catalogId = String(eligibleCatalogs[0].id)
+          catalogCompanyId = String(eligibleCatalogs[0].company_id)
         } else if (eligibleCatalogs.length === 0) {
           return json(
             {
@@ -479,16 +596,75 @@ export async function POST(request: Request) {
             barcodeToId.set((r as { barcode: string }).barcode, (r as { id: string }).id)
           }
         }
-        const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = []
+
+        // ─── Текущие балансы (catalog + warehouse) для diff и валидации ───
+        const targetItemIds: string[] = []
+        const itemsWithStock: Array<{ itemId: string; barcode: string; newQty: number }> = []
         for (const row of rowsWithStock) {
           const itemId = barcodeToId.get(row.barcode)
           if (!itemId) continue
-          upserts.push({
-            location_id: catalogId,
-            item_id: itemId,
-            quantity: Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000,
-          })
+          const newQty = Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000
+          itemsWithStock.push({ itemId, barcode: row.barcode, newQty })
+          targetItemIds.push(itemId)
         }
+
+        let warehouseLocId: string | null = null
+        if (catalogCompanyId) {
+          const { data: whLoc } = await supabase
+            .from('inventory_locations')
+            .select('id')
+            .eq('company_id', catalogCompanyId)
+            .eq('location_type', 'warehouse')
+            .eq('is_active', true)
+            .maybeSingle()
+          warehouseLocId = whLoc?.id ? String(whLoc.id) : null
+        }
+
+        const balByItemLoc = new Map<string, number>()
+        if (targetItemIds.length > 0) {
+          const locIds = warehouseLocId ? [catalogId, warehouseLocId] : [catalogId]
+          for (const slice of chunkArray(targetItemIds, 200)) {
+            const { data: bal } = await supabase
+              .from('inventory_balances')
+              .select('location_id, item_id, quantity')
+              .in('location_id', locIds)
+              .in('item_id', slice)
+            for (const b of bal || []) {
+              balByItemLoc.set(`${(b as any).location_id}:${(b as any).item_id}`, Number((b as any).quantity || 0))
+            }
+          }
+        }
+
+        // ─── Валидация: new_catalog должен быть >= warehouse, иначе нужен force ───
+        const force = body.force === true
+        const violations: Array<{ barcode: string; new_catalog: number; warehouse: number }> = []
+        if (warehouseLocId) {
+          for (const it of itemsWithStock) {
+            const wh = balByItemLoc.get(`${warehouseLocId}:${it.itemId}`) || 0
+            if (it.newQty < wh - 0.0005) {
+              violations.push({ barcode: it.barcode, new_catalog: it.newQty, warehouse: wh })
+            }
+          }
+        }
+        if (violations.length > 0 && !force) {
+          return json(
+            {
+              error: 'stock-below-warehouse',
+              message:
+                'Новый каталог меньше текущей подсобки для некоторых товаров — это уничтожит остаток на витрине. Передайте force:true для подтверждения.',
+              violations,
+            },
+            409,
+          )
+        }
+        stock_warnings_count = violations.length
+
+        // ─── Upsert балансов каталога ───
+        const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = itemsWithStock.map((it) => ({
+          location_id: catalogId!,
+          item_id: it.itemId,
+          quantity: it.newQty,
+        }))
         if (upserts.length > 0) {
           for (const slice of chunkArray(upserts, 500)) {
             const { error: balErr } = await supabase.from('inventory_balances').upsert(slice, {
@@ -498,9 +674,53 @@ export async function POST(request: Request) {
             stock_updated += slice.length
           }
         }
+
+        // ─── Movements: фиксируем дельту каждого изменения ───
+        const actorUserId = access.staffMember?.id || null
+        const nowIso = new Date().toISOString()
+        const movements: any[] = []
+        for (const it of itemsWithStock) {
+          const prev = balByItemLoc.get(`${catalogId}:${it.itemId}`) || 0
+          const delta = Math.round((it.newQty - prev + Number.EPSILON) * 1000) / 1000
+          if (Math.abs(delta) < 0.0005) continue
+          movements.push({
+            item_id: it.itemId,
+            movement_type: 'inventory_adjustment',
+            quantity: Math.abs(delta),
+            from_location_id: delta < 0 ? catalogId : null,
+            to_location_id: delta > 0 ? catalogId : null,
+            reference_type: 'catalog_excel_import',
+            reference_id: null,
+            comment: `Импорт Excel в каталог: ${prev} → ${it.newQty}`,
+            actor_user_id: actorUserId,
+            created_at: nowIso,
+          })
+        }
+        if (movements.length > 0) {
+          for (const slice of chunkArray(movements, 500)) {
+            const { error: mvErr } = await supabase.from('inventory_movements').insert(slice)
+            if (mvErr) throw mvErr
+          }
+        }
+
+        // ─── Audit ───
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'inventory-catalog',
+          entityId: catalogId,
+          action: 'excel_import_stock',
+          payload: {
+            company_id: catalogCompanyId || null,
+            rows_with_stock: rowsWithStock.length,
+            stock_updated,
+            movements_written: movements.length,
+            warnings_count: stock_warnings_count,
+            forced: force,
+          },
+        })
       }
 
-      return json({ ok: true, data: { created, updated, stock_updated } })
+      return json({ ok: true, data: { created, updated, stock_updated, stock_warnings: stock_warnings_count } })
     }
 
     // -----------------------------------------------------------------------

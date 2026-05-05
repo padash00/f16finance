@@ -454,30 +454,52 @@ export async function POST(request: Request) {
       }
       if (newStatus === 'received') {
         patch.received_at = nowIso
+        patch.received_by = actorUserId
       }
 
-      let { error: updErr } = await supabase
+      const { error: updErr } = await supabase
         .from('inventory_requests')
         .update(patch)
         .eq('id', requestId)
-
-      // Backward compatibility: if DB column received_by is not deployed yet,
-      // retry without it so status transition keeps working.
-      if (updErr && newStatus === 'received') {
-        const msg = String((updErr as any)?.message || '')
-        if (msg.toLowerCase().includes('received_by')) {
-          const fallbackPatch = { ...patch }
-          delete (fallbackPatch as any).received_by
-          const fallback = await supabase
-            .from('inventory_requests')
-            .update(fallbackPatch)
-            .eq('id', requestId)
-          updErr = fallback.error
-        }
-      }
       if (updErr) throw updErr
 
       return json({ ok: true, data: { status: newStatus } })
+    }
+
+    // ── undecideRequest: откат одобренной заявки (вернуть товар на склад) ─────
+    if (body.action === 'undecideRequest') {
+      const actorUserId = access.user?.id || null
+      const requestId = String(body.requestId || '').trim()
+      if (!requestId) return json({ error: 'request-id-required' }, 400)
+      const reason = String(body.reason || '').trim() || null
+
+      await ensureInventoryRequestAccess(supabase as any, requestId, inventoryScope)
+
+      const { error: rpcErr } = await supabase.rpc('inventory_undecide_request', {
+        p_request_id: requestId,
+        p_reason: reason,
+        p_actor_user_id: actorUserId,
+      })
+      if (rpcErr) {
+        const msg = String(rpcErr.message || '')
+        if (msg.includes('inventory-request-not-undecidable')) {
+          return json({ error: 'Эту заявку нельзя откатить — она в неподходящем статусе' }, 409)
+        }
+        if (msg.includes('inventory-request-already-received')) {
+          return json({ error: 'Заявка уже получена точкой — откат запрещён' }, 409)
+        }
+        throw rpcErr
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-request',
+        entityId: requestId,
+        action: 'undecide',
+        payload: { reason },
+      })
+
+      return json({ ok: true })
     }
 
     if (body.action !== 'decideRequest') return json({ error: 'invalid-action' }, 400)

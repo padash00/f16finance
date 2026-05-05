@@ -172,6 +172,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/tasks': 'Задачи',
   '/weekly-report': 'Еженедельный отчет',
   '/store/receipts': 'Приемка склада',
+  '/store/postings': 'Оприходование',
   '/store/warehouse': 'Склад',
   '/store/movements': 'Движения склада',
   '/store/requests': 'Заявки склада',

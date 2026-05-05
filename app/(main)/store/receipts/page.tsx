@@ -63,6 +63,10 @@ type InventoryReceipt = {
   invoice_number: string | null
   invoice_file_url: string | null
   comment: string | null
+  status: 'posted' | 'cancelled'
+  kind: 'supplier' | 'posting'
+  cancelled_at: string | null
+  cancel_reason: string | null
   supplier?: InventorySupplier | null
   location?: InventoryLocation | null
   items?: Array<{
@@ -180,6 +184,10 @@ function normalizeReceipt(raw: any): InventoryReceipt {
     invoice_number: raw?.invoice_number || null,
     invoice_file_url: raw?.invoice_file_url || null,
     comment: raw?.comment || null,
+    status: raw?.status === 'cancelled' ? 'cancelled' : 'posted',
+    kind: raw?.kind === 'posting' ? 'posting' : 'supplier',
+    cancelled_at: raw?.cancelled_at || null,
+    cancel_reason: raw?.cancel_reason || null,
     supplier: firstOrSelf(raw?.supplier),
     location: firstOrSelf(raw?.location),
     items: asArray(raw?.items).map((item: any) => ({
@@ -518,6 +526,35 @@ export default function StoreReceiptsPage() {
     }
 
     setQuickError('Найдено несколько товаров — выбери ниже из подсказок.')
+  }
+
+  const cancelReceipt = async (receipt: InventoryReceipt) => {
+    if (receipt.status === 'cancelled') return
+    const reason = window.prompt(
+      `Отменить приёмку от ${receipt.received_at} на сумму ${receipt.total_amount}? Укажите причину (опционально):`,
+    )
+    if (reason === null) return
+    try {
+      const response = await fetch('/api/admin/store/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancelReceipt',
+          receipt_id: receipt.id,
+          cancel_reason: reason || null,
+        }),
+      })
+      const json = await response.json()
+      if (!response.ok) {
+        alert(json?.message || json?.error || 'Не удалось отменить приёмку')
+        return
+      }
+      setReceiptDetailsOpen(false)
+      setSelectedReceipt(null)
+      await load(undefined, { soft: true })
+    } catch (e: any) {
+      alert(e?.message || 'Ошибка сети')
+    }
   }
 
   const createReceipt = async (event: React.FormEvent) => {
@@ -1208,18 +1245,31 @@ export default function StoreReceiptsPage() {
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {filteredReceipts.map((receipt) => (
-                  <tr key={receipt.id} className="transition hover:bg-white/[0.02]">
+                  <tr
+                    key={receipt.id}
+                    className={`transition hover:bg-white/[0.02] ${receipt.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}
+                  >
                     <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
                       <span className="text-xs text-muted-foreground">{formatDate(receipt.received_at)}</span>
                     </td>
                     <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <p className="truncate text-sm font-medium">{receipt.supplier?.name || 'Без поставщика'}</p>
+                          <p className="truncate text-sm font-medium">
+                            {receipt.kind === 'posting'
+                              ? 'Оприходование'
+                              : receipt.supplier?.name || 'Без поставщика'}
+                            {receipt.status === 'cancelled' ? (
+                              <span className="ml-2 inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-normal text-rose-200 no-underline">
+                                Отменена
+                              </span>
+                            ) : null}
+                          </p>
                         </TooltipTrigger>
                         <TooltipContent side="top" align="start" className="max-w-md">
-                          {receipt.supplier?.name || 'Без поставщика'}
+                          {receipt.kind === 'posting' ? 'Оприходование (без поставщика)' : receipt.supplier?.name || 'Без поставщика'}
                           {receipt.comment ? <div className="mt-1 text-xs text-muted-foreground">{receipt.comment}</div> : null}
+                          {receipt.cancel_reason ? <div className="mt-1 text-xs text-rose-300">Причина отмены: {receipt.cancel_reason}</div> : null}
                         </TooltipContent>
                       </Tooltip>
                       {receipt.comment ? (
@@ -1904,16 +1954,43 @@ export default function StoreReceiptsPage() {
               <p className="text-sm text-muted-foreground">Документ не выбран.</p>
             ) : (
               <div className="space-y-4">
-                <div className="text-sm text-muted-foreground">
-                  Локация: <span className="text-foreground">{selectedReceipt.location?.name || '—'}</span>
-                  {selectedReceipt.invoice_number ? (
-                    <span> · Накладная: <span className="text-foreground">{selectedReceipt.invoice_number}</span></span>
-                  ) : null}
-                  {selectedReceipt.invoice_file_url ? (
-                    <span> · <a href={selectedReceipt.invoice_file_url} target="_blank" rel="noreferrer" className="underline text-emerald-300">Файл накладной</a></span>
-                  ) : null}
-                  <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedReceipt.total_amount || 0))}</span></span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm text-muted-foreground">
+                    Локация: <span className="text-foreground">{selectedReceipt.location?.name || '—'}</span>
+                    {selectedReceipt.invoice_number ? (
+                      <span> · Накладная: <span className="text-foreground">{selectedReceipt.invoice_number}</span></span>
+                    ) : null}
+                    {selectedReceipt.invoice_file_url ? (
+                      <span> · <a href={selectedReceipt.invoice_file_url} target="_blank" rel="noreferrer" className="underline text-emerald-300">Файл накладной</a></span>
+                    ) : null}
+                    <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedReceipt.total_amount || 0))}</span></span>
+                    {selectedReceipt.kind === 'posting' ? (
+                      <span> · <span className="text-blue-300">Оприходование</span></span>
+                    ) : null}
+                  </div>
+                  <div className="ml-auto">
+                    {selectedReceipt.status === 'cancelled' ? (
+                      <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-xs text-rose-200">
+                        Отменена{selectedReceipt.cancelled_at ? ` · ${formatDate(selectedReceipt.cancelled_at)}` : ''}
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                        onClick={() => void cancelReceipt(selectedReceipt)}
+                      >
+                        Отменить приёмку
+                      </Button>
+                    )}
+                  </div>
                 </div>
+                {selectedReceipt.cancel_reason ? (
+                  <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
+                    Причина отмены: {selectedReceipt.cancel_reason}
+                  </div>
+                ) : null}
                 <div className="overflow-auto rounded-xl border border-white/10">
                   <table className="w-full table-fixed text-sm">
                     <thead className="bg-white/[0.03]">

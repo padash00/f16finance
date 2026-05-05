@@ -55,12 +55,28 @@ type ImportRow = {
   stock_qty?: number
 }
 
+type StockDiff = {
+  barcode: string
+  name: string
+  current_catalog: number
+  current_warehouse: number
+  current_showcase: number
+  new_catalog: number
+  new_showcase: number
+  delta_catalog: number
+  warehouse_exceeds_new_catalog: boolean
+}
+
 type PreviewData = {
   new_items: ImportRow[]
   updated_items: Array<ImportRow & { existing_name: string; price_changed: boolean; name_changed: boolean }>
   unchanged_count: number
   categories_to_create: string[]
   stock_rows?: number
+  stock_changes?: StockDiff[]
+  stock_warnings?: StockDiff[]
+  stock_total_delta_positive?: number
+  stock_total_delta_negative?: number
 }
 
 type ItemFormData = {
@@ -530,7 +546,7 @@ export function CatalogPageContent() {
     }
   }
 
-  async function confirmImport() {
+  async function confirmImport(opts: { force?: boolean } = {}) {
     if (!importRows.length) return
     setImportStatus('importing')
     setImportError(null)
@@ -538,9 +554,25 @@ export function CatalogPageContent() {
       const res = await fetch('/api/admin/inventory/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'confirmImport', rows: importRows }),
+        body: JSON.stringify({ action: 'confirmImport', rows: importRows, force: !!opts.force }),
       })
       const json = await res.json()
+      if (res.status === 409 && json?.error === 'stock-below-warehouse') {
+        const lines = (json.violations || [])
+          .slice(0, 5)
+          .map((v: any) => `${v.barcode}: каталог=${v.new_catalog}, подсобка=${v.warehouse}`)
+          .join('\n')
+        const more = (json.violations?.length || 0) > 5 ? `\n…ещё ${(json.violations.length - 5)}` : ''
+        const ok = window.confirm(
+          (json.message || 'Новый каталог меньше подсобки.') +
+            `\n\n${lines}${more}\n\nПродолжить и затереть остаток на витрине?`,
+        )
+        if (!ok) {
+          setImportStatus('idle')
+          return
+        }
+        return confirmImport({ force: true })
+      }
       if (!res.ok) throw new Error(json.error)
       setImportResult(json.data)
       setImportStatus('done')
@@ -1076,6 +1108,47 @@ export function CatalogPageContent() {
                   </p>
                 ) : null}
 
+                {(preview.stock_warnings?.length || 0) > 0 && (
+                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+                    <p className="font-semibold mb-1">⚠ Внимание: новый каталог меньше подсобки</p>
+                    <p className="mb-1">
+                      Для {preview.stock_warnings!.length} товаров новый остаток в каталоге меньше текущей подсобки. Это уничтожит остаток на витрине. Подтверждение потребуется при применении.
+                    </p>
+                    <div className="space-y-0.5 mt-1">
+                      {preview.stock_warnings!.slice(0, 5).map((w) => (
+                        <div key={w.barcode} className="flex justify-between gap-2">
+                          <span className="truncate">{w.name}</span>
+                          <span className="shrink-0">каталог {w.new_catalog} &lt; подсобка {w.current_warehouse}</span>
+                        </div>
+                      ))}
+                      {preview.stock_warnings!.length > 5 && (
+                        <p className="text-rose-600/70">…ещё {preview.stock_warnings!.length - 5}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(preview.stock_changes?.length || 0) > 0 && (
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-xs">
+                    <p className="font-medium mb-1">
+                      Изменений остатка: {preview.stock_changes!.length} (плюс {preview.stock_total_delta_positive ?? 0}, минус {preview.stock_total_delta_negative ?? 0})
+                    </p>
+                    <div className="space-y-0.5 max-h-40 overflow-auto">
+                      {preview.stock_changes!.slice(0, 10).map((c) => (
+                        <div key={c.barcode} className="flex justify-between gap-2 text-muted-foreground">
+                          <span className="truncate">{c.name}</span>
+                          <span className="shrink-0">
+                            {c.current_catalog} → {c.new_catalog} ({c.delta_catalog > 0 ? '+' : ''}{c.delta_catalog})
+                          </span>
+                        </div>
+                      ))}
+                      {preview.stock_changes!.length > 10 && (
+                        <p className="text-muted-foreground/70">…ещё {preview.stock_changes!.length - 10}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {preview.new_items.length > 0 && (
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-1">Примеры новых товаров:</p>
@@ -1118,7 +1191,7 @@ export function CatalogPageContent() {
 
                 <div className="flex gap-2 pt-1">
                   <Button
-                    onClick={confirmImport}
+                    onClick={() => confirmImport()}
                     disabled={importStatus === 'importing' || !canApplyImport}
                   >
                     {importStatus === 'importing' ? 'Импортирую...' : applyLabel}

@@ -357,6 +357,28 @@ function StoreRequestsPageContent() {
     }))
   }
 
+  const undecideRequest = async (requestId: string) => {
+    const reason = window.prompt('Откатить одобрение заявки? Товар вернётся на склад. Укажите причину (опционально):')
+    if (reason === null) return
+    setSavingId(requestId)
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/inventory/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'undecideRequest', requestId, reason: reason || null }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
+      setSuccess('Решение откачено, заявка вернулась в статус «Новая».')
+      await load(undefined, { soft: true })
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   const transitionStatus = async (requestId: string, status: 'issued' | 'received') => {
     setSavingId(requestId)
     setError(null)
@@ -810,6 +832,16 @@ function StoreRequestsPageContent() {
                     <span className="text-xs text-muted-foreground">
                       {formatQty(approved)} ед. к выдаче · {items.length} поз.
                     </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                      disabled={savingId === request.id}
+                      onClick={() => void undecideRequest(request.id)}
+                    >
+                      Откатить
+                    </Button>
                     <Button
                       type="button"
                       size="sm"

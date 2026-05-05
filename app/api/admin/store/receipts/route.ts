@@ -19,7 +19,7 @@ function canManageStore(access: {
 }
 
 type Body = {
-  action: 'createReceipt' | 'saveDraft' | 'deleteDraft'
+  action: 'createReceipt' | 'saveDraft' | 'deleteDraft' | 'cancelReceipt' | 'createPosting'
   payload?: {
     location_id: string
     supplier_id?: string | null
@@ -47,6 +47,14 @@ type Body = {
       invoice_name?: string | null
     }>
   }
+  posting?: {
+    location_id: string
+    received_at: string
+    comment?: string | null
+    items: Array<{ item_id: string; quantity: number; unit_cost?: number; comment?: string | null }>
+  }
+  receipt_id?: string
+  cancel_reason?: string
   draft_id?: string
   draft_title?: string | null
 }
@@ -204,6 +212,117 @@ export async function POST(request: Request) {
         },
       })
       return json({ ok: true })
+    }
+
+    if (body.action === 'cancelReceipt') {
+      const receiptId = String(body.receipt_id || '').trim()
+      if (!receiptId) return json({ error: 'receipt-id-required' }, 400)
+      const reason = String(body.cancel_reason || '').trim() || null
+
+      // Authorize against location scope (organization/company access)
+      const { data: receiptRow, error: receiptErr } = await supabase
+        .from('inventory_receipts')
+        .select('id, status, location_id, supplier_id, total_amount, received_at, kind')
+        .eq('id', receiptId)
+        .maybeSingle()
+      if (receiptErr) throw receiptErr
+      if (!receiptRow) return json({ error: 'receipt-not-found' }, 404)
+      await ensureInventoryLocationAccess(supabase as any, String(receiptRow.location_id), inventoryScope)
+
+      const { error: rpcErr } = await supabase.rpc('inventory_cancel_receipt', {
+        p_receipt_id: receiptId,
+        p_reason: reason,
+        p_actor_user_id: actorUserId,
+      })
+      if (rpcErr) {
+        const msg = String(rpcErr.message || '')
+        if (msg.includes('inventory-receipt-already-cancelled')) {
+          return json({ error: 'Приёмка уже отменена' }, 409)
+        }
+        if (msg.includes('inventory-receipt-cancel-insufficient-stock')) {
+          return json(
+            {
+              error: 'cancel-insufficient-stock',
+              message:
+                'Нельзя отменить: часть полученного товара уже выдана/продана. Сначала верните товар на склад.',
+            },
+            409,
+          )
+        }
+        throw rpcErr
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-receipt',
+        entityId: receiptId,
+        action: 'cancel',
+        payload: {
+          reason,
+          location_id: receiptRow.location_id,
+          supplier_id: receiptRow.supplier_id,
+          received_at: receiptRow.received_at,
+          total_amount: receiptRow.total_amount,
+          kind: (receiptRow as any).kind || 'supplier',
+        },
+      })
+
+      return json({ ok: true })
+    }
+
+    if (body.action === 'createPosting') {
+      const posting = body.posting
+      if (!posting) return json({ error: 'posting-required' }, 400)
+      const locationId = String(posting.location_id || '').trim()
+      if (!locationId) return json({ error: 'location-required' }, 400)
+      await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+
+      const items = (posting.items || [])
+        .map((i) => ({
+          item_id: String(i.item_id || '').trim(),
+          quantity: normalizeQty(i.quantity),
+          unit_cost: normalizeUnitCost(i.unit_cost ?? 0),
+          comment: i.comment || null,
+        }))
+        .filter((i) => i.item_id && i.quantity > 0)
+
+      if (items.length === 0) return json({ error: 'items-required' }, 400)
+
+      const receivedAt = String(posting.received_at || '').trim() || new Date().toISOString().slice(0, 10)
+      const comment = String(posting.comment || '').trim() || 'Оприходование'
+
+      const result: any = await postInventoryReceipt(supabase as any, {
+        location_id: locationId,
+        received_at: receivedAt,
+        supplier_id: null,
+        comment,
+        created_by: actorUserId,
+        items,
+      })
+      const newReceiptId = String(result?.receipt_id || result?.id || '')
+      if (newReceiptId) {
+        const { error: kindErr } = await supabase
+          .from('inventory_receipts')
+          .update({ kind: 'posting' })
+          .eq('id', newReceiptId)
+        if (kindErr) throw kindErr
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-receipt',
+        entityId: newReceiptId,
+        action: 'create_posting',
+        payload: {
+          location_id: locationId,
+          received_at: receivedAt,
+          comment,
+          item_count: items.length,
+          kind: 'posting',
+        },
+      })
+
+      return json({ ok: true, data: { receipt_id: newReceiptId, kind: 'posting' } })
     }
 
     if (body.action === 'saveDraft') {

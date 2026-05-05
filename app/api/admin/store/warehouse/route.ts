@@ -337,11 +337,37 @@ export async function POST(request: Request) {
       if (resolvedItems.length === 0) return json({ error: 'no-items-resolved' }, 400)
 
       const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
+      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog_total')
       const actorUserId = access.staffMember?.id || null
       const mode = String(body.mode || 'add') === 'set' ? 'set' : 'add'
       const now = new Date().toISOString()
 
       if (mode === 'set') {
+        // Validate: new_warehouse must not exceed catalog_total balance
+        const itemIds = resolvedItems.map((i) => i.item_id)
+        const { data: catBal } = await supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .eq('location_id', catalog.id)
+          .in('item_id', itemIds)
+        const catalogByItem = new Map<string, number>()
+        for (const b of catBal || []) catalogByItem.set(String((b as any).item_id), Number((b as any).quantity || 0))
+        const force = body.force === true
+        const violations = resolvedItems
+          .map((it) => ({ item_id: it.item_id, new_warehouse: it.quantity, catalog: catalogByItem.get(it.item_id) || 0 }))
+          .filter((v) => v.new_warehouse > v.catalog + 0.0005)
+        if (violations.length > 0 && !force) {
+          return json(
+            {
+              error: 'warehouse-exceeds-catalog',
+              message:
+                'Подсобка не может превышать каталог. Сначала увеличьте каталог (приёмка/оприходование) или передайте force:true.',
+              violations,
+            },
+            409,
+          )
+        }
+
         // SET mode: upsert warehouse to exact quantities
         const upserts = resolvedItems.map((item) => ({
           location_id: warehouse.id,
@@ -416,9 +442,32 @@ export async function POST(request: Request) {
       if (qty < 0) return json({ error: 'quantity-invalid' }, 400)
 
       const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
+      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog_total')
 
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
+
+      // Validate new warehouse <= catalog balance for this item
+      {
+        const { data: catBal } = await supabase
+          .from('inventory_balances')
+          .select('quantity')
+          .eq('location_id', catalog.id)
+          .eq('item_id', itemId)
+          .maybeSingle()
+        const catalogQty = Number(catBal?.quantity || 0)
+        if (qty > catalogQty + 0.0005 && body.force !== true) {
+          return json(
+            {
+              error: 'warehouse-exceeds-catalog',
+              message: `Подсобка не может превышать каталог (${catalogQty}). Сначала увеличьте каталог.`,
+              new_warehouse: qty,
+              catalog: catalogQty,
+            },
+            409,
+          )
+        }
+      }
 
       const { error: upsertErr } = await supabase
         .from('inventory_balances')
@@ -575,13 +624,27 @@ export async function POST(request: Request) {
       }
 
       type InRow = { item_id: string; new_warehouse: number; new_catalog: number }
-      const rows: InRow[] = (body.items || [])
+      const allRows: InRow[] = (body.items || [])
         .map((i: any) => ({
           item_id: String(i.item_id || '').trim(),
           new_warehouse: normalizeQty(i.new_warehouse),
           new_catalog: normalizeQty(i.new_catalog),
         }))
-        .filter((i: InRow) => i.item_id && i.new_warehouse >= 0 && i.new_catalog >= i.new_warehouse)
+        .filter((i: InRow) => i.item_id && i.new_warehouse >= 0)
+
+      const violations = allRows.filter((r) => r.new_warehouse > r.new_catalog + 0.0005)
+      if (violations.length > 0 && body.force !== true) {
+        return json(
+          {
+            error: 'warehouse-exceeds-catalog',
+            message:
+              'Подсобка превышает каталог для некоторых товаров. Сначала увеличьте каталог или передайте force:true.',
+            violations,
+          },
+          409,
+        )
+      }
+      const rows: InRow[] = allRows.filter((r) => r.new_warehouse <= r.new_catalog + 0.0005)
 
       if (rows.length === 0) return json({ error: 'items-required' }, 400)
 

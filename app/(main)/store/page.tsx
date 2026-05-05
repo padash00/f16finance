@@ -345,6 +345,16 @@ export default function StoreOverviewPage() {
               <div className="mt-1 text-xs text-slate-400">Приход товара на склад</div>
             </Link>
             <Link
+              href={withGlobalFilters('/store/postings')}
+              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <PackagePlus className="h-4 w-4 text-emerald-300" />
+                Оприходование
+              </div>
+              <div className="mt-1 text-xs text-slate-400">Без поставщика — корректировки и излишки</div>
+            </Link>
+            <Link
               href={withGlobalFilters('/store/movements')}
               className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
             >
