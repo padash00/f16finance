@@ -28,7 +28,7 @@ function normalizeQty(v: unknown) {
 async function ensureCompanyLocation(
   supabase: any,
   companyId: string,
-  locationType: 'warehouse' | 'point_display' | 'catalog_total',
+  locationType: 'warehouse' | 'point_display',
 ) {
   const { data: existing } = await supabase
     .from('inventory_locations')
@@ -137,16 +137,15 @@ export async function GET(request: Request) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
 
-    const [warehouseLoc, showcaseLoc, catalogLoc] = await Promise.all([
+    const [warehouseLoc, showcaseLoc] = await Promise.all([
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
       ensureCompanyLocation(supabase, companyId, 'point_display'),
-      ensureCompanyLocation(supabase, companyId, 'catalog_total'),
     ])
 
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
-      .in('location_id', [catalogLoc.id, warehouseLoc.id, showcaseLoc.id])
+      .in('location_id', [warehouseLoc.id, showcaseLoc.id])
     if (balErr) throw balErr
 
     // v2: showcase читается напрямую из point_display.
@@ -161,15 +160,13 @@ export async function GET(request: Request) {
         bucket = {
           item_id: itemId,
           item: row.item,
-          catalog_quantity: 0,
           warehouse_quantity: 0,
           point_display_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
       }
-      if (row.location_id === catalogLoc.id) bucket.catalog_quantity = Number(row.quantity) || 0
-      else if (row.location_id === warehouseLoc.id) bucket.warehouse_quantity = Number(row.quantity) || 0
+      if (row.location_id === warehouseLoc.id) bucket.warehouse_quantity = Number(row.quantity) || 0
       else if (row.location_id === showcaseLoc.id) bucket.point_display_quantity = Number(row.quantity) || 0
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
@@ -342,50 +339,50 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      const [showcaseLoc, warehouseLoc, catalogLoc] = await Promise.all([
+      const [showcaseLoc, warehouseLoc] = await Promise.all([
         ensureCompanyLocation(supabase, companyId, 'point_display'),
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
-        ensureCompanyLocation(supabase, companyId, 'catalog_total'),
       ])
 
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
 
       for (const item of items) {
-        // catalog_total model: showcase = max(0, catalog - warehouse). Return shifts stock from витрина → склад by incrementing warehouse only (catalog unchanged).
-        const { data: cBal } = await supabase
+        // v8: возврат витрина → склад. Атомарно: -витрина, +склад.
+        const { data: sBal } = await supabase
           .from('inventory_balances')
           .select('quantity')
-          .eq('location_id', catalogLoc.id)
+          .eq('location_id', showcaseLoc.id)
           .eq('item_id', item.item_id)
           .maybeSingle()
-        const { data: wBal } = await supabase
-          .from('inventory_balances')
-          .select('quantity')
-          .eq('location_id', warehouseLoc.id)
-          .eq('item_id', item.item_id)
-          .maybeSingle()
-        const catalogQty = Number(cBal?.quantity || 0)
-        const warehouseQty = Number(wBal?.quantity || 0)
-        const showcaseQty = Math.max(0, catalogQty - warehouseQty)
+        const showcaseQty = Number(sBal?.quantity || 0)
         if (item.quantity > showcaseQty) {
           return json({ error: 'showcase-insufficient', item_id: item.item_id, showcase: showcaseQty, requested: item.quantity }, 400)
         }
 
-        const newWarehouse = warehouseQty + item.quantity
-        await supabase
-          .from('inventory_balances')
-          .upsert({ location_id: warehouseLoc.id, item_id: item.item_id, quantity: newWarehouse, updated_at: now }, { onConflict: 'location_id,item_id' })
+        const { error: showErr } = await supabase.rpc('inventory_apply_balance_delta', {
+          p_location_id: showcaseLoc.id,
+          p_item_id: item.item_id,
+          p_delta: -item.quantity,
+        })
+        if (showErr) throw showErr
+
+        const { error: whErr } = await supabase.rpc('inventory_apply_balance_delta', {
+          p_location_id: warehouseLoc.id,
+          p_item_id: item.item_id,
+          p_delta: item.quantity,
+        })
+        if (whErr) throw whErr
 
         await supabase.from('inventory_movements').insert({
           item_id: item.item_id,
           from_location_id: showcaseLoc.id,
           to_location_id: warehouseLoc.id,
           quantity: item.quantity,
-          movement_type: 'transfer',
+          movement_type: 'transfer_showcase_to_warehouse',
           reference_type: 'return_to_warehouse',
           comment: String(body.comment || '').trim() || 'Возврат с витрины на склад',
-          created_by: actorUserId,
+          actor_user_id: actorUserId,
           created_at: now,
         })
       }

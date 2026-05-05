@@ -27,7 +27,7 @@ function normalizeQty(v: unknown) {
 async function ensureCompanyLocation(
   supabase: any,
   companyId: string,
-  locationType: 'warehouse' | 'point_display' | 'catalog_total',
+  locationType: 'warehouse' | 'point_display',
 ) {
   const { data: existing, error: fetchErr } = await supabase
     .from('inventory_locations')
@@ -145,19 +145,18 @@ export async function GET(request: Request) {
       }
     }
 
-    const [warehouse, showcase, catalog] = await Promise.all([
+    const [warehouse, showcase] = await Promise.all([
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
       ensureCompanyLocation(supabase, companyId, 'point_display'),
-      ensureCompanyLocation(supabase, companyId, 'catalog_total'),
     ])
 
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, quantity_reserved, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
-      .in('location_id', [warehouse.id, showcase.id, catalog.id])
+      .in('location_id', [warehouse.id, showcase.id])
     if (balErr) throw balErr
 
-    // v2/v7: showcase из point_display; warehouse_reserved для подсветки доступного остатка
+    // v8: только склад и витрина. Каталог вычисляется как сумма (warehouse + showcase).
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -170,7 +169,6 @@ export async function GET(request: Request) {
           showcase_quantity: 0,
           warehouse_quantity: 0,
           warehouse_reserved: 0,
-          catalog_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
@@ -178,8 +176,6 @@ export async function GET(request: Request) {
       if (row.location_id === warehouse.id) {
         bucket.warehouse_quantity = Number(row.quantity) || 0
         bucket.warehouse_reserved = Number((row as any).quantity_reserved) || 0
-      } else if (row.location_id === catalog.id) {
-        bucket.catalog_quantity = Number(row.quantity) || 0
       } else if (row.location_id === showcase.id) {
         bucket.showcase_quantity = Number(row.quantity) || 0
       }
@@ -187,12 +183,17 @@ export async function GET(request: Request) {
     }
 
     const balances = Array.from(byItem.values())
-      .map((b) => ({
-        ...b,
-        showcase_quantity: Number(b.showcase_quantity || 0),
-        warehouse_available: Math.max(0, Number(b.warehouse_quantity || 0) - Number(b.warehouse_reserved || 0)),
-        quantity: Number(b.catalog_quantity || 0),
-      }))
+      .map((b) => {
+        const wh = Number(b.warehouse_quantity || 0)
+        const sh = Number(b.showcase_quantity || 0)
+        return {
+          ...b,
+          showcase_quantity: sh,
+          warehouse_available: Math.max(0, wh - Number(b.warehouse_reserved || 0)),
+          catalog_quantity: wh + sh,
+          quantity: wh + sh,
+        }
+      })
       .sort((a, b) => b.quantity - a.quantity)
 
     const { data: categories } = await supabase
@@ -203,7 +204,7 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        catalog,
+        catalog: null,
         warehouse,
         showcase,
         companies: companies || [],
@@ -345,36 +346,12 @@ export async function POST(request: Request) {
       if (resolvedItems.length === 0) return json({ error: 'no-items-resolved' }, 400)
 
       const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
-      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog_total')
       const actorUserId = access.staffMember?.id || null
       const mode = String(body.mode || 'add') === 'set' ? 'set' : 'add'
       const now = new Date().toISOString()
 
       if (mode === 'set') {
-        // Validate: new_warehouse must not exceed catalog_total balance
-        const itemIds = resolvedItems.map((i) => i.item_id)
-        const { data: catBal } = await supabase
-          .from('inventory_balances')
-          .select('item_id, quantity')
-          .eq('location_id', catalog.id)
-          .in('item_id', itemIds)
-        const catalogByItem = new Map<string, number>()
-        for (const b of catBal || []) catalogByItem.set(String((b as any).item_id), Number((b as any).quantity || 0))
-        const force = body.force === true
-        const violations = resolvedItems
-          .map((it) => ({ item_id: it.item_id, new_warehouse: it.quantity, catalog: catalogByItem.get(it.item_id) || 0 }))
-          .filter((v) => v.new_warehouse > v.catalog + 0.0005)
-        if (violations.length > 0 && !force) {
-          return json(
-            {
-              error: 'warehouse-exceeds-catalog',
-              message:
-                'Подсобка не может превышать каталог. Сначала увеличьте каталог (приёмка/оприходование) или передайте force:true.',
-              violations,
-            },
-            409,
-          )
-        }
+        // v8: склад и витрина независимы. Валидация warehouse vs catalog больше не имеет смысла.
 
         // SET mode: upsert warehouse to exact quantities
         const upserts = resolvedItems.map((item) => ({
@@ -450,32 +427,11 @@ export async function POST(request: Request) {
       if (qty < 0) return json({ error: 'quantity-invalid' }, 400)
 
       const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
-      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog_total')
 
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
 
-      // Validate new warehouse <= catalog balance for this item
-      {
-        const { data: catBal } = await supabase
-          .from('inventory_balances')
-          .select('quantity')
-          .eq('location_id', catalog.id)
-          .eq('item_id', itemId)
-          .maybeSingle()
-        const catalogQty = Number(catBal?.quantity || 0)
-        if (qty > catalogQty + 0.0005 && body.force !== true) {
-          return json(
-            {
-              error: 'warehouse-exceeds-catalog',
-              message: `Подсобка не может превышать каталог (${catalogQty}). Сначала увеличьте каталог.`,
-              new_warehouse: qty,
-              catalog: catalogQty,
-            },
-            409,
-          )
-        }
-      }
+      // v8: склад и витрина независимы. Валидация warehouse vs catalog больше не нужна.
 
       const { error: upsertErr } = await supabase
         .from('inventory_balances')
@@ -555,26 +511,25 @@ export async function POST(request: Request) {
         })
       }
 
-      const [warehouse, showcase, catalog] = await Promise.all([
+      const [warehouse, showcase] = await Promise.all([
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
         ensureCompanyLocation(supabase, companyId, 'point_display'),
-        ensureCompanyLocation(supabase, companyId, 'catalog_total'),
       ])
 
       const matchedItemIds = [...byBarcode.values()].map((v) => v.id)
       const curWarehouse = new Map<string, number>()
-      const curCatalog = new Map<string, number>()
+      const curShowcase = new Map<string, number>()
       if (matchedItemIds.length) {
         const { data: bal } = await supabase
           .from('inventory_balances')
           .select('location_id, item_id, quantity')
-          .in('location_id', [warehouse.id, showcase.id, catalog.id])
+          .in('location_id', [warehouse.id, showcase.id])
           .in('item_id', matchedItemIds)
         for (const row of bal || []) {
           const q = Number((row as any).quantity || 0)
           const iid = String((row as any).item_id)
           if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
-          else if ((row as any).location_id === catalog.id) curCatalog.set(iid, q)
+          else if ((row as any).location_id === showcase.id) curShowcase.set(iid, q)
         }
       }
 
@@ -587,25 +542,19 @@ export async function POST(request: Request) {
           continue
         }
         const curW = curWarehouse.get(item.id) || 0
-        const curC = curCatalog.get(item.id) || 0
-        const curS = Math.max(0, curC - curW)
+        const curS = curShowcase.get(item.id) || 0
         const newW = r.quantity
-        const newC = curC
         matched.push({
           item_id: item.id,
           barcode: item.barcode,
           catalog_name: item.name,
           excel_name: r.name || null,
           unit: item.unit,
-          current_catalog: curW + curS,
-          current_catalog_total: curC,
+          current_total: curW + curS,
           current_warehouse: curW,
           current_showcase: curS,
           new_warehouse: newW,
-          new_catalog: newC,
-          new_showcase: Math.max(0, newC - newW),
-          warehouse_exceeds_catalog: newW > newC,
-          catalog_changed: newC !== curC,
+          new_total: newW + curS,
         })
       }
 
@@ -631,28 +580,15 @@ export async function POST(request: Request) {
         if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
       }
 
-      type InRow = { item_id: string; new_warehouse: number; new_catalog: number }
-      const allRows: InRow[] = (body.items || [])
+      type InRow = { item_id: string; new_warehouse: number }
+      const rows: InRow[] = (body.items || [])
         .map((i: any) => ({
           item_id: String(i.item_id || '').trim(),
           new_warehouse: normalizeQty(i.new_warehouse),
-          new_catalog: normalizeQty(i.new_catalog),
         }))
         .filter((i: InRow) => i.item_id && i.new_warehouse >= 0)
 
-      const violations = allRows.filter((r) => r.new_warehouse > r.new_catalog + 0.0005)
-      if (violations.length > 0 && body.force !== true) {
-        return json(
-          {
-            error: 'warehouse-exceeds-catalog',
-            message:
-              'Подсобка превышает каталог для некоторых товаров. Сначала увеличьте каталог или передайте force:true.',
-            violations,
-          },
-          409,
-        )
-      }
-      const rows: InRow[] = allRows.filter((r) => r.new_warehouse <= r.new_catalog + 0.0005)
+      // v8: склад и витрина независимы. Никакой валидации vs catalog.
 
       if (rows.length === 0) return json({ error: 'items-required' }, 400)
 

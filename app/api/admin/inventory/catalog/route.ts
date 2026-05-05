@@ -71,22 +71,19 @@ export async function GET(request: Request) {
 
     if (itemsError) throw itemsError
 
-    // v2: showcase читается напрямую из point_display, не вычисляется формулой
+    // v8: total = warehouse + showcase. catalog_total больше не используется.
     const { data: balances, error: balancesError } = await supabase
       .from('inventory_balances')
       .select('item_id, quantity, loc:inventory_locations(location_type)')
 
     if (balancesError) throw balancesError
 
-    const catalogMap: Record<string, number> = {}
     const warehouseMap: Record<string, number> = {}
     const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
       const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
       const qty = b.quantity || 0
-      if (locType === 'catalog_total') {
-        catalogMap[b.item_id] = (catalogMap[b.item_id] || 0) + qty
-      } else if (locType === 'warehouse') {
+      if (locType === 'warehouse') {
         warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty
       } else if (locType === 'point_display') {
         showcaseMap[b.item_id] = (showcaseMap[b.item_id] || 0) + qty
@@ -96,8 +93,8 @@ export async function GET(request: Request) {
     // Normalize items (category may come back as array from supabase joins)
     const normalized = (items || []).map((item: any) => {
       const wh = warehouseMap[item.id] || 0
-      const cat = catalogMap[item.id] || 0
       const sh = showcaseMap[item.id] || 0
+      const cat = wh + sh
       return {
         ...item,
         category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
@@ -232,15 +229,16 @@ export async function POST(request: Request) {
       if (rowsWithStockBC.length > 0) {
         const requestedCompanyId = String(body.company_id || '').trim() || null
 
-        // catalog_total локации организации
-        const { data: catList } = await supabase
+        // v8: импорт остатков идёт на point_display
+        const { data: pdList } = await supabase
           .from('inventory_locations')
           .select('id, company_id')
-          .eq('location_type', 'catalog_total')
+          .eq('location_type', 'point_display')
           .eq('is_active', true)
           .eq('organization_id', orgId)
+          .not('company_id', 'is', null)
 
-        // warehouse-локации тех же компаний
+        // warehouse-локации тех же компаний (для отображения current_warehouse в превью)
         const { data: whList } = await supabase
           .from('inventory_locations')
           .select('id, company_id')
@@ -248,17 +246,16 @@ export async function POST(request: Request) {
           .eq('is_active', true)
           .eq('organization_id', orgId)
 
-        // выбираем catalog (как в confirmImport): если company_id задан — берём его, иначе если ровно один — берём
-        let catalogId: string | undefined
+        let catalogId: string | undefined  // имя оставлено для совместимости — теперь это point_display
         let warehouseId: string | undefined
         if (requestedCompanyId) {
-          const c = (catList || []).find((r: any) => String(r.company_id) === requestedCompanyId)
+          const c = (pdList || []).find((r: any) => String(r.company_id) === requestedCompanyId)
           if (c?.id) catalogId = String(c.id)
           const w = (whList || []).find((r: any) => String(r.company_id) === requestedCompanyId)
           if (w?.id) warehouseId = String(w.id)
-        } else if ((catList || []).length === 1) {
-          catalogId = String(catList![0].id)
-          const cmp = String(catList![0].company_id)
+        } else if ((pdList || []).length === 1) {
+          catalogId = String(pdList![0].id)
+          const cmp = String(pdList![0].company_id)
           const w = (whList || []).find((r: any) => String(r.company_id) === cmp)
           if (w?.id) warehouseId = String(w.id)
         }
@@ -509,53 +506,36 @@ export async function POST(request: Request) {
         (row) => typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty) && row.stock_qty >= 0,
       )
       if (rowsWithStock.length > 0 && orgId) {
-        const { data: catList, error: catLocErr } = await supabase
+        // v8: Excel-импорт остатков идёт на point_display активной компании.
+        const { data: pdList, error: pdLocErr } = await supabase
           .from('inventory_locations')
           .select('id, name, code, company_id')
-          .eq('location_type', 'catalog_total')
-          .eq('is_active', true)
-          .eq('organization_id', orgId)
-
-        if (catLocErr) throw catLocErr
-
-        // Остатки из Excel едут только в компанию с включённым магазином (point_display active).
-        const { data: enabledLocs, error: enabledErr } = await supabase
-          .from('inventory_locations')
-          .select('company_id')
           .eq('location_type', 'point_display')
           .eq('is_active', true)
           .eq('organization_id', orgId)
           .not('company_id', 'is', null)
-        if (enabledErr) throw enabledErr
-        const storeEnabledCompanyIds = new Set(
-          (enabledLocs || []).map((r: any) => String(r.company_id)).filter(Boolean),
-        )
+
+        if (pdLocErr) throw pdLocErr
 
         const requestedCompanyId = String(body.company_id || '').trim() || null
-        const eligibleCatalogs = (catList || []).filter((c: any) =>
-          c?.company_id ? storeEnabledCompanyIds.has(String(c.company_id)) : false,
-        )
 
-        let catalogId: string | undefined
+        let catalogId: string | undefined  // location_id куда писать остатки (теперь point_display)
         let catalogCompanyId: string | undefined
         if (requestedCompanyId) {
-          const picked = (catList || []).find((c: any) => String(c?.company_id || '') === requestedCompanyId)
+          const picked = (pdList || []).find((c: any) => String(c?.company_id || '') === requestedCompanyId)
           if (!picked?.id) {
-            return json({ error: 'catalog-not-found-for-company' }, 400)
-          }
-          if (!storeEnabledCompanyIds.has(requestedCompanyId)) {
-            return json({ error: 'store-not-enabled-for-company' }, 400)
+            return json({ error: 'showcase-not-enabled-for-company' }, 400)
           }
           catalogId = String(picked.id)
           catalogCompanyId = requestedCompanyId
-        } else if (eligibleCatalogs.length === 1) {
-          catalogId = String(eligibleCatalogs[0].id)
-          catalogCompanyId = String(eligibleCatalogs[0].company_id)
-        } else if (eligibleCatalogs.length === 0) {
+        } else if ((pdList || []).length === 1) {
+          catalogId = String(pdList![0].id)
+          catalogCompanyId = String(pdList![0].company_id)
+        } else if ((pdList || []).length === 0) {
           return json(
             {
               error:
-                'Нет точек с включённым магазином (point_display active). Включите магазин в нужной точке или уберите колонку «Остаток» из файла.',
+                'Нет точек с включённой витриной. Включите магазин в нужной точке или уберите колонку «Остаток» из файла.',
             },
             400,
           )
@@ -563,21 +543,7 @@ export async function POST(request: Request) {
           return json(
             {
               error: 'store-ambiguous-company-required',
-              companies: eligibleCatalogs.map((c: any) => ({ id: String(c.company_id), name: String(c.name || '') })),
-            },
-            400,
-          )
-        }
-
-        if (!catalogId) {
-          // Safety fallback — не должно сработать после проверок выше.
-          catalogId = pickCentralCatalogId(catList as any)
-        }
-        if (!catalogId) {
-          return json(
-            {
-              error:
-                'В организации нет активного каталога (catalog_total) — создайте каталог для компании, чтобы записать остатки из Excel.',
+              companies: (pdList || []).map((c: any) => ({ id: String(c.company_id), name: String(c.name || '') })),
             },
             400,
           )
@@ -637,29 +603,8 @@ export async function POST(request: Request) {
           }
         }
 
-        // ─── Валидация: new_catalog должен быть >= warehouse, иначе нужен force ───
-        const force = body.force === true
-        const violations: Array<{ barcode: string; new_catalog: number; warehouse: number }> = []
-        if (warehouseLocId) {
-          for (const it of itemsWithStock) {
-            const wh = balByItemLoc.get(`${warehouseLocId}:${it.itemId}`) || 0
-            if (it.newQty < wh - 0.0005) {
-              violations.push({ barcode: it.barcode, new_catalog: it.newQty, warehouse: wh })
-            }
-          }
-        }
-        if (violations.length > 0 && !force) {
-          return json(
-            {
-              error: 'stock-below-warehouse',
-              message:
-                'Новый каталог меньше текущей подсобки для некоторых товаров — это уничтожит остаток на витрине. Передайте force:true для подтверждения.',
-              violations,
-            },
-            409,
-          )
-        }
-        stock_warnings_count = violations.length
+        // v8: склад и витрина независимы. Валидация warehouse vs new_showcase больше не нужна.
+        stock_warnings_count = 0
 
         // ─── Upsert балансов каталога ───
         const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = itemsWithStock.map((it) => ({
@@ -691,9 +636,9 @@ export async function POST(request: Request) {
             quantity: Math.abs(delta),
             from_location_id: delta < 0 ? catalogId : null,
             to_location_id: delta > 0 ? catalogId : null,
-            reference_type: 'catalog_excel_import',
+            reference_type: 'showcase_excel_import',
             reference_id: null,
-            comment: `Импорт Excel в каталог: ${prev} → ${it.newQty}`,
+            comment: `Импорт Excel остатков на витрину: ${prev} → ${it.newQty}`,
             actor_user_id: actorUserId,
             created_at: nowIso,
           })

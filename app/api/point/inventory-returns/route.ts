@@ -324,7 +324,7 @@ export async function POST(request: Request) {
     if (body?.action !== 'createReturn') return json({ error: 'invalid-action' }, 400)
 
     const location = await resolvePointLocation(supabase, device.company_id)
-    await ensureCatalogLocationExists(supabase, device.company_id)
+    // v8: catalog_total больше не нужна; возврат пишется в point_display через RPC
     const actor = await resolveActor({ request, supabase, companyId: device.company_id })
 
     const returnDate = String(body.payload?.return_date || '').trim()

@@ -86,6 +86,18 @@ const INVENTORY_ERROR_PREFIXES: Array<{ prefix: string; message: string | ((rest
   { prefix: 'inventory-request-items-required', message: 'Заявка не содержит позиций.' },
   // Товары
   { prefix: 'inventory-item-not-found', message: 'Товар не найден.' },
+  // Жёсткие правила движений (триггер v2)
+  { prefix: 'inventory-movement-validation-sale-from-must-be-showcase', message: 'Продажа должна списываться только с витрины.' },
+  { prefix: 'inventory-movement-validation-return-to-must-be-showcase', message: 'Возврат должен зачисляться только на витрину.' },
+  { prefix: 'inventory-movement-validation-transfer-w2s', message: 'Перемещение «склад → витрина» — только из склада на витрину.' },
+  { prefix: 'inventory-movement-validation-transfer-s2w', message: 'Перемещение «витрина → склад» — только из витрины на склад.' },
+  { prefix: 'inventory-movement-validation-reservation-must-be-warehouse', message: 'Резерв создаётся только на складе.' },
+  { prefix: 'inventory-movement-validation-reservation-release-must-be-warehouse', message: 'Снятие резерва возможно только на складе.' },
+  { prefix: 'inventory-movement-validation-receipt-to-must-be-warehouse-or-showcase', message: 'Приёмка возможна только на склад или витрину.' },
+  { prefix: 'inventory-movement-validation-writeoff-from-must-be-warehouse-or-showcase', message: 'Списание возможно только со склада или с витрины.' },
+  { prefix: 'inventory-reserved-negative', message: 'Резерв не может быть отрицательным.' },
+  { prefix: 'inventory-reservation-exceeds-stock', message: 'Резерв превышает фактический остаток на складе.' },
+  { prefix: 'inventory-request-not-receivable', message: 'Заявка в неподходящем статусе для получения.' },
   // POS общие
   { prefix: 'point-sale-items-required', message: 'Добавьте хотя бы одну позицию в чек.' },
   { prefix: 'point-sale-shift-invalid', message: 'Смена должна быть «день» или «ночь».' },
