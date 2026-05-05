@@ -219,7 +219,7 @@ async function resolveStockLocations(supabase: any, companyId: string) {
 
 async function fetchShowcaseBalances(params: {
   supabase: any
-  catalogId: string
+  catalogId: string | null
   warehouseId: string | null
   showcaseId: string | null
   itemIds?: string[] | null
@@ -239,37 +239,9 @@ async function fetchShowcaseBalances(params: {
     return map
   }
 
-  // Fallback: старая формула catalog - warehouse (если point_display ещё не создан).
-  const catalogQuery = params.supabase
-    .from('inventory_balances')
-    .select('item_id, quantity')
-    .eq('location_id', params.catalogId)
-  if (params.itemIds?.length) catalogQuery.in('item_id', params.itemIds)
-
-  const queries: Array<Promise<any>> = [catalogQuery]
-  if (params.warehouseId) {
-    const warehouseQuery = params.supabase
-      .from('inventory_balances')
-      .select('item_id, quantity')
-      .eq('location_id', params.warehouseId)
-    if (params.itemIds?.length) warehouseQuery.in('item_id', params.itemIds)
-    queries.push(warehouseQuery)
-  }
-
-  const results = await Promise.all(queries)
-  const [catalogRes, warehouseRes] = results
-  if (catalogRes.error) throw catalogRes.error
-  if (warehouseRes?.error) throw warehouseRes.error
-
-  const catalogMap = new Map<string, number>((catalogRes.data || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
-  const warehouseMap = new Map<string, number>((warehouseRes?.data || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
-
-  const showcaseMap = new Map<string, number>()
-  for (const [itemId, catalogQty] of catalogMap) {
-    const warehouseQty = warehouseMap.get(itemId) || 0
-    showcaseMap.set(itemId, Math.max(0, catalogQty - warehouseQty))
-  }
-  return showcaseMap
+  // v8: если point_display не настроен — пустая витрина.
+  // Старая формула catalog - warehouse удалена вместе с catalog_total.
+  return new Map<string, number>()
 }
 
 async function resolveActor(params: {
