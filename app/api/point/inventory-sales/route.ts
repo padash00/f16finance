@@ -205,22 +205,40 @@ async function resolveStockLocations(supabase: any, companyId: string) {
     .from('inventory_locations')
     .select('id, location_type')
     .eq('company_id', companyId)
-    .in('location_type', ['catalog_total', 'warehouse'])
+    .in('location_type', ['catalog_total', 'warehouse', 'point_display'])
     .eq('is_active', true)
 
   if (error) throw error
   const catalogId = (data || []).find((row: any) => row.location_type === 'catalog_total')?.id || null
   const warehouseId = (data || []).find((row: any) => row.location_type === 'warehouse')?.id || null
+  const showcaseId = (data || []).find((row: any) => row.location_type === 'point_display')?.id || null
   if (!catalogId) throw new Error('inventory-sale-catalog-location-missing')
-  return { catalogId, warehouseId }
+  return { catalogId, warehouseId, showcaseId }
 }
 
 async function fetchShowcaseBalances(params: {
   supabase: any
   catalogId: string
   warehouseId: string | null
+  showcaseId: string | null
   itemIds?: string[] | null
 }) {
+  // v2: читаем напрямую из point_display, без формулы.
+  if (params.showcaseId) {
+    const q = params.supabase
+      .from('inventory_balances')
+      .select('item_id, quantity')
+      .eq('location_id', params.showcaseId)
+    if (params.itemIds?.length) q.in('item_id', params.itemIds)
+    const { data, error } = await q
+    if (error) throw error
+    const map = new Map<string, number>(
+      (data || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]),
+    )
+    return map
+  }
+
+  // Fallback: старая формула catalog - warehouse (если point_display ещё не создан).
   const catalogQuery = params.supabase
     .from('inventory_balances')
     .select('item_id, quantity')
@@ -679,7 +697,7 @@ export async function GET(request: Request) {
           .eq('is_active', true)
           .neq('item_type', 'consumable')
           .order('name', { ascending: true }),
-        fetchShowcaseBalances({ supabase, catalogId: stock.catalogId, warehouseId: stock.warehouseId }),
+        fetchShowcaseBalances({ supabase, catalogId: stock.catalogId, warehouseId: stock.warehouseId, showcaseId: stock.showcaseId }),
         supabase
           .from('point_sales')
           .select(
@@ -797,6 +815,7 @@ export async function POST(request: Request) {
         supabase,
         catalogId: stock.catalogId,
         warehouseId: stock.warehouseId,
+        showcaseId: stock.showcaseId,
         itemIds,
       }),
       resolveCustomerSaleContext({

@@ -146,10 +146,12 @@ export async function GET(request: Request) {
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
-      .in('location_id', [catalogLoc.id, warehouseLoc.id])
+      .in('location_id', [catalogLoc.id, warehouseLoc.id, showcaseLoc.id])
     if (balErr) throw balErr
 
-    // catalog_total model: showcase = max(0, catalog_total - warehouse)
+    // v2: showcase читается напрямую из point_display.
+    // Старая формула catalog - warehouse оставлена в полях для совместимости с UI,
+    // которые могут показывать catalog/warehouse отдельно.
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -161,18 +163,21 @@ export async function GET(request: Request) {
           item: row.item,
           catalog_quantity: 0,
           warehouse_quantity: 0,
+          point_display_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
       }
       if (row.location_id === catalogLoc.id) bucket.catalog_quantity = Number(row.quantity) || 0
       else if (row.location_id === warehouseLoc.id) bucket.warehouse_quantity = Number(row.quantity) || 0
+      else if (row.location_id === showcaseLoc.id) bucket.point_display_quantity = Number(row.quantity) || 0
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
     const balances = Array.from(byItem.values())
       .map((b) => {
-        const showcase = Math.max(0, Number(b.catalog_quantity || 0) - Number(b.warehouse_quantity || 0))
+        // v2: читаем напрямую из point_display
+        const showcase = Number(b.point_display_quantity || 0)
         return {
           ...b,
           showcase_quantity: showcase,

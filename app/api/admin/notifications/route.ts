@@ -230,7 +230,7 @@ export async function GET(request: Request) {
         const { data: allLocations, error: locationsError } = await supabase
           .from('inventory_locations')
           .select('id, company_id, location_type')
-          .in('location_type', ['catalog_total', 'warehouse'])
+          .in('location_type', ['catalog_total', 'warehouse', 'point_display'])
         if (locationsError) throw locationsError
 
         const locations = (allLocations || []).filter((row: any) =>
@@ -293,6 +293,7 @@ export async function GET(request: Request) {
                 threshold: number
                 catalogQty: number
                 warehouseQty: number
+                showcaseQty: number
               }
             >()
 
@@ -310,20 +311,18 @@ export async function GET(request: Request) {
                 threshold: Number(item.low_stock_threshold || 0),
                 catalogQty: 0,
                 warehouseQty: 0,
+                showcaseQty: 0,
               }
 
               const qty = Number((row as any).quantity || 0)
               if (location.location_type === 'catalog_total') prev.catalogQty += qty
               if (location.location_type === 'warehouse') prev.warehouseQty += qty
+              if (location.location_type === 'point_display') prev.showcaseQty += qty
               grouped.set(key, prev)
             }
 
-            // Showcase is virtual: catalog - warehouse (matches /store/showcase logic).
+            // v2: showcase читается напрямую из point_display.
             const lowStock = Array.from(grouped.values())
-              .map((entry) => ({
-                ...entry,
-                showcaseQty: Math.max(0, entry.catalogQty - entry.warehouseQty),
-              }))
               .filter((entry) => {
                 // Only count items that exist in inventory (catalog > 0).
                 if (entry.catalogQty <= 0) return false

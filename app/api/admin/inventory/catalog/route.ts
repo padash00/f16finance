@@ -71,16 +71,16 @@ export async function GET(request: Request) {
 
     if (itemsError) throw itemsError
 
-    // Fetch balances with location type: showcase is derived from catalog_total - warehouse
+    // v2: showcase читается напрямую из point_display, не вычисляется формулой
     const { data: balances, error: balancesError } = await supabase
       .from('inventory_balances')
       .select('item_id, quantity, loc:inventory_locations(location_type)')
 
     if (balancesError) throw balancesError
 
-    // catalog_total model: showcase = max(0, catalog_total - warehouse)
     const catalogMap: Record<string, number> = {}
     const warehouseMap: Record<string, number> = {}
+    const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
       const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
       const qty = b.quantity || 0
@@ -88,6 +88,8 @@ export async function GET(request: Request) {
         catalogMap[b.item_id] = (catalogMap[b.item_id] || 0) + qty
       } else if (locType === 'warehouse') {
         warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty
+      } else if (locType === 'point_display') {
+        showcaseMap[b.item_id] = (showcaseMap[b.item_id] || 0) + qty
       }
     }
 
@@ -95,7 +97,7 @@ export async function GET(request: Request) {
     const normalized = (items || []).map((item: any) => {
       const wh = warehouseMap[item.id] || 0
       const cat = catalogMap[item.id] || 0
-      const sh = Math.max(0, cat - wh)
+      const sh = showcaseMap[item.id] || 0
       return {
         ...item,
         category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,

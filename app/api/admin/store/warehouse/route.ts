@@ -157,7 +157,7 @@ export async function GET(request: Request) {
       .in('location_id', [warehouse.id, showcase.id, catalog.id])
     if (balErr) throw balErr
 
-    // Merge by item_id: warehouse + catalog_total (showcase is derived)
+    // v2: showcase читается напрямую из point_display, catalog — для отображения «всего»
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -167,7 +167,7 @@ export async function GET(request: Request) {
         bucket = {
           item_id: itemId,
           item: row.item,
-          showcase_quantity: 0, // derived below
+          showcase_quantity: 0,
           warehouse_quantity: 0,
           catalog_quantity: 0,
           updated_at: row.updated_at,
@@ -176,13 +176,15 @@ export async function GET(request: Request) {
       }
       if (row.location_id === warehouse.id) bucket.warehouse_quantity = Number(row.quantity) || 0
       else if (row.location_id === catalog.id) bucket.catalog_quantity = Number(row.quantity) || 0
+      else if (row.location_id === showcase.id) bucket.showcase_quantity = Number(row.quantity) || 0
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
     const balances = Array.from(byItem.values())
       .map((b) => ({
         ...b,
-        showcase_quantity: Math.max(0, Number(b.catalog_quantity || 0) - Number(b.warehouse_quantity || 0)),
+        // v2: showcase = реальный point_display, не формула
+        showcase_quantity: Number(b.showcase_quantity || 0),
         quantity: Number(b.catalog_quantity || 0),
       }))
       .sort((a, b) => b.quantity - a.quantity)

@@ -60,54 +60,25 @@ export async function GET(request: Request) {
     if (discountsError) throw discountsError
     if (loyaltyConfigError) throw loyaltyConfigError
 
-    // Catalog-модель: витрина = catalog - warehouse по компании.
-    // Ключ — catalog/warehouse location_id, значение — company_id.
-    const catalogByCompany = new Map<string, string>() // company_id → catalog_total_loc_id
-    const warehouseByCompany = new Map<string, string>() // company_id → warehouse_loc_id
-    for (const l of allLocations || []) {
-      if (l.location_type === 'catalog_total') catalogByCompany.set(l.company_id, l.id)
-      else if (l.location_type === 'warehouse') warehouseByCompany.set(l.company_id, l.id)
-    }
+    // v2: showcase читается напрямую из point_display.
+    // pdLocIds — все активные локации витрин
+    const pdLocIds = new Set((locations || []).map((l) => String(l.id)))
 
-    // Маппинг: point_display_location_id → company_id
+    // Маппинг point_display location_id → company_id
     const pdToCompany = new Map<string, string>()
     for (const l of locations || []) pdToCompany.set(l.id, l.company_id)
 
-    // Считаем showcase_qty по (company, item)
-    const catalogBal = new Map<string, number>() // key = `${company_id}:${item_id}`
-    const warehouseBal = new Map<string, number>()
-    for (const b of balances || []) {
-      const qty = Number(b.quantity || 0)
-      // Определяем, это catalog или warehouse — из catalogByCompany / warehouseByCompany
-      for (const [companyId, locId] of catalogByCompany) {
-        if (locId === b.location_id) {
-          catalogBal.set(`${companyId}:${b.item_id}`, qty)
-          break
-        }
-      }
-      for (const [companyId, locId] of warehouseByCompany) {
-        if (locId === b.location_id) {
-          warehouseBal.set(`${companyId}:${b.item_id}`, qty)
-          break
-        }
-      }
-    }
-
     const balanceMap = new Map<string, number>()
     const locationBalanceMap = new Map<string, Record<string, number>>()
-    for (const pdLoc of locations || []) {
-      const companyId = pdLoc.company_id as string
-      for (const item of items || []) {
-        const catalogQ = catalogBal.get(`${companyId}:${item.id}`) || 0
-        const warehouseQ = warehouseBal.get(`${companyId}:${item.id}`) || 0
-        const showcaseQ = Math.max(0, catalogQ - warehouseQ)
-        if (showcaseQ <= 0) continue
-        const current = balanceMap.get(item.id) || 0
-        balanceMap.set(item.id, current + showcaseQ)
-        const byLocation = locationBalanceMap.get(item.id) || {}
-        byLocation[pdLoc.id] = showcaseQ
-        locationBalanceMap.set(item.id, byLocation)
-      }
+    for (const b of balances || []) {
+      if (!pdLocIds.has(String(b.location_id))) continue
+      const qty = Number(b.quantity || 0)
+      if (qty <= 0) continue
+      const current = balanceMap.get(b.item_id) || 0
+      balanceMap.set(b.item_id, current + qty)
+      const byLocation = locationBalanceMap.get(b.item_id) || {}
+      byLocation[b.location_id] = qty
+      locationBalanceMap.set(b.item_id, byLocation)
     }
 
     // Map items with category_name and total_balance
