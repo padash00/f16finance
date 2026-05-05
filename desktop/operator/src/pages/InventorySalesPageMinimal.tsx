@@ -132,6 +132,9 @@ export default function InventorySalesPageMinimal({
   const [viewMode, setViewMode] = useState<'sale' | 'history'>('sale')
   const [selectedSale, setSelectedSale] = useState<any | null>(null)
 
+  // Подтверждение оплаты
+  const [showPayConfirm, setShowPayConfirm] = useState(false)
+
   // Корректировка оплаты
   const [correctionMethod, setCorrectionMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [correctionCash, setCorrectionCash] = useState('')
@@ -500,11 +503,31 @@ export default function InventorySalesPageMinimal({
     }
   }
 
-  async function handlePay() {
+  function openPayConfirm() {
     if (cart.length === 0) {
       toastError('Корзина пуста')
       return
     }
+    if (finalTotal <= 0) {
+      toastError('Сумма должна быть больше 0')
+      return
+    }
+    if (paymentMethod === 'mixed') {
+      const cashCheck = Math.max(0, parseMoney(mixedCash))
+      const kaspiCheck = Math.max(0, parseMoney(mixedKaspi))
+      if (cashCheck <= 0 || kaspiCheck <= 0) {
+        toastError('Заполните обе суммы для смешанной оплаты')
+        return
+      }
+      if (Math.abs(cashCheck + kaspiCheck - finalTotal) > 0.5) {
+        toastError(`Сумма ${cashCheck + kaspiCheck} ₸ не совпадает с итогом ${finalTotal} ₸`)
+        return
+      }
+    }
+    setShowPayConfirm(true)
+  }
+
+  async function handlePay() {
     const cashAmount =
       paymentMethod === 'cash'
         ? finalTotal
@@ -517,11 +540,6 @@ export default function InventorySalesPageMinimal({
         : paymentMethod === 'mixed'
           ? Math.max(0, finalTotal - cashAmount)
           : 0
-
-    if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
-      toastError('В смешанной оплате обе суммы должны быть больше 0')
-      return
-    }
 
     setSaving(true)
     try {
@@ -581,6 +599,7 @@ export default function InventorySalesPageMinimal({
       printReceipt(preview)
 
       clearAll()
+      setShowPayConfirm(false)
       void load(true)
     } catch (err: any) {
       beep('error')
@@ -1122,18 +1141,11 @@ export default function InventorySalesPageMinimal({
             <div className="mt-auto flex flex-col gap-2">
               <Button
                 type="button"
-                onClick={() => void handlePay()}
+                onClick={openPayConfirm}
                 disabled={saving || cart.length === 0}
                 className="h-14 rounded-2xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
               >
-                {saving ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Сохраняем…
-                  </span>
-                ) : (
-                  <>ОПЛАТИТЬ · {formatMoney(finalTotal)} ₸</>
-                )}
+                ОПЛАТИТЬ · {formatMoney(finalTotal)} ₸
               </Button>
               {cart.length > 0 && (
                 <Button type="button" variant="outline" onClick={clearAll} className="h-10 rounded-xl">
@@ -1146,6 +1158,131 @@ export default function InventorySalesPageMinimal({
         </>
         )}
       </main>
+
+      {/* Модалка подтверждения оплаты */}
+      {showPayConfirm && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => !saving && setShowPayConfirm(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-slate-900">
+            {/* Шапка */}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold">Подтвердите оплату</h3>
+                <p className="text-xs text-slate-500">Проверьте детали чека перед проведением</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !saving && setShowPayConfirm(false)}
+                disabled={saving}
+                className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Список товаров */}
+            <div className="max-h-64 overflow-auto px-5 py-3">
+              <div className="space-y-1">
+                {cartDetailed.map((line) => (
+                  <div key={line.id} className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-1.5 last:border-b-0 dark:border-slate-800/50">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{line.name}</p>
+                      <p className="text-xs text-slate-500">{line.quantity} × {formatMoney(line.unit_price)} ₸</p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums">{formatMoney(line.total)} ₸</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Сводка */}
+            <div className="border-t border-slate-200 px-5 py-3 dark:border-slate-800">
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between text-slate-500">
+                  <span>Подытог ({cartDetailed.length} поз. · {cartDetailed.reduce((s, l) => s + l.quantity, 0)} шт)</span>
+                  <span className="tabular-nums">{formatMoney(subtotal)} ₸</span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                    <span>Скидка {effectiveDiscountPercent}%{appliedPromoCode ? ` (${appliedPromoCode})` : ''}</span>
+                    <span className="tabular-nums">−{formatMoney(discountAmount)} ₸</span>
+                  </div>
+                )}
+                {loyaltyDiscountAmount > 0 && (
+                  <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                    <span>Бонусы ({loyaltyPointsToSpend} б.)</span>
+                    <span className="tabular-nums">−{formatMoney(loyaltyDiscountAmount)} ₸</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Способ оплаты */}
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-semibold">
+                    {paymentMethod === 'cash' ? 'Наличные' : paymentMethod === 'kaspi' ? 'Kaspi' : 'Смешанная'}
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums">
+                    {formatMoney(finalTotal)} <span className="text-sm font-medium text-slate-500">₸</span>
+                  </span>
+                </div>
+                {paymentMethod === 'mixed' && (
+                  <div className="mt-2 space-y-0.5 border-t border-slate-200 pt-2 text-xs text-slate-500 dark:border-slate-700">
+                    <div className="flex justify-between">
+                      <span>Наличные</span>
+                      <span className="tabular-nums">{formatMoney(parseMoney(mixedCash))} ₸</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Kaspi</span>
+                      <span className="tabular-nums">{formatMoney(parseMoney(mixedKaspi))} ₸</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Клиент / Комментарий */}
+              {selectedCustomer && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                  <UserCircle2 className="h-3.5 w-3.5" />
+                  <span>{selectedCustomer.name}{selectedCustomer.phone ? ` · ${selectedCustomer.phone}` : ''}</span>
+                </div>
+              )}
+              {comment.trim() && (
+                <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  {comment.trim()}
+                </div>
+              )}
+            </div>
+
+            {/* Кнопки */}
+            <div className="flex flex-col gap-2 border-t border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPayConfirm(false)}
+                disabled={saving}
+                className="h-12 sm:order-1 sm:w-auto sm:px-6"
+              >
+                Отмена
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handlePay()}
+                disabled={saving}
+                className="h-14 rounded-xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600 disabled:opacity-50 sm:order-2 sm:h-12 sm:px-8"
+              >
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Проводим…
+                  </span>
+                ) : (
+                  <>✓ Подтвердить · {formatMoney(finalTotal)} ₸</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модалка корректировки оплаты */}
       {selectedSale && (

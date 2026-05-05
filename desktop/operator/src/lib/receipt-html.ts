@@ -173,18 +173,35 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       </div>
     </div>
     <script>
-      window.onload = () => { window.print(); };
+      window.onload = () => {
+        try { window.focus(); } catch (e) {}
+        // Небольшая задержка чтобы стили успели применится перед печатью
+        setTimeout(() => { try { window.focus(); window.print(); } catch (e) {} }, 100);
+      };
     </script>
   </body>
 </html>`
 }
 
 export function printReceipt(preview: SaleReceiptPreview) {
-  const win = window.open('', '_blank', 'width=420,height=720')
+  const win = window.open('', '_blank', 'width=420,height=720,top=80,left=80')
   if (!win) return false
   win.document.open()
   win.document.write(buildReceiptHtml(preview))
   win.document.close()
+  // Несколько попыток поднять окно чека на передний план
+  // (Electron + некоторые ОС забирают фокус обратно в основное окно)
+  const focusReceipt = () => {
+    try {
+      win.focus()
+      if ((win as any).moveTo) (win as any).moveTo(80, 80)
+    } catch {
+      /* ignore */
+    }
+  }
+  setTimeout(focusReceipt, 50)
+  setTimeout(focusReceipt, 250)
+  setTimeout(focusReceipt, 600)
   return true
 }
 
