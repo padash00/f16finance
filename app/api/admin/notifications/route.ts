@@ -230,7 +230,7 @@ export async function GET(request: Request) {
         const { data: allLocations, error: locationsError } = await supabase
           .from('inventory_locations')
           .select('id, company_id, location_type')
-          .in('location_type', ['catalog_total', 'warehouse', 'point_display'])
+          .in('location_type', ['warehouse', 'point_display'])
         if (locationsError) throw locationsError
 
         const locations = (allLocations || []).filter((row: any) =>
@@ -315,19 +315,20 @@ export async function GET(request: Request) {
               }
 
               const qty = Number((row as any).quantity || 0)
-              if (location.location_type === 'catalog_total') prev.catalogQty += qty
               if (location.location_type === 'warehouse') prev.warehouseQty += qty
               if (location.location_type === 'point_display') prev.showcaseQty += qty
               grouped.set(key, prev)
             }
 
-            // v2: showcase читается напрямую из point_display.
+            // v8: catalog = warehouse + showcase. Низкий остаток = витрина пустеет,
+            // но товар где-то ещё есть (на складе) — иначе он просто отсутствует.
             const lowStock = Array.from(grouped.values())
+              .map((entry) => ({ ...entry, catalogQty: entry.warehouseQty + entry.showcaseQty }))
               .filter((entry) => {
-                // Only count items that exist in inventory (catalog > 0).
+                // Считаем только товары, которые есть на точке (склад + витрина > 0)
                 if (entry.catalogQty <= 0) return false
-                // With threshold: flag if showcase ≤ threshold.
-                // Without threshold: flag only if showcase hits zero.
+                // Если задан порог — флаг при showcase ≤ порог
+                // Без порога — флаг только при showcase = 0 и при наличии товара на складе
                 return entry.threshold > 0 ? entry.showcaseQty <= entry.threshold : entry.showcaseQty <= 0
               })
 
