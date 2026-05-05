@@ -194,7 +194,9 @@ export async function GET(request: Request) {
           quantity: wh + sh,
         }
       })
-      .sort((a, b) => b.quantity - a.quantity)
+      // Страница склада показывает только товары, которые есть на складе
+      .filter((b) => Number(b.warehouse_quantity || 0) > 0 || Number(b.warehouse_reserved || 0) > 0)
+      .sort((a, b) => Number(b.warehouse_quantity || 0) - Number(a.warehouse_quantity || 0))
 
     const { data: categories } = await supabase
       .from('inventory_categories')

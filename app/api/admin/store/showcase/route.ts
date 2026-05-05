@@ -181,7 +181,8 @@ export async function GET(request: Request) {
           quantity: showcase, // back-compat: UI reads b.quantity as showcase
         }
       })
-      .filter((b) => b.showcase_quantity > 0 || b.warehouse_quantity > 0)
+      // Страница витрины показывает только товары, которые есть на витрине
+      .filter((b) => b.showcase_quantity > 0)
       .sort((a, b) => b.showcase_quantity - a.showcase_quantity)
 
     // Items available in warehouse for request dropdown
