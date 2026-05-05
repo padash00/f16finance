@@ -37,11 +37,16 @@ select 'step 2', 'Уникальный индекс по idempotency_key',
 union all
 select 'step 2', 'CHECK включает reservation/transfer_warehouse_to_showcase/migration_initial',
   case when (
-    select pg_get_constraintdef(oid)
-    from pg_constraint
-    where conname='inventory_movements_movement_type_check'
-  ) like '%reservation%transfer_warehouse_to_showcase%migration_initial%'
-    then '✓' else '✗' end, ''
+    -- Проверяем независимо от порядка
+    (
+      (select pg_get_constraintdef(oid) from pg_constraint
+        where conname='inventory_movements_movement_type_check') like '%reservation%'
+      and (select pg_get_constraintdef(oid) from pg_constraint
+        where conname='inventory_movements_movement_type_check') like '%transfer_warehouse_to_showcase%'
+      and (select pg_get_constraintdef(oid) from pg_constraint
+        where conname='inventory_movements_movement_type_check') like '%migration_initial%'
+    )
+  ) then '✓' else '✗' end, ''
 
 -- Step 3: backfill витрины
 union all
