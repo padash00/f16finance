@@ -128,6 +128,17 @@ export default function InventorySalesPageMinimal({
   const [uniName, setUniName] = useState('')
   const [uniPrice, setUniPrice] = useState('')
 
+  // Режим: продажа или история
+  const [viewMode, setViewMode] = useState<'sale' | 'history'>('sale')
+  const [selectedSale, setSelectedSale] = useState<any | null>(null)
+
+  // Корректировка оплаты
+  const [correctionMethod, setCorrectionMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
+  const [correctionCash, setCorrectionCash] = useState('')
+  const [correctionKaspi, setCorrectionKaspi] = useState('')
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [correctionSaving, setCorrectionSaving] = useState(false)
+
   const [now, setNow] = useState(() => new Date())
   const searchRef = useRef<HTMLInputElement | null>(null)
 
@@ -430,6 +441,65 @@ export default function InventorySalesPageMinimal({
     clearCustomer()
   }
 
+  function openCorrection(sale: any) {
+    setSelectedSale(sale)
+    setCorrectionMethod(sale.payment_method || 'cash')
+    setCorrectionCash(String(Number(sale.cash_amount || 0)))
+    setCorrectionKaspi(String(Number(sale.kaspi_amount || 0)))
+    setCorrectionReason('')
+  }
+
+  function closeCorrection() {
+    setSelectedSale(null)
+    setCorrectionReason('')
+  }
+
+  async function handleCorrection() {
+    if (!selectedSale) return
+    if (!correctionReason.trim()) {
+      toastError('Укажите причину исправления')
+      return
+    }
+    const total = Number(selectedSale.total_amount || 0)
+    const cash =
+      correctionMethod === 'cash'
+        ? total
+        : correctionMethod === 'mixed'
+          ? Math.max(0, Math.min(total, parseMoney(correctionCash)))
+          : 0
+    const kaspi =
+      correctionMethod === 'kaspi'
+        ? total
+        : correctionMethod === 'mixed'
+          ? Math.max(0, total - cash)
+          : 0
+    if (correctionMethod === 'mixed' && (cash <= 0 || kaspi <= 0)) {
+      toastError('В смешанной оплате обе суммы должны быть больше 0')
+      return
+    }
+    setCorrectionSaving(true)
+    try {
+      await api.correctPointInventorySalePayment(config, session, {
+        sale_id: selectedSale.id,
+        payment_method: correctionMethod,
+        cash_amount: cash,
+        kaspi_amount: kaspi,
+        kaspi_before_midnight_amount:
+          runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspi,
+        kaspi_after_midnight_amount:
+          runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspi : 0,
+        reason: correctionReason.trim(),
+      })
+      toastSuccess('Оплата исправлена')
+      closeCorrection()
+      void load(true)
+    } catch (err: any) {
+      toastError(err?.message || 'Не удалось исправить оплату')
+    } finally {
+      setCorrectionSaving(false)
+    }
+  }
+
   async function handlePay() {
     if (cart.length === 0) {
       toastError('Корзина пуста')
@@ -561,8 +631,97 @@ export default function InventorySalesPageMinimal({
         </div>
       </header>
 
+      {/* Вкладки: Продажи / История */}
+      <nav className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-900 sm:px-4">
+        {(['sale', 'history'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setViewMode(mode)}
+            className={`relative px-4 py-2.5 text-sm font-medium transition ${
+              viewMode === mode
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            {mode === 'sale' ? 'Продажи' : `История${(context?.sales?.length || 0) > 0 ? ` (${context?.sales?.length})` : ''}`}
+            {viewMode === mode && (
+              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-emerald-500" />
+            )}
+          </button>
+        ))}
+      </nav>
+
       {/* Основной контент */}
       <main className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        {viewMode === 'history' ? (
+          <section className="flex-1 overflow-auto p-3 sm:p-4">
+            {(context?.sales || []).length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+                <ReceiptIcon className="h-12 w-12 opacity-30" />
+                <p className="text-sm">Чеков ещё нет</p>
+                <p className="text-xs text-slate-500">Все ваши продажи за смену появятся здесь</p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                      <th className="px-3 py-3 text-left font-medium">Время</th>
+                      <th className="px-3 py-3 text-left font-medium">Позиций</th>
+                      <th className="px-3 py-3 text-left font-medium">Оплата</th>
+                      <th className="px-3 py-3 text-right font-medium">Сумма</th>
+                      <th className="w-32 px-3 py-3 text-right font-medium">Действие</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(context?.sales || []).map((sale) => {
+                      const t = sale.sold_at ? new Date(sale.sold_at) : null
+                      const timeStr = t ? t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '—'
+                      return (
+                        <tr key={sale.id} className="border-b border-slate-100 last:border-b-0 dark:border-slate-800/50">
+                          <td className="px-3 py-3">
+                            <p className="text-sm font-medium">{timeStr}</p>
+                            <p className="text-xs text-slate-500">#{sale.id.slice(-6)}</p>
+                          </td>
+                          <td className="px-3 py-3 text-sm">{sale.items?.length || 0}</td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                sale.payment_method === 'cash'
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  : sale.payment_method === 'kaspi'
+                                    ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300'
+                                    : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                              }`}
+                            >
+                              {sale.payment_method === 'cash' ? 'Наличные' : sale.payment_method === 'kaspi' ? 'Kaspi' : 'Смешанная'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums">
+                            {formatMoney(sale.total_amount)} ₸
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openCorrection(sale)}
+                              className="h-8 text-xs"
+                            >
+                              Исправить оплату
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : (
+        <>
         {/* Левая зона: поиск + таблица позиций */}
         <section className="flex flex-1 flex-col overflow-hidden">
           {/* Поиск */}
@@ -984,7 +1143,92 @@ export default function InventorySalesPageMinimal({
             </div>
           </div>
         </aside>
+        </>
+        )}
       </main>
+
+      {/* Модалка корректировки оплаты */}
+      {selectedSale && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={closeCorrection}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
+            <h3 className="text-base font-semibold">Исправить оплату</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Чек #{selectedSale.id.slice(-6)} · {formatMoney(selectedSale.total_amount)} ₸
+            </p>
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['cash', 'kaspi', 'mixed'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setCorrectionMethod(m)}
+                    className={`rounded-xl border py-2 text-sm font-medium transition ${
+                      correctionMethod === m
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                    }`}
+                  >
+                    {m === 'cash' ? 'Наличные' : m === 'kaspi' ? 'Kaspi' : 'Смешан.'}
+                  </button>
+                ))}
+              </div>
+              {correctionMethod === 'mixed' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label>
+                    <span className="text-xs text-slate-500">Наличные</span>
+                    <input
+                      value={correctionCash}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setCorrectionCash(v)
+                        const total = Number(selectedSale.total_amount || 0)
+                        const cash = Math.max(0, Math.min(total, parseMoney(v)))
+                        setCorrectionKaspi(String(Math.max(0, total - cash)))
+                      }}
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                    />
+                  </label>
+                  <label>
+                    <span className="text-xs text-slate-500">Kaspi</span>
+                    <input
+                      value={correctionKaspi}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setCorrectionKaspi(v)
+                        const total = Number(selectedSale.total_amount || 0)
+                        const kaspi = Math.max(0, Math.min(total, parseMoney(v)))
+                        setCorrectionCash(String(Math.max(0, total - kaspi)))
+                      }}
+                      className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                    />
+                  </label>
+                </div>
+              )}
+              <label className="block">
+                <span className="text-xs text-slate-500">Причина исправления (обязательно)</span>
+                <textarea
+                  value={correctionReason}
+                  onChange={(e) => setCorrectionReason(e.target.value)}
+                  rows={2}
+                  placeholder="Например: ошибка при выборе способа оплаты"
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={closeCorrection} disabled={correctionSaving}>Отмена</Button>
+              <Button
+                type="button"
+                onClick={() => void handleCorrection()}
+                disabled={correctionSaving || !correctionReason.trim()}
+                className="bg-emerald-500 hover:bg-emerald-600"
+              >
+                {correctionSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Исправить'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модалка универсального товара */}
       {showUniversal && (
