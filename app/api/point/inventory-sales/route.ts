@@ -876,9 +876,11 @@ export async function POST(request: Request) {
       },
     })
 
-    // Trigger low stock check in background (don't await) — читаем с catalog
+    // Low stock check в фоне — проверяем витрину (point_display)
     const soldItemIds = items.map((i) => i.item_id)
-    checkAndNotifyLowStock(soldItemIds, stock.catalogId).catch(() => null)
+    if (stock.showcaseId) {
+      checkAndNotifyLowStock(soldItemIds, stock.showcaseId).catch(() => null)
+    }
 
     return json({
       ok: true,
