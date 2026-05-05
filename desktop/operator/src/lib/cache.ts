@@ -59,3 +59,27 @@ export async function clearOperatorSession(): Promise<void> {
   const { operatorSession: _, ...rest } = c
   await ipc.cache.set({ ...rest })
 }
+
+// Кэш для страницы продаж — для мгновенного показа на медленном интернете.
+// При загрузке страницы сначала показываем сохранённый контекст, потом обновляем с сервера.
+const SALES_CONTEXT_MAX_AGE_MS = 60 * 60 * 1000 // 1 час
+
+export async function saveSalesContextCache(context: unknown): Promise<void> {
+  try {
+    await save({ salesContext: { data: context, savedAt: new Date().toISOString() } } as any)
+  } catch {
+    /* безопасно игнорируем — это просто кэш */
+  }
+}
+
+export async function getCachedSalesContext<T = unknown>(): Promise<T | null> {
+  try {
+    const c = (await load()) as any
+    if (!c.salesContext) return null
+    const age = Date.now() - new Date(c.salesContext.savedAt).getTime()
+    if (age > SALES_CONTEXT_MAX_AGE_MS) return null
+    return c.salesContext.data as T
+  } catch {
+    return null
+  }
+}

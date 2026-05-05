@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import * as api from '@/lib/api'
+import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatDate, formatMoney, localRef, parseMoney } from '@/lib/utils'
@@ -159,54 +160,117 @@ function buildReceiptHtml(preview: SaleReceiptPreview) {
     .filter(Boolean)
     .join('')
 
+  const totalQty = preview.lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
+  const itemsCount = preview.lines.length
+
   return `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
     <title>Чек ${escapeHtml(preview.saleId?.slice(-6) || '')}</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 16px; color: #111827; }
-      .wrap { max-width: 360px; margin: 0 auto; }
+      @page { size: 80mm auto; margin: 4mm; }
+      * { box-sizing: border-box; }
+      body { font-family: 'Arial', sans-serif; margin: 0; padding: 8px 6px; color: #000; font-size: 14px; line-height: 1.4; }
+      .wrap { max-width: 76mm; margin: 0 auto; }
       .center { text-align: center; }
-      .muted { color: #6b7280; font-size: 12px; }
-      .line { border-top: 1px dashed #9ca3af; margin: 10px 0; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      td { padding: 2px 0; vertical-align: top; }
-      .summary { font-size: 13px; }
-      .total { font-size: 16px; font-weight: 700; }
+      .muted { color: #4b5563; font-size: 12px; }
+      .line { border-top: 1px dashed #000; margin: 8px 0; }
+      .double-line { border-top: 2px solid #000; margin: 8px 0; }
+      .header-title { font-weight: 800; font-size: 22px; letter-spacing: 1px; }
+      .header-sub { font-size: 13px; margin-top: 2px; }
+      .meta { font-size: 12px; margin-top: 6px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .item-row td { padding: 4px 0 0 0; vertical-align: top; }
+      .item-name { font-weight: 600; font-size: 14px; }
+      .item-qty-price { font-size: 12px; color: #4b5563; padding-bottom: 4px; border-bottom: 1px dotted #d1d5db; }
+      .summary-row { display: flex; justify-content: space-between; font-size: 14px; padding: 2px 0; }
+      .summary-row.discount { color: #dc2626; }
+      .total-block { background: #000; color: #fff; padding: 8px 10px; margin: 8px 0 4px; border-radius: 4px; }
+      .total-row { display: flex; justify-content: space-between; align-items: baseline; }
+      .total-label { font-size: 14px; font-weight: 600; }
+      .total-value { font-size: 22px; font-weight: 800; }
+      .payment-row { display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px; padding: 4px 0; }
+      .payment-label { font-weight: 600; }
+      .footer { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 11px; }
+      .thanks { font-size: 16px; font-weight: 700; margin-top: 8px; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="center">
-        <div style="font-weight:700;font-size:18px;">ORDA POINT</div>
-        <div class="muted">${escapeHtml(preview.companyName)} · ${escapeHtml(preview.locationName)}</div>
-        <div class="muted">${escapeHtml(preview.saleDate)} ${escapeHtml(preview.saleTime)} · ${escapeHtml(formatShiftLabel(preview.shift))}</div>
-        <div class="muted">Чек #${escapeHtml(preview.saleId?.slice(-6) || 'новый')}</div>
+        <div class="header-title">ORDA POINT</div>
+        <div class="header-sub">${escapeHtml(preview.companyName)}</div>
+        <div class="muted">${escapeHtml(preview.locationName)}</div>
+      </div>
+      <div class="line"></div>
+      <div class="meta">
+        <div><strong>Дата:</strong> ${escapeHtml(preview.saleDate)} ${escapeHtml(preview.saleTime)}</div>
+        <div><strong>Смена:</strong> ${escapeHtml(formatShiftLabel(preview.shift))}</div>
+        <div><strong>Чек №:</strong> ${escapeHtml(preview.saleId?.slice(-6) || 'новый')}</div>
+        <div><strong>Оператор:</strong> ${escapeHtml(preview.operatorName)}</div>
       </div>
       <div class="line"></div>
       <table>
-        <thead>
-          <tr class="muted">
-            <td>Товар</td>
-            <td style="text-align:center;">Кол.</td>
-            <td style="text-align:right;">Цена</td>
-            <td style="text-align:right;">Сумма</td>
+        <tbody>${preview.lines
+          .map(
+            (line) => `
+          <tr class="item-row">
+            <td colspan="2">
+              <div class="item-name">${escapeHtml(line.name)}</div>
+              <div class="item-qty-price">
+                ${line.quantity} × ${escapeHtml(formatMoney(line.unit_price))}
+                <span style="float:right;font-weight:600;color:#000;">${escapeHtml(formatMoney(line.total))}</span>
+              </div>
+            </td>
           </tr>
-        </thead>
-        <tbody>${linesHtml}</tbody>
+        `,
+          )
+          .join('')}</tbody>
       </table>
       <div class="line"></div>
-      <div class="summary" style="display:flex;justify-content:space-between;"><span>Подытог</span><strong>${escapeHtml(formatMoney(preview.subtotal))}</strong></div>
-      ${discountRows}
-      <div class="line"></div>
-      <div class="total" style="display:flex;justify-content:space-between;"><span>Итого</span><span>${escapeHtml(formatMoney(preview.totalAmount))}</span></div>
-      <div class="summary" style="display:flex;justify-content:space-between;margin-top:6px;"><span>${escapeHtml(paymentBadge(preview.paymentMethod))}</span><strong>${escapeHtml(formatMoney(preview.totalAmount))}</strong></div>
-      ${preview.paymentMethod === 'mixed' ? `<div class="muted" style="margin-top:4px;">Наличные: ${escapeHtml(formatMoney(preview.cashAmount))} · Kaspi: ${escapeHtml(formatMoney(preview.kaspiAmount))}</div>` : ''}
+      <div class="summary-row"><span>Позиций</span><span>${itemsCount}</span></div>
+      <div class="summary-row"><span>Всего штук</span><span>${totalQty}</span></div>
+      <div class="summary-row"><span>Подытог</span><strong>${escapeHtml(formatMoney(preview.subtotal))}</strong></div>
+      ${
+        preview.discountAmount > 0
+          ? `<div class="summary-row discount"><span>Скидка</span><strong>− ${escapeHtml(formatMoney(preview.discountAmount))}</strong></div>`
+          : ''
+      }
+      ${
+        preview.loyaltyDiscountAmount > 0
+          ? `<div class="summary-row discount"><span>Бонусы</span><strong>− ${escapeHtml(formatMoney(preview.loyaltyDiscountAmount))}</strong></div>`
+          : ''
+      }
+      <div class="total-block">
+        <div class="total-row">
+          <span class="total-label">К оплате</span>
+          <span class="total-value">${escapeHtml(formatMoney(preview.totalAmount))} ₸</span>
+        </div>
+      </div>
+      <div class="payment-row">
+        <span class="payment-label">${escapeHtml(paymentBadge(preview.paymentMethod))}</span>
+        <strong>${escapeHtml(formatMoney(preview.totalAmount))} ₸</strong>
+      </div>
+      ${
+        preview.paymentMethod === 'mixed'
+          ? `
+        <div class="payment-row" style="font-size:12px;color:#4b5563;">
+          <span>↳ Наличные</span><span>${escapeHtml(formatMoney(preview.cashAmount))} ₸</span>
+        </div>
+        <div class="payment-row" style="font-size:12px;color:#4b5563;">
+          <span>↳ Kaspi</span><span>${escapeHtml(formatMoney(preview.kaspiAmount))} ₸</span>
+        </div>
+      `
+          : ''
+      }
       ${customerBlock}
       ${commentBlock}
-      <div class="muted" style="margin-top:10px;">Оператор: ${escapeHtml(preview.operatorName)}</div>
-      <div class="center muted" style="margin-top:12px;">Спасибо за покупку</div>
+      <div class="footer center">
+        <div class="thanks">СПАСИБО ЗА ПОКУПКУ!</div>
+        <div class="muted" style="margin-top:6px;">Сохраните чек до выхода</div>
+        <div class="muted" style="margin-top:4px;">Возврат: 14 дней</div>
+      </div>
     </div>
     <script>
       window.onload = () => { window.print(); };
@@ -250,6 +314,7 @@ export default function InventorySalesPage({
   const [comment, setComment] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [mixedCash, setMixedCash] = useState('')
+  const [mixedKaspi, setMixedKaspi] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [receiptPreview, setReceiptPreview] = useState<SaleReceiptPreview | null>(null)
   const [correctionSale, setCorrectionSale] = useState<PointInventorySaleRow | null>(null)
@@ -280,22 +345,39 @@ export default function InventorySalesPage({
   const [promoValidating, setPromoValidating] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
-  async function load() {
-    setLoading(true)
+  async function load(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) setLoading(true)
     setError(null)
     try {
       const data = await api.getPointInventorySales(config, session)
       setContext(data)
+      void saveSalesContextCache(data)
     } catch (err: any) {
-      setContext(null)
-      setError(err?.message || 'Не удалось загрузить витрину точки')
+      // Если есть кэш — оставляем то что показывали; ошибку показываем только при первом запуске
+      if (!opts.silent) {
+        setContext(null)
+        setError(err?.message || 'Не удалось загрузить витрину точки')
+      }
     } finally {
-      setLoading(false)
+      if (!opts.silent) setLoading(false)
     }
   }
 
   useEffect(() => {
-    void load()
+    let cancelled = false
+    void (async () => {
+      // Сначала показываем кэшированный контекст (мгновенно при медленном интернете)
+      const cached = await getCachedSalesContext<typeof context>().catch(() => null)
+      if (!cancelled && cached) {
+        setContext(cached as any)
+        setLoading(false)
+        // Тихо обновляем с сервера в фоне
+        void load({ silent: true })
+      } else if (!cancelled) {
+        void load()
+      }
+    })()
+    return () => { cancelled = true }
   }, [])
 
   // Customer search with debounce
@@ -490,6 +572,7 @@ export default function InventorySalesPage({
     setCategoryFilter('all')
     setShowAllCatalog(false)
     setMixedCash('')
+    setMixedKaspi('')
     setPaymentMethod('cash')
     clearCustomer()
     setManualDiscountPercent('')
@@ -1202,11 +1285,31 @@ export default function InventorySalesPage({
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <p className="mb-1 text-[10px] text-muted-foreground">Наличными</p>
-                  <Input value={mixedCash} onChange={(e) => setMixedCash(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                  <Input
+                    value={mixedCash}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setMixedCash(value)
+                      const cash = Math.max(0, Math.min(finalTotal, parseMoney(value)))
+                      setMixedKaspi(String(Math.max(0, finalTotal - cash)))
+                    }}
+                    placeholder="0"
+                    className="h-8 text-xs"
+                  />
                 </div>
                 <div>
                   <p className="mb-1 text-[10px] text-muted-foreground">Kaspi</p>
-                  <Input value={String(Math.max(0, finalTotal - Math.max(0, parseMoney(mixedCash))))} readOnly className="h-8 text-xs" />
+                  <Input
+                    value={mixedKaspi}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setMixedKaspi(value)
+                      const kaspi = Math.max(0, Math.min(finalTotal, parseMoney(value)))
+                      setMixedCash(String(Math.max(0, finalTotal - kaspi)))
+                    }}
+                    placeholder="0"
+                    className="h-8 text-xs"
+                  />
                 </div>
               </div>
             )}
