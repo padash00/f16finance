@@ -1,31 +1,51 @@
 /**
- * Прототип минималистичного дизайна страницы продаж под стиль Wipon Pro.
+ * Минималистичный дизайн страницы продаж под стиль Wipon Pro.
  *
- * ВАЖНО: это прототип, не замена основной страницы.
- * Базовый flow: поиск/штрихкод → добавить → корзина → оплата → чек.
+ * Что есть:
+ * - Поиск товара (название/штрихкод/артикул) с авто-добавлением
+ * - Универсальный товар (ручной ввод названия и цены)
+ * - Таблица позиций чека по центру
+ * - Скидки (ручной % + промокоды)
+ * - Клиенты и бонусы лояльности
+ * - Комментарий к продаже
+ * - Все 3 способа оплаты с автозаполнением смешанной
+ * - Печать чека после оплаты
+ * - Звуковой сигнал при добавлении/ошибке
+ * - Адаптивная вёрстка от 10" планшета до 34" монитора
  *
- * Нет в этом прототипе (можно добавить позже):
- * - Скидки и промокоды
- * - Клиенты и бонусы
- * - Корректировка оплаты на проведённых чеках
- * - История продаж
- *
- * Подключается через флаг в App.tsx.
+ * Подключается через VITE_USE_MINIMAL_SALES=1 при сборке.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, LogOut, Minus, Plus, RefreshCw, Search, X } from 'lucide-react'
+import {
+  Loader2,
+  LogOut,
+  Minus,
+  Percent,
+  Plus,
+  Receipt as ReceiptIcon,
+  RefreshCw,
+  Search,
+  Star,
+  Tag,
+  Trash2,
+  UserCircle2,
+  X,
+} from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
+import { beep, formatShiftLabel, printReceipt, type SaleReceiptPreview } from '@/lib/receipt-html'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatMoney, localRef, parseMoney } from '@/lib/utils'
 import type {
   AppConfig,
   BootstrapData,
+  Customer,
+  LoyaltyConfig,
   OperatorSession,
   PointInventorySaleContext,
   PointInventorySaleItem,
@@ -44,27 +64,15 @@ type Props = {
 }
 
 type CartLine = {
-  item_id: string
+  id: string             // unique key для React (для универсальных товаров — random)
+  item_id: string | null // null для универсального товара
+  name: string
+  unit?: string | null
   quantity: number
   unit_price: number
 }
 
-function formatShiftLabel(shift: 'day' | 'night' | string) {
-  if (shift === 'day') return 'Дневная'
-  if (shift === 'night') return 'Ночная'
-  return shift
-}
-
-function buildReceipt(html: string) {
-  const win = window.open('', '_blank', 'width=420,height=720')
-  if (!win) {
-    toastError('Не удалось открыть окно печати')
-    return
-  }
-  win.document.open()
-  win.document.write(html)
-  win.document.close()
-}
+const UNIVERSAL_PRODUCT_PREFIX = 'universal:'
 
 export default function InventorySalesPageMinimal({
   config,
@@ -88,10 +96,38 @@ export default function InventorySalesPageMinimal({
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
+  const [comment, setComment] = useState('')
+
+  // Оплата
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [mixedCash, setMixedCash] = useState('')
   const [mixedKaspi, setMixedKaspi] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Скидки
+  const [showDiscount, setShowDiscount] = useState(false)
+  const [manualDiscountPercent, setManualDiscountPercent] = useState('')
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
+  const [promoDiscountPercent, setPromoDiscountPercent] = useState(0)
+  const [promoValidating, setPromoValidating] = useState(false)
+
+  // Клиенты
+  const [showCustomer, setShowCustomer] = useState(false)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerResults, setCustomerResults] = useState<Customer[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null)
+  const [customerSearching, setCustomerSearching] = useState(false)
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [loyaltyPointsToSpend, setLoyaltyPointsToSpend] = useState(0)
+  const customerSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Универсальный товар
+  const [showUniversal, setShowUniversal] = useState(false)
+  const [uniName, setUniName] = useState('')
+  const [uniPrice, setUniPrice] = useState('')
+
   const [now, setNow] = useState(() => new Date())
   const searchRef = useRef<HTMLInputElement | null>(null)
 
@@ -108,6 +144,7 @@ export default function InventorySalesPageMinimal({
       const cached = await getCachedSalesContext<PointInventorySaleContext>().catch(() => null)
       if (!cancelled && cached) {
         setContext(cached)
+        setLoyaltyConfig((cached as any).loyalty_config || null)
         setLoading(false)
         void load(true)
       } else if (!cancelled) {
@@ -123,17 +160,42 @@ export default function InventorySalesPageMinimal({
     try {
       const data = await api.getPointInventorySales(config, session)
       setContext(data)
+      setLoyaltyConfig((data as any).loyalty_config || null)
       void saveSalesContextCache(data)
     } catch (err: any) {
-      if (!silent) {
-        setError(err?.message || 'Не удалось загрузить витрину')
-      }
+      if (!silent) setError(err?.message || 'Не удалось загрузить витрину')
     } finally {
       if (!silent) setLoading(false)
     }
   }
 
-  // Operator name display
+  // Поиск клиента (debounced)
+  useEffect(() => {
+    if (customerSearchTimeout.current) clearTimeout(customerSearchTimeout.current)
+    if (!customerSearch.trim() || customerSearch.trim().length < 2) {
+      setCustomerResults([])
+      setShowCustomerDropdown(false)
+      return
+    }
+    customerSearchTimeout.current = setTimeout(async () => {
+      setCustomerSearching(true)
+      try {
+        const result = await api.searchCustomers(config, customerSearch.trim())
+        setCustomerResults(result?.customers || [])
+        if (result?.loyalty_config) setLoyaltyConfig(result.loyalty_config)
+        setShowCustomerDropdown(true)
+      } catch {
+        /* тихо */
+      } finally {
+        setCustomerSearching(false)
+      }
+    }, 300)
+    return () => {
+      if (customerSearchTimeout.current) clearTimeout(customerSearchTimeout.current)
+    }
+  }, [customerSearch, config, session])
+
+  // Operator name
   const operatorName = useMemo(() => {
     return (
       session.operator?.full_name ||
@@ -150,7 +212,7 @@ export default function InventorySalesPageMinimal({
     return m
   }, [context?.items])
 
-  // Поиск
+  // Поиск товара
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return [] as PointInventorySaleItem[]
@@ -163,21 +225,55 @@ export default function InventorySalesPageMinimal({
       .slice(0, 8)
   }, [search, context?.items])
 
-  // Подробная корзина
+  // Подытог корзины
+  const subtotal = useMemo(
+    () => cart.reduce((s, l) => s + l.quantity * l.unit_price, 0),
+    [cart],
+  )
+
+  // Эффективная скидка (промокод имеет приоритет)
+  const effectiveDiscountPercent = useMemo(() => {
+    const manual = Math.max(0, Math.min(99, parseMoney(manualDiscountPercent)))
+    return appliedPromoCode ? promoDiscountPercent : manual
+  }, [manualDiscountPercent, appliedPromoCode, promoDiscountPercent])
+
+  const discountAmount = useMemo(() => {
+    return Math.round(((subtotal * effectiveDiscountPercent) / 100) * 100) / 100
+  }, [subtotal, effectiveDiscountPercent])
+
+  const afterDiscountTotal = useMemo(
+    () => Math.max(0, subtotal - discountAmount),
+    [subtotal, discountAmount],
+  )
+
+  // Бонусы лояльности
+  const maxRedeemablePoints = useMemo(() => {
+    if (!selectedCustomer || !loyaltyConfig?.is_active) return 0
+    const points = Math.max(0, selectedCustomer.loyalty_points || 0)
+    const maxPercent = Math.max(0, Math.min(100, loyaltyConfig.max_redeem_percent_per_purchase || 100))
+    const maxByPercent = Math.floor((afterDiscountTotal * maxPercent) / 100)
+    return Math.min(points, maxByPercent)
+  }, [selectedCustomer, loyaltyConfig, afterDiscountTotal])
+
+  const loyaltyDiscountAmount = useMemo(() => {
+    if (!selectedCustomer || !loyaltyConfig?.is_active || loyaltyPointsToSpend <= 0) return 0
+    return Math.min(loyaltyPointsToSpend, afterDiscountTotal, maxRedeemablePoints)
+  }, [selectedCustomer, loyaltyConfig, loyaltyPointsToSpend, afterDiscountTotal, maxRedeemablePoints])
+
+  const finalTotal = useMemo(
+    () => Math.max(0, afterDiscountTotal - loyaltyDiscountAmount),
+    [afterDiscountTotal, loyaltyDiscountAmount],
+  )
+
+  // Подробная корзина для печати/UI
   const cartDetailed = useMemo(() => {
-    return cart.map((line) => {
-      const item = itemsById.get(line.item_id)
-      return {
-        ...line,
-        item: item || null,
-        total: line.quantity * line.unit_price,
-      }
-    })
-  }, [cart, itemsById])
+    return cart.map((line) => ({
+      ...line,
+      total: line.quantity * line.unit_price,
+    }))
+  }, [cart])
 
-  const subtotal = useMemo(() => cartDetailed.reduce((s, l) => s + l.total, 0), [cartDetailed])
-
-  // Авто-добавление по штрихкоду (если введён ровно штрихкод)
+  // Авто-добавление по штрихкоду / Enter
   function handleSearchSubmit() {
     const q = search.trim()
     if (!q) return
@@ -189,16 +285,19 @@ export default function InventorySalesPageMinimal({
       setSearch('')
       return
     }
-    // Если ровно один результат — добавляем
     if (searchResults.length === 1) {
       addItem(searchResults[0])
       setSearch('')
+    } else if (searchResults.length === 0) {
+      beep('error')
+      toastError('Товар не найден')
     }
   }
 
   function addItem(item: PointInventorySaleItem) {
     const available = Number(item.display_qty || 0)
     if (available <= 0) {
+      beep('error')
       toastError(`Нет на витрине: ${item.name}`)
       return
     }
@@ -207,44 +306,128 @@ export default function InventorySalesPageMinimal({
       if (existing) {
         const nextQty = existing.quantity + 1
         if (nextQty > available) {
+          beep('error')
           toastError(`Доступно только ${available}`)
           return prev
         }
-        return prev.map((l) =>
-          l.item_id === item.id ? { ...l, quantity: nextQty } : l,
-        )
+        return prev.map((l) => (l.item_id === item.id ? { ...l, quantity: nextQty } : l))
       }
       return [
         ...prev,
-        { item_id: item.id, quantity: 1, unit_price: Number(item.sale_price || 0) },
+        {
+          id: item.id,
+          item_id: item.id,
+          name: item.name,
+          unit: item.unit || null,
+          quantity: 1,
+          unit_price: Number(item.sale_price || 0),
+        },
       ]
     })
+    beep('ok')
   }
 
-  function changeQty(itemId: string, nextQty: number) {
+  function addUniversalItem() {
+    const name = uniName.trim()
+    const price = parseMoney(uniPrice)
+    if (!name) {
+      toastError('Введите название')
+      return
+    }
+    if (price <= 0) {
+      toastError('Цена должна быть больше 0')
+      return
+    }
+    setCart((prev) => [
+      ...prev,
+      {
+        id: `${UNIVERSAL_PRODUCT_PREFIX}${Date.now()}`,
+        item_id: null,
+        name,
+        quantity: 1,
+        unit_price: price,
+      },
+    ])
+    setUniName('')
+    setUniPrice('')
+    setShowUniversal(false)
+    beep('ok')
+  }
+
+  function changeQty(id: string, nextQty: number) {
     if (nextQty <= 0) {
-      setCart((prev) => prev.filter((l) => l.item_id !== itemId))
+      setCart((prev) => prev.filter((l) => l.id !== id))
       return
     }
-    const item = itemsById.get(itemId)
-    const available = Number(item?.display_qty || 0)
-    if (nextQty > available) {
-      toastError(`Доступно только ${available}`)
-      return
+    const line = cart.find((l) => l.id === id)
+    if (line?.item_id) {
+      const item = itemsById.get(line.item_id)
+      const available = Number(item?.display_qty || 0)
+      if (nextQty > available) {
+        beep('error')
+        toastError(`Доступно только ${available}`)
+        return
+      }
     }
-    setCart((prev) =>
-      prev.map((l) => (l.item_id === itemId ? { ...l, quantity: nextQty } : l)),
-    )
+    setCart((prev) => prev.map((l) => (l.id === id ? { ...l, quantity: nextQty } : l)))
   }
 
-  function removeLine(itemId: string) {
-    setCart((prev) => prev.filter((l) => l.item_id !== itemId))
+  function removeLine(id: string) {
+    setCart((prev) => prev.filter((l) => l.id !== id))
   }
 
-  function clearCart() {
+  function selectCustomer(customer: Customer) {
+    setSelectedCustomer(customer)
+    setShowCustomerDropdown(false)
+    setCustomerResults([])
+    setCustomerSearch('')
+    setLoyaltyPointsToSpend(0)
+  }
+
+  function clearCustomer() {
+    setSelectedCustomer(null)
+    setLoyaltyPointsToSpend(0)
+    setCustomerSearch('')
+    setShowCustomerDropdown(false)
+    setCustomerResults([])
+  }
+
+  async function applyPromoCode() {
+    const code = promoCodeInput.trim().toUpperCase()
+    if (!code) return
+    setPromoValidating(true)
+    try {
+      const result = await api.validatePromoCode(config, code, subtotal)
+      if (result.value > 0) {
+        const pct = result.type === 'percent' ? result.value : (subtotal > 0 ? (result.value / subtotal) * 100 : 0)
+        setAppliedPromoCode(code)
+        setPromoDiscountPercent(Math.min(99, pct))
+        setManualDiscountPercent('')
+        toastSuccess(`Промокод «${code}» применён`)
+      } else {
+        toastError('Промокод недействителен')
+      }
+    } catch (err: any) {
+      toastError(err?.message || 'Промокод недействителен')
+    } finally {
+      setPromoValidating(false)
+    }
+  }
+
+  function clearPromoCode() {
+    setAppliedPromoCode(null)
+    setPromoDiscountPercent(0)
+    setPromoCodeInput('')
+  }
+
+  function clearAll() {
     setCart([])
     setMixedCash('')
     setMixedKaspi('')
+    setComment('')
+    setManualDiscountPercent('')
+    clearPromoCode()
+    clearCustomer()
   }
 
   async function handlePay() {
@@ -254,15 +437,15 @@ export default function InventorySalesPageMinimal({
     }
     const cashAmount =
       paymentMethod === 'cash'
-        ? subtotal
+        ? finalTotal
         : paymentMethod === 'mixed'
-          ? Math.max(0, Math.min(subtotal, parseMoney(mixedCash)))
+          ? Math.max(0, Math.min(finalTotal, parseMoney(mixedCash)))
           : 0
     const kaspiAmount =
       paymentMethod === 'kaspi'
-        ? subtotal
+        ? finalTotal
         : paymentMethod === 'mixed'
-          ? Math.max(0, subtotal - cashAmount)
+          ? Math.max(0, finalTotal - cashAmount)
           : 0
 
     if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
@@ -270,9 +453,15 @@ export default function InventorySalesPageMinimal({
       return
     }
 
+    // Универсальные товары пока не поддерживаются API — предупреждаем
+    if (cart.some((l) => !l.item_id)) {
+      toastError('Универсальные товары пока нельзя оплатить — удалите их или замените на товары из каталога')
+      return
+    }
+
     setSaving(true)
     try {
-      await api.createPointInventorySale(config, session, {
+      const result = await api.createPointInventorySale(config, session, {
         sale_date: new Date().toISOString().slice(0, 10),
         shift: runtimeShift.shift,
         payment_method: paymentMethod,
@@ -282,19 +471,54 @@ export default function InventorySalesPageMinimal({
           runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
         kaspi_after_midnight_amount:
           runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
-        comment: '',
+        comment: comment.trim() || null,
         local_ref: localRef(),
         items: cart.map((l) => ({
-          item_id: l.item_id,
+          item_id: l.item_id!,
           quantity: l.quantity,
           unit_price: l.unit_price,
         })),
-      } as any)
+        customer_id: selectedCustomer?.id || null,
+        loyalty_points_spent: selectedCustomer ? loyaltyPointsToSpend : 0,
+        discount_amount: discountAmount,
+        loyalty_discount_amount: loyaltyDiscountAmount,
+      })
       toastSuccess('Продажа сохранена')
-      clearCart()
+      beep('ok')
+
+      // Печать чека
+      const nowTs = new Date()
+      const preview: SaleReceiptPreview = {
+        saleId: result?.sale_id || null,
+        saleDate: nowTs.toLocaleDateString('ru-RU'),
+        saleTime: nowTs.toLocaleTimeString('ru-RU'),
+        shift: runtimeShift.shift,
+        paymentMethod,
+        cashAmount,
+        kaspiAmount,
+        totalAmount: finalTotal,
+        subtotal,
+        discountAmount,
+        loyaltyDiscountAmount,
+        customer: selectedCustomer ? { name: selectedCustomer.name, phone: selectedCustomer.phone } : null,
+        comment: comment.trim() || null,
+        operatorName,
+        companyName: session.company?.name || '',
+        locationName: context?.location?.name || '',
+        lines: cartDetailed.map((l) => ({
+          name: l.name,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          total: l.total,
+          unit: l.unit || null,
+        })),
+      }
+      printReceipt(preview)
+
+      clearAll()
       void load(true)
-      // (здесь можно вызывать печать чека — позже добавить)
     } catch (err: any) {
+      beep('error')
       toastError(err?.message || 'Не удалось провести продажу')
     } finally {
       setSaving(false)
@@ -305,13 +529,12 @@ export default function InventorySalesPageMinimal({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      {/* Drag region для Electron */}
       <div className="h-9 shrink-0 drag-region bg-white dark:bg-slate-900" />
 
       {/* Шапка */}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 no-drag dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500 text-white text-sm font-bold">F</div>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2 no-drag dark:border-slate-800 dark:bg-slate-900 sm:px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500 text-sm font-bold text-white">F</div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{session.company?.name || 'Точка'}</p>
             <p className="truncate text-xs text-slate-500 dark:text-slate-400">
@@ -349,61 +572,75 @@ export default function InventorySalesPageMinimal({
         <section className="flex flex-1 flex-col overflow-hidden">
           {/* Поиск */}
           <div className="relative shrink-0 border-b border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 sm:p-4">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                ref={searchRef}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleSearchSubmit()
-                  }
-                }}
-                placeholder="Поиск товара по названию, штрихкоду или артикулу"
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-12 text-base outline-none transition focus:border-emerald-400 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-900"
-                autoFocus
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <input
+                  ref={searchRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleSearchSubmit()
+                    }
+                  }}
+                  placeholder="Поиск товара по названию, штрихкоду или артикулу"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-12 text-base outline-none transition focus:border-emerald-400 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:focus:bg-slate-900"
+                  autoFocus
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUniversal(true)}
+                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                title="Универсальный товар: ввести название и цену вручную (требует серверной доработки)"
+              >
+                + Товар
+              </button>
+              {/* Универсальный товар сейчас только для UI-теста — серверная поддержка отсутствует */}
             </div>
 
-            {/* Выпадающий список результатов поиска */}
             {searchResults.length > 0 && (
-              <div className="absolute left-3 right-3 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 sm:left-4 sm:right-4">
-                {searchResults.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      addItem(item)
-                      setSearch('')
-                      searchRef.current?.focus()
-                    }}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.name}</p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        {item.barcode || '—'} · {Number(item.display_qty || 0)} шт на витрине
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-base font-semibold">{formatMoney(item.sale_price)}</p>
-                  </button>
-                ))}
+              <div className="absolute left-3 right-3 top-full z-20 mt-1 max-h-80 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 sm:left-4 sm:right-4">
+                {searchResults.map((item) => {
+                  const qty = Number(item.display_qty || 0)
+                  const isLow = qty > 0 && qty <= 3
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        addItem(item)
+                        setSearch('')
+                        searchRef.current?.focus()
+                      }}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.name}</p>
+                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                          {item.barcode || '—'} · <span className={isLow ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>{qty} шт{isLow ? ' (мало!)' : ''}</span>
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-base font-semibold">{formatMoney(item.sale_price)}</p>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
 
-          {/* Таблица позиций чека */}
+          {/* Таблица позиций */}
           <div className="flex-1 overflow-auto p-3 sm:p-4">
             {loading && cart.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
@@ -416,11 +653,7 @@ export default function InventorySalesPageMinimal({
               </div>
             ) : cartDetailed.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-400">
-                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100 text-slate-300 dark:bg-slate-800 dark:text-slate-600">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-10 w-10">
-                    <path d="M3 9l9-6 9 6M3 9l9 6 9-6M3 9v10a2 2 0 002 2h14a2 2 0 002-2V9" />
-                  </svg>
-                </div>
+                <ReceiptIcon className="h-12 w-12 opacity-30" />
                 <p className="text-sm">Список пуст</p>
                 <p className="text-xs text-slate-500 dark:text-slate-500">Найдите товар через поиск или отсканируйте штрихкод</p>
               </div>
@@ -439,23 +672,25 @@ export default function InventorySalesPageMinimal({
                   </thead>
                   <tbody>
                     {cartDetailed.map((line, idx) => (
-                      <tr
-                        key={line.item_id}
-                        className="border-b border-slate-100 last:border-b-0 dark:border-slate-800/50"
-                      >
+                      <tr key={line.id} className="border-b border-slate-100 last:border-b-0 dark:border-slate-800/50">
                         <td className="px-3 py-3 text-sm text-slate-500">{idx + 1}</td>
                         <td className="px-3 py-3">
-                          <p className="text-sm font-medium leading-tight">{line.item?.name || 'Товар'}</p>
+                          <p className="text-sm font-medium leading-tight">{line.name}</p>
                           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:hidden">
-                            {formatMoney(line.unit_price)} / {line.item?.unit || 'шт'}
+                            {formatMoney(line.unit_price)} / {line.unit || 'шт'}
                           </p>
+                          {!line.item_id && (
+                            <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-2 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                              универсальный
+                            </span>
+                          )}
                         </td>
                         <td className="hidden px-3 py-3 text-right text-sm tabular-nums sm:table-cell">{formatMoney(line.unit_price)}</td>
                         <td className="px-3 py-3">
                           <div className="mx-auto flex w-fit items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700">
                             <button
                               type="button"
-                              onClick={() => changeQty(line.item_id, line.quantity - 1)}
+                              onClick={() => changeQty(line.id, line.quantity - 1)}
                               className="grid h-8 w-8 place-items-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
                             >
                               <Minus className="h-3.5 w-3.5" />
@@ -463,7 +698,7 @@ export default function InventorySalesPageMinimal({
                             <span className="min-w-[2rem] text-center text-sm font-semibold tabular-nums">{line.quantity}</span>
                             <button
                               type="button"
-                              onClick={() => changeQty(line.item_id, line.quantity + 1)}
+                              onClick={() => changeQty(line.id, line.quantity + 1)}
                               className="grid h-8 w-8 place-items-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
                             >
                               <Plus className="h-3.5 w-3.5" />
@@ -474,10 +709,10 @@ export default function InventorySalesPageMinimal({
                         <td className="px-3 py-3 text-right">
                           <button
                             type="button"
-                            onClick={() => removeLine(line.item_id)}
+                            onClick={() => removeLine(line.id)}
                             className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
                           >
-                            <X className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </td>
                       </tr>
@@ -490,20 +725,182 @@ export default function InventorySalesPageMinimal({
         </section>
 
         {/* Правая зона: оплата */}
-        <aside className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 lg:w-96 lg:border-l lg:border-t-0 lg:p-4 xl:w-[420px]">
+        <aside className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 lg:w-96 lg:overflow-auto lg:border-l lg:border-t-0 lg:p-4 xl:w-[420px]">
           <div className="flex h-full flex-col gap-3">
             {/* Итого */}
             <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800">
               <p className="text-xs text-slate-500 dark:text-slate-400">К оплате</p>
               <p className="mt-1 text-3xl font-bold tabular-nums sm:text-4xl">
-                {formatMoney(subtotal)}
+                {formatMoney(finalTotal)}
                 <span className="ml-1 text-lg font-medium text-slate-400">₸</span>
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {cartDetailed.length} {cartDetailed.length === 1 ? 'позиция' : 'позиций'} ·{' '}
-                {cartDetailed.reduce((s, l) => s + l.quantity, 0)} шт
+              {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
+                <div className="mt-2 space-y-0.5 text-xs">
+                  <div className="flex justify-between text-slate-500"><span>Подытог</span><span>{formatMoney(subtotal)} ₸</span></div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                      <span>Скидка {effectiveDiscountPercent}%</span>
+                      <span>−{formatMoney(discountAmount)} ₸</span>
+                    </div>
+                  )}
+                  {loyaltyDiscountAmount > 0 && (
+                    <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                      <span>Бонусы</span>
+                      <span>−{formatMoney(loyaltyDiscountAmount)} ₸</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                {cartDetailed.length} {cartDetailed.length === 1 ? 'позиция' : 'позиций'} · {cartDetailed.reduce((s, l) => s + l.quantity, 0)} шт
               </p>
             </div>
+
+            {/* Клиент / Скидка тогглы */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCustomer(!showCustomer)}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-medium transition ${
+                  selectedCustomer
+                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                }`}
+              >
+                <UserCircle2 className="h-3.5 w-3.5" />
+                {selectedCustomer ? selectedCustomer.name.slice(0, 12) : 'Клиент'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDiscount(!showDiscount)}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-medium transition ${
+                  effectiveDiscountPercent > 0
+                    ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                }`}
+              >
+                <Tag className="h-3.5 w-3.5" />
+                {effectiveDiscountPercent > 0 ? `Скидка -${effectiveDiscountPercent}%` : 'Скидка'}
+              </button>
+            </div>
+
+            {/* Панель клиента */}
+            {showCustomer && (
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                {selectedCustomer ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{selectedCustomer.name}</p>
+                        <p className="truncate text-xs text-slate-500">{selectedCustomer.phone || selectedCustomer.card_number || '—'}</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-bold text-amber-500">{selectedCustomer.loyalty_points} б.</p>
+                    </div>
+                    {loyaltyConfig?.is_active && maxRedeemablePoints > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Star className="h-3.5 w-3.5 text-amber-500" />
+                        <input
+                          type="number"
+                          value={loyaltyPointsToSpend || ''}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, maxRedeemablePoints))
+                            setLoyaltyPointsToSpend(val)
+                          }}
+                          placeholder={`Использовать баллы (макс. ${maxRedeemablePoints})`}
+                          className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-amber-400 dark:border-slate-700 dark:bg-slate-900"
+                          min={0}
+                          max={maxRedeemablePoints}
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={clearCustomer}
+                      className="text-xs text-slate-500 hover:text-rose-600"
+                    >
+                      Убрать клиента
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <UserCircle2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        placeholder="Телефон или карта"
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+                      />
+                      {customerSearching && (
+                        <Loader2 className="absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+                      )}
+                    </div>
+                    {showCustomerDropdown && customerResults.length > 0 && (
+                      <div className="max-h-48 space-y-0.5 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                        {customerResults.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => selectCustomer(c)}
+                            className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{c.name}</p>
+                              <p className="truncate text-slate-500">{c.phone || c.card_number || '—'}</p>
+                            </div>
+                            <p className="shrink-0 font-semibold text-amber-500">{c.loyalty_points} б.</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Панель скидки */}
+            {showDiscount && (
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex items-center gap-2">
+                  <Percent className="h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="number"
+                    value={manualDiscountPercent}
+                    onChange={(e) => {
+                      setManualDiscountPercent(e.target.value)
+                      clearPromoCode()
+                    }}
+                    placeholder="Скидка вручную, %"
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900"
+                    min={0}
+                    max={99}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="Промокод"
+                    className="h-9 flex-1 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-900"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void applyPromoCode()}
+                    disabled={promoValidating || !promoCodeInput.trim()}
+                    className="h-9"
+                  >
+                    {promoValidating ? '...' : 'OK'}
+                  </Button>
+                </div>
+                {appliedPromoCode && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-emerald-600 dark:text-emerald-400">✓ {appliedPromoCode} применён</span>
+                    <button type="button" onClick={clearPromoCode} className="text-slate-400 hover:text-rose-600">убрать</button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Способ оплаты */}
             <div className="grid grid-cols-3 gap-1.5">
@@ -523,7 +920,6 @@ export default function InventorySalesPageMinimal({
               ))}
             </div>
 
-            {/* Поля смешанной оплаты */}
             {paymentMethod === 'mixed' && (
               <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800">
                 <label className="block">
@@ -533,8 +929,8 @@ export default function InventorySalesPageMinimal({
                     onChange={(e) => {
                       const v = e.target.value
                       setMixedCash(v)
-                      const cash = Math.max(0, Math.min(subtotal, parseMoney(v)))
-                      setMixedKaspi(String(Math.max(0, subtotal - cash)))
+                      const cash = Math.max(0, Math.min(finalTotal, parseMoney(v)))
+                      setMixedKaspi(String(Math.max(0, finalTotal - cash)))
                     }}
                     placeholder="0"
                     inputMode="numeric"
@@ -548,8 +944,8 @@ export default function InventorySalesPageMinimal({
                     onChange={(e) => {
                       const v = e.target.value
                       setMixedKaspi(v)
-                      const kaspi = Math.max(0, Math.min(subtotal, parseMoney(v)))
-                      setMixedCash(String(Math.max(0, subtotal - kaspi)))
+                      const kaspi = Math.max(0, Math.min(finalTotal, parseMoney(v)))
+                      setMixedCash(String(Math.max(0, finalTotal - kaspi)))
                     }}
                     placeholder="0"
                     inputMode="numeric"
@@ -558,6 +954,15 @@ export default function InventorySalesPageMinimal({
                 </label>
               </div>
             )}
+
+            {/* Комментарий */}
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={2}
+              placeholder="Комментарий к продаже (необязательно)"
+              className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900"
+            />
 
             {/* Кнопки действий */}
             <div className="mt-auto flex flex-col gap-2">
@@ -573,23 +978,55 @@ export default function InventorySalesPageMinimal({
                     Сохраняем…
                   </span>
                 ) : (
-                  <>ОПЛАТИТЬ · {formatMoney(subtotal)} ₸</>
+                  <>ОПЛАТИТЬ · {formatMoney(finalTotal)} ₸</>
                 )}
               </Button>
               {cart.length > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={clearCart}
-                  className="h-10 rounded-xl"
-                >
-                  Очистить корзину
+                <Button type="button" variant="outline" onClick={clearAll} className="h-10 rounded-xl">
+                  Очистить
                 </Button>
               )}
             </div>
           </div>
         </aside>
       </main>
+
+      {/* Модалка универсального товара */}
+      {showUniversal && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setShowUniversal(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+          >
+            <h3 className="text-base font-semibold">Универсальный товар</h3>
+            <p className="mt-1 text-xs text-slate-500">Введите название и цену вручную (товара нет в каталоге).</p>
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="text-xs text-slate-500">Название</span>
+                <input
+                  value={uniName}
+                  onChange={(e) => setUniName(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                  autoFocus
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-slate-500">Цена, ₸</span>
+                <input
+                  value={uniPrice}
+                  onChange={(e) => setUniPrice(e.target.value)}
+                  inputMode="numeric"
+                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setShowUniversal(false)}>Отмена</Button>
+              <Button type="button" onClick={addUniversalItem} className="bg-emerald-500 hover:bg-emerald-600">Добавить</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
