@@ -18,6 +18,15 @@ function canManageStore(access: {
   return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
 }
 
+// Оприходование = ручное добавление товара без поставщика. Это чувствительная операция,
+// её разрешаем только владельцу/суперадмину, чтобы менеджеры не могли «нарисовать» остатки.
+function canPostInventory(access: {
+  isSuperAdmin: boolean
+  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+}) {
+  return access.isSuperAdmin || access.staffRole === 'owner'
+}
+
 type Body = {
   action: 'createReceipt' | 'saveDraft' | 'deleteDraft' | 'cancelReceipt' | 'createPosting'
   payload?: {
@@ -271,11 +280,29 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createPosting') {
+      if (!canPostInventory(access)) {
+        return json(
+          { error: 'forbidden', message: 'Оприходование разрешено только владельцу или суперадминистратору' },
+          403,
+        )
+      }
       const posting = body.posting
       if (!posting) return json({ error: 'posting-required' }, 400)
       const locationId = String(posting.location_id || '').trim()
       if (!locationId) return json({ error: 'location-required' }, 400)
       await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+
+      // Разрешаем оприходование на склад или на витрину; запрещаем catalog_total и любые другие
+      const { data: locRow, error: locErr } = await supabase
+        .from('inventory_locations')
+        .select('id, location_type, name')
+        .eq('id', locationId)
+        .maybeSingle()
+      if (locErr) throw locErr
+      if (!locRow) return json({ error: 'location-not-found' }, 404)
+      if (locRow.location_type !== 'warehouse' && locRow.location_type !== 'point_display') {
+        return json({ error: 'Оприходовать можно только на склад или на витрину' }, 400)
+      }
 
       const items = (posting.items || [])
         .map((i) => ({

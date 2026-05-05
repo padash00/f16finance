@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Package, Plus, Trash2, Upload } from 'lucide-react'
+import { Loader2, Package, Plus, ShieldAlert, Store, Trash2, Upload, Warehouse } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,6 +45,14 @@ type RecentPosting = {
   items?: Array<{ id: string; quantity: number; unit_cost: number; total_cost: number; item?: Item | null }>
 }
 
+type SessionRole = {
+  isSuperAdmin?: boolean
+  staffRole?: 'owner' | 'manager' | 'marketer' | 'other' | null
+  roleLabel?: string
+}
+
+const CONFIRM_PHRASE = 'ОПРИХОДОВАТЬ'
+
 function newLine(): PostingLine {
   return {
     key: Math.random().toString(36).slice(2),
@@ -61,6 +69,9 @@ function parseNum(v: string) {
 }
 
 export default function StorePostingsPage() {
+  const [role, setRole] = useState<SessionRole | null>(null)
+  const [roleLoading, setRoleLoading] = useState(true)
+
   const [locations, setLocations] = useState<Location[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [recent, setRecent] = useState<RecentPosting[]>([])
@@ -74,17 +85,46 @@ export default function StorePostingsPage() {
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<PostingLine[]>([newLine()])
   const [search, setSearch] = useState<Record<string, string>>({})
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmPhrase, setConfirmPhrase] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/auth/session-role', { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!cancelled && res.ok) {
+          setRole({
+            isSuperAdmin: json?.isSuperAdmin,
+            staffRole: json?.staffRole,
+            roleLabel: json?.roleLabel,
+          })
+        }
+      } finally {
+        if (!cancelled) setRoleLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const allowed = !!(role?.isSuperAdmin || role?.staffRole === 'owner')
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/store/receipts?scope=warehouse', { cache: 'no-store' })
+      // scope=all чтобы получить и склады, и витрины
+      const res = await fetch('/api/admin/store/receipts?scope=all', { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Ошибка загрузки')
       const data = json.data || {}
       setItems(data.items || [])
-      setLocations((data.locations || []).filter((l: Location) => l.location_type === 'warehouse'))
+      setLocations(
+        ((data.locations as Location[]) || []).filter(
+          (l) => l.location_type === 'warehouse' || l.location_type === 'point_display',
+        ),
+      )
       setRecent(((data.receipts as RecentPosting[]) || []).filter((r) => r.kind === 'posting').slice(0, 20))
     } catch (e: any) {
       setError(e?.message || 'Ошибка')
@@ -93,11 +133,9 @@ export default function StorePostingsPage() {
     }
   }
 
-  useEffect(() => { void load() }, [])
-
   useEffect(() => {
-    if (!locationId && locations.length === 1) setLocationId(locations[0].id)
-  }, [locations, locationId])
+    if (allowed) void load()
+  }, [allowed])
 
   const itemById = useMemo(() => {
     const m = new Map<string, Item>()
@@ -113,13 +151,32 @@ export default function StorePostingsPage() {
       .slice(0, 30)
   }
 
-  const submit = async () => {
+  const selectedLocation = locations.find((l) => l.id === locationId) || null
+  const targetLabel = selectedLocation?.location_type === 'point_display' ? 'витрину' : 'склад'
+
+  const validate = (): string | null => {
+    if (!locationId) return 'Выберите склад или витрину'
+    const payloadItems = lines
+      .map((l) => ({ item_id: l.item_id, quantity: parseNum(l.quantity) }))
+      .filter((l) => l.item_id && l.quantity > 0)
+    if (payloadItems.length === 0) return 'Добавьте хотя бы одну строку с положительным количеством'
+    return null
+  }
+
+  const openConfirm = () => {
     setError(null)
     setSuccess(null)
-    if (!locationId) {
-      setError('Выберите склад')
+    const v = validate()
+    if (v) {
+      setError(v)
       return
     }
+    setConfirmPhrase('')
+    setConfirmOpen(true)
+  }
+
+  const submit = async () => {
+    setError(null)
     const payloadItems = lines
       .map((l) => ({
         item_id: l.item_id,
@@ -128,10 +185,6 @@ export default function StorePostingsPage() {
         comment: l.comment.trim() || null,
       }))
       .filter((l) => l.item_id && l.quantity > 0)
-    if (payloadItems.length === 0) {
-      setError('Добавьте хотя бы одну строку с положительным количеством')
-      return
-    }
 
     setSaving(true)
     try {
@@ -150,9 +203,10 @@ export default function StorePostingsPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.message || json.error || 'Не удалось оприходовать')
-      setSuccess('Оприходование проведено.')
+      setSuccess(`Оприходование на ${targetLabel} проведено.`)
       setLines([newLine()])
       setComment('')
+      setConfirmOpen(false)
       await load()
     } catch (e: any) {
       setError(e?.message || 'Ошибка')
@@ -161,31 +215,100 @@ export default function StorePostingsPage() {
     }
   }
 
+  if (roleLoading) {
+    return (
+      <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+        <p className="text-sm text-muted-foreground">Загрузка…</p>
+      </div>
+    )
+  }
+
+  if (!allowed) {
+    return (
+      <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+        <Card className="border-rose-500/30 bg-rose-500/5">
+          <CardContent className="p-6 flex items-start gap-3">
+            <ShieldAlert className="h-6 w-6 text-rose-300 shrink-0" />
+            <div>
+              <h2 className="text-base font-semibold text-rose-200">Доступ ограничен</h2>
+              <p className="mt-1 text-sm text-rose-200/80">
+                Оприходование разрешено только владельцу и суперадминистратору. Текущая роль: <strong>{role?.roleLabel || '—'}</strong>.
+              </p>
+              <p className="mt-2 text-xs text-rose-300/70">
+                Если нужно добавить остаток — обратитесь к владельцу или используйте «Приёмку» с поставщиком.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto w-full max-w-screen-2xl space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300">
           <Upload className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold text-white">Оприходование</h1>
           <p className="truncate text-xs text-muted-foreground">
-            Добавление товара на склад без поставщика — для начальных остатков, корректировок прихода или излишков.
+            Ручное добавление товара на склад или витрину без поставщика. Только для владельца и суперадмина.
           </p>
         </div>
+        <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+          {role?.roleLabel || 'Владелец'}
+        </Badge>
       </div>
+
+      <Card className="border-amber-500/20 bg-amber-500/5">
+        <CardContent className="p-4 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-300 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-100">
+            <p className="font-medium">Ответственная операция</p>
+            <p className="mt-1 text-xs text-amber-200/80">
+              Оприходование изменяет фактический остаток без документа от поставщика. Каждое действие записывается в журнал движений и аудит.
+              Перед проведением потребуется подтверждение.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-white/10 bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5 space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Склад</Label>
+              <Label className="text-xs">Куда оприходовать</Label>
               <Select value={locationId} onValueChange={setLocationId}>
-                <SelectTrigger><SelectValue placeholder="Выберите склад" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите склад или витрину" />
+                </SelectTrigger>
                 <SelectContent>
-                  {locations.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                  ))}
+                  {locations.length === 0 && (
+                    <div className="px-2 py-2 text-xs text-muted-foreground">Локаций нет</div>
+                  )}
+                  {locations
+                    .filter((l) => l.location_type === 'warehouse')
+                    .map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        <div className="flex items-center gap-2">
+                          <Warehouse className="h-3.5 w-3.5 text-blue-300" />
+                          <span>{l.name}</span>
+                          <span className="text-[10px] text-muted-foreground">склад</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  {locations
+                    .filter((l) => l.location_type === 'point_display')
+                    .map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        <div className="flex items-center gap-2">
+                          <Store className="h-3.5 w-3.5 text-emerald-300" />
+                          <span>{l.name}</span>
+                          <span className="text-[10px] text-muted-foreground">витрина</span>
+                        </div>
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -194,8 +317,12 @@ export default function StorePostingsPage() {
               <Input type="date" value={receivedAt} onChange={(e) => setReceivedAt(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Комментарий</Label>
-              <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Например: начальный остаток" />
+              <Label className="text-xs">Комментарий (обязательно для отчётности)</Label>
+              <Input
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Например: начальный остаток / излишек по ревизии / возврат от сотрудника"
+              />
             </div>
           </div>
 
@@ -295,13 +422,54 @@ export default function StorePostingsPage() {
           {success && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm text-emerald-300">{success}</div>}
 
           <div className="flex justify-end">
-            <Button type="button" onClick={() => void submit()} disabled={saving || loading}>
+            <Button type="button" onClick={openConfirm} disabled={saving || loading}>
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Package className="h-3.5 w-3.5 mr-1" />}
               Оприходовать
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <Card className="w-full max-w-md border-amber-500/30 bg-card">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-amber-300" />
+                <h3 className="font-semibold">Подтверждение оприходования</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Будет проведено оприходование на <strong className="text-foreground">{selectedLocation?.name || '—'}</strong> ({targetLabel}).
+                Позиций: <strong className="text-foreground">{lines.filter((l) => l.item_id && parseNum(l.quantity) > 0).length}</strong>.
+              </p>
+              <p className="text-xs text-amber-200/80">
+                Действие будет записано в журнал движений и аудит. Откатить можно через «Отмену приёмки».
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  Введите фразу <code className="bg-white/10 px-1 rounded text-xs">{CONFIRM_PHRASE}</code> для подтверждения:
+                </Label>
+                <Input
+                  value={confirmPhrase}
+                  onChange={(e) => setConfirmPhrase(e.target.value)}
+                  placeholder={CONFIRM_PHRASE}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={saving}>Отмена</Button>
+                <Button
+                  onClick={() => void submit()}
+                  disabled={saving || confirmPhrase.trim() !== CONFIRM_PHRASE}
+                >
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                  Провести
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card className="border-white/10 bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
@@ -318,7 +486,8 @@ export default function StorePostingsPage() {
                 <thead>
                   <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="py-2 pl-2 pr-2 font-normal">Дата</th>
-                    <th className="py-2 px-2 font-normal">Склад</th>
+                    <th className="py-2 px-2 font-normal">Куда</th>
+                    <th className="py-2 px-2 font-normal">Тип</th>
                     <th className="py-2 px-2 font-normal">Комментарий</th>
                     <th className="py-2 px-2 text-right font-normal">Позиций</th>
                     <th className="py-2 px-2 text-right font-normal">Сумма</th>
@@ -330,6 +499,17 @@ export default function StorePostingsPage() {
                     <tr key={r.id} className={r.status === 'cancelled' ? 'opacity-50 line-through' : ''}>
                       <td className="py-2 pl-2 pr-2 text-xs text-muted-foreground">{r.received_at}</td>
                       <td className="py-2 px-2 text-xs">{r.location?.name || '—'}</td>
+                      <td className="py-2 px-2 text-xs">
+                        {r.location?.location_type === 'point_display' ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-300">
+                            <Store className="h-3 w-3" /> витрина
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-blue-300">
+                            <Warehouse className="h-3 w-3" /> склад
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-xs text-muted-foreground">{r.comment || '—'}</td>
                       <td className="py-2 px-2 text-right text-xs">{(r.items || []).length}</td>
                       <td className="py-2 px-2 text-right text-xs">{Number(r.total_amount || 0).toLocaleString('ru-RU')}</td>
