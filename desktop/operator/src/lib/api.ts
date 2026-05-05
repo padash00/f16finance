@@ -695,7 +695,8 @@ export async function createPointInventorySale(
     comment?: string | null
     local_ref?: string | null
     items: Array<{
-      item_id: string
+      item_id?: string | null
+      universal_name?: string | null
       quantity: number
       unit_price: number
       comment?: string | null

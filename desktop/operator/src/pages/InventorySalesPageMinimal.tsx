@@ -453,12 +453,6 @@ export default function InventorySalesPageMinimal({
       return
     }
 
-    // Универсальные товары пока не поддерживаются API — предупреждаем
-    if (cart.some((l) => !l.item_id)) {
-      toastError('Универсальные товары пока нельзя оплатить — удалите их или замените на товары из каталога')
-      return
-    }
-
     setSaving(true)
     try {
       const result = await api.createPointInventorySale(config, session, {
@@ -474,7 +468,8 @@ export default function InventorySalesPageMinimal({
         comment: comment.trim() || null,
         local_ref: localRef(),
         items: cart.map((l) => ({
-          item_id: l.item_id!,
+          item_id: l.item_id,
+          universal_name: l.item_id ? null : l.name,
           quantity: l.quantity,
           unit_price: l.unit_price,
         })),

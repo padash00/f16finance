@@ -976,7 +976,13 @@ export async function createPointInventorySale(
     comment?: string | null
     source?: string | null
     local_ref?: string | null
-    items: Array<{ item_id: string; quantity: number; unit_price: number; comment?: string | null }>
+    items: Array<{
+      item_id?: string | null
+      universal_name?: string | null
+      quantity: number
+      unit_price: number
+      comment?: string | null
+    }>
   },
 ) {
   const { data, error } = await supabase.rpc('inventory_create_point_sale', {

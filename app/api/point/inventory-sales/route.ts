@@ -79,7 +79,13 @@ function roundLineTotal(quantity: number, unitPrice: number) {
 }
 
 function buildAuthoritativeSaleLines(params: {
-  requestedItems: Array<{ item_id: string; quantity: number; comment?: string | null }>
+  requestedItems: Array<{
+    item_id?: string | null
+    universal_name?: string | null
+    quantity: number
+    unit_price?: number
+    comment?: string | null
+  }>
   dbItems: Array<{ id: string; name: string; sale_price: number; is_active: boolean; item_type?: string | null }>
   showcaseBalances: Map<string, number>
   paymentTotal: number
@@ -87,6 +93,26 @@ function buildAuthoritativeSaleLines(params: {
   const itemMap = new Map(params.dbItems.map((row) => [row.id, row]))
 
   const baseLines = params.requestedItems.map((item) => {
+    // Универсальный товар: цена и название от оператора, без проверки остатков
+    if (!item.item_id && item.universal_name) {
+      const unitPrice = normalizeMoney(item.unit_price || 0)
+      if (unitPrice <= 0) {
+        throw new Error(`Универсальный товар «${item.universal_name}» — цена должна быть больше 0`)
+      }
+      return {
+        item_id: null as string | null,
+        universal_name: item.universal_name.trim(),
+        quantity: item.quantity,
+        base_unit_price: unitPrice,
+        base_total: roundLineTotal(item.quantity, unitPrice),
+        comment: item.comment?.trim() || null,
+      }
+    }
+
+    if (!item.item_id) {
+      throw new Error('Не указан ни item_id, ни universal_name')
+    }
+
     const dbItem = itemMap.get(item.item_id)
     if (!dbItem || !dbItem.is_active) {
       throw new Error(`Товар недоступен для продажи: ${item.item_id}`)
@@ -103,6 +129,7 @@ function buildAuthoritativeSaleLines(params: {
     const unitPrice = normalizeMoney(dbItem.sale_price)
     return {
       item_id: item.item_id,
+      universal_name: null as string | null,
       quantity: item.quantity,
       base_unit_price: unitPrice,
       base_total: roundLineTotal(item.quantity, unitPrice),
@@ -119,6 +146,7 @@ function buildAuthoritativeSaleLines(params: {
   if (Math.abs(subtotal - params.paymentTotal) <= 0.01) {
     return baseLines.map((line) => ({
       item_id: line.item_id,
+      universal_name: line.universal_name,
       quantity: line.quantity,
       unit_price: line.base_unit_price,
       comment: line.comment,
@@ -127,6 +155,7 @@ function buildAuthoritativeSaleLines(params: {
 
   const lines = baseLines.map((line) => ({
     item_id: line.item_id,
+    universal_name: line.universal_name,
     quantity: line.quantity,
     unit_price: line.base_unit_price,
     comment: line.comment,
@@ -674,7 +703,7 @@ export async function GET(request: Request) {
         supabase
           .from('point_sales')
           .select(
-            'id, sale_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, sold_at, items:point_sale_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
+            'id, sale_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, sold_at, items:point_sale_items(id, universal_name, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
           )
           .eq('location_id', location.id)
           .order('sold_at', { ascending: false })
@@ -739,14 +768,22 @@ export async function POST(request: Request) {
       return json({ error: 'sale-payment-method-invalid' }, 400)
     }
 
-    const requestedItems = Array.isArray(body.payload?.items)
+    const requestedItems: Array<{
+      item_id: string | null
+      universal_name: string | null
+      unit_price?: number
+      quantity: number
+      comment: string | null
+    }> = Array.isArray(body.payload?.items)
       ? body.payload.items
-          .map((item) => ({
-            item_id: String(item.item_id || '').trim(),
+          .map((item: any) => ({
+            item_id: String(item.item_id || '').trim() || null,
+            universal_name: String(item.universal_name || '').trim() || null,
+            unit_price: normalizeMoney(item.unit_price || 0),
             quantity: normalizeQty(item.quantity),
             comment: item.comment?.trim() || null,
           }))
-          .filter((item) => item.item_id && item.quantity > 0)
+          .filter((item: any) => (item.item_id || item.universal_name) && item.quantity > 0)
       : []
 
     if (requestedItems.length === 0) return json({ error: 'point-sale-items-required' }, 400)
@@ -766,7 +803,7 @@ export async function POST(request: Request) {
       return json({ error: 'sale-kaspi-split-mismatch' }, 400)
     }
 
-    const itemIds = [...new Set(requestedItems.map((item) => item.item_id))]
+    const itemIds = [...new Set(requestedItems.map((item) => item.item_id).filter((id): id is string => !!id))]
     const stock = await resolveStockLocations(supabase, device.company_id)
     const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
     if (!shiftIdAttach) {
@@ -876,9 +913,9 @@ export async function POST(request: Request) {
       },
     })
 
-    // Low stock check в фоне — проверяем витрину (point_display)
-    const soldItemIds = items.map((i) => i.item_id)
-    if (stock.showcaseId) {
+    // Low stock check в фоне — только для каталожных товаров
+    const soldItemIds = items.map((i) => i.item_id).filter((id): id is string => !!id)
+    if (stock.showcaseId && soldItemIds.length > 0) {
       checkAndNotifyLowStock(soldItemIds, stock.showcaseId).catch(() => null)
     }
 
