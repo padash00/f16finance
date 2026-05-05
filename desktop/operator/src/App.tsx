@@ -10,7 +10,14 @@ import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const PointSelectPage = lazy(() => import('@/pages/PointSelectPage'))
 const ShiftPage = lazy(() => import('@/pages/ShiftPage'))
-const InventorySalesPage = lazy(() => import('@/pages/InventorySalesPage'))
+// Переключение между классическим UI и минималистичным прототипом.
+// Включается через переменную окружения VITE_USE_MINIMAL_SALES=1 при сборке.
+const useMinimalSales = (import.meta as any).env?.VITE_USE_MINIMAL_SALES === '1'
+const InventorySalesPage = lazy(() =>
+  useMinimalSales
+    ? import('@/pages/InventorySalesPageMinimal')
+    : import('@/pages/InventorySalesPage'),
+)
 const InventoryReturnsPage = lazy(() => import('@/pages/InventoryReturnsPage'))
 const ScannerPage = lazy(() => import('@/pages/ScannerPage'))
 const InventoryRequestPage = lazy(() => import('@/pages/InventoryRequestPage'))
