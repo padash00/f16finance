@@ -662,7 +662,6 @@ export async function POST(request: Request) {
             stock_updated,
             movements_written: movements.length,
             warnings_count: stock_warnings_count,
-            forced: force,
           },
         })
       }
