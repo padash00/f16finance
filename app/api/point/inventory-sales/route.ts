@@ -226,8 +226,42 @@ async function resolvePointSaleLocation(supabase: any, companyId: string) {
     .maybeSingle()
 
   if (error) throw error
-  if (!data?.id) throw new Error('inventory-sale-location-not-found')
-  return data
+  if (data?.id) return data
+
+  // Авто-создание витрины если её нет (новая точка после v8 модели)
+  const { data: company } = await supabase
+    .from('companies')
+    .select('id, name, code, organization_id')
+    .eq('id', companyId)
+    .maybeSingle()
+  if (!company?.id) throw new Error('inventory-sale-location-not-found')
+
+  const { data: created, error: createErr } = await supabase
+    .from('inventory_locations')
+    .insert({
+      company_id: company.id,
+      organization_id: (company as any).organization_id || null,
+      name: `Витрина — ${(company as any).name || 'точка'}`,
+      code: (company as any).code ? `PD-${(company as any).code}` : null,
+      location_type: 'point_display',
+      is_active: true,
+    })
+    .select('id, name, code, location_type')
+    .single()
+  if (createErr) {
+    // Возможно, кто-то параллельно создал — попробуем ещё раз прочитать
+    const { data: retry } = await supabase
+      .from('inventory_locations')
+      .select('id, name, code, location_type')
+      .eq('company_id', companyId)
+      .eq('location_type', 'point_display')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    if (retry?.id) return retry
+    throw createErr
+  }
+  return created
 }
 
 async function resolveStockLocations(supabase: any, companyId: string) {
@@ -240,9 +274,14 @@ async function resolveStockLocations(supabase: any, companyId: string) {
 
   if (error) throw error
   const warehouseId = (data || []).find((row: any) => row.location_type === 'warehouse')?.id || null
-  const showcaseId = (data || []).find((row: any) => row.location_type === 'point_display')?.id || null
-  if (!showcaseId) throw new Error('point-sale-showcase-location-missing')
-  // catalogId оставлен как null для совместимости с сигнатурой; больше не используется.
+  let showcaseId = (data || []).find((row: any) => row.location_type === 'point_display')?.id || null
+
+  // Если витрины нет — создаём (auto-bootstrap для новых точек после v8 модели)
+  if (!showcaseId) {
+    const loc = await resolvePointSaleLocation(supabase, companyId)
+    showcaseId = loc.id
+  }
+
   return { catalogId: null as string | null, warehouseId, showcaseId }
 }
 

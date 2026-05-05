@@ -45,8 +45,10 @@ const INVENTORY_ERROR_PREFIXES: Array<{ prefix: string; message: string | ((rest
     },
   },
   // Локации
-  { prefix: 'point-sale-showcase-location-missing', message: 'Витрина для этой точки не настроена. Включите магазин в настройках точки.' },
-  { prefix: 'pos-sale-showcase-location-missing', message: 'Витрина для этой точки не настроена. Включите магазин в настройках точки.' },
+  { prefix: 'inventory-sale-location-not-found', message: 'Витрина точки не настроена. Откройте админку → раздел точки → включите магазин.' },
+  { prefix: 'inventory-sale-catalog-location-missing', message: 'Витрина точки не настроена. Откройте админку → раздел точки → включите магазин.' },
+  { prefix: 'point-sale-showcase-location-missing', message: 'Витрина точки не настроена. Откройте админку → раздел точки → включите магазин.' },
+  { prefix: 'pos-sale-showcase-location-missing', message: 'Витрина точки не настроена. Откройте админку → раздел точки → включите магазин.' },
   { prefix: 'point-sale-catalog-location-missing', message: 'Каталог точки не настроен.' },
   { prefix: 'point-return-showcase-location-missing', message: 'Витрина для этой точки не настроена.' },
   // Склад: общая нехватка
