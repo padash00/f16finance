@@ -282,6 +282,9 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'store-receipts.apply_template', label: 'Применить шаблон приёмки', severity: 'low' },
           { id: 'store-receipts.save_template', label: 'Сохранить шаблон приёмки', severity: 'low' },
           { id: 'store-receipts.delete_template', label: 'Удалить шаблон приёмки', severity: 'medium' },
+          { id: 'store-receipts.bulk_markup', label: 'Применить наценку ко всем позициям', severity: 'medium' },
+          { id: 'store-receipts.bulk_sale_price', label: 'Применить цену продажи ко всем позициям', severity: 'medium' },
+          { id: 'store-receipts.quick_add_barcode', label: 'Быстрое добавление товара по штрихкоду', severity: 'low' },
         ],
       },
       {
@@ -325,6 +328,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           ...crud('store-revisions', { exportData: true, delete: false }),
           { id: 'store-revisions.commit', label: 'Подтвердить и провести ревизию', severity: 'high' },
           { id: 'store-revisions.cancel', label: 'Отменить ревизию', severity: 'high' },
+          { id: 'store-revisions.add_item_barcode', label: 'Добавить товар по штрихкоду', severity: 'low' },
+          { id: 'store-revisions.preload_from_balances', label: 'Автозаполнить остатки в форму ревизии', severity: 'medium' },
         ],
       },
       {
@@ -336,6 +341,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'store-writeoffs.cancel', label: 'Отменить списание', severity: 'high' },
           { id: 'store-writeoffs.apply_template', label: 'Применить шаблон списания', severity: 'low' },
           { id: 'store-writeoffs.save_template', label: 'Сохранить шаблон списания', severity: 'low' },
+          { id: 'store-writeoffs.quick_add_barcode', label: 'Быстрое добавление товара по штрихкоду', severity: 'low' },
         ],
       },
       {
@@ -489,6 +495,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Пропуска',
         capabilities: [
           { id: 'pass.view', label: 'Просмотр пропусков', severity: 'low' },
+          { id: 'pass.export_csv', label: 'Выгрузка списка в CSV', severity: 'high' },
+          { id: 'pass.copy_credentials', label: 'Копирование логина/пароля в буфер', severity: 'high' },
         ],
       },
       {
@@ -585,6 +593,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'point-devices.toggle_active', label: 'Включить/отключить устройство', severity: 'high' },
           { id: 'point-devices.rotate_token', label: 'Сбросить токен устройства', severity: 'high' },
           { id: 'point-devices.manage_feature_flags', label: 'Управление флагами функций', severity: 'high' },
+          { id: 'point-devices.reveal_token', label: 'Просмотр токена устройства', severity: 'high' },
+          { id: 'point-devices.copy_token', label: 'Копирование токена в буфер', severity: 'medium' },
         ],
       },
       {
@@ -662,7 +672,10 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         id: 'discounts',
         path: '/discounts',
         label: 'Скидки и промокоды',
-        capabilities: crud('discounts'),
+        capabilities: [
+          ...crud('discounts'),
+          { id: 'discounts.generate_promo', label: 'Сгенерировать промокод', severity: 'medium' },
+        ],
       },
     ],
   },
@@ -782,6 +795,9 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'access.manage_user_overrides', label: 'Переопределить права для сотрудника', severity: 'high' },
           { id: 'access.manage_staff_roles', label: 'Назначить роль сотруднику', severity: 'high' },
           { id: 'access.change_email', label: 'Изменить email сотрудника', severity: 'high' },
+          { id: 'access.generate_password', label: 'Сгенерировать пароль сотрудника', severity: 'high' },
+          { id: 'access.reveal_password', label: 'Просмотр сгенерированного пароля', severity: 'high' },
+          { id: 'access.invite_staff', label: 'Отправить приглашение по email', severity: 'high' },
           { id: 'access.reset_to_defaults', label: 'Сброс к правам по умолчанию', severity: 'high' },
         ],
       },
