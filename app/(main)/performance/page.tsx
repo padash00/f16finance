@@ -51,6 +51,9 @@ type ApiResponse = {
   }
 }
 
+type Company = { id: string; name: string; code: string | null }
+type ShiftFilter = 'all' | 'day' | 'night'
+
 type PeriodPreset = 'thisMonth' | 'lastMonth' | 'thisWeek' | 'lastWeek' | 'thisYear'
 
 const PERIOD_PRESETS: Record<PeriodPreset, { label: string; getRange: () => { from: string; to: string } }> = {
@@ -147,6 +150,9 @@ export default function PerformancePage() {
   useEffect(() => setIsClient(true), [])
 
   const [period, setPeriod] = useState<PeriodPreset>('thisMonth')
+  const [companyId, setCompanyId] = useState<string>('')   // '' = все точки
+  const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
+  const [companies, setCompanies] = useState<Company[]>([])
   const [data, setData] = useState<ApiResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -155,12 +161,21 @@ export default function PerformancePage() {
 
   const range = useMemo(() => PERIOD_PRESETS[period].getRange(), [period])
 
+  // Загружаем список точек один раз
+  useEffect(() => {
+    fetch('/api/admin/companies', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => setCompanies(j.data || []))
+      .catch(() => {})
+  }, [])
+
   const load = async (silent = false) => {
     if (silent) setRefreshing(true)
     else setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({ from: range.from, to: range.to })
+      if (companyId) params.set('company_id', companyId)
       const res = await fetch(`/api/admin/performance/ranking?${params}`, { cache: 'no-store' })
       const body = (await res.json()) as ApiResponse | { error: string }
       if (!res.ok) throw new Error(('error' in body && body.error) || 'Не удалось загрузить рейтинг')
@@ -176,12 +191,42 @@ export default function PerformancePage() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period])
+  }, [period, companyId])
+
+  // Локальная фильтрация по shift (api грузит все смены, фильтруем на клиенте чтобы не дёргать api)
+  const filteredRanking = useMemo(() => {
+    if (!data) return []
+    if (shiftFilter === 'all') return data.ranking
+    // Фильтруем shift_details и пересчитываем PI/shifts/totalRevenue только для нужных смен
+    return data.ranking
+      .map((op) => {
+        const matched = op.shift_details.filter((s) => s.shift === shiftFilter)
+        if (matched.length === 0) return null
+        const totalRev = matched.reduce((sum, s) => sum + s.actual, 0)
+        const piAvg = matched.reduce((sum, s) => sum + s.pi, 0) / matched.length
+        return {
+          ...op,
+          shifts: matched.length,
+          total_revenue: totalRev,
+          avg_revenue_per_shift: matched.length > 0 ? totalRev / matched.length : 0,
+          pi: Number(piAvg.toFixed(3)),
+          qualifying: matched.length >= (data.config.min_qualifying_shifts || 3),
+          shift_details: matched,
+        } as RankingItem
+      })
+      .filter((x): x is RankingItem => x !== null)
+      .sort((a, b) => {
+        if (a.qualifying !== b.qualifying) return a.qualifying ? -1 : 1
+        if (a.qualifying) return b.pi - a.pi
+        return b.total_revenue - a.total_revenue
+      })
+  }, [data, shiftFilter])
 
   if (!isClient) return null
 
-  const qualifying = (data?.ranking || []).filter((r) => r.qualifying)
-  const coldStart = (data?.ranking || []).filter((r) => !r.qualifying)
+  const qualifying = filteredRanking.filter((r) => r.qualifying)
+  const coldStart = filteredRanking.filter((r) => !r.qualifying)
+  const selectedCompany = companies.find((c) => c.id === companyId)
 
   return (
     <div className="app-page-wide space-y-6">
@@ -196,37 +241,85 @@ export default function PerformancePage() {
               <Trophy className="w-8 h-8 text-emerald-400" />
               Эффективность операторов
             </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-300">
+                {PERIOD_PRESETS[period].label}
+              </span>
+              {selectedCompany && (
+                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                  📍 {selectedCompany.name}
+                </span>
+              )}
+              {shiftFilter !== 'all' && (
+                <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-medium text-violet-300">
+                  {shiftFilter === 'day' ? '☀️ Только дневные смены' : '🌙 Только ночные смены'}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-400 max-w-2xl">
               Performance Index = факт / ожидание. Учитывается контекст каждой смены: точка, день недели, день/ночь.
               Сравнение с медианой такого же слота за прошлые 90 дней. Минимум {data?.config.min_qualifying_shifts || 3} смен для попадания в основной рейтинг.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
-              {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                    period === p ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {PERIOD_PRESETS[p].label}
-                </button>
-              ))}
+          <div className="flex flex-col items-stretch gap-2 lg:items-end">
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              {/* Период */}
+              <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
+                {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPeriod(p)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                      period === p ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {PERIOD_PRESETS[p].label}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => load(true)}
+                disabled={loading || refreshing}
+                className="rounded-xl border border-white/10"
+                title="Обновить"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => load(true)}
-              disabled={loading || refreshing}
-              className="rounded-xl border border-white/10"
-              title="Обновить"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </Button>
+
+            {/* Точка + Тип смены */}
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              <select
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className="bg-zinc-900/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-white outline-none hover:bg-zinc-900/70 cursor-pointer"
+              >
+                <option value="" className="bg-zinc-900">📍 Все точки</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-zinc-900">
+                    📍 {c.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
+                {(['all', 'day', 'night'] as ShiftFilter[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setShiftFilter(s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                      shiftFilter === s ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {s === 'all' ? 'Все смены' : s === 'day' ? '☀️ День' : '🌙 Ночь'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </Card>
