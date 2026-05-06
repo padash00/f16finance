@@ -11,6 +11,7 @@ import {
   resolveCompanyScope,
 } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -1176,6 +1177,8 @@ export async function POST(req: Request) {
     const supabase = createAdminSupabaseClient()
 
     if (body.action === 'createAdjustment') {
+      const denied = await requireCapability(access, 'salary.create_adjustment')
+      if (denied) return denied as any
       if (!body.payload.operator_id || !body.payload.date || !Number.isFinite(body.payload.amount)) {
         return json({ error: 'Недостаточно данных для корректировки' }, 400)
       }
@@ -1219,6 +1222,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'createAdvance') {
+      const denied = await requireCapability(access, 'salary.create_advance')
+      if (denied) return denied as any
       const weekStart = normalizeIsoDate(body.payload.week_start)
       const paymentDate = normalizeIsoDate(body.payload.payment_date)
       const split = normalizeSplit(body.payload.cash_amount, body.payload.kaspi_amount)
@@ -1353,6 +1358,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'createWeeklyPayment') {
+      const denied = await requireCapability(access, 'salary.create_payment')
+      if (denied) return denied as any
       const weekStart = normalizeIsoDate(body.payload.week_start)
       const paymentDate = normalizeIsoDate(body.payload.payment_date)
       const split = normalizeSplit(body.payload.cash_amount, body.payload.kaspi_amount)
@@ -1535,6 +1542,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'voidPayment') {
+      const denied = await requireCapability(access, 'salary.void_payment')
+      if (denied) return denied as any
       const weekStart2 = normalizeIsoDate(body.weekStart)
       if (!body.paymentId || !weekStart2 || !body.operatorId) {
         return json({ error: 'paymentId, weekStart и operatorId обязательны' }, 400)
@@ -1598,6 +1607,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'voidAdjustment') {
+      const denied = await requireCapability(access, 'salary.void_adjustment')
+      if (denied) return denied as any
       const weekStart2 = normalizeIsoDate(body.weekStart)
       if (!body.adjustmentId || !weekStart2 || !body.operatorId) {
         return json({ error: 'adjustmentId, weekStart и operatorId обязательны' }, 400)
@@ -1702,6 +1713,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'unlockSalaryWeek') {
+      const denied = await requireCapability(access, 'salary.unlock_week')
+      if (denied) return denied as any
       const weekStartUnlock = normalizeIsoDate(body.weekStart)
       if (!body.operatorId || !weekStartUnlock) {
         return json({ error: 'operatorId и weekStart обязательны' }, 400)
@@ -1758,6 +1771,12 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data: { week: refreshed } })
+    }
+
+    // Сюда доходим только для action='updateOperatorChatId' (другие обработаны выше)
+    {
+      const denied = await requireCapability(access, 'salary.update_chat_id')
+      if (denied) return denied as any
     }
 
     if (!body.operatorId) {

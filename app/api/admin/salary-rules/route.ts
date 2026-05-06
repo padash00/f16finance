@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { listOrganizationCompanyCodes } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -566,6 +567,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'createRule') {
+      const denied = await requireCapability(access, 'salary-rules.create')
+      if (denied) return denied as any
       const payload = normalizePayload(body.payload)
       const validationError = validatePayload(payload)
       if (validationError) return json({ error: validationError }, 400)
@@ -610,6 +613,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateRule') {
+      const denied = await requireCapability(access, 'salary-rules.edit')
+      if (denied) return denied as any
       const payload = normalizePayload(body.payload)
       const validationError = validatePayload(payload)
       if (validationError) return json({ error: validationError }, 400)
@@ -721,6 +726,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteRule') {
+      const denied = await requireCapability(access, 'salary-rules.delete')
+      if (denied) return denied as any
       const { data: previous, error: previousError } = await supabase
         .from('operator_salary_rules')
         .select('*')
@@ -768,6 +775,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertRuleVersion') {
+      const denied = await requireCapability(access, 'salary-rules.upsert_version')
+      if (denied) return denied as any
       const payload = normalizeRuleVersionPayload(body.payload)
       const validationError = validateRuleVersionPayload(payload)
       if (validationError) return json({ error: validationError }, 400)
@@ -844,6 +853,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteRuleVersion') {
+      const denied = await requireCapability(access, 'salary-rules.delete_version')
+      if (denied) return denied as any
       const versionId = String(body.versionId || '').trim()
       if (!versionId) return json({ error: 'versionId обязателен' }, 400)
 
@@ -883,6 +894,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertSeniorityTier') {
+      const denied = await requireCapability(access, 'salary-rules.upsert_seniority')
+      if (denied) return denied as any
       const payload = normalizeSeniorityTierPayload(body.payload)
       const validationError = validateSeniorityTierPayload(payload)
       if (validationError) return json({ error: validationError }, 400)
@@ -939,6 +952,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteSeniorityTier') {
+      const denied = await requireCapability(access, 'salary-rules.delete_seniority')
+      if (denied) return denied as any
       const tierId = String(body.tierId || '').trim()
       if (!tierId) return json({ error: 'tierId обязателен' }, 400)
 
