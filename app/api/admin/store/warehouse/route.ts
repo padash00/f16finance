@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -253,6 +254,8 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createItem') {
+      const denied = await requireCapability(access, 'store-warehouse.create_item')
+      if (denied) return denied as any
       const name = String(body.name || '').trim()
       const barcode = String(body.barcode || '').trim()
       if (!name) return json({ error: 'name-required' }, 400)
@@ -284,6 +287,8 @@ export async function POST(request: Request) {
 
     // ── addStock: add/set stock in physical warehouse ─────────────────────────
     if (body.action === 'addStock') {
+      const denied = await requireCapability(access, 'store-warehouse.edit')
+      if (denied) return denied as any
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
@@ -416,6 +421,8 @@ export async function POST(request: Request) {
 
     // ── setWarehouse: set physical warehouse allocation for items ──────────────
     if (body.action === 'setWarehouse') {
+      const denied = await requireCapability(access, 'store-warehouse.edit')
+      if (denied) return denied as any
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
@@ -467,6 +474,8 @@ export async function POST(request: Request) {
     // Input: { action, company_id, items: [{barcode, quantity, name?}] }
     // Output: { matched: [...], unmatched: [...] } — ничего не меняет в БД.
     if (body.action === 'previewBackroomUpload') {
+      const denied = await requireCapability(access, 'store-warehouse.upload_backroom')
+      if (denied) return denied as any
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
@@ -575,6 +584,8 @@ export async function POST(request: Request) {
 
     // ── applyBackroomUpload: set warehouse from parsed file ────────────────────
     if (body.action === 'applyBackroomUpload') {
+      const denied = await requireCapability(access, 'store-warehouse.apply_backroom')
+      if (denied) return denied as any
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
@@ -641,6 +652,8 @@ export async function POST(request: Request) {
 
     // ── deleteStock: remove item from warehouse + showcase ────────────────────
     if (body.action === 'deleteStock') {
+      const denied = await requireCapability(access, 'store-warehouse.edit')
+      if (denied) return denied as any
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 

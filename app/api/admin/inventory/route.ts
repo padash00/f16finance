@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import {
   createInventoryCategory,
@@ -355,6 +356,8 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createItem') {
+      const denied = await requireCapability(access, 'store-catalog.create')
+      if (denied) return denied as any
       const name = String(body.payload?.name || '').trim()
       const barcode = String(body.payload?.barcode || '').trim()
       const salePrice = normalizeMoney(body.payload?.sale_price)

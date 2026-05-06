@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveEffectiveOrganizationId } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { bulkSyncInventoryItemsToPointProducts, syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
@@ -126,6 +127,8 @@ export async function POST(request: Request) {
     // previewImport
     // -----------------------------------------------------------------------
     if (body.action === 'previewImport') {
+      const denied = await requireCapability(access, 'store-catalog.import')
+      if (denied) return denied as any
       const rows: ImportRow[] = body.rows || []
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
@@ -335,6 +338,8 @@ export async function POST(request: Request) {
     // confirmImport
     // -----------------------------------------------------------------------
     if (body.action === 'confirmImport') {
+      const denied = await requireCapability(access, 'store-catalog.import')
+      if (denied) return denied as any
       const rows: ImportRow[] = body.rows || []
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
@@ -675,6 +680,8 @@ export async function POST(request: Request) {
     // и FK-проблем (inventory_movements/point_sale_items блокируют delete items).
     // -----------------------------------------------------------------------
     if (body.action === 'resetAllBalances') {
+      const denied = await requireCapability(access, 'store-catalog.bulk_zero_stock')
+      if (denied) return denied as any
       const confirm = String(body.confirm || '').trim()
       if (confirm !== 'ОБНУЛИТЬ ОСТАТКИ') {
         return json({ error: 'Введите фразу подтверждения: ОБНУЛИТЬ ОСТАТКИ' }, 400)
@@ -714,6 +721,8 @@ export async function POST(request: Request) {
     // deactivateAllItems — скрыть все позиции каталога (is_active = false)
     // -----------------------------------------------------------------------
     if (body.action === 'deactivateAllItems') {
+      const denied = await requireCapability(access, 'store-catalog.bulk_deactivate')
+      if (denied) return denied as any
       const confirm = String(body.confirm || '').trim()
       if (confirm !== 'ОТКЛЮЧИТЬ ВСЕ') {
         return json({ error: 'Введите фразу подтверждения: ОТКЛЮЧИТЬ ВСЕ' }, 400)
@@ -741,6 +750,8 @@ export async function POST(request: Request) {
     // deleteAllItems — удалить ВСЕ товары организации (сначала остатки, потом товары)
     // -----------------------------------------------------------------------
     if (body.action === 'deleteAllItems') {
+      const denied = await requireCapability(access, 'store-catalog.bulk_delete_all')
+      if (denied) return denied as any
       const confirm = String(body.confirm || '').trim()
       if (confirm !== 'УДАЛИТЬ ВСЁ') {
         return json({ error: 'Введите фразу подтверждения: УДАЛИТЬ ВСЁ' }, 400)
@@ -782,6 +793,8 @@ export async function POST(request: Request) {
     // deleteEmptyBalanceItems — удалить товары без остатков (как одиночное удаление)
     // -----------------------------------------------------------------------
     if (body.action === 'deleteEmptyBalanceItems') {
+      const denied = await requireCapability(access, 'store-catalog.bulk_delete_empty')
+      if (denied) return denied as any
       const confirm = String(body.confirm || '').trim()
       if (confirm !== 'УДАЛИТЬ ПУСТЫЕ') {
         return json({ error: 'Введите фразу подтверждения: УДАЛИТЬ ПУСТЫЕ' }, 400)
@@ -834,6 +847,8 @@ export async function POST(request: Request) {
     // deleteItem
     // -----------------------------------------------------------------------
     if (body.action === 'deleteItem') {
+      const denied = await requireCapability(access, 'store-catalog.delete')
+      if (denied) return denied as any
       const itemId = String(body.item_id || '').trim()
       if (!itemId) return json({ error: 'item-id-required' }, 400)
 
@@ -860,6 +875,8 @@ export async function POST(request: Request) {
     // updateItem
     // -----------------------------------------------------------------------
     if (body.action === 'updateItem') {
+      const denied = await requireCapability(access, 'store-catalog.edit')
+      if (denied) return denied as any
       const itemId = String(body.item_id || '').trim()
       if (!itemId) return json({ error: 'item-id-required' }, 400)
 

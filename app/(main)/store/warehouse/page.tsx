@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import mammoth from 'mammoth'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   AlertCircle,
   Barcode,
@@ -124,6 +125,12 @@ function parseNum(v: string) {
 }
 
 export default function WarehousePage() {
+  const { can } = useCapabilities()
+  const canEdit = can('store-warehouse.edit')
+  const canCreateItem = can('store-warehouse.create_item')
+  const canUploadBackroom = can('store-warehouse.upload_backroom')
+  const canPrintLabels = can('store-warehouse.print_labels')
+
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
   const [warehouseLoc, setWarehouseLoc] = useState<LocationRef | null>(null)
@@ -752,14 +759,18 @@ export default function WarehousePage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { setAddMode('warehouseFile'); setBackroomSheetOpen(true) }} className="h-9 gap-1.5">
-            <Boxes className="h-3.5 w-3.5" />
-            Файл подсобки
-          </Button>
-          <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700">
-            <PackagePlus className="h-3.5 w-3.5" />
-            Добавить товары
-          </Button>
+          {canUploadBackroom && (
+            <Button variant="outline" size="sm" onClick={() => { setAddMode('warehouseFile'); setBackroomSheetOpen(true) }} className="h-9 gap-1.5">
+              <Boxes className="h-3.5 w-3.5" />
+              Файл подсобки
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+              <PackagePlus className="h-3.5 w-3.5" />
+              Добавить товары
+            </Button>
+          )}
         </div>
       </div>
 
@@ -805,7 +816,7 @@ export default function WarehousePage() {
             Выбрано: {selectedIds.size}
           </span>
         )}
-        {selectedIds.size > 0 && (
+        {selectedIds.size > 0 && canPrintLabels && (
           <Button
             size="sm"
             variant="outline"
@@ -816,30 +827,32 @@ export default function WarehousePage() {
             Ценники ({selectedIds.size})
           </Button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" className="h-9 gap-1.5">
-              <MoreHorizontal className="h-3.5 w-3.5" />
-              Действия
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => setDeleteConfirm('selected')}>
-              <Trash2 className="h-3.5 w-3.5" />
-              Удалить выбранные ({selectedIds.size})
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              disabled={balances.length === 0 || deleting}
-              onClick={() => setDeleteConfirm('all')}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Очистить весь склад
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {canEdit && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="h-9 gap-1.5">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+                Действия
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => setDeleteConfirm('selected')}>
+                <Trash2 className="h-3.5 w-3.5" />
+                Удалить выбранные ({selectedIds.size})
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={balances.length === 0 || deleting}
+                onClick={() => setDeleteConfirm('all')}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Очистить весь склад
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Main table */}
@@ -1063,10 +1076,12 @@ export default function WarehousePage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" className="h-7 text-xs" onClick={handleCreateItem} disabled={creatingItem || !newItemName.trim()}>
-                        {creatingItem ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                        Создать
-                      </Button>
+                      {canCreateItem && (
+                        <Button size="sm" className="h-7 text-xs" onClick={handleCreateItem} disabled={creatingItem || !newItemName.trim()}>
+                          {creatingItem ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                          Создать
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setNewItemDialog(null); setBarcodeInput(''); setBarcodeResult(null) }}>
                         Отмена
                       </Button>

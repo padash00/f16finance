@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -305,6 +306,17 @@ function ItemForm({
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export function CatalogPageContent() {
+  const { can } = useCapabilities()
+  const canCreate = can('store-catalog.create')
+  const canEdit = can('store-catalog.edit')
+  const canDelete = can('store-catalog.delete')
+  const canExport = can('store-catalog.export')
+  const canImport = can('store-catalog.import')
+  const canBulkZeroStock = can('store-catalog.bulk_zero_stock')
+  const canBulkDeactivate = can('store-catalog.bulk_deactivate')
+  const canBulkDeleteEmpty = can('store-catalog.bulk_delete_empty')
+  const canBulkDeleteAll = can('store-catalog.bulk_delete_all')
+
   const [tab, setTab] = useState<'catalog' | 'import'>('catalog')
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -660,26 +672,38 @@ export function CatalogPageContent() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
-            <Download className="w-3.5 h-3.5 mr-1.5" />
-            Экспорт Excel
-          </Button>
-          <Button variant="outline" size="sm" className="text-sky-700 border-sky-500/40" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase('') }}>
-            Обнулить остатки
-          </Button>
-          <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
-            Скрыть все в каталоге
-          </Button>
-          <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
-            Удалить без остатков
-          </Button>
-          <Button variant="outline" size="sm" className="text-destructive border-destructive/60 bg-destructive/5" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase('') }}>
-            Удалить весь каталог
-          </Button>
-          <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Добавить товар
-          </Button>
+          {canExport && (
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              Экспорт Excel
+            </Button>
+          )}
+          {canBulkZeroStock && (
+            <Button variant="outline" size="sm" className="text-sky-700 border-sky-500/40" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase('') }}>
+              Обнулить остатки
+            </Button>
+          )}
+          {canBulkDeactivate && (
+            <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
+              Скрыть все в каталоге
+            </Button>
+          )}
+          {canBulkDeleteEmpty && (
+            <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
+              Удалить без остатков
+            </Button>
+          )}
+          {canBulkDeleteAll && (
+            <Button variant="outline" size="sm" className="text-destructive border-destructive/60 bg-destructive/5" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase('') }}>
+              Удалить весь каталог
+            </Button>
+          )}
+          {canCreate && (
+            <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Добавить товар
+            </Button>
+          )}
         </div>
       </div>
 
@@ -752,21 +776,23 @@ export function CatalogPageContent() {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs — вкладка «Импорт» скрыта если нет права store-catalog.import */}
       <div className="flex gap-1 border-b border-border">
-        {(['catalog', 'import'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === t
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t === 'catalog' ? `Каталог${filtered.length !== items.length ? ` (${filtered.length})` : ` (${items.length})`}` : 'Импорт Excel'}
-          </button>
-        ))}
+        {(['catalog', 'import'] as const)
+          .filter((t) => t !== 'import' || canImport)
+          .map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                tab === t
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t === 'catalog' ? `Каталог${filtered.length !== items.length ? ` (${filtered.length})` : ` (${items.length})`}` : 'Импорт Excel'}
+            </button>
+          ))}
       </div>
 
       {/* ── TAB: CATALOG ─────────────────────────────────────────────────────── */}
@@ -911,20 +937,24 @@ export function CatalogPageContent() {
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => { startEdit(item); setShowAdd(false) }}
-                                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                title="Редактировать"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => deleteItem(item)}
-                                className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                title="Удалить"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canEdit && (
+                                <button
+                                  onClick={() => { startEdit(item); setShowAdd(false) }}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                  title="Редактировать"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  onClick={() => deleteItem(item)}
+                                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                  title="Удалить"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
