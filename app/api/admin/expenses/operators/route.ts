@@ -57,6 +57,20 @@ export async function GET(req: Request) {
       area: 'api/admin/expenses/operators GET',
       message: error?.message || 'expense operators list failed',
     })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    console.error('[expenses/operators GET] full error:', error)
+    let json_dump = ''
+    try { json_dump = JSON.stringify(error, Object.getOwnPropertyNames(error)) } catch {}
+    return json({
+      error: error?.message || 'Ошибка сервера',
+      _diagnostic: {
+        name: error?.name || null,
+        message: String(error?.message || error || 'unknown'),
+        code: error?.code || null,
+        status: error?.status || error?.statusCode || null,
+        details: error?.details || null,
+        hint: error?.hint || null,
+        full: json_dump.slice(0, 1500),
+      },
+    }, 500)
   }
 }
