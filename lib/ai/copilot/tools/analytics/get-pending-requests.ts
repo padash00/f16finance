@@ -1,0 +1,42 @@
+/**
+ * AI tool: показать заявки на пополнение которые ждут решения.
+ * Capability: store-requests.view
+ */
+
+import type { CopilotTool } from '../../types'
+
+export const getPendingRequestsTool: CopilotTool = {
+  name: 'get_pending_requests',
+  category: 'analytics',
+  description: 'Показать заявки на пополнение витрины которые ждут решения',
+  requiredCapability: 'store-requests.view',
+  severity: 'low',
+  params: [],
+  handler: async (_input, ctx) => {
+    const { data, error } = await ctx.supabase
+      .from('inventory_requests')
+      .select('id, status, created_at, comment, company:companies!requesting_company_id(name)')
+      .in('status', ['new', 'disputed'])
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (error) return { ok: false, message: `Ошибка: ${error.message}` }
+
+    const rows = data || []
+    if (rows.length === 0) return { ok: true, message: '✅ Нет ожидающих заявок.' }
+
+    const lines: string[] = [`📋 Заявок ждут решения: ${rows.length}\n`]
+    for (const r of rows as any[]) {
+      const co = Array.isArray(r.company) ? r.company[0] : r.company
+      const date = r.created_at ? new Date(r.created_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : ''
+      const tag = r.status === 'disputed' ? '⚠️ Спорная' : '🆕 Новая'
+      lines.push(`  ${tag} · ${co?.name || '—'} · ${date}${r.comment ? `\n    "${r.comment.slice(0, 80)}"` : ''}`)
+    }
+
+    return {
+      ok: true,
+      message: lines.join('\n'),
+      data: { count: rows.length },
+      followUps: [{ label: '👁 Открыть заявки', action: 'open:/store/requests' }],
+    }
+  },
+}

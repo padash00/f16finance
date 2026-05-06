@@ -13,9 +13,17 @@ import { addExpenseTool } from './finance/add-expense'
 import { addIncomeTool } from './finance/add-income'
 import { markDebtPaidTool } from './finance/mark-debt-paid'
 import { createTaskTool } from './tasks/create-task'
+import { closeTaskTool } from './tasks/close-task'
 import { createInventoryRequestTool } from './inventory/create-request'
+import { approveRequestTool, declineRequestTool } from './inventory/decide-request'
+import { assignShiftTool } from './shifts/assign-shift'
 import { queryRevenueTool } from './analytics/query-revenue'
 import { queryLowStockTool } from './analytics/query-low-stock'
+import { queryExpensesTool } from './analytics/query-expenses'
+import { getTodayShiftsTool } from './analytics/get-today-shifts'
+import { getOverdueTasksTool } from './analytics/get-overdue-tasks'
+import { getPendingRequestsTool } from './analytics/get-pending-requests'
+import { getBirthdaysTool } from './analytics/get-birthdays'
 
 let initialized = false
 
@@ -23,24 +31,40 @@ export function initializeCopilotTools(): void {
   if (initialized) return
   initialized = true
 
-  // Финансовые tools
+  // ─── Action tools (write) ────────────────────────────────────────────
+  // Финансы
   registerTool(addExpenseTool)
   registerTool(addIncomeTool)
   registerTool(markDebtPaidTool)
 
-  // Зарплата tools
+  // Зарплата
   registerTool(giveAdvanceTool)
   registerTool(addFineTool)
   registerTool(addBonusTool)
 
-  // Операционные tools
+  // Задачи
   registerTool(createTaskTool)
+  registerTool(closeTaskTool)
+
+  // Склад
   registerTool(createInventoryRequestTool)
+  registerTool(approveRequestTool)
+  registerTool(declineRequestTool)
 
-  // Read / analytics tools
+  // Смены
+  registerTool(assignShiftTool)
+
+  // ─── Read / analytics tools ──────────────────────────────────────────
   registerTool(queryRevenueTool)
+  registerTool(queryExpensesTool)
   registerTool(queryLowStockTool)
+  registerTool(getTodayShiftsTool)
+  registerTool(getOverdueTasksTool)
+  registerTool(getPendingRequestsTool)
+  registerTool(getBirthdaysTool)
 
-  // TODO: расширять партиями — assign_shift, swap_shift, approve_request,
-  // writeoff_item, query_expenses, compare_periods, query_pi, и т.д.
+  // Зарегистрировано: 18 tools
+  // TODO следующие партии: get_operator_salary, get_operator_pi,
+  // compare_periods, write_off_item, transfer_to_showcase, swap_shift,
+  // create_operator, block_operator, save_to_memory, send_to_operator
 }
