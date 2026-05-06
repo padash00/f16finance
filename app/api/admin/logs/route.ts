@@ -658,14 +658,57 @@ export async function GET(req: Request) {
     ) as string[]
 
     const actorEmailMap = new Map<string, string>()
+    const actorNameMap = new Map<string, string>()
     if (actorIds.length > 0 && hasAdminSupabaseCredentials()) {
-      const { data, error } = await createAdminSupabaseClient().auth.admin.listUsers({ page: 1, perPage: 1000 })
+      const adminClient = createAdminSupabaseClient()
+      const { data, error } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 })
       if (!error && data?.users) {
         for (const user of data.users) {
           if (user.id && user.email && actorIds.includes(user.id)) {
             actorEmailMap.set(user.id, user.email)
           }
         }
+      }
+      // Резолвим имена сотрудников по email — для красивого отображения и в TG, и на странице
+      const emails = Array.from(actorEmailMap.values())
+      if (emails.length > 0) {
+        const { data: staffRows } = await adminClient
+          .from('staff')
+          .select('email, full_name, short_name')
+          .in('email', emails)
+        const emailToName = new Map<string, string>()
+        for (const row of (staffRows || []) as any[]) {
+          const email = String(row.email || '').toLowerCase()
+          const name = String(row.full_name || row.short_name || '').trim()
+          if (email && name) emailToName.set(email, name)
+        }
+        for (const [userId, email] of actorEmailMap) {
+          const n = emailToName.get(email.toLowerCase())
+          if (n) actorNameMap.set(userId, n)
+        }
+      }
+    }
+
+    // Резолвим имена компаний из payload, чтобы фронт мог красиво выводить точку
+    const companyIds = new Set<string>()
+    for (const row of (auditRows || []) as AuditRow[]) {
+      const payload = row.payload as Record<string, unknown> | null
+      if (!payload) continue
+      const direct = String(payload.company_id || '').trim()
+      if (direct) companyIds.add(direct)
+      const next = (payload.next as Record<string, unknown>) || null
+      const prev = (payload.previous as Record<string, unknown>) || null
+      if (next?.company_id) companyIds.add(String(next.company_id))
+      if (prev?.company_id) companyIds.add(String(prev.company_id))
+    }
+    const companyNameMap = new Map<string, string>()
+    if (companyIds.size > 0) {
+      const { data: companies } = await supabase
+        .from('companies')
+        .select('id, name')
+        .in('id', Array.from(companyIds))
+      for (const row of (companies || []) as any[]) {
+        if (row.id && row.name) companyNameMap.set(String(row.id), String(row.name))
       }
     }
 
@@ -703,23 +746,35 @@ export async function GET(req: Request) {
     }
 
     const combined = [
-      ...((auditRows || []) as AuditRow[]).map((row) => ({
-        id: `audit:${row.id}`,
-        kind: 'audit' as const,
-        createdAt: row.created_at,
-        title: `${row.entity_type} • ${row.action}`,
-        subtitle: row.entity_id,
-        details: null,
-        detailRows: [],
-        entityType: row.entity_type,
-        action: row.action,
-        actorUserId: row.actor_user_id,
-        actorEmail: row.actor_user_id ? actorEmailMap.get(row.actor_user_id) || null : null,
-        channel: null,
-        status: null,
-        recipient: null,
-        payload: row.payload || null,
-      })),
+      ...((auditRows || []) as AuditRow[]).map((row) => {
+        const payload: Record<string, unknown> = row.payload ? { ...row.payload } : {}
+        // Подмешиваем имя точки, чтобы фронт красиво показывал «точка: F16 Ramen»
+        const companyId = String(payload.company_id || '').trim()
+        if (companyId && !payload.company_name) {
+          const cn = companyNameMap.get(companyId)
+          if (cn) payload.company_name = cn
+        }
+        // Подмешиваем имя действующего лица для форматтера
+        const actorName = row.actor_user_id ? actorNameMap.get(row.actor_user_id) : null
+        if (actorName) payload.actor_label = actorName
+        return {
+          id: `audit:${row.id}`,
+          kind: 'audit' as const,
+          createdAt: row.created_at,
+          title: `${row.entity_type} • ${row.action}`,
+          subtitle: row.entity_id,
+          details: null,
+          detailRows: [],
+          entityType: row.entity_type,
+          action: row.action,
+          actorUserId: row.actor_user_id,
+          actorEmail: row.actor_user_id ? actorEmailMap.get(row.actor_user_id) || null : null,
+          channel: null,
+          status: null,
+          recipient: null,
+          payload,
+        }
+      }),
       ...((notificationRows || []) as NotificationRow[]).map((row) => {
         const recipientKey = String(row.recipient || '').trim()
         const recipientName = recipientNameMap.get(recipientKey) || null

@@ -12,6 +12,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { formatAuditEvent, type FormattedEvent } from '@/lib/core/event-formatter'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -188,9 +189,32 @@ function pageLabel(value: string) {
   return PAGE_LABELS[raw] || PAGE_LABELS[normalized] || raw
 }
 
-// ─── Human-readable title ────────────────────────────────────────────────────
+// ─── Human-readable title (через единый форматтер) ───────────────────────────
 
+function formatItem(item: LogItem): FormattedEvent | null {
+  if (!item.entityType || item.kind !== 'audit') return null
+  const payload = item.payload || {}
+  const actorLabel =
+    String((payload as Record<string, unknown>).actor_label || '').trim() ||
+    actorName(item.actorEmail)
+  return formatAuditEvent({
+    entityType: item.entityType,
+    action: item.action || '',
+    payload: payload as Record<string, unknown>,
+    actorLabel,
+  })
+}
+
+// Старый humanTitle оставлен для notification и ai типов событий + как fallback
 function humanTitle(item: LogItem): string {
+  // audit события форматируются через единый форматтер
+  if (item.kind === 'audit') {
+    const f = formatItem(item)
+    if (f) {
+      const head = `${f.icon} ${f.title}`
+      return f.details.length ? `${head} · ${f.details.join(' · ')}` : head
+    }
+  }
   const who = actorName(item.actorEmail)
   const p = item.payload || {}
   const et = (item.entityType || '').toLowerCase()
@@ -731,6 +755,24 @@ export default function LogsPage() {
                         </span>
                       )}
 
+                      {/* Severity badge — для audit-событий */}
+                      {(() => {
+                        const f = formatItem(item)
+                        if (!f) return null
+                        const labels: Record<string, { text: string; cls: string }> = {
+                          info: { text: 'инфо', cls: 'bg-slate-500/15 text-slate-300' },
+                          normal: { text: 'обычное', cls: 'bg-sky-500/15 text-sky-300' },
+                          important: { text: 'важное', cls: 'bg-amber-500/15 text-amber-300' },
+                          critical: { text: 'критично', cls: 'bg-red-500/20 text-red-300' },
+                        }
+                        const sev = labels[f.severity] || labels.info
+                        return (
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${sev.cls}`}>
+                            {sev.text}
+                          </span>
+                        )
+                      })()}
+
                       {/* Error badge */}
                       {isError && (
                         <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300">ошибка</span>
@@ -744,7 +786,7 @@ export default function LogsPage() {
 
                     {/* Main title */}
                     <p className="mt-1.5 text-sm font-medium leading-snug text-slate-100">
-                      {item.title || humanTitle(item)}
+                      {humanTitle(item)}
                     </p>
 
                     {item.detailRows?.length ? (

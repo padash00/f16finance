@@ -743,7 +743,42 @@ export function buildStyledSheet(
 }
 
 // ─── Download helper (browser) ─────────────────────────────────────────────────
-export async function downloadWorkbook(wb: ExcelJS.Workbook, filename: string) {
+type DownloadOptions = {
+  /** Что именно экспортируется (по-русски) для журнала событий */
+  subject?: string
+  /** Количество строк/записей */
+  count?: number
+  /** Период экспорта */
+  period?: string
+  /** Отключить запись в журнал (если страница уже логирует своим способом) */
+  silent?: boolean
+}
+
+const FILENAME_TO_SUBJECT: Record<string, string> = {
+  incomes: 'доходы',
+  income: 'доходы',
+  expenses: 'расходы',
+  expense: 'расходы',
+  salary: 'зарплатная ведомость',
+  staff: 'сотрудники',
+  operators: 'операторы',
+  cashflow: 'движение денег',
+  customers: 'клиенты',
+  clients: 'клиенты',
+  point_debts: 'долги точки',
+  catalog: 'каталог товаров',
+  abc_analysis: 'ABC-анализ',
+  'ai-analysis': 'AI-анализ',
+}
+
+function subjectFromFilename(filename: string): string {
+  const base = filename.replace(/\.(xlsx|xls|csv)$/i, '').toLowerCase()
+  // Берём всё до первого _ или цифры (incomes_2026-04 → incomes)
+  const root = base.split(/[_-]/)[0]
+  return FILENAME_TO_SUBJECT[root] || FILENAME_TO_SUBJECT[base] || 'данные'
+}
+
+export async function downloadWorkbook(wb: ExcelJS.Workbook, filename: string, options?: DownloadOptions) {
   finalizeWorkbook(wb)
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -753,6 +788,23 @@ export async function downloadWorkbook(wb: ExcelJS.Workbook, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+
+  // Логируем экспорт в журнал событий, чтобы видеть кто что выгружал
+  if (!options?.silent && typeof window !== 'undefined') {
+    try {
+      const subject = options?.subject || subjectFromFilename(filename)
+      const { logExport } = await import('@/lib/client/log-export')
+      await logExport({
+        subject,
+        format: 'xlsx',
+        count: options?.count,
+        period: options?.period,
+        extra: { filename },
+      })
+    } catch {
+      // не мешаем основному потоку
+    }
+  }
 }
 
 export function createWorkbook(company = 'Orda Control'): ExcelJS.Workbook {

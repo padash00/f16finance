@@ -18,6 +18,7 @@ const ALLOWED_ENTITY_TYPES = new Set([
   'expense-export',
   'finance',
   'page-view',
+  'data-export', // универсальная категория экспорта (Excel/CSV/PDF)
 ])
 
 export async function POST(req: Request) {
