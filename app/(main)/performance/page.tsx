@@ -241,23 +241,127 @@ export default function PerformancePage() {
       )}
 
       {/* Объяснение метода */}
-      <Card className="p-5 bg-blue-500/5 border-blue-500/15 text-sm text-slate-300">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <div className="text-blue-300 font-semibold">Как считается</div>
-            <div className="text-slate-400">
-              Каждой смене мы подбираем «ожидание» — медианная выручка такой же смены (точка × день недели × день/ночь) за прошлые 90 дней.
-              <strong className="text-white"> PI = факт / ожидание</strong>.
-              PI = 1.10 значит «оператор делает на 10% больше нормы для своих слотов».
-              Среднее PI по всем сменам оператора и есть его балл.
-              {data?.baseline && (
-                <span className="text-slate-500">
-                  {' '}База: {data.baseline.shifts_count} смен в {data.baseline.slots_count} слотах · медиана глобально {moneyShort(data.baseline.global_median)}.
-                </span>
-              )}
+      <Card className="bg-gray-900/40 border-white/8 overflow-hidden">
+        <div className="border-b border-white/5 bg-blue-500/[0.04] px-5 py-3 flex items-center gap-2">
+          <Info className="w-4 h-4 text-blue-400" />
+          <span className="text-sm font-semibold text-blue-300">Как формируется рейтинг</span>
+        </div>
+        <div className="p-5 space-y-5 text-sm">
+          {/* Шаг 1 */}
+          <div className="flex gap-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">1</div>
+            <div className="flex-1">
+              <div className="font-semibold text-white mb-1">Считаем «ожидание» для каждой смены</div>
+              <p className="text-slate-400 leading-relaxed">
+                Берём прошлые <strong className="text-slate-200">90 дней</strong> и для каждого слота считаем
+                <strong className="text-slate-200"> медианную выручку</strong>. Слот — это уникальная комбинация
+                «<strong className="text-emerald-300">точка</strong> × <strong className="text-emerald-300">день недели</strong> × <strong className="text-emerald-300">день/ночь</strong>».
+              </p>
+              <div className="mt-2 rounded-lg border border-white/8 bg-black/20 p-3 text-xs text-slate-400">
+                Пример: «Arena × пятница × ночь» — за последние 90 дней было 12 таких смен с выручкой от 180k до 420k. Медиана = <span className="text-white font-semibold">280 000 ₸</span>. Это ожидание для любой будущей пятничной ночи в Arena.
+              </div>
             </div>
           </div>
+
+          {/* Шаг 2 */}
+          <div className="flex gap-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">2</div>
+            <div className="flex-1">
+              <div className="font-semibold text-white mb-1">Считаем PI каждой смены оператора</div>
+              <p className="text-slate-400 leading-relaxed">
+                Для каждой смены берём фактическую выручку и делим на ожидание этого слота:
+              </p>
+              <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3 font-mono text-sm text-emerald-200">
+                PI смены = факт / ожидание
+              </div>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+                  <div className="text-emerald-300 font-semibold">PI = 1.20</div>
+                  <div className="text-slate-400 mt-1">Сделал 336k вместо ожидаемых 280k. Это <strong className="text-emerald-300">+20% к норме</strong>.</div>
+                </div>
+                <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.05] p-3">
+                  <div className="text-rose-300 font-semibold">PI = 0.85</div>
+                  <div className="text-slate-400 mt-1">Сделал 238k при ожидании 280k. <strong className="text-rose-300">−15% к норме</strong>.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Шаг 3 */}
+          <div className="flex gap-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">3</div>
+            <div className="flex-1">
+              <div className="font-semibold text-white mb-1">Берём среднее PI по всем сменам — это балл оператора</div>
+              <p className="text-slate-400 leading-relaxed">
+                У оператора 8 смен за месяц → 8 PI. Их среднее и есть его рейтинговый балл.
+              </p>
+              <div className="mt-2 rounded-lg border border-white/8 bg-black/20 p-3 text-xs text-slate-400">
+                <span className="text-white font-semibold">Айгерим:</span> 8 смен. PI = [1.05, 1.18, 0.92, 1.30, 1.12, 0.95, 1.20, 1.08]. Среднее = <span className="text-emerald-300 font-semibold">1.10</span> — на <strong>10% выше нормы</strong> в среднем по всем своим сменам.
+              </div>
+            </div>
+          </div>
+
+          {/* Цветовые метки */}
+          <div className="flex gap-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">4</div>
+            <div className="flex-1">
+              <div className="font-semibold text-white mb-2">Цветовые метки</div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-1.5 text-center">
+                  <div className="text-emerald-300 font-bold">≥ 1.15</div>
+                  <div className="text-emerald-200 text-[10px]">Превосходно</div>
+                </div>
+                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1.5 text-center">
+                  <div className="text-emerald-300 font-bold">1.05–1.14</div>
+                  <div className="text-emerald-200 text-[10px]">Хорошо</div>
+                </div>
+                <div className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1.5 text-center">
+                  <div className="text-slate-300 font-bold">0.95–1.04</div>
+                  <div className="text-slate-300 text-[10px]">Норма</div>
+                </div>
+                <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-center">
+                  <div className="text-amber-300 font-bold">0.85–0.94</div>
+                  <div className="text-amber-200 text-[10px]">Ниже нормы</div>
+                </div>
+                <div className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1.5 text-center">
+                  <div className="text-rose-300 font-bold">{'< 0.85'}</div>
+                  <div className="text-rose-200 text-[10px]">Слабо</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Защиты */}
+          <div className="flex gap-3 pt-2 border-t border-white/5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 text-xs font-semibold">!</div>
+            <div className="flex-1">
+              <div className="font-semibold text-white mb-1">Защита от случайных всплесков</div>
+              <ul className="text-slate-400 leading-relaxed space-y-1 list-disc pl-4">
+                <li>
+                  <strong className="text-slate-200">Минимум 3 смены</strong> для попадания в основной рейтинг.
+                  Меньше — оператор в секции «Накапливают данные».
+                </li>
+                <li>
+                  <strong className="text-slate-200">PI ограничен от 0.5 до 2.0</strong> — лотерейный день с одним крупным заказом не возносит и не валит надолго.
+                </li>
+                <li>
+                  Если в слоте {'<'} 3 наблюдений (редкий случай) — берём fallback: медиана по точке-смене, потом по точке, потом глобально.
+                </li>
+                <li>
+                  <strong className="text-slate-200">Сравнение справедливое</strong> — пятница сравнивается с пятницей, ночь с ночью, Arena с Arena. Не зависит от того сколько смен у оператора.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Stats */}
+          {data?.baseline && (
+            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
+              <span><strong className="text-slate-300">База расчёта:</strong> {data.baseline.shifts_count} смен в {data.baseline.slots_count} уникальных слотах</span>
+              <span><strong className="text-slate-300">Период базы:</strong> {data.baseline.from} — {data.baseline.to}</span>
+              <span><strong className="text-slate-300">Медиана глобально:</strong> {moneyShort(data.baseline.global_median)}</span>
+            </div>
+          )}
         </div>
       </Card>
 
