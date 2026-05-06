@@ -3223,7 +3223,7 @@ export async function POST(req: Request) {
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
             isSuperAdmin: botUser.role === 'super_admin',
-            chatId,
+            chatId: Number(chatId),
             text: userText,
           })
           await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
