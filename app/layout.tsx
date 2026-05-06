@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google'
+import { IBM_Plex_Mono, Inter, Manrope } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 
 import { ClientErrorReporter } from '@/components/client-error-reporter'
@@ -15,9 +15,19 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-space-grotesk',
+// Основной шрифт UI/body — Inter. Cyrillic в обязательном subset для русского.
+const inter = Inter({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-inter',
+  display: 'swap',
+})
+
+// Заголовки — Manrope. Жирные веса для крупных H1.
+const manrope = Manrope({
+  subsets: ['latin', 'cyrillic'],
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-manrope',
+  display: 'swap',
 })
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -95,7 +105,7 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head />
-      <body className={`${spaceGrotesk.variable} ${ibmPlexMono.variable} app-shell font-sans antialiased dark`}>
+      <body className={`${inter.variable} ${manrope.variable} ${ibmPlexMono.variable} app-shell font-sans antialiased dark`}>
         {children}
         <GlobalAssistant />
         <ClientErrorReporter />

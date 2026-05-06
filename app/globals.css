@@ -59,8 +59,26 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-space-grotesk);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-manrope);
   --font-mono: var(--font-ibm-plex-mono);
+
+  /* Premium SaaS palette для лендинга */
+  --color-bg-deep: #050a14;
+  --color-bg-base: #07101d;
+  --color-surface-1: #0d1626;
+  --color-surface-2: #101b2e;
+  --color-text-primary: #f6f8fc;
+  --color-text-secondary: #c8d1e0;
+  --color-text-soft: #a6b2c5;
+  --color-text-muted: #77839a;
+  --color-accent-gold: #f5b84b;
+  --color-accent-orange: #ff9c57;
+  --color-accent-orange-deep: #ff7c4d;
+  --color-accent-teal: #10d6c2;
+  --color-accent-success: #38e7b0;
+  --color-accent-negative: #ff6c7a;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
