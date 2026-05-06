@@ -418,8 +418,8 @@ function PageRow({
         <div className="flex items-center gap-2">
           {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
           <span className="text-sm font-medium text-slate-200">{page.label}</span>
-          <span className="text-xs text-slate-500">
-            {page.path} · {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
+          <span className="text-xs text-slate-500" title={page.path}>
+            {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
           </span>
         </div>
       </button>
@@ -441,11 +441,10 @@ function PageRow({
               {page.capabilities.map((cap) => (
                 <tr key={cap.id} className="border-t border-white/5">
                   <td className="py-1.5 pr-3 align-top">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5" title={cap.id}>
                       {severityBadge(cap.severity)}
                       <span>{cap.label}</span>
                     </div>
-                    <div className="text-[10px] text-slate-500">{cap.id}</div>
                   </td>
                   {roles.map((role) => {
                     const isSuperAdminRow = role === 'super_admin'
