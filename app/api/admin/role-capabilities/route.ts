@@ -28,9 +28,12 @@ export async function GET(request: Request) {
     ? createAdminSupabaseClient()
     : access.supabase
 
+  // Supabase по умолчанию отдаёт макс 1000 строк, а у нас 6 ролей × 265 = 1590.
+  // Явно расширяем диапазон чтобы получить всё.
   const { data: rows, error } = await supabase
     .from('role_capabilities')
     .select('role, capability, granted')
+    .range(0, 9999)
 
   if (error) return json({ error: error.message }, 500)
 

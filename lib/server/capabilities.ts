@@ -66,6 +66,7 @@ export async function loadUserCapabilities(
       .from('role_capabilities')
       .select('capability, granted')
       .eq('role', role)
+      .range(0, 999)
 
     for (const row of (roleRows || []) as Array<{ capability: string; granted: boolean }>) {
       if (row.granted) result.add(row.capability)
@@ -77,6 +78,7 @@ export async function loadUserCapabilities(
     .from('user_capability_overrides')
     .select('capability, granted')
     .eq('user_id', userId)
+    .range(0, 999)
 
   for (const row of (overrideRows || []) as Array<{ capability: string; granted: boolean }>) {
     if (row.granted) result.add(row.capability)
