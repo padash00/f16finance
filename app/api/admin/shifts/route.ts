@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { requiredEnv } from '@/lib/server/env'
 import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
@@ -640,6 +641,8 @@ export async function POST(req: Request) {
       : requestClient
 
     if (body.action === 'saveShift') {
+      const denied = await requireCapability(access, 'shifts.create')
+      if (denied) return denied as any
       await ensureShiftCompanyAccess(supabase, access, body.payload.companyId)
       const result = await upsertShift(supabase, body.payload)
 
@@ -661,6 +664,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'bulkAssignWeek') {
+      const denied = await requireCapability(access, 'shifts.bulk_assign_week')
+      if (denied) return denied as any
       const { companyId, operatorName, shiftType, dates } = body.payload
       if (!companyId || !operatorName?.trim() || !shiftType || !Array.isArray(dates) || dates.length === 0) {
         return badRequest('companyId, operatorName, shiftType и dates обязательны')
@@ -729,6 +734,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'copyWeekTemplate') {
+      const denied = await requireCapability(access, 'shifts.copy_week')
+      if (denied) return denied as any
       const { targetWeekStart } = body.payload
       if (!targetWeekStart) {
         return badRequest('targetWeekStart обязателен')
@@ -847,6 +854,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'publishWeek') {
+      const denied = await requireCapability(access, 'shifts.publish_week')
+      if (denied) return denied as any
       const { companyId, weekStart } = body.payload
       if (!companyId || !weekStart) {
         return badRequest('companyId и weekStart обязательны')
@@ -892,6 +901,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'resolveIssue') {
+      const denied = await requireCapability(access, 'shifts.resolve_issue')
+      if (denied) return denied as any
       const {
         requestId,
         status,

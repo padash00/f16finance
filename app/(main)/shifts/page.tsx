@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -250,6 +251,15 @@ function buildShiftConflicts(shifts: Shift[], companyNames: Record<string, strin
 }
 
 function ShiftsPageContent() {
+  const { can } = useCapabilities()
+  const canCreate = can('shifts.create')
+  const canEdit = can('shifts.edit')
+  const canDelete = can('shifts.delete')
+  const canCopyWeek = can('shifts.copy_week')
+  const canBulkAssign = can('shifts.bulk_assign_week')
+  const canPublishWeek = can('shifts.publish_week')
+  const canResolveIssue = can('shifts.resolve_issue')
+
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const defaultWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const [urlState, setUrlState] = useUrlState({
@@ -955,16 +965,18 @@ function ShiftsPageContent() {
                     </Button>
                   </Card>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleCopyPreviousWeek}
-                    disabled={copyingWeek || loading}
-                  >
-                    {copyingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                    Заполнить по прошлой неделе
-                  </Button>
+                  {canCopyWeek && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={handleCopyPreviousWeek}
+                      disabled={copyingWeek || loading}
+                    >
+                      {copyingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                      Заполнить по прошлой неделе
+                    </Button>
+                  )}
 
                   <Link href="/shifts/report">
                     <Button variant="outline" size="sm" className="gap-2">
@@ -1083,16 +1095,18 @@ function ShiftsPageContent() {
                 </option>
               </select>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={handleBulkAssign}
-                disabled={bulkAssigning || loading || assignableCompanies.length === 0 || operators.length === 0}
-              >
-                {bulkAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Назначить
-              </Button>
+              {canBulkAssign && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleBulkAssign}
+                  disabled={bulkAssigning || loading || assignableCompanies.length === 0 || operators.length === 0}
+                >
+                  {bulkAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Назначить
+                </Button>
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1227,13 +1241,15 @@ function ShiftsPageContent() {
                         <div className="text-sm font-semibold text-foreground">{panelCompany?.name || 'Компания не выбрана'}</div>
                         <div className="mt-1 text-xs text-muted-foreground">Неделя: {weekRange}</div>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={handlePublishWeek}
-                        disabled={!panelCompanyId || publishingCompanyId === panelCompanyId}
-                      >
-                        {publishingCompanyId === panelCompanyId ? 'Публикуем...' : 'Опубликовать'}
-                      </Button>
+                      {canPublishWeek && (
+                        <Button
+                          size="sm"
+                          onClick={handlePublishWeek}
+                          disabled={!panelCompanyId || publishingCompanyId === panelCompanyId}
+                        >
+                          {publishingCompanyId === panelCompanyId ? 'Публикуем...' : 'Опубликовать'}
+                        </Button>
+                      )}
                     </div>
 
                     {panelPublication ? (

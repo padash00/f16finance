@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -154,6 +155,10 @@ export default function ShiftReportDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
+  const { can } = useCapabilities()
+  const canCloseForce = can('shifts-reports.close_force')
+  const canPurge = can('shifts-reports.purge')
+
   const [shift, setShift] = useState<ShiftDetail | null>(null)
   const [sales, setSales] = useState<Sale[]>([])
   const [returns, setReturns] = useState<Return[]>([])
@@ -214,7 +219,7 @@ export default function ShiftReportDetailPage({
                 Z-отчёт
               </Button>
             )}
-            {shift && shift.status === 'open' && (
+            {shift && shift.status === 'open' && canCloseForce && (
               <Button
                 variant="outline"
                 size="sm"
@@ -224,7 +229,7 @@ export default function ShiftReportDetailPage({
                 Закрыть смену
               </Button>
             )}
-            {shift && (
+            {shift && canPurge && (
               <Button
                 variant="outline"
                 size="sm"
