@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     const { error } = await supabase
       .from('role_capabilities')
       .upsert(
-        { role, capability, granted, updated_at: new Date().toISOString() },
+        { role, capability, granted },
         { onConflict: 'role,capability' },
       )
     if (error) return json({ error: error.message }, 500)
@@ -142,7 +142,6 @@ export async function POST(request: Request) {
       role,
       capability,
       granted,
-      updated_at: new Date().toISOString(),
     }))
 
     const { error } = await supabase
@@ -170,7 +169,6 @@ export async function POST(request: Request) {
       role,
       capability,
       granted: true,
-      updated_at: new Date().toISOString(),
     }))
     const { error } = await supabase
       .from('role_capabilities')
