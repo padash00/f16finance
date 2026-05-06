@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { canAccessPath, type StaffRole, type SubscriptionFeature } from '@/lib/core/access'
+import { findCapabilityPageByPath } from '@/lib/core/capabilities'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { SessionRoleInfo } from '@/lib/core/types'
 import { cn } from '@/lib/utils'
 import {
@@ -369,6 +371,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const hasRestoredScrollRef = useRef(false)
+  const { can: canDo, isLoading: capsLoading } = useCapabilities()
   const [isOpen, setIsOpen] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
@@ -490,6 +493,17 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
             if (item.href === '/operator-lead' && !isLeadOperator) {
               return false
             }
+
+            // Если страница есть в каталоге capabilities — приоритет у новой модели.
+            // Capabilities ещё не загружены — пропускаем (старая логика);
+            // загружены — смотрим <page-id>.view (или ['*'] для super_admin).
+            if (!capsLoading && isStaff) {
+              const capPage = findCapabilityPageByPath(item.href)
+              if (capPage) {
+                return canDo(`${capPage.id}.view`)
+              }
+            }
+
             return canAccessPath({
               pathname: item.href,
               isStaff,
@@ -512,7 +526,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
         const sectionText = `${section.title} ${section.subtitle}`.toLowerCase()
         return sectionText.includes(query)
       })
-  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures, rolePermissionOverrides])
+  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures, rolePermissionOverrides, capsLoading, canDo])
 
   useEffect(() => {
     if (!searchQuery.trim()) return
