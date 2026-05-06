@@ -156,6 +156,33 @@ export function CapabilitiesPanel() {
     }
   }
 
+  // Универсальный пресет: применяет одно из 'reset_role' | 'view_only' | 'clear_all' | 'copy_from'
+  async function applyPreset(
+    role: string,
+    preset: 'reset_role' | 'view_only' | 'clear_all' | 'copy_from',
+    confirmText: string,
+    extraBody?: Record<string, unknown>,
+  ) {
+    if (!confirm(confirmText)) return
+    setSavingKey(`preset:${role}:${preset}`)
+    try {
+      const res = await fetch('/api/admin/role-capabilities', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: preset, role, ...(extraBody || {}) }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `HTTP ${res.status}`)
+      }
+      await load()
+    } catch (e: any) {
+      alert(`Ошибка: ${e?.message || 'не удалось'}`)
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
   async function resetRole(role: string) {
     if (!confirm(`Открыть все права для роли «${roleLabel(role)}»?`)) return
     setSavingKey(`reset:${role}`)
@@ -357,30 +384,70 @@ export function CapabilitiesPanel() {
 
       {/* Действия для роли */}
       {can('access.reset_to_defaults') && (
-      <Card className="border-white/10 bg-slate-950/50 p-4">
-        <div className="text-sm font-semibold text-white mb-2">Быстрые действия</div>
-        <div className="flex flex-wrap gap-2">
-          {roles.map((role) => (
-            <Button
-              key={role}
-              variant="outline"
-              size="sm"
-              className="border-amber-500/30 text-amber-200 hover:bg-amber-500/10"
-              disabled={savingKey === `reset:${role}`}
-              onClick={() => resetRole(role)}
-            >
-              {savingKey === `reset:${role}` ? (
-                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Lock className="mr-2 h-3.5 w-3.5" />
-              )}
-              Открыть всё для «{roleLabel(role)}»
-            </Button>
-          ))}
+      <Card className="border-white/10 bg-slate-950/50 p-4 space-y-4">
+        <div>
+          <div className="text-sm font-semibold text-white mb-2">Умное управление правами</div>
+          <p className="text-xs text-slate-400 mb-3">
+            При включении любого действия (например <span className="text-amber-300">expenses.create</span>)
+            автоматически включаются зависимости (страница <span className="text-amber-300">expenses.view</span>),
+            чтобы не было ошибки «Нет доступа к странице».
+          </p>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
-          Это включает все 265 прав для выбранной роли. Используется как сброс к «всё открыто».
-        </p>
+
+        {roles.filter((r) => r !== 'super_admin').map((role) => {
+          const otherRoles = roles.filter((r) => r !== role && r !== 'super_admin')
+          return (
+            <div key={role} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div className="text-sm font-medium text-white mb-2">{roleLabel(role)}</div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Button
+                  variant="outline" size="sm"
+                  className="border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/10"
+                  disabled={savingKey?.startsWith(`preset:${role}:`)}
+                  onClick={() => applyPreset(role, 'reset_role', `Включить ВСЁ для роли «${roleLabel(role)}»?`)}
+                >
+                  ✓ Включить всё
+                </Button>
+                <Button
+                  variant="outline" size="sm"
+                  className="border-sky-500/30 text-sky-200 hover:bg-sky-500/10"
+                  disabled={savingKey?.startsWith(`preset:${role}:`)}
+                  onClick={() => applyPreset(role, 'view_only', `Только просмотр для роли «${roleLabel(role)}»?\n\nВсе *.view = ВКЛ, остальные действия = ВЫКЛ.`)}
+                >
+                  👁 Только просмотр
+                </Button>
+                <Button
+                  variant="outline" size="sm"
+                  className="border-rose-500/30 text-rose-200 hover:bg-rose-500/10"
+                  disabled={savingKey?.startsWith(`preset:${role}:`)}
+                  onClick={() => applyPreset(role, 'clear_all', `Закрыть ВСЁ для роли «${roleLabel(role)}»?\n\nПользователь не сможет открыть ни одну страницу.`)}
+                >
+                  ✗ Закрыть всё
+                </Button>
+                {otherRoles.length > 0 && (
+                  <Button
+                    variant="outline" size="sm"
+                    className="border-violet-500/30 text-violet-200 hover:bg-violet-500/10"
+                    disabled={savingKey?.startsWith(`preset:${role}:`)}
+                    onClick={() => {
+                      const source = window.prompt(
+                        `Скопировать с какой роли в «${roleLabel(role)}»?\n\nДоступные:\n${otherRoles.map((r) => `  - ${r} (${roleLabel(r)})`).join('\n')}\n\nВведите код роли:`,
+                        otherRoles[0],
+                      )
+                      if (!source) return
+                      applyPreset(role, 'copy_from', `Скопировать права с «${source}» в «${roleLabel(role)}»?`, { copy_from_role: source })
+                    }}
+                  >
+                    📋 Скопировать с другой
+                  </Button>
+                )}
+                {savingKey?.startsWith(`preset:${role}:`) && (
+                  <Loader2 className="mt-2 h-4 w-4 animate-spin text-slate-400" />
+                )}
+              </div>
+            </div>
+          )
+        })}
       </Card>
       )}
     </div>
