@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -170,6 +171,8 @@ export async function POST(req: Request) {
     const canManageFinance = access.isSuperAdmin || access.staffRole === 'owner'
 
     if (body.action === 'createIncome') {
+      const denied = await requireCapability(access, 'income.create')
+      if (denied) return denied as any
       if (!canCreateFinance) return json({ error: 'forbidden' }, 403)
       if (!body.payload.date?.trim()) return json({ error: 'Дата обязательна' }, 400)
       if (!body.payload.company_id?.trim()) return json({ error: 'Компания обязательна' }, 400)
@@ -237,6 +240,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'createIncomeBatch') {
+      const denied = await requireCapability(access, 'income.create_batch')
+      if (denied) return denied as any
       if (!canCreateFinance) return json({ error: 'forbidden' }, 403)
       const rows = Array.isArray(body.payload) ? body.payload : []
       if (rows.length === 0) return json({ error: 'Нужен список доходов' }, 400)
@@ -291,6 +296,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateOnlineAmount') {
+      const denied = await requireCapability(access, 'income.update_online')
+      if (denied) return denied as any
       if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.incomeId?.trim()) return json({ error: 'incomeId обязателен' }, 400)
 
@@ -331,6 +338,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateIncome') {
+      const denied = await requireCapability(access, 'income.edit')
+      if (denied) return denied as any
       if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.incomeId?.trim()) return json({ error: 'incomeId обязателен' }, 400)
       if (!body.payload.date?.trim()) return json({ error: 'Дата обязательна' }, 400)
@@ -380,6 +389,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteIncome') {
+      const denied = await requireCapability(access, 'income.delete')
+      if (denied) return denied as any
       if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.incomeId?.trim()) return json({ error: 'incomeId обязателен' }, 400)
 

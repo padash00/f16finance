@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
@@ -436,9 +437,13 @@ export default function ExpensesPage() {
     [operatorMap]
   )
 
-  const canCreateExpense =
-    !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
-  const canManageExpense = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
+  // Гибкие права через capabilities — управляются из /access.
+  const { can: canDo } = useCapabilities()
+  const canCreateExpense = canDo('expenses.create')
+  const canEditExpense = canDo('expenses.edit')
+  const canDeleteExpense = canDo('expenses.delete')
+  const canExportExpense = canDo('expenses.export')
+  const canManageExpense = canEditExpense || canDeleteExpense // legacy
   const statusLabelByValue: Record<Exclude<ExpenseStatusFilter, 'all'>, string> = {
     confirmed: 'Подтвержден',
     pending_approval: 'Ожидает одобрения',
@@ -1008,9 +1013,11 @@ export default function ExpensesPage() {
                     </button>
                   )}
 
-                  <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
-                    <Download className="w-4 h-4 mr-1" /> Экспорт
-                  </Button>
+                  {canExportExpense && (
+                    <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                      <Download className="w-4 h-4 mr-1" /> Экспорт
+                    </Button>
+                  )}
 
                   <Link href="/expenses/analysis">
                     <Button variant="outline" size="sm" className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
@@ -2082,6 +2089,9 @@ function ListTab({
   deletingExpenseId,
   onPreview,
 }: any) {
+  const { can: canDoTbl } = useCapabilities()
+  const canEditExpense = canDoTbl('expenses.edit')
+  const canDeleteExpense = canDoTbl('expenses.delete')
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null)
   const tableContainerRef = useRef<HTMLDivElement | null>(null)
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -2241,17 +2251,21 @@ function ListTab({
                   {canManageExpense ? (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="icon-sm" onClick={() => openExpenseEditor(row)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon-sm"
-                          onClick={() => deleteExpense(row)}
-                          disabled={deletingExpenseId === row.id}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
+                        {canEditExpense && (
+                          <Button variant="outline" size="icon-sm" onClick={() => openExpenseEditor(row)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDeleteExpense && (
+                          <Button
+                            variant="destructive"
+                            size="icon-sm"
+                            onClick={() => deleteExpense(row)}
+                            disabled={deletingExpenseId === row.id}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   ) : null}

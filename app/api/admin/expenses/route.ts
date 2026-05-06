@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
@@ -189,6 +190,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateExpense') {
+      const denied = await requireCapability(access, 'expenses.edit')
+      if (denied) return denied as any
       if (!canUpdateFinance) return json({ error: 'forbidden' }, 403)
       if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
       const validationError = validatePayload(body.payload)
@@ -254,6 +257,9 @@ export async function POST(req: Request) {
       return json({ ok: true })
     }
 
+    // Дошли сюда — это deleteExpense (другие actions обработаны выше)
+    const denied = await requireCapability(access, 'expenses.delete')
+    if (denied) return denied as any
     if (!canDeleteFinance) return json({ error: 'forbidden' }, 403)
     if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
 

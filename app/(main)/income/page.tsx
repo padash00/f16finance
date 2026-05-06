@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -404,9 +405,15 @@ export default function IncomePage() {
   }, [companies])
 
   const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
-  const canCreateIncome =
-    !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
-  const canManageIncome = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
+
+  // Гибкие права через capabilities — управляются из /access.
+  // Если право не дано — кнопки скрываются (вариант A: hidden, не disabled).
+  const { can } = useCapabilities()
+  const canCreateIncome = can('income.create')
+  const canEditIncome = can('income.edit')
+  const canDeleteIncome = can('income.delete')
+  const canExportIncome = can('income.export')
+  const canManageIncome = canEditIncome || canDeleteIncome // legacy — для обратной совместимости
 
 
   // Фильтрация и агрегация
@@ -904,9 +911,11 @@ export default function IncomePage() {
                     </button>
                   )}
 
-                  <Button variant="outline" size="sm" onClick={downloadCSV} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
-                    <Download className="w-4 h-4 mr-1" /> Экспорт
-                  </Button>
+                  {canExportIncome && (
+                    <Button variant="outline" size="sm" onClick={downloadCSV} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                      <Download className="w-4 h-4 mr-1" /> Экспорт
+                    </Button>
+                  )}
 
                   {canCreateIncome ? (
                     <Link href="/income/add">
@@ -1820,10 +1829,10 @@ function FeedTab({
   )
 }
 
-function IncomeRowFull({ 
-  row, 
-  companyName, 
-  operatorName, 
+function IncomeRowFull({
+  row,
+  companyName,
+  operatorName,
   isExtra,
   canManageIncome,
   editingOnlineId,
@@ -1838,7 +1847,10 @@ function IncomeRowFull({
   deletingIncomeId,
 }: any) {
   const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
-  
+  const { can } = useCapabilities()
+  const canEditIncome = can('income.edit')
+  const canDeleteIncome = can('income.delete')
+
   return (
     <div className={`p-4 hover:bg-gray-700/30 transition-colors ${isExtra ? 'bg-yellow-500/5' : ''}`}>
       <div className="flex items-center justify-between">
@@ -1943,17 +1955,21 @@ function IncomeRowFull({
 
             {canManageIncome && !String(row.id).startsWith('extra-') ? (
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon-sm" onClick={() => openIncomeEditor(row)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon-sm"
-                  onClick={() => deleteIncome(row)}
-                  disabled={deletingIncomeId === row.id}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                {canEditIncome && (
+                  <Button variant="outline" size="icon-sm" onClick={() => openIncomeEditor(row)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {canDeleteIncome && (
+                  <Button
+                    variant="destructive"
+                    size="icon-sm"
+                    onClick={() => deleteIncome(row)}
+                    disabled={deletingIncomeId === row.id}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             ) : null}
           </div>
