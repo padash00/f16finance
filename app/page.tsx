@@ -395,7 +395,7 @@ export default async function MarketingHomePage() {
       <FaqStructuredData faq={faqItems} />
 
       {/* ────────── Шапка ────────── */}
-      <section className="mx-auto max-w-7xl px-6 pb-10 pt-8 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 pb-10 pt-8 sm:px-8 lg:px-10">
         <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-5 py-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-base font-bold text-slate-950">
@@ -427,7 +427,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Hero ────────── */}
-      <section className="mx-auto max-w-7xl px-6 pb-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 pb-16 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
           <div className="space-y-7">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-amber-200">
@@ -559,7 +559,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Боли ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
             Знакомая ситуация?
@@ -590,7 +590,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── ГЛАВНЫЕ СТОЛПЫ ────────── */}
-      <section id="pillars" className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section id="pillars" className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
             Что внутри OrdaOps
@@ -632,7 +632,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── AI ПОМОЩНИК — БОЛЬШАЯ СЕКЦИЯ ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <Card className="overflow-hidden border-amber-400/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.10),rgba(255,255,255,0.03))] p-8 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)] sm:p-10">
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
@@ -702,7 +702,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── СМЕНА ЗА 30 СЕКУНД ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
             Закрытие смен
@@ -740,7 +740,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── МАГАЗИН ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <Card className="overflow-hidden border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.08),rgba(255,255,255,0.03))] p-8 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)] sm:p-10">
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
@@ -861,7 +861,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── СРАВНЕНИЕ ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
             Чем отличается
@@ -930,7 +930,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Аудитории ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="grid gap-6 md:grid-cols-3">
           {audiences.map((a) => {
             const Icon = a.icon
@@ -951,7 +951,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Цены ────────── */}
-      <section id="pricing" className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section id="pricing" className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
             Цены
@@ -1015,7 +1015,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── До / После ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="border-rose-500/20 bg-rose-500/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-rose-200">
@@ -1060,7 +1060,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Результат ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <Card className="border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.10),rgba(255,255,255,0.03))] p-8 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)] sm:p-10">
           <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:items-center">
             <div>
@@ -1092,7 +1092,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── FAQ ────────── */}
-      <section className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
             Частые вопросы
@@ -1116,7 +1116,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Контакт ────────── */}
-      <section id="contact" className="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+      <section id="contact" className="mx-auto max-w-screen-2xl px-6 py-16 sm:px-8 lg:px-10">
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
@@ -1154,7 +1154,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── Финальный CTA ────────── */}
-      <section className="mx-auto max-w-7xl px-6 pb-20 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-screen-2xl px-6 pb-20 sm:px-8 lg:px-10">
         <Card className="overflow-hidden border-amber-400/30 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(255,255,255,0.05))] p-10 text-white shadow-[0_24px_70px_rgba(245,158,11,0.18)] sm:p-12">
           <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
@@ -1188,7 +1188,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── Footer ────────── */}
       <footer className="border-t border-white/5 bg-black/30">
-        <div className="mx-auto grid max-w-7xl gap-8 px-6 py-12 sm:px-8 md:grid-cols-4 lg:px-10">
+        <div className="mx-auto grid max-w-screen-2xl gap-8 px-6 py-12 sm:px-8 md:grid-cols-4 lg:px-10">
           <div>
             <div className="flex items-center gap-2">
               <div className="grid h-8 w-8 place-items-center rounded-lg bg-amber-500 text-sm font-bold text-slate-950">◇</div>
