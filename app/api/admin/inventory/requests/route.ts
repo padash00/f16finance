@@ -87,9 +87,12 @@ export async function GET(request: Request) {
     )
     const balanceByLocationAndItem: Record<string, number> = {}
     if (sourceLocationIds.length > 0 && itemIds.length > 0) {
+      // Берём quantity И quantity_reserved чтобы показать РЕАЛЬНО доступное.
+      // Иначе UI пишет «Хватает 5» а сервер при approve считает 5-reserved
+      // и падает с inventory-insufficient-stock.
       const { data: balanceRows, error: balanceErr } = await supabase
         .from('inventory_balances')
-        .select('location_id, item_id, quantity')
+        .select('location_id, item_id, quantity, quantity_reserved')
         .in('location_id', sourceLocationIds)
         .in('item_id', itemIds)
       if (balanceErr) throw balanceErr
@@ -97,7 +100,10 @@ export async function GET(request: Request) {
         const locationId = String((row as any)?.location_id || '').trim()
         const itemId = String((row as any)?.item_id || '').trim()
         if (!locationId || !itemId) continue
-        balanceByLocationAndItem[`${locationId}:${itemId}`] = Number((row as any)?.quantity || 0)
+        const quantity = Number((row as any)?.quantity || 0)
+        const reserved = Number((row as any)?.quantity_reserved || 0)
+        // Доступное = физическое минус то что зарезервировано в одобренных но не выданных заявках
+        balanceByLocationAndItem[`${locationId}:${itemId}`] = Math.max(0, quantity - reserved)
       }
     }
 
