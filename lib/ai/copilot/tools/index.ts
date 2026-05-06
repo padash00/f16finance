@@ -26,8 +26,16 @@ import { sendMessageToOperatorTool, broadcastToOperatorsTool } from './team/send
 import { approveExpenseTool, declineExpenseTool } from './finance/approve-expense'
 import { deleteExpenseTool } from './finance/delete-expense'
 import { addCategoryTool } from './finance/add-category'
+import { deleteIncomeTool } from './finance/delete-income'
+import { addVendorTool } from './finance/add-vendor'
+import { voidAdjustmentTool } from './salary/void-adjustment'
 import { takeTaskTool } from './tasks/take-task'
+import { deleteTaskTool } from './tasks/delete-task'
+import { addStockTool } from './inventory/add-stock'
 import { saveMemoryTool } from './system/save-memory'
+import { getOperatorSalaryTool } from './analytics/get-operator-salary'
+import { getOverdueDebtsTool } from './analytics/get-overdue-debts'
+import { getShiftReportTool } from './analytics/get-shift-report'
 import { getPiRankingTool } from './analytics/get-pi-ranking'
 import { queryByCompanyTool } from './analytics/query-by-company'
 import { queryAnomaliesTool } from './analytics/query-anomalies'
@@ -58,16 +66,20 @@ export function initializeCopilotTools(): void {
   registerTool(declineExpenseTool)
   registerTool(deleteExpenseTool)
   registerTool(addCategoryTool)
+  registerTool(deleteIncomeTool)
+  registerTool(addVendorTool)
 
   // Зарплата
   registerTool(giveAdvanceTool)
   registerTool(addFineTool)
   registerTool(addBonusTool)
+  registerTool(voidAdjustmentTool)
 
   // Задачи
   registerTool(createTaskTool)
   registerTool(takeTaskTool)
   registerTool(closeTaskTool)
+  registerTool(deleteTaskTool)
 
   // Системные
   registerTool(saveMemoryTool)
@@ -78,6 +90,7 @@ export function initializeCopilotTools(): void {
   registerTool(declineRequestTool)
   registerTool(transferToShowcaseTool)
   registerTool(writeoffItemTool)
+  registerTool(addStockTool)
 
   // Смены
   registerTool(assignShiftTool)
@@ -105,7 +118,10 @@ export function initializeCopilotTools(): void {
   registerTool(getPiRankingTool)
   registerTool(queryByCompanyTool)
   registerTool(queryAnomaliesTool)
+  registerTool(getOperatorSalaryTool)
+  registerTool(getOverdueDebtsTool)
+  registerTool(getShiftReportTool)
 
-  // Зарегистрировано: 38 tools (24 action + 13 analytics + 1 system)
-  // Покрывает большую часть admin workflow.
+  // Зарегистрировано: 46 tools (29 action + 16 analytics + 1 system)
+  // Покрывает большинство admin workflow в системе.
 }
