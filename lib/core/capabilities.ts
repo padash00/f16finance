@@ -152,6 +152,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'weekly-report.view', label: 'Просмотр', severity: 'low' },
           { id: 'weekly-report.export', label: 'Выгрузка в Excel', severity: 'low' },
+          { id: 'weekly-report.export_pdf', label: 'Выгрузка в PDF', severity: 'low' },
           { id: 'weekly-report.share', label: 'Поделиться отчётом', severity: 'medium' },
         ],
       },
@@ -226,6 +227,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'store.view', label: 'Просмотр обзора', severity: 'low' },
           { id: 'store.export', label: 'Выгрузка', severity: 'low' },
+          { id: 'store.global_search', label: 'Глобальный поиск по складу', severity: 'low' },
         ],
       },
       {
@@ -235,6 +237,10 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'store-warehouse.view', label: 'Просмотр остатков', severity: 'low' },
           { id: 'store-warehouse.edit', label: 'Корректировка остатков вручную', severity: 'high' },
+          { id: 'store-warehouse.create_item', label: 'Создать товар через сканер штрихкода', severity: 'medium' },
+          { id: 'store-warehouse.upload_backroom', label: 'Загрузка файла подсобки', severity: 'medium' },
+          { id: 'store-warehouse.apply_backroom', label: 'Применить загруженный файл подсобки', severity: 'high' },
+          { id: 'store-warehouse.print_labels', label: 'Печать ценников', severity: 'low' },
         ],
       },
       {
@@ -244,6 +250,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'store-showcase.view', label: 'Просмотр витрины', severity: 'low' },
           { id: 'store-showcase.move', label: 'Перенос со склада на витрину', severity: 'medium' },
+          { id: 'store-showcase.return_to_warehouse', label: 'Возврат с витрины на склад', severity: 'medium' },
         ],
       },
       {
@@ -266,6 +273,9 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           ...crud('store-receipts', { exportData: true }),
           { id: 'store-receipts.cancel', label: 'Отмена проведённой приёмки', severity: 'high' },
           { id: 'store-receipts.ai_parse', label: 'AI-распознавание накладной', severity: 'medium' },
+          { id: 'store-receipts.apply_template', label: 'Применить шаблон приёмки', severity: 'low' },
+          { id: 'store-receipts.save_template', label: 'Сохранить шаблон приёмки', severity: 'low' },
+          { id: 'store-receipts.delete_template', label: 'Удалить шаблон приёмки', severity: 'medium' },
         ],
       },
       {
@@ -298,6 +308,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         label: 'Журнал заявок',
         capabilities: [
           { id: 'store-requests-journal.view', label: 'Просмотр истории заявок', severity: 'low' },
+          { id: 'store-requests-journal.export', label: 'Выгрузка истории заявок', severity: 'low' },
         ],
       },
       {
@@ -317,6 +328,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           ...crud('store-writeoffs', { exportData: true }),
           { id: 'store-writeoffs.cancel', label: 'Отменить списание', severity: 'high' },
+          { id: 'store-writeoffs.apply_template', label: 'Применить шаблон списания', severity: 'low' },
+          { id: 'store-writeoffs.save_template', label: 'Сохранить шаблон списания', severity: 'low' },
         ],
       },
       {
@@ -367,9 +380,15 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'store-billing',
         path: '/store/billing',
-        label: 'Биллинг точки',
+        label: 'Биллинг и долги поставщикам',
         capabilities: [
-          { id: 'store-billing.view', label: 'Просмотр счетов', severity: 'low' },
+          { id: 'store-billing.view', label: 'Просмотр счетов и долгов', severity: 'low' },
+          { id: 'store-billing.pay_debt', label: 'Оплатить долг поставщику', severity: 'high' },
+          { id: 'store-billing.write_off_debt', label: 'Списать долг (без оплаты)', severity: 'high' },
+          { id: 'store-billing.bulk_pay', label: 'Массовая оплата долгов', severity: 'high' },
+          { id: 'store-billing.reschedule_debt', label: 'Перенести срок оплаты долга', severity: 'medium' },
+          { id: 'store-billing.parse_receipt', label: 'AI-распознавание чека/счёта', severity: 'medium' },
+          { id: 'store-billing.export', label: 'Выгрузка долгов в Excel', severity: 'low' },
         ],
       },
     ],
@@ -440,6 +459,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'staff.invite', label: 'Пригласить сотрудника', severity: 'high' },
           { id: 'staff.toggle_status', label: 'Активировать/деактивировать', severity: 'high' },
           { id: 'staff.create_payment', label: 'Записать выплату', severity: 'high' },
+          { id: 'staff.add_adjustment', label: 'Сделать корректировку зарплаты', severity: 'high' },
+          { id: 'staff.add_extra_day', label: 'Добавить доп. рабочий день', severity: 'medium' },
         ],
       },
       {
@@ -464,6 +485,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'salary.void_adjustment', label: 'Отменить корректировку', severity: 'high' },
           { id: 'salary.unlock_week', label: 'Разблокировать закрытую неделю', severity: 'high' },
           { id: 'salary.update_chat_id', label: 'Изменить Telegram ID', severity: 'medium' },
+          { id: 'salary.add_extra_day', label: 'Добавить доп. рабочий день', severity: 'medium' },
         ],
       },
       {
@@ -571,6 +593,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'stations.rotate_provisioning_key', label: 'Сбросить provisioning-ключ', severity: 'high' },
           { id: 'stations.update_branding', label: 'Изменить брендинг', severity: 'medium' },
           { id: 'stations.update_map_layout', label: 'Изменить карту/раскладку', severity: 'medium' },
+          { id: 'stations.get_analytics', label: 'Просмотр аналитики проекта', severity: 'low' },
         ],
       },
     ],
@@ -603,7 +626,10 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         id: 'customers',
         path: '/customers',
         label: 'Клиенты',
-        capabilities: [...crud('customers', { exportData: true })],
+        capabilities: [
+          ...crud('customers', { exportData: true }),
+          { id: 'customers.adjust_points', label: 'Корректировка бонусов лояльности', severity: 'high' },
+        ],
       },
       {
         id: 'discounts',
@@ -632,6 +658,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'tasks.add_comment', label: 'Прокомментировать', severity: 'low' },
           { id: 'tasks.respond', label: 'Ответить на задачу', severity: 'low' },
           { id: 'tasks.assign', label: 'Назначить оператору', severity: 'medium', deps: ['operators.view'] },
+          { id: 'tasks.notify', label: 'Отправить уведомление по задаче', severity: 'medium' },
         ],
       },
       {
@@ -725,6 +752,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'access.bulk_capabilities', label: 'Массовое управление правами', severity: 'high' },
           { id: 'access.manage_user_overrides', label: 'Переопределить права для сотрудника', severity: 'high' },
           { id: 'access.manage_staff_roles', label: 'Назначить роль сотруднику', severity: 'high' },
+          { id: 'access.change_email', label: 'Изменить email сотрудника', severity: 'high' },
           { id: 'access.reset_to_defaults', label: 'Сброс к правам по умолчанию', severity: 'high' },
         ],
       },
