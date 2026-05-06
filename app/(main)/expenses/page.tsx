@@ -940,6 +940,12 @@ export default function ExpensesPage() {
     }
   }
 
+  // Пока компонент не смонтирован на клиенте — рендерим null чтобы избежать
+  // hydration mismatch (на странице есть new Date() в render + useState с todayISO()).
+  if (!isClient) {
+    return null
+  }
+
   if (loading && rows.length === 0) {
     return (
       <>
