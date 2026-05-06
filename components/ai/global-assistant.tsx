@@ -29,6 +29,8 @@ const HIDDEN_PATH_PREFIXES = [
   '/operator-salary-system',
   '/profit-and-loss-ebitda',
   '/point-terminal',
+  '/offer',
+  '/privacy',
 ]
 
 // Главная (landing) страница тоже публичная — точное совпадение

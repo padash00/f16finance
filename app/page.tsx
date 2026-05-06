@@ -1218,8 +1218,8 @@ export default async function MarketingHomePage() {
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">Юридическое</div>
             <ul className="mt-3 space-y-2 text-sm text-slate-400">
-              <li><span className="text-slate-500">Оферта</span></li>
-              <li><span className="text-slate-500">Политика конфиденциальности</span></li>
+              <li><Link href="/offer" className="hover:text-amber-200">Публичная оферта</Link></li>
+              <li><Link href="/privacy" className="hover:text-amber-200">Политика конфиденциальности</Link></li>
             </ul>
           </div>
         </div>
