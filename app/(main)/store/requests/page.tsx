@@ -519,7 +519,7 @@ function StoreRequestsPageContent() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -666,7 +666,7 @@ function StoreRequestsPageContent() {
           <span className="text-xs text-muted-foreground">({pendingRequests.length})</span>
         </div>
 
-        {loading ? (
+        {loading && pendingRequests.length === 0 ? (
           <StorePanelSkeleton cards={3} />
         ) : pendingRequests.length === 0 ? (
           <Card className="border-white/10 bg-card/70 p-6 text-sm text-muted-foreground">

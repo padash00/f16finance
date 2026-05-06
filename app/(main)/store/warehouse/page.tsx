@@ -723,7 +723,7 @@ export default function WarehousePage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -857,7 +857,7 @@ export default function WarehousePage() {
 
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
-        {loading ? (
+        {loading && balances.length === 0 ? (
           <div className="flex h-60 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>

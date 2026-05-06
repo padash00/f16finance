@@ -250,7 +250,7 @@ export default function StoreAnalyticsPage() {
   }, [data?.balances])
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
           <Store className="h-5 w-5 text-cyan-300" />
@@ -312,7 +312,7 @@ export default function StoreAnalyticsPage() {
           <p className="mt-1 text-sm text-muted-foreground">Главные цифры по каждой точке без лишней детализации.</p>
 
           <div className="mt-4 space-y-3">
-            {loading ? (
+            {loading && pointAnalytics.length === 0 ? (
               Array.from({ length: 3 }).map((_, idx) => (
                 <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -395,7 +395,7 @@ export default function StoreAnalyticsPage() {
           <p className="mt-1 text-sm text-muted-foreground">Товары на точках, которые уже подошли к порогу остатка.</p>
 
           <div className="mt-4 space-y-3">
-            {loading ? (
+            {loading && riskyBalances.length === 0 ? (
               Array.from({ length: 4 }).map((_, idx) => (
                 <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                   <div className="flex items-start justify-between gap-3">

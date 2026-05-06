@@ -203,7 +203,7 @@ export default function PosReturnsPage() {
   }
 
   return (
-    <div className="app-page">
+    <div className="app-page-wide space-y-6">
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>

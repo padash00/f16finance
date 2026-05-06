@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,13 @@ function generatePromoCode(): string {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function DiscountsPage() {
+  const { can } = useCapabilities()
+  const canCreate = can('discounts.create')
+  const canEdit = can('discounts.edit')
+  const canDelete = can('discounts.delete')
+  const canGeneratePromo = can('discounts.generate_promo')
+  const canCopyPromo = can('discounts.copy_promo')
+
   const [discounts, setDiscounts] = useState<Discount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -287,9 +295,11 @@ export default function DiscountsPage() {
               placeholder="PROMO2026"
               className="font-mono"
             />
-            <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, promo_code: generatePromoCode() })}>
-              Генерировать
-            </Button>
+            {can('discounts.generate_promo') && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, promo_code: generatePromoCode() })}>
+                Генерировать
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -336,7 +346,7 @@ export default function DiscountsPage() {
   }
 
   return (
-    <div className="app-page">
+    <div className="app-page-wide space-y-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -349,10 +359,12 @@ export default function DiscountsPage() {
           <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Создать скидку
-          </Button>
+          {can('discounts.create') && (
+            <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Создать скидку
+            </Button>
+          )}
         </div>
       </div>
 
@@ -362,7 +374,7 @@ export default function DiscountsPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading && discounts.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
           Загрузка...
@@ -412,34 +424,40 @@ export default function DiscountsPage() {
                           <span className="rounded border border-white/20 bg-white/[0.05] px-2 py-0.5 font-mono text-sm">
                             {discount.promo_code}
                           </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title="Скопировать промокод"
-                            onClick={() => copyPromoCode(discount.promo_code!, discount.id)}
-                          >
-                            {copiedId === discount.id ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
+                          {can('discounts.copy_promo') && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="Скопировать промокод"
+                              onClick={() => copyPromoCode(discount.promo_code!, discount.id)}
+                            >
+                              {copiedId === discount.id ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(discount)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-rose-400 hover:text-rose-300"
-                        onClick={() => void handleDelete(discount.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {can('discounts.edit') && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(discount)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {can('discounts.delete') && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-rose-400 hover:text-rose-300"
+                          onClick={() => void handleDelete(discount.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>

@@ -61,7 +61,7 @@ export default function StoreAbcPage() {
   const topRows = useMemo(() => rows.slice(0, 20), [rows])
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
@@ -105,7 +105,7 @@ export default function StoreAbcPage() {
           <span>B: {summary.count_b || 0}</span>
           <span>C: {summary.count_c || 0}</span>
         </div>
-        {loading ? (
+        {loading && topRows.length === 0 ? (
           <div className="text-sm text-muted-foreground">Загрузка...</div>
         ) : topRows.length === 0 ? (
           <div className="text-sm text-muted-foreground">Нет данных.</div>

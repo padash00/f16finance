@@ -217,7 +217,7 @@ export default function StorePostingsPage() {
 
   if (roleLoading) {
     return (
-      <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      <div className="app-page-wide space-y-6">
         <p className="text-sm text-muted-foreground">Загрузка…</p>
       </div>
     )
@@ -225,7 +225,7 @@ export default function StorePostingsPage() {
 
   if (!allowed) {
     return (
-      <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      <div className="app-page-wide space-y-6">
         <Card className="border-rose-500/30 bg-rose-500/5">
           <CardContent className="p-6 flex items-start gap-3">
             <ShieldAlert className="h-6 w-6 text-rose-300 shrink-0" />
@@ -245,7 +245,7 @@ export default function StorePostingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300">
           <Upload className="h-5 w-5" />
@@ -476,7 +476,7 @@ export default function StorePostingsPage() {
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
             <Package className="h-4 w-4 text-emerald-300" /> Последние оприходования
           </div>
-          {loading ? (
+          {loading && recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">Загрузка…</p>
           ) : recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">Пока нет оприходований.</p>

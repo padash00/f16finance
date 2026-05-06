@@ -305,7 +305,7 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="app-page">
+    <div className="app-page-wide space-y-6">
       <div className="mb-6">
         <AdminPageHeader
           title="Клиенты"
@@ -390,7 +390,7 @@ export default function CustomersPage() {
       {/* Table */}
       <Card className="overflow-hidden p-0">
         <CardContent className="p-0">
-          {loading ? (
+          {loading && customers.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
               Загрузка...

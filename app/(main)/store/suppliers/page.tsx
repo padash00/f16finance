@@ -73,7 +73,7 @@ export default function SuppliersListPage() {
   }, [suppliers, query])
 
   return (
-    <div className="app-page max-w-[1400px] space-y-5">
+    <div className="app-page-wide space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
           <Building2 className="w-6 h-6 text-emerald-300" />

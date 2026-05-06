@@ -1094,7 +1094,7 @@ export default function StoreReceiptsPage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -1224,7 +1224,7 @@ export default function StoreReceiptsPage() {
 
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
-        {loading ? (
+        {loading && filteredReceipts.length === 0 ? (
           <StoreDataTableSkeleton columns={7} />
         ) : filteredReceipts.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">

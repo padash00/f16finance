@@ -332,7 +332,7 @@ function PosReceiptsPageContent() {
         }
       `}</style>
 
-      <div className="app-page">
+      <div className="app-page-wide space-y-6">
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -439,7 +439,7 @@ function PosReceiptsPageContent() {
         {/* Table */}
         <Card>
           <CardContent className="p-0">
-            {loading ? (
+            {loading && sales.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 Загрузка...
