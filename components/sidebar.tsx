@@ -496,8 +496,8 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
 
             // Если страница есть в каталоге capabilities — приоритет у новой модели.
             // Capabilities ещё не загружены — пропускаем (старая логика);
-            // загружены — смотрим <page-id>.view (или ['*'] для super_admin).
-            if (!capsLoading && isStaff) {
+            // загружены — смотрим <page-id>.view (super_admin получает true автоматом).
+            if (!capsLoading) {
               const capPage = findCapabilityPageByPath(item.href)
               if (capPage) {
                 return canDo(`${capPage.id}.view`)
