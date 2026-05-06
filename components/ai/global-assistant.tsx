@@ -24,7 +24,15 @@ const HIDDEN_PATH_PREFIXES = [
   '/auth',
   '/setup-required',
   '/unauthorized',
+  // Публичные маркетинговые страницы — AI-консультант там не нужен
+  '/club-management-system',
+  '/operator-salary-system',
+  '/profit-and-loss-ebitda',
+  '/point-terminal',
 ]
+
+// Главная (landing) страница тоже публичная — точное совпадение
+const HIDDEN_EXACT_PATHS = new Set<string>(['/'])
 
 function isOperatorCabinetPath(pathname: string) {
   return pathname === '/operator' || pathname.startsWith('/operator/')
@@ -35,6 +43,7 @@ export function GlobalAssistant() {
 
   const shouldHide =
     isOperatorCabinetPath(pathname || '') ||
+    HIDDEN_EXACT_PATHS.has(pathname || '') ||
     HIDDEN_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix + '/'))
 
   const snapshot = useMemo<PageSnapshot>(
