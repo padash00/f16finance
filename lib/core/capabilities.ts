@@ -572,6 +572,14 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'performance',
+        path: '/performance',
+        label: 'Эффективность операторов (PI)',
+        capabilities: [
+          { id: 'performance.view', label: 'Просмотр', severity: 'low' },
+        ],
+      },
+      {
         id: 'operator-tasks',
         path: '/operator-tasks',
         label: 'Задачи операторов',

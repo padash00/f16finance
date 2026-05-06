@@ -182,6 +182,7 @@ export const navSections: NavSection[] = [
     icon: Zap,
     items: [
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
+      { href: '/performance', label: 'Эффективность (PI)', icon: TrendingUp, note: 'Справедливый рейтинг с поправкой на слот', isNew: true, badge: 'new', badgeColor: 'green' },
       { href: '/ratings', label: 'Рейтинг операторов', icon: Trophy, note: 'Лидерборд по выручке' },
       { href: '/operator-achievements', label: 'Достижения операторов', icon: Award, note: 'Кто что получил, прогресс' },
     ],
