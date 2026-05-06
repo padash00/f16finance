@@ -920,8 +920,11 @@ export function findCapability(id: string): Capability | null {
   return null
 }
 
-/** Найти страницу по ID или пути */
+/** Найти страницу по ID или пути. Query string и hash отрезаются. */
 export function findCapabilityPageByPath(pathname: string): CapabilityPage | null {
+  // Убираем ?query и #hash чтобы '/operator-analytics?tab=achievements'
+  // матчился с '/operator-analytics' в каталоге.
+  pathname = pathname.split('?')[0].split('#')[0]
   for (const group of CAPABILITY_GROUPS) {
     for (const page of group.pages) {
       if (page.path === pathname) return page
