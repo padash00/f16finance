@@ -5,6 +5,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
 import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
@@ -238,6 +239,41 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
+
+    // Capability check на основе action — единый диспатчер
+    const ACTION_TO_CAPABILITY: Record<string, string> = {
+      createZone: 'stations.create_zone',
+      updateZone: 'stations.edit_zone',
+      deleteZone: 'stations.delete_zone',
+      createStation: 'stations.create_station',
+      updateStation: 'stations.edit_station',
+      updateStationKioskTheme: 'stations.edit_kiosk_background',
+      deleteStation: 'stations.delete_station',
+      createTariff: 'stations.create_tariff',
+      updateTariff: 'stations.edit_tariff',
+      deleteTariff: 'stations.delete_tariff',
+      updateMapLayout: 'stations.update_map_layout',
+      createDecoration: 'stations.create_decoration',
+      updateDecoration: 'stations.create_decoration',
+      deleteDecoration: 'stations.delete_decoration',
+      createGameCatalog: 'stations.create_game_catalog',
+      updateGameCatalog: 'stations.edit_game_catalog',
+      deleteGameCatalog: 'stations.delete_game_catalog',
+      upsertStationGame: 'stations.edit_station_game',
+      deleteStationGame: 'stations.delete_station_game',
+      bulkUpsertZoneGames: 'stations.bulk_upsert_games',
+      topUpClientBalance: 'stations.top_up_balance',
+      adminStartSession: 'stations.admin_start_session',
+      adminEndSession: 'stations.admin_end_session',
+      rotateProjectProvisioningKey: 'stations.rotate_provisioning_key',
+      updateProjectBranding: 'stations.update_branding',
+      getAnalytics: 'stations.get_analytics',
+    }
+    const requiredCap = ACTION_TO_CAPABILITY[String(body.action)]
+    if (requiredCap) {
+      const denied = await requireCapability(access, requiredCap)
+      if (denied) return denied as any
+    }
 
     const bodyCompanyId: string | null = body.companyId || null
     if (bodyCompanyId) {
