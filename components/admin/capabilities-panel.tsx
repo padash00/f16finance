@@ -193,7 +193,10 @@ export function CapabilitiesPanel() {
         for (const cap of page.capabilities) {
           for (const role of roles) {
             totals[role].total++
-            if (isGranted(role, cap.id)) totals[role].granted++
+            // Супер-админ всегда имеет всё (bypass в коде)
+            if (role === 'super_admin' || isGranted(role, cap.id)) {
+              totals[role].granted++
+            }
           }
         }
       }
@@ -397,18 +400,28 @@ function PageRow({
                     <div className="text-[10px] text-slate-500">{cap.id}</div>
                   </td>
                   {roles.map((role) => {
-                    const granted = isGranted(role, cap.id)
+                    const isSuperAdminRow = role === 'super_admin'
+                    // Супер-админ обходит проверки прав в коде (см. proxy.ts и
+                    // requireCapability). Отрисовываем как всегда включено,
+                    // свитч заблокирован.
+                    const granted = isSuperAdminRow ? true : isGranted(role, cap.id)
                     const key = `${role}:${cap.id}`
                     const saving = savingKey === key
                     return (
                       <td key={role} className="py-1.5 px-2 text-center align-top">
                         <button
-                          onClick={() => onToggle(role, cap.id, !granted)}
-                          disabled={saving}
+                          onClick={() => !isSuperAdminRow && onToggle(role, cap.id, !granted)}
+                          disabled={saving || isSuperAdminRow}
                           className={`inline-flex h-5 w-9 items-center rounded-full transition ${
                             granted ? 'bg-emerald-500/40' : 'bg-slate-700'
-                          } ${saving ? 'opacity-50' : ''}`}
-                          title={granted ? 'Право включено — клик чтобы отключить' : 'Право отключено — клик чтобы включить'}
+                          } ${saving ? 'opacity-50' : ''} ${isSuperAdminRow ? 'cursor-not-allowed opacity-70' : ''}`}
+                          title={
+                            isSuperAdminRow
+                              ? 'Супер-админ обходит все проверки прав в коде — настройка не нужна'
+                              : granted
+                                ? 'Право включено — клик чтобы отключить'
+                                : 'Право отключено — клик чтобы включить'
+                          }
                         >
                           <span
                             className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${

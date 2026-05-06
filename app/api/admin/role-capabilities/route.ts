@@ -28,21 +28,54 @@ export async function GET(request: Request) {
     ? createAdminSupabaseClient()
     : access.supabase
 
-  // Supabase по умолчанию отдаёт макс 1000 строк, а у нас 6 ролей × 265 = 1590.
-  // Явно расширяем диапазон чтобы получить всё.
-  const { data: rows, error } = await supabase
-    .from('role_capabilities')
-    .select('role, capability, granted')
-    .range(0, 9999)
-
-  if (error) return json({ error: error.message }, 500)
-
-  // Список всех ролей: те что в БД + builtin
-  const dbRoles = Array.from(new Set((rows || []).map((r: any) => r.role)))
+  // Сначала собираем список всех ролей. Supabase по умолчанию режет до 1000 строк
+  // (db.maxRows), но distinct по role даёт всего ~10 строк — точно влезет.
   const builtinRoles = ['owner', 'manager', 'marketer', 'other', 'super_admin']
-  const roles = Array.from(new Set([...builtinRoles, ...dbRoles])).sort()
 
-  return json({ items: rows || [], roles })
+  // Из таблицы positions (кастомные роли)
+  const { data: positionRows } = await supabase
+    .from('positions')
+    .select('name')
+    .range(0, 999)
+
+  // Distinct из самой role_capabilities (через group_by нет, но distinct работает)
+  const { data: distinctRoles } = await supabase
+    .from('role_capabilities')
+    .select('role')
+    .order('role')
+    .range(0, 999)
+
+  const allRoleSet = new Set<string>(builtinRoles)
+  for (const r of (positionRows || []) as Array<{ name: string }>) {
+    if (r.name) allRoleSet.add(r.name)
+  }
+  for (const r of (distinctRoles || []) as Array<{ role: string }>) {
+    if (r.role) allRoleSet.add(r.role)
+  }
+  const roles = Array.from(allRoleSet).sort()
+
+  // Затем за каждой ролью идём отдельным запросом (265 строк, в лимит влезает).
+  // Параллельно — быстро.
+  const perRoleResults = await Promise.all(
+    roles.map((role) =>
+      supabase
+        .from('role_capabilities')
+        .select('role, capability, granted')
+        .eq('role', role)
+        .range(0, 999),
+    ),
+  )
+
+  const items: Array<{ role: string; capability: string; granted: boolean }> = []
+  for (const r of perRoleResults) {
+    if (r.error) {
+      console.warn('role-capabilities query error', r.error)
+      continue
+    }
+    items.push(...(r.data || []))
+  }
+
+  return json({ items, roles })
 }
 
 /**
