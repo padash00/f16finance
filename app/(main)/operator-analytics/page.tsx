@@ -953,11 +953,12 @@ function OperatorAnalyticsContent() {
   const [includeExtra, setIncludeExtra] = useState(true)
   const [showInactive, setShowInactive] = useState(false)
 
-  // UI states. tab может прийти из URL — для прямой ссылки из сайдбара.
-  const [mainTab, setMainTab] = useState<'analytics' | 'achievements'>(() => {
-    const t = searchParams.get('tab')
-    return t === 'achievements' ? 'achievements' : 'analytics'
-  })
+  // UI states. tab всегда берётся из URL — переключение через сайдбар.
+  const tabFromUrl = searchParams.get('tab') === 'achievements' ? 'achievements' : 'analytics'
+  const [mainTab, setMainTab] = useState<'analytics' | 'achievements'>(tabFromUrl)
+  useEffect(() => {
+    setMainTab(tabFromUrl)
+  }, [tabFromUrl])
   const [sortKey, setSortKey] = useState<SortKey>('turnover')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [search, setSearch] = useState('')
@@ -1792,28 +1793,6 @@ function OperatorAnalyticsContent() {
                 </Button>
               </div>
             </div>
-          </div>
-
-          {/* Main Tabs */}
-          <div className="inline-flex bg-gray-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
-            <button
-              onClick={() => setMainTab('analytics')}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                mainTab === 'analytics' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              Аналитика
-            </button>
-            <button
-              onClick={() => setMainTab('achievements')}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                mainTab === 'achievements' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Trophy className="w-4 h-4" />
-              Достижения
-            </button>
           </div>
 
           {mainTab === 'achievements' ? (
