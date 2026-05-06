@@ -21,8 +21,15 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Этот endpoint используется страницей /expense-whitelist И формой
-    // создания расхода. Любой авторизованный staff/super-admin получает список.
+    // Endpoint используется страницей /expense-whitelist И формой создания
+    // расхода. Пускаем по любому из прав: expense-whitelist.view ИЛИ expenses.create.
+    const wlDenied = await requireCapability(access, 'expense-whitelist.view')
+    if (wlDenied) {
+      const createDenied = await requireCapability(access, 'expenses.create')
+      if (createDenied) return createDenied as any
+    }
+
+    // Capability checks выше уже отсеивают; здесь — любой staff
     if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { listOrganizationOperatorIds } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -14,8 +15,15 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Этот endpoint используется в форме создания расхода. Любой
-    // авторизованный staff/super-admin может получить список операторов.
+    // Endpoint используется списком расходов И формой создания.
+    // Пускаем по любому из прав: expenses.view ИЛИ expenses.create.
+    const viewDenied = await requireCapability(access, 'expenses.view')
+    if (viewDenied) {
+      const createDenied = await requireCapability(access, 'expenses.create')
+      if (createDenied) return createDenied as any
+    }
+
+    // Capability checks выше уже отсеивают; здесь — любой staff
     if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
