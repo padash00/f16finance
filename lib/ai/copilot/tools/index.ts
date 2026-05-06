@@ -28,14 +28,21 @@ import { deleteExpenseTool } from './finance/delete-expense'
 import { addCategoryTool } from './finance/add-category'
 import { deleteIncomeTool } from './finance/delete-income'
 import { addVendorTool } from './finance/add-vendor'
+import { updateExpenseTool } from './finance/update-expense'
+import { addKaspiRecordTool } from './finance/add-kaspi-record'
 import { voidAdjustmentTool } from './salary/void-adjustment'
 import { takeTaskTool } from './tasks/take-task'
 import { deleteTaskTool } from './tasks/delete-task'
 import { addStockTool } from './inventory/add-stock'
+import { updateStockThresholdTool } from './inventory/update-stock-threshold'
+import { updateOperatorTool } from './team/update-operator'
 import { saveMemoryTool } from './system/save-memory'
 import { getOperatorSalaryTool } from './analytics/get-operator-salary'
 import { getOverdueDebtsTool } from './analytics/get-overdue-debts'
 import { getShiftReportTool } from './analytics/get-shift-report'
+import { getPaymentBreakdownTool } from './analytics/get-payment-breakdown'
+import { getRecentActionsTool } from './analytics/get-recent-actions'
+import { getTaxSummaryTool } from './analytics/get-tax-summary'
 import { getPiRankingTool } from './analytics/get-pi-ranking'
 import { queryByCompanyTool } from './analytics/query-by-company'
 import { queryAnomaliesTool } from './analytics/query-anomalies'
@@ -68,6 +75,8 @@ export function initializeCopilotTools(): void {
   registerTool(addCategoryTool)
   registerTool(deleteIncomeTool)
   registerTool(addVendorTool)
+  registerTool(updateExpenseTool)
+  registerTool(addKaspiRecordTool)
 
   // Зарплата
   registerTool(giveAdvanceTool)
@@ -91,6 +100,7 @@ export function initializeCopilotTools(): void {
   registerTool(transferToShowcaseTool)
   registerTool(writeoffItemTool)
   registerTool(addStockTool)
+  registerTool(updateStockThresholdTool)
 
   // Смены
   registerTool(assignShiftTool)
@@ -102,6 +112,7 @@ export function initializeCopilotTools(): void {
   registerTool(unblockOperatorTool)
   registerTool(sendMessageToOperatorTool)
   registerTool(broadcastToOperatorsTool)
+  registerTool(updateOperatorTool)
 
   // ─── Read / analytics tools ──────────────────────────────────────────
   registerTool(queryRevenueTool)
@@ -121,7 +132,10 @@ export function initializeCopilotTools(): void {
   registerTool(getOperatorSalaryTool)
   registerTool(getOverdueDebtsTool)
   registerTool(getShiftReportTool)
+  registerTool(getPaymentBreakdownTool)
+  registerTool(getRecentActionsTool)
+  registerTool(getTaxSummaryTool)
 
-  // Зарегистрировано: 46 tools (29 action + 16 analytics + 1 system)
-  // Покрывает большинство admin workflow в системе.
+  // Зарегистрировано: 53 tools (33 action + 19 analytics + 1 system)
+  // Покрывает >50% capabilities проекта.
 }
