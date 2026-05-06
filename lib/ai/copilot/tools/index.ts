@@ -24,6 +24,13 @@ import { blockOperatorTool, unblockOperatorTool } from './team/block-operator'
 import { createOperatorTool } from './team/create-operator'
 import { sendMessageToOperatorTool, broadcastToOperatorsTool } from './team/send-message'
 import { approveExpenseTool, declineExpenseTool } from './finance/approve-expense'
+import { deleteExpenseTool } from './finance/delete-expense'
+import { addCategoryTool } from './finance/add-category'
+import { takeTaskTool } from './tasks/take-task'
+import { saveMemoryTool } from './system/save-memory'
+import { getPiRankingTool } from './analytics/get-pi-ranking'
+import { queryByCompanyTool } from './analytics/query-by-company'
+import { queryAnomaliesTool } from './analytics/query-anomalies'
 import { queryRevenueTool } from './analytics/query-revenue'
 import { queryLowStockTool } from './analytics/query-low-stock'
 import { queryExpensesTool } from './analytics/query-expenses'
@@ -49,6 +56,8 @@ export function initializeCopilotTools(): void {
   registerTool(markDebtPaidTool)
   registerTool(approveExpenseTool)
   registerTool(declineExpenseTool)
+  registerTool(deleteExpenseTool)
+  registerTool(addCategoryTool)
 
   // Зарплата
   registerTool(giveAdvanceTool)
@@ -57,7 +66,11 @@ export function initializeCopilotTools(): void {
 
   // Задачи
   registerTool(createTaskTool)
+  registerTool(takeTaskTool)
   registerTool(closeTaskTool)
+
+  // Системные
+  registerTool(saveMemoryTool)
 
   // Склад
   registerTool(createInventoryRequestTool)
@@ -89,7 +102,10 @@ export function initializeCopilotTools(): void {
   registerTool(comparePeriodsTool)
   registerTool(getTopOperatorsTool)
   registerTool(getCashflowTool)
+  registerTool(getPiRankingTool)
+  registerTool(queryByCompanyTool)
+  registerTool(queryAnomaliesTool)
 
-  // Зарегистрировано: 31 tool (21 action + 10 analytics)
-  // Покрывает основной admin workflow в Telegram-боте.
+  // Зарегистрировано: 38 tools (24 action + 13 analytics + 1 system)
+  // Покрывает большую часть admin workflow.
 }
