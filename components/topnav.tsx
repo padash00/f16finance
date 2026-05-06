@@ -499,7 +499,7 @@ export function TopNav() {
 
   const visibleSections = useMemo(
     () => baseSections.map(session.filterSection).filter((section) => section.items.length > 0),
-    [baseSections, session],
+    [baseSections, session.filterSection],
   )
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { canAccessPath, type StaffRole, type SubscriptionFeature } from '@/lib/core/access'
@@ -119,7 +119,7 @@ export function useNavSession(): NavSession {
     }
   }
 
-  const filterSection = (section: NavSection): NavSection => ({
+  const filterSection = useCallback((section: NavSection): NavSection => ({
     ...section,
     items: section.items.filter((item) => {
       if (item.href === '/operator-lead' && !isLeadOperator) return false
@@ -144,7 +144,7 @@ export function useNavSession(): NavSession {
         rolePermissionOverrides,
       })
     }),
-  })
+  }), [isLeadOperator, capsLoading, canDo, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures, rolePermissionOverrides])
 
   return {
     userEmail,
