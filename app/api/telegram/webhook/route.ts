@@ -3530,9 +3530,26 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
-      // AI-чат для владельца/менеджера/администратора
+      // ─── AI Copilot для владельца/менеджера/администратора ──────────────
+      // Все естественные сообщения идут в Copilot (с tools и кнопками).
+      // Не нужно префикса /c — пишешь "выдай аванс" → бот спрашивает кому,
+      // показывает кнопки для выбора. Старый handleAIChat остаётся для
+      // операторов (личная статистика).
       if (canUseFinance(botUser.role)) {
-        await handleAIChat(Number(chatId), String(chatId), text, supabase, undefined, botUser)
+        try {
+          const result = await runCopilotForTelegram({
+            userId: botUser.entityId || telegramUserId,
+            role: botUser.role === 'unknown' ? null : botUser.role,
+            isSuperAdmin: botUser.role === 'super_admin',
+            chatId: Number(chatId),
+            text,
+          })
+          await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
+        } catch (e: any) {
+          // Fallback на старый AI если Copilot упал
+          console.error('[copilot] failed, fallback to old AI:', e)
+          await handleAIChat(Number(chatId), String(chatId), text, supabase, undefined, botUser)
+        }
         return json({ ok: true })
       }
 
