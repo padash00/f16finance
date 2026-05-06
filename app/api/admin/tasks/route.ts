@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { resolveStaffByUser } from '@/lib/server/admin'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -553,6 +554,8 @@ export async function POST(req: Request) {
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
     if (body.action === 'createTask') {
+      const denied = await requireCapability(access, 'tasks.create')
+      if (denied) return denied as any
       if (!body.payload.title?.trim()) return json({ error: 'Название задачи обязательно' }, 400)
       if (!body.payload.company_id?.trim() && !access.isSuperAdmin) {
         return json({ error: 'Для задачи нужно выбрать точку' }, 400)
@@ -656,6 +659,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateTask') {
+      const denied = await requireCapability(access, 'tasks.edit')
+      if (denied) return denied as any
       if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
       const existingContext = await loadTaskContext(supabase, body.taskId)
       await ensureTaskCompanyAccess(
@@ -831,6 +836,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'addComment') {
+      const denied = await requireCapability(access, 'tasks.add_comment')
+      if (denied) return denied as any
       if (!body.taskId || !body.content?.trim()) return json({ error: 'taskId и content обязательны' }, 400)
       const existingContext = await loadTaskContext(supabase, body.taskId)
       await ensureTaskCompanyAccess(
@@ -883,6 +890,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteTask') {
+      const denied = await requireCapability(access, 'tasks.delete')
+      if (denied) return denied as any
       if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
       const existingContext = await loadTaskContext(supabase, body.taskId)
       await ensureTaskCompanyAccess(

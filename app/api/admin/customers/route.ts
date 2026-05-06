@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -82,6 +83,8 @@ export async function POST(req: Request) {
     if (!body?.action) return json({ error: 'missing action' }, 400)
 
     if (body.action === 'createCustomer') {
+      const denied = await requireCapability(access, 'customers.create')
+      if (denied) return denied as any
       const { name, phone, card_number, email, notes, company_id } = body.payload || {}
       if (!name?.trim()) return json({ error: 'Имя клиента обязательно' }, 400)
       if (company_id) {
@@ -114,6 +117,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateCustomer') {
+      const denied = await requireCapability(access, 'customers.edit')
+      if (denied) return denied as any
       const { customerId, payload } = body
       if (!customerId) return json({ error: 'customerId required' }, 400)
       const { data: existing, error: existingError } = await supabase
@@ -153,6 +158,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteCustomer') {
+      const denied = await requireCapability(access, 'customers.delete')
+      if (denied) return denied as any
       const { customerId } = body
       if (!customerId) return json({ error: 'customerId required' }, 400)
       const { data: existing, error: existingError } = await supabase
@@ -179,6 +186,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'adjustPoints') {
+      const denied = await requireCapability(access, 'customers.adjust_points')
+      if (denied) return denied as any
       const { customerId, delta } = body
       if (!customerId) return json({ error: 'customerId required' }, 400)
       if (typeof delta !== 'number') return json({ error: 'delta must be a number' }, 400)

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
@@ -86,6 +87,14 @@ function formatDate(iso: string) {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const { can } = useCapabilities()
+  const canCreate = can('customers.create')
+  const canEdit = can('customers.edit')
+  const canDelete = can('customers.delete')
+  const canExport = can('customers.export')
+  const canAdjustPoints = can('customers.adjust_points')
+  const canViewHistory = can('customers.view_sale_history')
+
   const tableContainerRef = useRef<HTMLDivElement | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -305,17 +314,21 @@ export default function CustomersPage() {
           icon={<Users className="h-5 w-5" aria-hidden />}
           actions={
             <>
-              <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={customers.length === 0}>
-                <Download className="mr-2 h-4 w-4" />
-                Экспорт Excel
-              </Button>
+              {canExport && (
+                <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={customers.length === 0}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Экспорт Excel
+                </Button>
+              )}
               <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => void load()} disabled={loading} aria-label="Обновить">
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
+              {canCreate && (
               <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Добавить клиента
               </Button>
+              )}
             </>
           }
         />
@@ -439,33 +452,40 @@ export default function CustomersPage() {
                       <td className="px-4 py-3 text-muted-foreground">{customer.company?.name || '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="История покупок"
-                            onClick={() => void openHistory(customer)}
-                          >
-                            <Clock className="h-4 w-4 text-sky-400" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Баллы"
-                            onClick={() => { setAdjustCustomer(customer); setPointsDelta(''); setPointsReason(''); setFormError(null) }}
-                          >
-                            <Star className="h-4 w-4 text-amber-400" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Редактировать"
-                            onClick={() => openEdit(customer)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
+                          {canViewHistory && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="История покупок"
+                              onClick={() => void openHistory(customer)}
+                            >
+                              <Clock className="h-4 w-4 text-sky-400" />
+                            </Button>
+                          )}
+                          {canAdjustPoints && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Баллы"
+                              onClick={() => { setAdjustCustomer(customer); setPointsDelta(''); setPointsReason(''); setFormError(null) }}
+                            >
+                              <Star className="h-4 w-4 text-amber-400" />
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Редактировать"
+                              onClick={() => openEdit(customer)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -475,6 +495,7 @@ export default function CustomersPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

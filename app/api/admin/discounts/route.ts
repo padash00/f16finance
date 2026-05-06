@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -67,6 +68,8 @@ export async function POST(req: Request) {
     if (!body?.action) return json({ error: 'missing action' }, 400)
 
     if (body.action === 'createDiscount') {
+      const denied = await requireCapability(access, 'discounts.create')
+      if (denied) return denied as any
       const { name, type, value, promo_code, min_order_amount, valid_from, valid_to, usage_limit, company_id } = body.payload || {}
       if (!name?.trim()) return json({ error: 'Название скидки обязательно' }, 400)
       if (!['percent', 'fixed', 'promo_code'].includes(type)) return json({ error: 'Неверный тип скидки' }, 400)
@@ -107,6 +110,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateDiscount') {
+      const denied = await requireCapability(access, 'discounts.edit')
+      if (denied) return denied as any
       const { discountId, payload } = body
       if (!discountId) return json({ error: 'discountId required' }, 400)
       const { data: existing, error: existingError } = await supabase
@@ -153,6 +158,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteDiscount') {
+      const denied = await requireCapability(access, 'discounts.delete')
+      if (denied) return denied as any
       const { discountId } = body
       if (!discountId) return json({ error: 'discountId required' }, 400)
       const { data: existing, error: existingError } = await supabase
