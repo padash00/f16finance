@@ -433,7 +433,7 @@ export default function AccessPage() {
   const allPositionNames = useMemo(() => positions.map(p => p.name), [positions])
 
   return (
-    <div className="app-page max-w-5xl space-y-5">
+    <div className="app-page w-full space-y-5">
 
       <AdminPageHeader
         title="Права доступа"

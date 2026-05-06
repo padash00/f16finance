@@ -40,8 +40,18 @@ export function CapabilitiesPanel() {
   const [error, setError] = useState<string | null>(null)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  const [collapsedPages, setCollapsedPages] = useState<Set<string>>(new Set())
+  // По умолчанию всё свёрнуто — пользователь раскрывает только нужные разделы.
+  // Это сильно ускоряет рендер при 65 страницах и 265 capabilities.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(CAPABILITY_GROUPS.map((g) => g.id)),
+  )
+  const [collapsedPages, setCollapsedPages] = useState<Set<string>>(
+    () => {
+      const s = new Set<string>()
+      for (const g of CAPABILITY_GROUPS) for (const p of g.pages) s.add(p.id)
+      return s
+    },
+  )
 
   async function load() {
     setLoading(true)
@@ -109,6 +119,22 @@ export function CapabilitiesPanel() {
   async function bulkSet(role: string, capabilities: string[], granted: boolean) {
     if (!capabilities.length) return
     setSavingKey(`bulk:${role}`)
+
+    // Оптимистичное применение пакетного изменения — без перезагрузки списка
+    const capSet = new Set(capabilities)
+    const previousItems = items
+    setItems((prev) => {
+      const next = prev.map((it) =>
+        it.role === role && capSet.has(it.capability) ? { ...it, granted } : it,
+      )
+      // Добавляем недостающие
+      const existing = new Set(next.filter((it) => it.role === role).map((it) => it.capability))
+      for (const cap of capabilities) {
+        if (!existing.has(cap)) next.push({ role, capability: cap, granted })
+      }
+      return next
+    })
+
     try {
       const res = await fetch('/api/admin/role-capabilities', {
         method: 'POST',
@@ -119,8 +145,9 @@ export function CapabilitiesPanel() {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error || `HTTP ${res.status}`)
       }
-      await load()
     } catch (e: any) {
+      // Откатываем оптимистичное изменение
+      setItems(previousItems)
       alert(`Ошибка: ${e?.message || 'не удалось сохранить'}`)
     } finally {
       setSavingKey(null)
@@ -130,6 +157,22 @@ export function CapabilitiesPanel() {
   async function resetRole(role: string) {
     if (!confirm(`Открыть все права для роли «${roleLabel(role)}»?`)) return
     setSavingKey(`reset:${role}`)
+
+    // Оптимистично включаем все capabilities для роли
+    const previousItems = items
+    setItems((prev) => {
+      const otherRoles = prev.filter((it) => it.role !== role)
+      const allCaps: typeof prev = []
+      for (const group of CAPABILITY_GROUPS) {
+        for (const page of group.pages) {
+          for (const cap of page.capabilities) {
+            allCaps.push({ role, capability: cap.id, granted: true })
+          }
+        }
+      }
+      return [...otherRoles, ...allCaps]
+    })
+
     try {
       const res = await fetch('/api/admin/role-capabilities', {
         method: 'POST',
@@ -137,8 +180,8 @@ export function CapabilitiesPanel() {
         body: JSON.stringify({ action: 'reset_role', role }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      await load()
     } catch (e: any) {
+      setItems(previousItems)
       alert(`Ошибка: ${e?.message}`)
     } finally {
       setSavingKey(null)
@@ -268,7 +311,8 @@ export function CapabilitiesPanel() {
       {/* Дерево разделов */}
       <div className="space-y-3">
         {filteredGroups.map((group) => {
-          const groupCollapsed = collapsedGroups.has(group.id)
+          // Если идёт поиск — раскрываем найденное независимо от collapsed
+          const groupCollapsed = search.trim() ? false : collapsedGroups.has(group.id)
           return (
             <Card key={group.id} className="border-white/10 bg-slate-950/50 overflow-hidden">
               <button
@@ -297,6 +341,7 @@ export function CapabilitiesPanel() {
                       savingKey={savingKey}
                       collapsed={collapsedPages.has(page.id)}
                       onToggleCollapse={() => togglePage(page.id)}
+                      forceExpand={!!search.trim()}
                     />
                   ))}
                 </div>
@@ -349,6 +394,7 @@ function PageRow({
   savingKey,
   collapsed,
   onToggleCollapse,
+  forceExpand = false,
 }: {
   page: CapabilityPage
   roles: string[]
@@ -358,8 +404,10 @@ function PageRow({
   savingKey: string | null
   collapsed: boolean
   onToggleCollapse: () => void
+  forceExpand?: boolean
 }) {
   const allCapIds = page.capabilities.map((c) => c.id)
+  const effectivelyCollapsed = forceExpand ? false : collapsed
 
   return (
     <div className="border-b border-white/5 last:border-b-0">
@@ -368,7 +416,7 @@ function PageRow({
         className="flex w-full items-center justify-between gap-2 px-6 py-2 text-left transition hover:bg-white/5"
       >
         <div className="flex items-center gap-2">
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
+          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
           <span className="text-sm font-medium text-slate-200">{page.label}</span>
           <span className="text-xs text-slate-500">
             {page.path} · {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
@@ -376,7 +424,7 @@ function PageRow({
         </div>
       </button>
 
-      {!collapsed && (
+      {!effectivelyCollapsed && (
         <div className="px-6 pb-3">
           <table className="w-full text-sm">
             <thead>
