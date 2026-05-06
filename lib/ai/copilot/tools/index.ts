@@ -19,7 +19,11 @@ import { approveRequestTool, declineRequestTool } from './inventory/decide-reque
 import { assignShiftTool } from './shifts/assign-shift'
 import { cancelShiftTool } from './shifts/cancel-shift'
 import { writeoffItemTool } from './inventory/writeoff'
+import { transferToShowcaseTool } from './inventory/transfer-to-showcase'
 import { blockOperatorTool, unblockOperatorTool } from './team/block-operator'
+import { createOperatorTool } from './team/create-operator'
+import { sendMessageToOperatorTool, broadcastToOperatorsTool } from './team/send-message'
+import { approveExpenseTool, declineExpenseTool } from './finance/approve-expense'
 import { queryRevenueTool } from './analytics/query-revenue'
 import { queryLowStockTool } from './analytics/query-low-stock'
 import { queryExpensesTool } from './analytics/query-expenses'
@@ -28,6 +32,9 @@ import { getOverdueTasksTool } from './analytics/get-overdue-tasks'
 import { getPendingRequestsTool } from './analytics/get-pending-requests'
 import { getBirthdaysTool } from './analytics/get-birthdays'
 import { getOperatorInfoTool } from './analytics/get-operator-info'
+import { comparePeriodsTool } from './analytics/compare-periods'
+import { getTopOperatorsTool } from './analytics/get-top-operators'
+import { getCashflowTool } from './analytics/get-cashflow'
 
 let initialized = false
 
@@ -40,6 +47,8 @@ export function initializeCopilotTools(): void {
   registerTool(addExpenseTool)
   registerTool(addIncomeTool)
   registerTool(markDebtPaidTool)
+  registerTool(approveExpenseTool)
+  registerTool(declineExpenseTool)
 
   // Зарплата
   registerTool(giveAdvanceTool)
@@ -54,17 +63,19 @@ export function initializeCopilotTools(): void {
   registerTool(createInventoryRequestTool)
   registerTool(approveRequestTool)
   registerTool(declineRequestTool)
+  registerTool(transferToShowcaseTool)
+  registerTool(writeoffItemTool)
 
   // Смены
   registerTool(assignShiftTool)
   registerTool(cancelShiftTool)
 
-  // Списания
-  registerTool(writeoffItemTool)
-
   // Команда
+  registerTool(createOperatorTool)
   registerTool(blockOperatorTool)
   registerTool(unblockOperatorTool)
+  registerTool(sendMessageToOperatorTool)
+  registerTool(broadcastToOperatorsTool)
 
   // ─── Read / analytics tools ──────────────────────────────────────────
   registerTool(queryRevenueTool)
@@ -75,8 +86,10 @@ export function initializeCopilotTools(): void {
   registerTool(getPendingRequestsTool)
   registerTool(getBirthdaysTool)
   registerTool(getOperatorInfoTool)
+  registerTool(comparePeriodsTool)
+  registerTool(getTopOperatorsTool)
+  registerTool(getCashflowTool)
 
-  // Зарегистрировано: 23 tools (16 action + 7 analytics)
-  // TODO: ещё партии — get_operator_salary, query_pi, compare_periods,
-  // transfer_to_showcase, swap_shift, send_to_operator, save_to_memory.
+  // Зарегистрировано: 31 tool (21 action + 10 analytics)
+  // Покрывает основной admin workflow в Telegram-боте.
 }
