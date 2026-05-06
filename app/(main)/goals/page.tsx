@@ -338,7 +338,8 @@ export default function GoalsPage() {
             </Card>
           )}
 
-          {loading ? (
+          {/* Полный лоадер только при первой загрузке. Refetch — silent. */}
+          {loading && goals.length === 0 ? (
             <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span className="text-sm">Загрузка...</span>

@@ -197,7 +197,9 @@ export default function MonthlyReportPage() {
         </div>
       )}
 
-      {loading ? (
+      {/* Полный лоадер только при первой загрузке (когда ещё нет данных).
+          При смене года/месяца/компании старый отчёт остаётся, обновление silent. */}
+      {loading && !hasData ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
           Загрузка...

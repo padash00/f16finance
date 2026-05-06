@@ -692,7 +692,7 @@ export default function AIAnalysisPage() {
           )}
         </Card>
 
-        {analysis && !loading && (
+        {analysis && (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
               { label: "Доход (период)", v: formatMoney(analysis.totalIncome) },
@@ -754,7 +754,8 @@ export default function AIAnalysisPage() {
           ]}
         />
 
-        {loading && (
+        {/* Скелетон только при первой загрузке. Refetch — silent, старая аналитика остаётся. */}
+        {loading && !analysis && (
           <div className="space-y-6">
             <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
               <Skeleton className="h-6 w-64" />
@@ -785,7 +786,7 @@ export default function AIAnalysisPage() {
           </Card>
         )}
 
-        {!loading && analysis && (
+        {analysis && (
           <div className="space-y-6">
             <div className="space-y-2">
               <h2 className="text-sm font-medium text-gray-300">Основной график</h2>

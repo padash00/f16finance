@@ -866,7 +866,9 @@ export default function SmartDashboardPage() {
     )
   }
 
-  if (loading) {
+  // Полноэкранный лоадер только при первой загрузке (когда ещё нет данных).
+  // При смене периода/фильтра старый контент остаётся — обновление идёт silent.
+  if (loading && companies.length === 0) {
     return (
       <>
           <div className="text-center">
