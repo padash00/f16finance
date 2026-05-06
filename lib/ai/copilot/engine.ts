@@ -123,12 +123,31 @@ export async function runCopilot(
       return { text: `У тебя нет права для "${tool.description}". Обратись к администратору.` }
     }
     startTool(session, tool.name)
-    // Пред-заполняем те параметры что LLM смог извлечь
+    // Пред-заполняем те параметры что LLM смог извлечь.
+    // ВАЖНО: для select-параметров валидируем значение по getOptions —
+    // если AI выдумал ID/значение которого нет в реальном списке,
+    // НЕ устанавливаем и engine спросит пользователя через кнопки.
     for (const [key, value] of Object.entries(llmResponse.toolCall.args || {})) {
-      if (value != null && value !== '') {
-        const param = tool.params.find((p) => p.name === key)
-        if (param) setParam(session, key, value)
+      if (value == null || value === '') continue
+      const param = tool.params.find((p) => p.name === key)
+      if (!param) continue
+
+      if ((param.type === 'select' || param.type === 'multiselect') && param.getOptions) {
+        try {
+          const options = await param.getOptions(ctx)
+          const valueStr = String(value)
+          const valid = options.some((opt) => String(opt.value) === valueStr)
+          if (!valid) {
+            console.warn(`[copilot] AI hallucinated ${param.name}=${valueStr} — not in getOptions, asking user.`)
+            continue
+          }
+        } catch {
+          // Если getOptions упал — лучше пропустить чем принять выдуманное
+          continue
+        }
       }
+
+      setParam(session, key, value)
     }
     return await continueToolCollection(tool, ctx, session)
   }
