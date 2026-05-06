@@ -59,9 +59,10 @@ export const queryLowStockTool: CopilotTool = {
       .in('id', itemIds)
     if (itemErr) return { ok: false, message: `Ошибка: ${itemErr.message}` }
 
-    const itemMap = new Map((items || []).map((i: any) => [String(i.id), i]))
+    type ItemRow = { id: string; name: string; low_stock_threshold: number | null }
+    const itemMap = new Map<string, ItemRow>((items || []).map((i: any) => [String(i.id), i as ItemRow]))
     const lowStock: Array<{ name: string; qty: number; threshold: number }> = []
-    for (const b of balances || []) {
+    for (const b of (balances || []) as Array<{ item_id: string; quantity: number }>) {
       const item = itemMap.get(String(b.item_id))
       if (!item) continue
       const threshold = Number(item.low_stock_threshold || 0)
