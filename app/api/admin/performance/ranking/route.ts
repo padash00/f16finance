@@ -39,7 +39,7 @@ type Operator = {
   short_name: string | null
 }
 
-const BASELINE_DAYS = 90
+const BASELINE_DAYS = 180
 const MIN_BASELINE_OBSERVATIONS = 3 // если в слоте < 3 наблюдений — берём fallback
 const MIN_QUALIFYING_SHIFTS = 3      // меньше — оператор в "Cold start"
 const PI_CLIP_MIN = 0.5
@@ -131,67 +131,91 @@ export async function GET(req: Request) {
     const baseline = allIncomes.filter((r) => r.date >= baselineFrom && r.date <= baselineTo)
     const target = allIncomes.filter((r) => r.date >= from && r.date <= to)
 
-    // ── 4. Агрегируем по сменам (slot key = company:weekday:shift, по дате тоже) ──
-    // Слотовая корзина для baseline: складываем все смены такого типа
-    const baselineByDate = new Map<string, IncomeRow[]>()
+    // ── 4. Агрегируем по сменам (1 оператор = 1 смена) ───────────────────
+    // Каждая запись baselineShifts: одна смена с указанием оператора.
+    // operator_id нужен чтобы потом делать leave-one-out (исключать
+    // собственные смены оператора при подсчёте его ожидания).
+    const baselineByKey = new Map<string, { operator_id: string; revenue: number }>()
     for (const row of baseline) {
       if (!row.operator_id || !row.company_id) continue
-      const key = `${row.company_id}|${row.date}|${row.shift || 'day'}`
-      const arr = baselineByDate.get(key) || []
-      arr.push(row)
-      baselineByDate.set(key, arr)
+      const key = `${row.operator_id}|${row.company_id}|${row.date}|${row.shift || 'day'}`
+      const cur = baselineByKey.get(key) || { operator_id: row.operator_id, revenue: 0 }
+      cur.revenue += getRevenue(row)
+      baselineByKey.set(key, cur)
     }
-    // Сворачиваем кратные records на одну смену в одну сумму (если incomes в одной смене несколько строк)
-    const baselineShifts: { company: string; date: string; shift: string; revenue: number }[] = []
-    for (const [key, rows] of baselineByDate) {
-      const [company, date, shift] = key.split('|')
-      const total = rows.reduce((s, r) => s + getRevenue(r), 0)
-      if (total <= 0) continue
-      baselineShifts.push({ company, date, shift, revenue: total })
+    type BaseShift = { company: string; date: string; shift: string; operatorId: string; revenue: number }
+    const baselineShifts: BaseShift[] = []
+    for (const [key, cur] of baselineByKey) {
+      if (cur.revenue <= 0) continue
+      const parts = key.split('|') // operator|company|date|shift
+      baselineShifts.push({
+        operatorId: parts[0],
+        company: parts[1],
+        date: parts[2],
+        shift: parts[3],
+        revenue: cur.revenue,
+      })
     }
 
-    // Группируем baseline по (company, weekday, shift) → массив revenue
-    const baselineSlots = new Map<string, number[]>()
+    // Группируем по (company, weekday, shift) — но храним массив объектов с operator_id
+    const baselineSlots = new Map<string, BaseShift[]>()
     for (const sh of baselineShifts) {
       const slotKey = `${sh.company}|${weekday(sh.date)}|${sh.shift}`
       const arr = baselineSlots.get(slotKey) || []
-      arr.push(sh.revenue)
+      arr.push(sh)
       baselineSlots.set(slotKey, arr)
     }
 
-    // Median per slot. Fallback цепочка для слотов с малым числом наблюдений.
-    const slotMedian = new Map<string, { median: number; count: number; source: 'slot' | 'company-shift' | 'company' | 'global' }>()
-
-    // Подготовим fallback'ы
-    const companyShiftMap = new Map<string, number[]>()
-    const companyMap = new Map<string, number[]>()
-    const globalArr: number[] = []
+    // Fallback'и: company-shift / company / global. Тоже хранят BaseShift для leave-one-out.
+    const companyShiftMap = new Map<string, BaseShift[]>()
+    const companyMap = new Map<string, BaseShift[]>()
+    const globalArr: BaseShift[] = []
     for (const sh of baselineShifts) {
       const ck = `${sh.company}|${sh.shift}`
-      ;(companyShiftMap.get(ck) || companyShiftMap.set(ck, []).get(ck))!.push(sh.revenue)
-      ;(companyMap.get(sh.company) || companyMap.set(sh.company, []).get(sh.company))!.push(sh.revenue)
-      globalArr.push(sh.revenue)
+      const cs = companyShiftMap.get(ck) || []
+      cs.push(sh)
+      companyShiftMap.set(ck, cs)
+      const cm = companyMap.get(sh.company) || []
+      cm.push(sh)
+      companyMap.set(sh.company, cm)
+      globalArr.push(sh)
     }
-    const globalMedian = median(globalArr)
+    const globalMedian = median(globalArr.map((s) => s.revenue))
 
-    for (const [slotKey, values] of baselineSlots) {
-      if (values.length >= MIN_BASELINE_OBSERVATIONS) {
-        slotMedian.set(slotKey, { median: median(values), count: values.length, source: 'slot' })
-      }
-    }
-
-    function getExpected(company: string, date: string, shift: string): { value: number; source: string } {
+    /**
+     * Считаем ожидание для смены конкретного оператора с применением
+     * leave-one-out: его собственные смены НЕ участвуют в медиане.
+     * Это убирает self-influence (звезда сравнивает себя с собой).
+     */
+    function getExpected(
+      company: string,
+      date: string,
+      shift: string,
+      operatorId: string,
+    ): { value: number; source: string } {
       const slotKey = `${company}|${weekday(date)}|${shift}`
-      const slot = slotMedian.get(slotKey)
-      if (slot) return { value: slot.median, source: 'slot' }
-      const csKey = `${company}|${shift}`
-      const csVals = companyShiftMap.get(csKey)
-      if (csVals && csVals.length >= MIN_BASELINE_OBSERVATIONS) {
-        return { value: median(csVals), source: 'company-shift' }
+      const slotShifts = baselineSlots.get(slotKey) || []
+      const otherInSlot = slotShifts.filter((s) => s.operatorId !== operatorId)
+      if (otherInSlot.length >= MIN_BASELINE_OBSERVATIONS) {
+        return { value: median(otherInSlot.map((s) => s.revenue)), source: 'slot (LOO)' }
       }
-      const cVals = companyMap.get(company)
-      if (cVals && cVals.length >= MIN_BASELINE_OBSERVATIONS) {
-        return { value: median(cVals), source: 'company' }
+
+      const csKey = `${company}|${shift}`
+      const csShifts = (companyShiftMap.get(csKey) || []).filter((s) => s.operatorId !== operatorId)
+      if (csShifts.length >= MIN_BASELINE_OBSERVATIONS) {
+        return { value: median(csShifts.map((s) => s.revenue)), source: 'company-shift (LOO)' }
+      }
+
+      const cShifts = (companyMap.get(company) || []).filter((s) => s.operatorId !== operatorId)
+      if (cShifts.length >= MIN_BASELINE_OBSERVATIONS) {
+        return { value: median(cShifts.map((s) => s.revenue)), source: 'company (LOO)' }
+      }
+
+      // В крайнем случае — глобальная медиана без leave-one-out
+      // (если у нас всего 1 оператор и у него все смены — fallback на глобальную)
+      const globalLOO = globalArr.filter((s) => s.operatorId !== operatorId)
+      if (globalLOO.length >= MIN_BASELINE_OBSERVATIONS) {
+        return { value: median(globalLOO.map((s) => s.revenue)), source: 'global (LOO)' }
       }
       return { value: globalMedian, source: 'global' }
     }
@@ -221,7 +245,7 @@ export async function GET(req: Request) {
       const actual = rows.reduce((s, r) => s + getRevenue(r), 0)
       if (actual <= 0) continue
 
-      const exp = getExpected(company, date, shift)
+      const exp = getExpected(company, date, shift, operatorId)
       const piRaw = exp.value > 0 ? actual / exp.value : 1.0
       const pi = Math.max(PI_CLIP_MIN, Math.min(PI_CLIP_MAX, piRaw))
 

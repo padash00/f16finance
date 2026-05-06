@@ -258,7 +258,8 @@ export default function PerformancePage() {
             </div>
             <p className="text-sm text-slate-400 max-w-2xl">
               Performance Index = факт / ожидание. Учитывается контекст каждой смены: точка, день недели, день/ночь.
-              Сравнение с медианой такого же слота за прошлые 90 дней. Минимум {data?.config.min_qualifying_shifts || 3} смен для попадания в основной рейтинг.
+              Сравнение с медианой такого же слота за прошлые 180 дней — <strong className="text-slate-200">без собственных смен оператора</strong> (leave-one-out).
+              Минимум {data?.config.min_qualifying_shifts || 3} смен для попадания в основной рейтинг.
             </p>
           </div>
 
@@ -346,12 +347,16 @@ export default function PerformancePage() {
             <div className="flex-1">
               <div className="font-semibold text-white mb-1">Считаем «ожидание» для каждой смены</div>
               <p className="text-slate-400 leading-relaxed">
-                Берём прошлые <strong className="text-slate-200">90 дней</strong> и для каждого слота считаем
+                Берём прошлые <strong className="text-slate-200">180 дней</strong> и для каждого слота считаем
                 <strong className="text-slate-200"> медианную выручку</strong>. Слот — это уникальная комбинация
                 «<strong className="text-emerald-300">точка</strong> × <strong className="text-emerald-300">день недели</strong> × <strong className="text-emerald-300">день/ночь</strong>».
               </p>
+              <p className="text-slate-400 leading-relaxed mt-2">
+                <strong className="text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-300">не входят в медиану</strong>.
+                Это убирает «само-смещение»: если оператор работал почти все пятничные ночи, его прошлые результаты не должны формировать его же норму. Сравниваем его только с тем что делали <strong>другие</strong> в таком же слоте.
+              </p>
               <div className="mt-2 rounded-lg border border-white/8 bg-black/20 p-3 text-xs text-slate-400">
-                Пример: «Arena × пятница × ночь» — за последние 90 дней было 12 таких смен с выручкой от 180k до 420k. Медиана = <span className="text-white font-semibold">280 000 ₸</span>. Это ожидание для любой будущей пятничной ночи в Arena.
+                Пример: «Arena × пятница × ночь» — за последние 180 дней было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-white font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
               </div>
             </div>
           </div>
