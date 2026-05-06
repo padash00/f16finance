@@ -132,7 +132,7 @@ export default function IncidentsPage() {
   }, [rows])
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title="Инциденты"
         description="Нарушения, бонусы и заметки — авто-штрафы по чек-листам и ручные записи"

@@ -215,7 +215,7 @@ export default function KPIPage() {
 
   return (
     <>
-        <div className="app-page-tight max-w-6xl space-y-8">
+        <div className="app-page-wide space-y-6">
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-white/5">
             <div>
@@ -250,7 +250,8 @@ export default function KPIPage() {
           </div>
 
           {/* States */}
-          {loading ? (
+          {/* Полноэкранный лоадер только при первой загрузке. При смене месяца контент остаётся. */}
+          {loading && !data ? (
             <div className="h-56 flex items-center justify-center text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
               Считаем…

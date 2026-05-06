@@ -920,7 +920,7 @@ function ShiftsPageContent() {
 
   return (
     <>
-        <div className="app-page max-w-7xl">
+        <div className="app-page-wide">
           <div className="mb-6">
             <AdminPageHeader
               title="График смен"

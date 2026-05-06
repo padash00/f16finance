@@ -94,7 +94,7 @@ export default function ShiftReportsPage() {
   }, [load])
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title="Отчёты смен"
         description="Закрытые смены точек: финансы, операции, отчёты Z/X"

@@ -531,7 +531,7 @@ export default function KPIStatusAndPayoutPage() {
 
   return (
     <>
-        <div className="app-page-tight max-w-6xl space-y-8">
+        <div className="app-page-wide space-y-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-5 pb-6 border-b border-white/5">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">

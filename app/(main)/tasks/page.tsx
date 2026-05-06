@@ -671,7 +671,7 @@ function TasksContent() {
   if (error) {
     return (
     <>
-          <div className="app-page max-w-7xl">
+          <div className="app-page-wide">
           <Card className="p-6 border-red-500/30 bg-red-500/10">
             <div className="flex items-center gap-2 text-red-300">
               <AlertCircle className="w-5 h-5" />
