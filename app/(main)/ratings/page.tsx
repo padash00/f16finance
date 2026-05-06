@@ -124,7 +124,7 @@ export default function RatingsPage() {
 
   return (
     <>
-        <div className="app-page max-w-5xl space-y-6">
+        <div className="app-page-wide space-y-6">
 
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-gray-900 to-orange-900/30 p-6 border border-amber-500/20">
@@ -223,7 +223,8 @@ export default function RatingsPage() {
           <Card className="p-5 bg-gray-900/80 border-gray-800">
             <h2 className="text-sm font-semibold text-white mb-4">Таблица лидеров</h2>
 
-            {loading ? (
+            {/* Полный лоадер только при первой загрузке */}
+            {loading && leaderboard.length === 0 ? (
               <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
                 <Loader2 className="w-5 h-5 animate-spin" />
                 <span className="text-sm">Загружаю данные...</span>

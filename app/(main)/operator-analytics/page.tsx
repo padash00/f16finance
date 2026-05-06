@@ -1710,7 +1710,7 @@ function OperatorAnalyticsContent() {
   // Main render
   return (
     <>
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="app-page-wide space-y-6">
           {/* Toast */}
           {toast && (
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${

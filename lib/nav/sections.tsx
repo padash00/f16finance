@@ -175,19 +175,13 @@ export const navSections: NavSection[] = [
   },
   {
     id: 'operator-space',
-    title: 'Операторское пространство',
-    subtitle: 'Коммуникация и мотивация',
+    title: 'Операторы',
+    subtitle: 'Аналитика, рейтинг и достижения',
     accentColor: 'fuchsia',
     icon: Zap,
     items: [
-      { href: '/operator-dashboard', label: 'Мой кабинет', icon: User, note: 'Сводка оператора' },
-      { href: '/operator-lead', label: 'Моя точка', icon: Building2, note: 'Команда и спорные смены точки', badge: 'lead', badgeColor: 'orange' },
-      { href: '/operator-tasks', label: 'Мои задачи', icon: ClipboardCheck, note: 'Личный контур задач', badge: '3', badgeColor: 'orange' },
-      { href: '/ratings', label: 'Рейтинг операторов', icon: Trophy, note: 'Лидерборд по выручке', badge: 'new', badgeColor: 'orange', isNew: true },
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
-      { href: '/operator-chat', label: 'Чат операторов', icon: MessageSquareText, note: 'Коммуникация', badge: 'live', badgeColor: 'green' },
-      { href: '/operator-achievements', label: 'Достижения', icon: Trophy, note: 'Мотивация и XP', badge: 'XP', badgeColor: 'purple' },
-      { href: '/operator-settings', label: 'Настройки операторов', icon: Briefcase, note: 'Профильный контур' },
+      { href: '/ratings', label: 'Рейтинг операторов', icon: Trophy, note: 'Лидерборд по выручке' },
     ],
   },
   {
