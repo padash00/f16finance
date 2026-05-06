@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, memo, useCallback, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -592,9 +593,10 @@ const OperatorDetailsModal = memo(({
     ? operator.paymentBreakdown.reduce((max, p) => p.value > max.value ? p : max, operator.paymentBreakdown[0])
     : null
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div 
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
+      <div
         ref={modalRef}
         className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
       >
@@ -894,7 +896,8 @@ const OperatorDetailsModal = memo(({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 })
 OperatorDetailsModal.displayName = 'OperatorDetailsModal'
