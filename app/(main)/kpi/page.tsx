@@ -216,38 +216,43 @@ export default function KPIPage() {
   return (
     <>
         <div className="app-page-wide space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-white/5">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                <Calculator className="w-7 h-7 text-indigo-400" />
-                Прогноз выручки
-              </h1>
-              <div className="text-sm text-muted-foreground mt-2 flex flex-wrap items-center gap-2">
-                Источник: <Badge variant="secondary" className="font-mono">incomes</Badge>
-                Движок: <Badge variant="secondary" className="font-mono">kpiEngine</Badge>
-                {isAnyPartial && (
-                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    N-1 не закрыт → оценка
-                  </Badge>
-                )}
+          {/* Premium Header */}
+          <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.20),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200">
+                  KPI
+                </div>
+                <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-white flex items-center gap-3 lg:text-4xl">
+                  <Calculator className="w-8 h-8 text-indigo-400" />
+                  Прогноз выручки
+                </h1>
+                <div className="text-sm text-slate-400 flex flex-wrap items-center gap-2">
+                  Источник: <Badge variant="secondary" className="font-mono">incomes</Badge>
+                  Движок: <Badge variant="secondary" className="font-mono">kpiEngine</Badge>
+                  {isAnyPartial && (
+                    <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      N-1 не закрыт → оценка
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-zinc-900/50 p-1.5 rounded-xl border border-white/10">
+                <span className="text-xs text-slate-400 pl-3">План на:</span>
+                <input
+                  type="month"
+                  value={targetMonth}
+                  onChange={(e) => setTargetMonth(e.target.value)}
+                  className="bg-transparent border-none text-sm px-3 outline-none text-white"
+                />
+                <div className="w-px h-6 bg-white/10" />
+                <Button variant="ghost" size="sm" onClick={() => setTargetMonth((v) => v)} disabled={loading}>
+                  <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 bg-zinc-900/50 p-1.5 rounded-xl border border-white/5">
-              <span className="text-xs text-muted-foreground pl-3">План на:</span>
-              <input
-                type="month"
-                value={targetMonth}
-                onChange={(e) => setTargetMonth(e.target.value)}
-                className="bg-transparent border-none text-sm px-3 outline-none text-white"
-              />
-              <div className="w-px h-6 bg-white/10" />
-              <Button variant="ghost" size="sm" onClick={() => setTargetMonth((v) => v)} disabled={loading}>
-                <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-          </div>
+          </Card>
 
           {/* States */}
           {/* Полноэкранный лоадер только при первой загрузке. При смене месяца контент остаётся. */}

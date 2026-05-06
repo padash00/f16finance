@@ -532,57 +532,63 @@ export default function KPIStatusAndPayoutPage() {
   return (
     <>
         <div className="app-page-wide space-y-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-5 pb-6 border-b border-white/5">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                <Target className="w-7 h-7 text-indigo-400" />
-                KPI Табло + выплаты (неделя / месяц)
-              </h1>
-              <div className="text-xs text-muted-foreground">
-                Ошибка про is_night убрана. Сейчас все смены считаются дневными (пока не добавим поле).
-              </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-3 bg-zinc-900/50 p-2 rounded-xl border border-white/5">
-              <div className="flex items-center gap-2 px-2">
-                <span className="text-xs text-muted-foreground">Месяц</span>
-                <input
-                  type="month"
-                  value={monthStart.slice(0, 7)}
-                  onChange={(e) => setMonthStart(e.target.value + '-01')}
-                  className="bg-transparent border-none text-sm px-2 outline-none text-white"
-                />
+          {/* Premium Header */}
+          <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.20),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200">
+                  KPI · Планы
+                </div>
+                <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-white flex items-center gap-3 lg:text-4xl">
+                  <Target className="w-8 h-8 text-indigo-400" />
+                  KPI Табло + выплаты
+                </h1>
+                <p className="text-sm text-slate-400">
+                  Неделя / месяц. Все смены считаются дневными (пока не добавим поле is_night).
+                </p>
               </div>
 
-              <div className="w-px h-8 bg-white/10 hidden md:block" />
+              <div className="flex flex-col md:flex-row gap-3 bg-zinc-900/50 p-2 rounded-xl border border-white/10">
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs text-slate-400">Месяц</span>
+                  <input
+                    type="month"
+                    value={monthStart.slice(0, 7)}
+                    onChange={(e) => setMonthStart(e.target.value + '-01')}
+                    className="bg-transparent border-none text-sm px-2 outline-none text-white"
+                  />
+                </div>
 
-              <div className="flex items-center gap-2 px-2">
-                <CalendarDays className="w-4 h-4 text-zinc-500" />
-                <select
-                  value={weekIdx}
-                  onChange={(e) => setWeekIdx(Number(e.target.value))}
-                  className="bg-transparent border border-white/10 rounded px-2 py-1 text-sm text-white outline-none"
-                >
-                  {weeks.map((w, i) => (
-                    <option key={w.label} value={i} className="bg-zinc-900">
-                      {w.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div className="w-px h-8 bg-white/10 hidden md:block" />
 
-              <div className="w-px h-8 bg-white/10 hidden md:block" />
+                <div className="flex items-center gap-2 px-2">
+                  <CalendarDays className="w-4 h-4 text-zinc-500" />
+                  <select
+                    value={weekIdx}
+                    onChange={(e) => setWeekIdx(Number(e.target.value))}
+                    className="bg-transparent border border-white/10 rounded px-2 py-1 text-sm text-white outline-none"
+                  >
+                    {weeks.map((w, i) => (
+                      <option key={w.label} value={i} className="bg-zinc-900">
+                        {w.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <Button variant="ghost" size="sm" onClick={loadAll} disabled={loading}>
-                <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              {can('kpi.generate_collective_plans') && (
-                <Button variant="secondary" size="sm" onClick={generatePlans} disabled={loading}>
-                  <Wand2 className="w-4 h-4 mr-2 text-indigo-400" /> Генерировать планы
+                <div className="w-px h-8 bg-white/10 hidden md:block" />
+
+                <Button variant="ghost" size="sm" onClick={loadAll} disabled={loading}>
+                  <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-              )}
+                {can('kpi.generate_collective_plans') && (
+                  <Button variant="secondary" size="sm" onClick={generatePlans} disabled={loading}>
+                    <Wand2 className="w-4 h-4 mr-2 text-indigo-400" /> Генерировать планы
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          </Card>
 
           {status && (
             <div

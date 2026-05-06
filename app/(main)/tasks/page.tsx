@@ -689,7 +689,7 @@ function TasksContent() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
