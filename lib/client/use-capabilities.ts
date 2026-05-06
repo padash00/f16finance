@@ -22,7 +22,7 @@
  * Super admin видит can(...) === true для любого capability.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 type CapabilitiesState = {
   capabilities: Set<string>
@@ -130,20 +130,32 @@ export function useCapabilities(): UseCapabilities {
     }
   }, [])
 
-  const can = (capability: string): boolean => {
-    if (state.isSuperAdmin) return true
-    return state.capabilities.has(capability)
-  }
+  // Стабилизируем функции через useCallback — иначе при каждом рендере
+  // useCapabilities получаются новые ссылки, которые лавинообразно перерендеривают
+  // потребители (Sidebar, TopNav, страницы) и ломают <Link> навигацию.
+  const can = useCallback(
+    (capability: string): boolean => {
+      if (state.isSuperAdmin) return true
+      return state.capabilities.has(capability)
+    },
+    [state],
+  )
 
-  const canAny = (caps: string[]): boolean => {
-    if (state.isSuperAdmin) return true
-    return caps.some((c) => state.capabilities.has(c))
-  }
+  const canAny = useCallback(
+    (caps: string[]): boolean => {
+      if (state.isSuperAdmin) return true
+      return caps.some((c) => state.capabilities.has(c))
+    },
+    [state],
+  )
 
-  const canAll = (caps: string[]): boolean => {
-    if (state.isSuperAdmin) return true
-    return caps.every((c) => state.capabilities.has(c))
-  }
+  const canAll = useCallback(
+    (caps: string[]): boolean => {
+      if (state.isSuperAdmin) return true
+      return caps.every((c) => state.capabilities.has(c))
+    },
+    [state],
+  )
 
   return {
     can,
