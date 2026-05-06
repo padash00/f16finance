@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   Search,
+  Settings,
   Shield,
   User,
   X,
@@ -216,17 +217,25 @@ function UserCard({
           </div>
         </div>
 
-        <Button
-          variant="ghost"
-          onClick={onLogout}
-          className="mt-3 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
-        >
-          <span className="flex items-center gap-2 text-sm">
-            <LogOut className="h-4 w-4" />
-            Выйти
-          </span>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Link
+            href="/profile"
+            className="flex items-center justify-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-sm text-slate-300 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-300"
+          >
+            <Settings className="h-4 w-4" />
+            Профиль
+          </Link>
+          <Button
+            variant="ghost"
+            onClick={onLogout}
+            className="justify-center rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
+          >
+            <span className="flex items-center gap-2 text-sm">
+              <LogOut className="h-4 w-4" />
+              Выйти
+            </span>
+          </Button>
+        </div>
       </div>
     </div>
   )

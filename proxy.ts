@@ -196,6 +196,13 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
+  // Персональные страницы аутентифицированного пользователя — без RBAC,
+  // достаточно факта авторизации (она уже проверена выше).
+  const PERSONAL_PAGES = ['/profile']
+  if (PERSONAL_PAGES.some((p) => requestedPath === p || requestedPath.startsWith(p + '/'))) {
+    return response
+  }
+
   // Проверка через новую модель capabilities:
   // если страница есть в каталоге CAPABILITY_GROUPS — нужно право <page-id>.view.
   // Если страницы нет в каталоге → fallback на старую canAccessPath.
