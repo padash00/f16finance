@@ -176,6 +176,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'forecast.view', label: 'Просмотр прогноза', severity: 'low' },
           { id: 'forecast.generate', label: 'Запустить генерацию AI', severity: 'medium' },
+          { id: 'forecast.cancel_generation', label: 'Отменить генерацию AI', severity: 'low' },
         ],
       },
       {
@@ -473,6 +474,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'operators.send_credentials_telegram', label: 'Отправить логин/пароль в Telegram', severity: 'high' },
           { id: 'operators.bulk_send_credentials_telegram', label: 'Массовая отправка credentials в Telegram', severity: 'high' },
           { id: 'operators.export_credentials', label: 'Выгрузить логины и пароли в Excel', severity: 'high' },
+          { id: 'operators.copy_profile_data', label: 'Копирование данных оператора в буфер', severity: 'low' },
         ],
       },
       {
@@ -538,6 +540,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'structure.view', label: 'Просмотр структуры', severity: 'low' },
           { id: 'structure.save_assignments', label: 'Изменить подчинение', severity: 'high' },
+          { id: 'structure.drag_drop_reorder', label: 'Перетаскивать структуру (drag-and-drop)', severity: 'medium' },
         ],
       },
       {
@@ -675,6 +678,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           ...crud('discounts'),
           { id: 'discounts.generate_promo', label: 'Сгенерировать промокод', severity: 'medium' },
+          { id: 'discounts.copy_promo', label: 'Копирование промокода в буфер', severity: 'low' },
         ],
       },
     ],
