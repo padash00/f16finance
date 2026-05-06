@@ -99,6 +99,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           ...crud('expenses', { exportData: true }),
           { id: 'expenses.manage_templates', label: 'Управление шаблонами', severity: 'medium' },
+          { id: 'expenses.import_file', label: 'Загрузка файлов (чеки, фото)', severity: 'medium' },
         ],
       },
       {
@@ -124,6 +125,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'cashflow.view', label: 'Просмотр прогноза', severity: 'low' },
           { id: 'cashflow.export', label: 'Выгрузка в Excel', severity: 'low' },
+          { id: 'cashflow.ai_analysis', label: 'AI-анализ потоков', severity: 'low' },
         ],
       },
       {
@@ -154,6 +156,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'weekly-report.export', label: 'Выгрузка в Excel', severity: 'low' },
           { id: 'weekly-report.export_pdf', label: 'Выгрузка в PDF', severity: 'low' },
           { id: 'weekly-report.share', label: 'Поделиться отчётом', severity: 'medium' },
+          { id: 'weekly-report.ai_generate', label: 'Сгенерировать AI-отчёт', severity: 'medium' },
         ],
       },
       {
@@ -241,6 +244,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'store-warehouse.upload_backroom', label: 'Загрузка файла подсобки', severity: 'medium' },
           { id: 'store-warehouse.apply_backroom', label: 'Применить загруженный файл подсобки', severity: 'high' },
           { id: 'store-warehouse.print_labels', label: 'Печать ценников', severity: 'low' },
+          { id: 'store-warehouse.delete_selected', label: 'Удалить выбранные товары', severity: 'high' },
+          { id: 'store-warehouse.delete_all', label: 'Очистить весь склад', severity: 'high' },
         ],
       },
       {
@@ -273,6 +278,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           ...crud('store-receipts', { exportData: true }),
           { id: 'store-receipts.cancel', label: 'Отмена проведённой приёмки', severity: 'high' },
           { id: 'store-receipts.ai_parse', label: 'AI-распознавание накладной', severity: 'medium' },
+          { id: 'store-receipts.parse_payment_receipt', label: 'AI-распознавание чека об оплате', severity: 'medium' },
           { id: 'store-receipts.apply_template', label: 'Применить шаблон приёмки', severity: 'low' },
           { id: 'store-receipts.save_template', label: 'Сохранить шаблон приёмки', severity: 'low' },
           { id: 'store-receipts.delete_template', label: 'Удалить шаблон приёмки', severity: 'medium' },
@@ -335,8 +341,13 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'store-suppliers',
         path: '/store/suppliers',
+        extraPaths: ['/store/suppliers/[id]'],
         label: 'Поставщики',
-        capabilities: crud('store-suppliers', { delete: false }),
+        capabilities: [
+          ...crud('store-suppliers', { delete: false }),
+          { id: 'store-suppliers.add_alias', label: 'Добавить алиас товара поставщика', severity: 'medium' },
+          { id: 'store-suppliers.delete_alias', label: 'Удалить алиас товара', severity: 'medium' },
+        ],
       },
       {
         id: 'store-consumables',
@@ -448,6 +459,14 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'operators.bulk_delete', label: 'Массовое удаление', severity: 'high' },
           { id: 'operators.promote', label: 'Повысить в должности', severity: 'medium' },
           { id: 'operators.save_assignments', label: 'Изменить назначения на точки', severity: 'medium' },
+          { id: 'operators.avatar_upload', label: 'Загрузить фото оператора', severity: 'low' },
+          { id: 'operators.document_upload', label: 'Загрузить документы оператора', severity: 'medium' },
+          { id: 'operators.create_account', label: 'Создать учётную запись', severity: 'high' },
+          { id: 'operators.reset_password', label: 'Сбросить пароль', severity: 'high' },
+          { id: 'operators.edit_login', label: 'Изменить логин', severity: 'high' },
+          { id: 'operators.send_credentials_telegram', label: 'Отправить логин/пароль в Telegram', severity: 'high' },
+          { id: 'operators.bulk_send_credentials_telegram', label: 'Массовая отправка credentials в Telegram', severity: 'high' },
+          { id: 'operators.export_credentials', label: 'Выгрузить логины и пароли в Excel', severity: 'high' },
         ],
       },
       {
@@ -461,6 +480,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'staff.create_payment', label: 'Записать выплату', severity: 'high' },
           { id: 'staff.add_adjustment', label: 'Сделать корректировку зарплаты', severity: 'high' },
           { id: 'staff.add_extra_day', label: 'Добавить доп. рабочий день', severity: 'medium' },
+          { id: 'staff.reset_password', label: 'Сбросить пароль сотрудника', severity: 'high' },
         ],
       },
       {
@@ -515,9 +535,12 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'hr',
         path: '/hr',
-        label: 'HR',
+        label: 'HR / Кадры',
         capabilities: [
           { id: 'hr.view', label: 'Просмотр кадров', severity: 'low' },
+          { id: 'hr.dismiss', label: 'Уволить сотрудника', severity: 'high' },
+          { id: 'hr.restore', label: 'Восстановить уволенного', severity: 'high' },
+          { id: 'hr.view_history', label: 'Просмотр истории действий', severity: 'low' },
         ],
       },
       {
@@ -561,6 +584,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           ...crud('point-devices'),
           { id: 'point-devices.toggle_active', label: 'Включить/отключить устройство', severity: 'high' },
           { id: 'point-devices.rotate_token', label: 'Сбросить токен устройства', severity: 'high' },
+          { id: 'point-devices.manage_feature_flags', label: 'Управление флагами функций', severity: 'high' },
         ],
       },
       {
@@ -594,6 +618,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'stations.update_branding', label: 'Изменить брендинг', severity: 'medium' },
           { id: 'stations.update_map_layout', label: 'Изменить карту/раскладку', severity: 'medium' },
           { id: 'stations.get_analytics', label: 'Просмотр аналитики проекта', severity: 'low' },
+          { id: 'stations.edit_kiosk_background', label: 'Изменить фон киоска', severity: 'low' },
+          { id: 'stations.edit_kiosk_announcement', label: 'Редактировать объявление киоска', severity: 'low' },
         ],
       },
     ],
@@ -629,6 +655,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           ...crud('customers', { exportData: true }),
           { id: 'customers.adjust_points', label: 'Корректировка бонусов лояльности', severity: 'high' },
+          { id: 'customers.view_sale_history', label: 'Просмотр истории покупок клиента', severity: 'low' },
         ],
       },
       {
@@ -659,6 +686,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'tasks.respond', label: 'Ответить на задачу', severity: 'low' },
           { id: 'tasks.assign', label: 'Назначить оператору', severity: 'medium', deps: ['operators.view'] },
           { id: 'tasks.notify', label: 'Отправить уведомление по задаче', severity: 'medium' },
+          { id: 'tasks.bulk_complete', label: 'Массовое завершение задач', severity: 'medium' },
+          { id: 'tasks.bulk_delete', label: 'Массовое удаление задач', severity: 'high' },
         ],
       },
       {
@@ -779,6 +808,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           { id: 'telegram.toggle_finance', label: 'Включить/отключить фин. отчёты', severity: 'medium' },
           { id: 'telegram.edit_staff_telegram', label: 'Изменить Telegram ID сотрудника', severity: 'medium' },
           { id: 'telegram.setup_webhook', label: 'Настройка webhook', severity: 'high' },
+          { id: 'telegram.test_webhook', label: 'Тестировать webhook', severity: 'low' },
           { id: 'telegram.send_report', label: 'Отправить отчёт вручную', severity: 'medium' },
         ],
       },
@@ -813,6 +843,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
           ...crud('knowledge-admin'),
           { id: 'knowledge-admin.publish', label: 'Опубликовать статью', severity: 'medium' },
           { id: 'knowledge-admin.manage_checklists', label: 'Управление чек-листами', severity: 'medium' },
+          { id: 'knowledge-admin.run_checklist', label: 'Запустить чек-лист в смену', severity: 'medium' },
+          { id: 'knowledge-admin.skip_checklist', label: 'Пропустить обязательный чек-лист', severity: 'high' },
         ],
       },
       {
