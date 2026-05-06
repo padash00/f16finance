@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { runCopilotForTelegram } from '@/lib/ai/copilot'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -2721,6 +2722,26 @@ export async function POST(req: Request) {
       const chatId = update.callback_query.message?.chat?.id
       const messageId = update.callback_query.message?.message_id
 
+      // ─── Copilot callback (новый AI Copilot) ──────────────────────────
+      if (callbackData.startsWith('cp:') && chatId) {
+        await answerCallbackQuery(callbackQueryId, '...').catch(() => null)
+        try {
+          const botUser = await identifyBotUser(telegramUserId)
+          const result = await runCopilotForTelegram({
+            userId: botUser.entityId || telegramUserId,
+            role: botUser.role === 'unknown' ? null : botUser.role,
+            isSuperAdmin: botUser.role === 'super_admin',
+            chatId: Number(chatId),
+            callbackData: callbackData.slice(3), // отрезаем cp:
+          })
+          if (messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
+          await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
+        } catch (e: any) {
+          await sendTelegramText(Number(chatId), `❌ Ошибка Copilot: ${e?.message || 'unknown'}`).catch(() => null)
+        }
+        return json({ ok: true })
+      }
+
       const shiftWeekMatch = callbackData.match(/^sw:([0-9a-f-]+):(c|i)$/i)
       if (shiftWeekMatch) {
         await answerCallbackQuery(callbackQueryId, 'Обрабатываю ответ...').catch(() => null)
@@ -3186,6 +3207,29 @@ export async function POST(req: Request) {
       // /start and /help — personalized
       if (cmd === '/start' || cmd === '/help') {
         await sendTelegramText(chatId, buildHelpText(botUser))
+        return json({ ok: true })
+      }
+
+      // ─── Copilot: /c <текст> или просто текст если активная сессия ───
+      // /c — явная команда для интерактивного диалога с действиями (выдай аванс, добавь расход и т.д.)
+      if (cmd === '/c' || cmd === '/copilot') {
+        const userText = text.split(' ').slice(1).join(' ').trim()
+        if (!userText) {
+          await sendTelegramText(chatId, '🤖 Привет! Скажи что нужно сделать.\n\nПримеры:\n• выдай аванс Айгерим 50000\n• добавь расход 8500 за курьера\n\nДоступные действия зависят от твоих прав в системе.')
+          return json({ ok: true })
+        }
+        try {
+          const result = await runCopilotForTelegram({
+            userId: botUser.entityId || telegramUserId,
+            role: botUser.role === 'unknown' ? null : botUser.role,
+            isSuperAdmin: botUser.role === 'super_admin',
+            chatId,
+            text: userText,
+          })
+          await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
+        } catch (e: any) {
+          await sendTelegramText(chatId, `❌ Ошибка Copilot: ${e?.message || 'unknown'}`).catch(() => null)
+        }
         return json({ ok: true })
       }
 
