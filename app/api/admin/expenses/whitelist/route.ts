@@ -21,8 +21,14 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const denied = await requireCapability(access, 'expense-whitelist.view')
-    if (denied) return denied as any
+    // Этот endpoint используется страницей /expense-whitelist (просмотр) И
+    // формой создания расхода (выбор поставщика). Поэтому пускаем тех, у кого
+    // есть ЛЮБОЕ из прав: expense-whitelist.view ИЛИ expenses.create.
+    const wlDenied = await requireCapability(access, 'expense-whitelist.view')
+    if (wlDenied) {
+      const createDenied = await requireCapability(access, 'expenses.create')
+      if (createDenied) return createDenied as any
+    }
 
     // Capability checks выше уже отсеивают; здесь — любой staff
     const role = access.staffRole

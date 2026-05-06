@@ -15,8 +15,13 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const denied = await requireCapability(access, 'expenses.view')
-    if (denied) return denied as any
+    // Endpoint используется списком расходов И формой создания.
+    // Пускаем по любому из прав: expenses.view ИЛИ expenses.create.
+    const viewDenied = await requireCapability(access, 'expenses.view')
+    if (viewDenied) {
+      const createDenied = await requireCapability(access, 'expenses.create')
+      if (createDenied) return createDenied as any
+    }
 
     // Capability checks выше уже отсеивают; здесь — любой staff
     if (!access.isSuperAdmin && !access.staffRole) {

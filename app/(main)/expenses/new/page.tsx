@@ -173,8 +173,16 @@ function ExpenseWizardPageContent() {
     try {
       const raw = localStorage.getItem(EXPENSE_WIZARD_DRAFT_KEY)
       if (!raw) return
-      const saved = JSON.parse(raw) as { step?: number; payload?: Partial<WizardPayload> } | null
+      const saved = JSON.parse(raw) as { step?: number; payload?: Partial<WizardPayload>; savedAt?: number } | null
       if (!saved || !saved.payload) return
+      // TTL: черновик старше 12 часов считаем мусором. Это страхует от
+      // случая когда пользователь успешно создал расход вчера, но
+      // localStorage по какой-то причине не очистился.
+      const savedAt = Number(saved.savedAt || 0)
+      if (savedAt && Date.now() - savedAt > 12 * 60 * 60 * 1000) {
+        try { localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY) } catch {}
+        return
+      }
       const documentUrls = Array.isArray(saved.payload.document_urls)
         ? saved.payload.document_urls.filter(Boolean)
         : saved.payload.document_url
@@ -206,6 +214,7 @@ function ExpenseWizardPageContent() {
           JSON.stringify({
             step,
             payload,
+            savedAt: Date.now(),
           }),
         )
       } catch {
