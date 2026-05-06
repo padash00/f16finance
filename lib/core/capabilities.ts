@@ -644,6 +644,17 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     label: 'POS и клиенты',
     pages: [
       {
+        id: 'pos',
+        path: '/pos',
+        label: 'Касса (Web POS)',
+        capabilities: [
+          { id: 'pos.view', label: 'Открыть кассу', severity: 'low' },
+          { id: 'pos.sell', label: 'Оформить продажу', severity: 'high' },
+          { id: 'pos.refund', label: 'Возврат через кассу', severity: 'high' },
+          { id: 'pos.discount', label: 'Применить скидку', severity: 'medium' },
+        ],
+      },
+      {
         id: 'pos-receipts',
         path: '/pos-receipts',
         label: 'Чеки',

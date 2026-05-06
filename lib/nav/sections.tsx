@@ -136,6 +136,8 @@ export const navSections: NavSection[] = [
       { href: '/pos', label: 'Касса (Web POS)', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
       { href: '/pos-receipts', label: 'История чеков', icon: Receipt, note: 'Просмотр и печать чеков POS' },
       { href: '/pos-returns', label: 'Возврат товара', icon: RotateCcw, note: 'Оформление возврата по чеку' },
+      { href: '/customers', label: 'Клиенты', icon: Users2, note: 'Карточки покупателей и лояльность' },
+      { href: '/discounts', label: 'Скидки и промокоды', icon: Tags, note: 'Управление скидками и промо' },
     ],
   },
   {

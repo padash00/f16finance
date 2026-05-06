@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Bell, Cake, ClipboardList, Receipt } from 'lucide-react'
+import { AlertTriangle, Bell, Cake, Check, ClipboardList, Receipt } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabaseClient'
 
 type NotificationItem = {
   id: string
@@ -30,35 +31,88 @@ const iconMap = {
   alert: AlertTriangle,
 } as const
 
-const REFRESH_INTERVAL_MS = 60_000
+// Бэкап-обновление раз в 90 сек, если realtime отвалился.
+const REFRESH_INTERVAL_MS = 90_000
+// Дебаунс между приходом события и rеshooting к API.
+const REALTIME_DEBOUNCE_MS = 600
+const READ_AT_KEY = 'f16.notifications.lastReadAt'
+
+function readLastReadAt(): number {
+  if (typeof window === 'undefined') return 0
+  const raw = window.localStorage.getItem(READ_AT_KEY)
+  const value = raw ? Number(raw) : 0
+  return Number.isFinite(value) ? value : 0
+}
+
+function writeLastReadAt(value: number) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(READ_AT_KEY, String(value))
+}
+
+function isItemNew(item: NotificationItem, lastReadAt: number): boolean {
+  // Без timestamp считаем «новым» — иначе пользователь не увидит долги/остатки.
+  if (!item.date) return true
+  const ts = new Date(item.date).getTime()
+  if (!Number.isFinite(ts)) return true
+  return ts > lastReadAt
+}
 
 export function NotificationsBell() {
   const [open, setOpen] = useState(false)
-  const [total, setTotal] = useState(0)
   const [groups, setGroups] = useState<NotificationGroup[]>([])
   const [loading, setLoading] = useState(false)
+  const [lastReadAt, setLastReadAt] = useState<number>(0)
   const ref = useRef<HTMLDivElement | null>(null)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = async () => {
+  // Восстанавливаем «прочитано до» при первом монтировании на клиенте.
+  useEffect(() => {
+    setLastReadAt(readLastReadAt())
+  }, [])
+
+  const load = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch('/api/admin/notifications', { cache: 'no-store' })
       const body = await response.json().catch(() => null)
       if (response.ok && body?.ok) {
-        setTotal(Number(body.data?.total || 0))
         setGroups(Array.isArray(body.data?.groups) ? body.data.groups : [])
       }
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
+  // Дебаунсенный триггер для realtime: раз в 600 мс собираем все события в один fetch.
+  const scheduleReload = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = setTimeout(() => load(), REALTIME_DEBOUNCE_MS)
+  }, [load])
+
+  // Initial load + бэкап-poll.
   useEffect(() => {
     load()
     const id = setInterval(load, REFRESH_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [])
+  }, [load])
 
+  // Realtime подписка: при любом INSERT/UPDATE/DELETE в таблицах источников — релоад.
+  useEffect(() => {
+    const channel = supabase
+      .channel('notifications-bell')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_requests' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'debts' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_balances' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, scheduleReload)
+      .subscribe()
+
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      supabase.removeChannel(channel)
+    }
+  }, [scheduleReload])
+
+  // Закрытие по клику вне.
   useEffect(() => {
     if (!open) return
     const onDocClick = (event: MouseEvent) => {
@@ -67,6 +121,34 @@ export function NotificationsBell() {
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [open])
+
+  // Синхронизация lastReadAt между вкладками браузера.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === READ_AT_KEY) {
+        const value = event.newValue ? Number(event.newValue) : 0
+        setLastReadAt(Number.isFinite(value) ? value : 0)
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  // Счётчик «новых» — то что добавилось/изменилось после lastReadAt.
+  const unreadTotal = groups.reduce((sum, group) => {
+    const newItems = group.items.filter((item) => isItemNew(item, lastReadAt)).length
+    return sum + newItems
+  }, 0)
+
+  // Грубое total для подписи внутри попапа.
+  const total = groups.reduce((sum, g) => sum + g.count, 0)
+
+  const handleMarkAllRead = () => {
+    const now = Date.now()
+    writeLastReadAt(now)
+    setLastReadAt(now)
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -82,10 +164,10 @@ export function NotificationsBell() {
         )}
         aria-label="Уведомления"
       >
-        <Bell className="h-4 w-4" />
-        {total > 0 ? (
+        <Bell className={cn('h-4 w-4', unreadTotal > 0 && 'animate-pulse')} />
+        {unreadTotal > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-slate-950 bg-red-500 px-1 text-[10px] font-bold text-white">
-            {total > 99 ? '99+' : total}
+            {unreadTotal > 99 ? '99+' : unreadTotal}
           </span>
         ) : null}
       </button>
@@ -93,15 +175,30 @@ export function NotificationsBell() {
       {open ? (
         <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[360px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-white">Уведомления</p>
               <p className="text-[11px] text-slate-500">
-                {total > 0 ? `${total} ожидают внимания` : 'Всё в порядке'}
+                {unreadTotal > 0
+                  ? `${unreadTotal} новых · всего ${total}`
+                  : total > 0
+                    ? `${total} ожидают внимания`
+                    : 'Всё в порядке'}
               </p>
             </div>
-            {loading ? (
-              <div className="h-3 w-3 animate-pulse rounded-full bg-amber-500/60" />
-            ) : null}
+            <div className="flex items-center gap-2">
+              {loading ? <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500/70" /> : null}
+              {unreadTotal > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300 transition hover:border-emerald-500/40 hover:bg-emerald-500/20"
+                  title="Отметить все как прочитанные"
+                >
+                  <Check className="h-3 w-3" />
+                  Прочитать всё
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto p-2">
@@ -112,6 +209,7 @@ export function NotificationsBell() {
             ) : (
               groups.map((group) => {
                 const GroupIcon = iconMap[group.icon] || Bell
+                const newCount = group.items.filter((item) => isItemNew(item, lastReadAt)).length
                 return (
                   <div key={group.id} className="mb-3 last:mb-0">
                     <div className="flex items-center justify-between px-3 py-1">
@@ -121,6 +219,11 @@ export function NotificationsBell() {
                         <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                           {group.count}
                         </span>
+                        {newCount > 0 ? (
+                          <span className="rounded-md border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                            +{newCount}
+                          </span>
+                        ) : null}
                       </div>
                       <Link
                         href={group.href}
@@ -131,24 +234,40 @@ export function NotificationsBell() {
                       </Link>
                     </div>
                     <div className="space-y-1">
-                      {group.items.map((item) => (
-                        <Link
-                          key={item.id}
-                          href={item.href || group.href}
-                          onClick={() => setOpen(false)}
-                          className="flex items-start gap-3 rounded-xl px-3 py-2 text-slate-300 transition hover:bg-white/5 hover:text-white"
-                        >
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800/70 text-slate-400">
-                            <GroupIcon className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{item.title}</p>
-                            {item.subtitle ? (
-                              <p className="truncate text-xs text-slate-500">{item.subtitle}</p>
-                            ) : null}
-                          </div>
-                        </Link>
-                      ))}
+                      {group.items.map((item) => {
+                        const isNew = isItemNew(item, lastReadAt)
+                        return (
+                          <Link
+                            key={item.id}
+                            href={item.href || group.href}
+                            onClick={() => setOpen(false)}
+                            className={cn(
+                              'flex items-start gap-3 rounded-xl px-3 py-2 transition',
+                              isNew
+                                ? 'bg-red-500/[0.04] text-white hover:bg-red-500/10'
+                                : 'text-slate-300 hover:bg-white/5 hover:text-white',
+                            )}
+                          >
+                            <div className={cn(
+                              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                              isNew ? 'bg-red-500/15 text-red-300' : 'bg-slate-800/70 text-slate-400',
+                            )}>
+                              <GroupIcon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-medium">{item.title}</p>
+                                {isNew ? (
+                                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400 animate-pulse" />
+                                ) : null}
+                              </div>
+                              {item.subtitle ? (
+                                <p className="truncate text-xs text-slate-500">{item.subtitle}</p>
+                              ) : null}
+                            </div>
+                          </Link>
+                        )
+                      })}
                     </div>
                   </div>
                 )
