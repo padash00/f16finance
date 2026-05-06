@@ -4,6 +4,8 @@
   '/operator-salary-system',
   '/profit-and-loss-ebitda',
   '/point-terminal',
+  '/offer',
+  '/privacy',
   '/login',
   '/operator-login',
   '/unauthorized',
