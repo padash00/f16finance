@@ -49,7 +49,6 @@ import {
   Briefcase,
   Eye,
   Trophy,
-  Award,
   Medal,
   Crown,
   Sparkles,
