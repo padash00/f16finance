@@ -173,16 +173,8 @@ function ExpenseWizardPageContent() {
     try {
       const raw = localStorage.getItem(EXPENSE_WIZARD_DRAFT_KEY)
       if (!raw) return
-      const saved = JSON.parse(raw) as { step?: number; payload?: Partial<WizardPayload>; savedAt?: number } | null
+      const saved = JSON.parse(raw) as { step?: number; payload?: Partial<WizardPayload> } | null
       if (!saved || !saved.payload) return
-      // TTL: черновик старше 12 часов считаем мусором. Это страхует от
-      // случая когда пользователь успешно создал расход вчера, но
-      // localStorage по какой-то причине не очистился.
-      const savedAt = Number(saved.savedAt || 0)
-      if (savedAt && Date.now() - savedAt > 12 * 60 * 60 * 1000) {
-        try { localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY) } catch {}
-        return
-      }
       const documentUrls = Array.isArray(saved.payload.document_urls)
         ? saved.payload.document_urls.filter(Boolean)
         : saved.payload.document_url
@@ -214,7 +206,6 @@ function ExpenseWizardPageContent() {
           JSON.stringify({
             step,
             payload,
-            savedAt: Date.now(),
           }),
         )
       } catch {
@@ -501,6 +492,9 @@ function ExpenseWizardPageContent() {
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(json.error || 'Не удалось создать расход')
+      // СИНХРОННО очищаем черновик ДО setDone и до любых redirect'ов.
+      // Не полагаемся на useEffect — там race condition с debounce save.
+      try { localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY) } catch {}
       setDone({ status: json.data.status, id: json.data.id })
       if (embedded) {
         if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
@@ -512,6 +506,9 @@ function ExpenseWizardPageContent() {
         return
       }
       setTimeout(() => {
+        // Финальная страховка перед redirect — на случай если debounce setItem
+        // успел отработать после первого removeItem.
+        try { localStorage.removeItem(EXPENSE_WIZARD_DRAFT_KEY) } catch {}
         if (json.data.status === 'pending_approval') {
           router.push('/expenses/pending')
         } else {
