@@ -149,3 +149,63 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     )
   }
 }
+
+// ─── Админ-действия над сменой: closeForce, purge ───────────────────────────
+function canManageShift(access: { isSuperAdmin: boolean; staffRole: string }) {
+  return access.isSuperAdmin || access.staffRole === 'owner'
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canManageShift(access)) return json({ error: 'forbidden' }, 403)
+
+    const { id } = await params
+    const body = (await request.json().catch(() => ({}))) as {
+      action?: 'closeForce' | 'purge'
+      note?: string
+      confirm?: string
+    }
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const actorUserId = access.user?.id || null
+
+    if (body.action === 'closeForce') {
+      const { error: rpcErr } = await supabase.rpc('point_shift_admin_close', {
+        p_shift_id: id,
+        p_actor_user_id: actorUserId,
+        p_note: (body.note || '').trim() || null,
+      })
+      if (rpcErr) {
+        const msg = String(rpcErr.message || '')
+        if (msg.includes('shift-not-found')) return json({ error: 'shift-not-found' }, 404)
+        if (msg.includes('shift-already-closed')) return json({ error: 'shift-already-closed' }, 409)
+        throw rpcErr
+      }
+      return json({ ok: true })
+    }
+
+    if (body.action === 'purge') {
+      // Только super-admin может удалять смены целиком
+      if (!access.isSuperAdmin) return json({ error: 'forbidden', message: 'Удаление смены — только для суперадмина' }, 403)
+      if (body.confirm !== 'УДАЛИТЬ СМЕНУ') {
+        return json({ error: 'confirm-phrase-required', message: 'Введите фразу подтверждения: УДАЛИТЬ СМЕНУ' }, 400)
+      }
+      const { data, error: rpcErr } = await supabase.rpc('point_shift_admin_purge', {
+        p_shift_id: id,
+        p_actor_user_id: actorUserId,
+      })
+      if (rpcErr) throw rpcErr
+      const result = Array.isArray(data) ? data[0] : data
+      return json({ ok: true, data: result })
+    }
+
+    return json({ error: 'unknown-action' }, 400)
+  } catch (error: any) {
+    return json(
+      { error: 'admin-shift-action-failed', detail: (error as any)?.message || String(error) },
+      500,
+    )
+  }
+}

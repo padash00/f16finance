@@ -63,11 +63,14 @@ export async function GET(request: Request) {
     const shifts = (data || []) as any[]
 
     // Fallback: для смен без staff-оператора подтягиваем оператора-кассира
-    // из первой продажи (point_sales.operator_id → operators table).
+    // (а) из первой продажи смены через shift_id
+    // (б) если shift_id не проставлен в продажах — через окно времени смены и компанию
     const shiftsWithoutOperator = shifts.filter((s) => !s.operator || !s.operator.id)
     if (shiftsWithoutOperator.length > 0) {
       const shiftIds = shiftsWithoutOperator.map((s) => s.id)
-      const { data: salesRows } = await supabase
+
+      // Способ A: через shift_id в продажах
+      const { data: salesByShift } = await supabase
         .from('point_sales')
         .select('shift_id, operator_id, sold_at, operator:operators!operator_id(id, full_name, short_name)')
         .in('shift_id', shiftIds)
@@ -75,13 +78,34 @@ export async function GET(request: Request) {
         .order('sold_at', { ascending: true })
 
       const firstOperatorByShift = new Map<string, any>()
-      for (const row of salesRows || []) {
+      for (const row of salesByShift || []) {
         const sid = String((row as any).shift_id || '')
         if (!sid) continue
         if (!firstOperatorByShift.has(sid)) {
           const op = (row as any).operator
           const opObj = Array.isArray(op) ? op[0] : op
           if (opObj) firstOperatorByShift.set(sid, opObj)
+        }
+      }
+
+      // Способ B: для смен где Способ A не дал — пробуем по company_id + временному окну смены
+      for (const s of shiftsWithoutOperator) {
+        if (firstOperatorByShift.has(s.id)) continue
+        if (!s.company_id || !s.opened_at) continue
+        const { data: salesByTime } = await supabase
+          .from('point_sales')
+          .select('operator_id, sold_at, operator:operators!operator_id(id, full_name, short_name)')
+          .eq('company_id', s.company_id)
+          .gte('sold_at', s.opened_at)
+          .lte('sold_at', s.closed_at || new Date().toISOString())
+          .not('operator_id', 'is', null)
+          .order('sold_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (salesByTime && (salesByTime as any).operator) {
+          const op = (salesByTime as any).operator
+          const opObj = Array.isArray(op) ? op[0] : op
+          if (opObj) firstOperatorByShift.set(s.id, opObj)
         }
       }
 
@@ -93,7 +117,7 @@ export async function GET(request: Request) {
             full_name: op.full_name,
             short_name: op.short_name,
           }
-          s.operator_source = 'sales' // помечаем что подтянуто из продаж
+          s.operator_source = 'sales'
         }
       }
     }

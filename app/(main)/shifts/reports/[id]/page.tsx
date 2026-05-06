@@ -163,6 +163,9 @@ export default function ShiftReportDetailPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showZReport, setShowZReport] = useState(false)
+  const [adminAction, setAdminAction] = useState<null | 'closeForce' | 'purge'>(null)
+  const [adminBusy, setAdminBusy] = useState(false)
+  const [purgeConfirm, setPurgeConfirm] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -204,11 +207,31 @@ export default function ShiftReportDetailPage({
         accent="emerald"
         backHref="/shifts/reports"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {shift?.closed_at && (
               <Button variant="outline" size="sm" onClick={() => setShowZReport(true)}>
                 <ReceiptIcon className="h-4 w-4" />
                 Z-отчёт
+              </Button>
+            )}
+            {shift && shift.status === 'open' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAdminAction('closeForce')}
+                className="border-amber-500/40 text-amber-200 hover:bg-amber-500/10"
+              >
+                Закрыть смену
+              </Button>
+            )}
+            {shift && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setAdminAction('purge'); setPurgeConfirm('') }}
+                className="border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
+              >
+                Удалить смену
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -587,6 +610,104 @@ export default function ShiftReportDetailPage({
             </div>
           </Card>
         </>
+      )}
+
+      {/* Принудительное закрытие смены */}
+      {adminAction === 'closeForce' && shift && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
+          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-amber-500/30 p-5">
+            <h3 className="text-base font-semibold">Закрыть смену принудительно</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Смена будет помечена как закрытая без отправки отчёта. Используется для тестов.
+              Если у этой смены есть продажи — они останутся в системе.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAdminAction(null)} disabled={adminBusy}>Отмена</Button>
+              <Button
+                onClick={async () => {
+                  setAdminBusy(true)
+                  try {
+                    const res = await fetch(`/api/admin/shifts/reports/${shift.id}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'closeForce', note: 'Закрытие из админки' }),
+                    })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.detail || json.error || 'Ошибка')
+                    setAdminAction(null)
+                    await load()
+                  } catch (e: any) {
+                    alert(e?.message || 'Ошибка')
+                  } finally {
+                    setAdminBusy(false)
+                  }
+                }}
+                disabled={adminBusy}
+                className="bg-amber-500 hover:bg-amber-600"
+              >
+                {adminBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Закрыть смену'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Полное удаление смены (только super-admin) */}
+      {adminAction === 'purge' && shift && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
+          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-rose-500/40 bg-rose-950/30 p-5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-6 w-6 shrink-0 text-rose-300" />
+              <div>
+                <h3 className="text-base font-semibold text-rose-100">Полное удаление смены</h3>
+                <p className="mt-1 text-xs text-rose-200/80">
+                  Удалится сама смена + все продажи + возвраты + чек-листы + инциденты + связанные движения.
+                  Остатки витрины откатятся (вернутся к состоянию до начала смены).
+                  Это <strong>нельзя отменить</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs text-rose-200">
+                Введите фразу <code className="rounded bg-rose-500/20 px-1.5 py-0.5">УДАЛИТЬ СМЕНУ</code> для подтверждения:
+              </p>
+              <input
+                value={purgeConfirm}
+                onChange={(e) => setPurgeConfirm(e.target.value)}
+                placeholder="УДАЛИТЬ СМЕНУ"
+                className="h-10 w-full rounded-lg border border-rose-500/40 bg-black/30 px-3 text-sm outline-none focus:border-rose-400"
+                autoFocus
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAdminAction(null)} disabled={adminBusy}>Отмена</Button>
+              <Button
+                onClick={async () => {
+                  setAdminBusy(true)
+                  try {
+                    const res = await fetch(`/api/admin/shifts/reports/${shift.id}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'purge', confirm: purgeConfirm.trim() }),
+                    })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json.detail || json.message || json.error || 'Ошибка')
+                    alert(`Смена удалена. Откачено продаж: ${json?.data?.sales_deleted || 0}, возвратов: ${json?.data?.returns_deleted || 0}, остатков: ${json?.data?.showcase_restored || 0}`)
+                    window.location.href = '/shifts/reports'
+                  } catch (e: any) {
+                    alert(e?.message || 'Ошибка')
+                  } finally {
+                    setAdminBusy(false)
+                  }
+                }}
+                disabled={adminBusy || purgeConfirm.trim() !== 'УДАЛИТЬ СМЕНУ'}
+                className="bg-rose-500 hover:bg-rose-600"
+              >
+                {adminBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Удалить навсегда'}
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Z-отчёт смены — модалка в стиле кассового чека */}
