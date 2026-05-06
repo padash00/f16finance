@@ -12,6 +12,7 @@ import {
   type CapabilityGroup,
   type CapabilityPage,
 } from '@/lib/core/capabilities'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type RoleCapability = { role: string; capability: string; granted: boolean }
 
@@ -34,6 +35,7 @@ function severityBadge(sev: Capability['severity']) {
 }
 
 export function CapabilitiesPanel() {
+  const { can } = useCapabilities()
   const [items, setItems] = useState<RoleCapability[]>([])
   const [roles, setRoles] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -342,6 +344,8 @@ export function CapabilitiesPanel() {
                       collapsed={collapsedPages.has(page.id)}
                       onToggleCollapse={() => togglePage(page.id)}
                       forceExpand={!!search.trim()}
+                      canToggle={can('access.toggle_capability')}
+                      canBulk={can('access.bulk_capabilities')}
                     />
                   ))}
                 </div>
@@ -352,6 +356,7 @@ export function CapabilitiesPanel() {
       </div>
 
       {/* Действия для роли */}
+      {can('access.reset_to_defaults') && (
       <Card className="border-white/10 bg-slate-950/50 p-4">
         <div className="text-sm font-semibold text-white mb-2">Быстрые действия</div>
         <div className="flex flex-wrap gap-2">
@@ -377,6 +382,7 @@ export function CapabilitiesPanel() {
           Это включает все 265 прав для выбранной роли. Используется как сброс к «всё открыто».
         </p>
       </Card>
+      )}
     </div>
   )
 }
@@ -395,6 +401,8 @@ function PageRow({
   collapsed,
   onToggleCollapse,
   forceExpand = false,
+  canToggle = true,
+  canBulk = true,
 }: {
   page: CapabilityPage
   roles: string[]
@@ -405,6 +413,8 @@ function PageRow({
   collapsed: boolean
   onToggleCollapse: () => void
   forceExpand?: boolean
+  canToggle?: boolean
+  canBulk?: boolean
 }) {
   const allCapIds = page.capabilities.map((c) => c.id)
   const effectivelyCollapsed = forceExpand ? false : collapsed
@@ -457,17 +467,19 @@ function PageRow({
                     return (
                       <td key={role} className="py-1.5 px-2 text-center align-top">
                         <button
-                          onClick={() => !isSuperAdminRow && onToggle(role, cap.id, !granted)}
-                          disabled={saving || isSuperAdminRow}
+                          onClick={() => canToggle && !isSuperAdminRow && onToggle(role, cap.id, !granted)}
+                          disabled={saving || isSuperAdminRow || !canToggle}
                           className={`inline-flex h-5 w-9 items-center rounded-full transition ${
                             granted ? 'bg-emerald-500/40' : 'bg-slate-700'
-                          } ${saving ? 'opacity-50' : ''} ${isSuperAdminRow ? 'cursor-not-allowed opacity-70' : ''}`}
+                          } ${saving ? 'opacity-50' : ''} ${(isSuperAdminRow || !canToggle) ? 'cursor-not-allowed opacity-70' : ''}`}
                           title={
-                            isSuperAdminRow
-                              ? 'Супер-админ обходит все проверки прав в коде — настройка не нужна'
-                              : granted
-                                ? 'Право включено — клик чтобы отключить'
-                                : 'Право отключено — клик чтобы включить'
+                            !canToggle
+                              ? 'Нет прав для изменения'
+                              : isSuperAdminRow
+                                ? 'Супер-админ обходит все проверки прав в коде — настройка не нужна'
+                                : granted
+                                  ? 'Право включено — клик чтобы отключить'
+                                  : 'Право отключено — клик чтобы включить'
                           }
                         >
                           <span
@@ -483,29 +495,31 @@ function PageRow({
               ))}
             </tbody>
           </table>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">Пакетно по роли:</span>
-            {roles.map((role) => (
-              <div key={role} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5">
-                <span className="text-[11px] text-slate-300">{roleLabel(role)}:</span>
-                <button
-                  onClick={() => onBulkSet(role, allCapIds, true)}
-                  disabled={savingKey === `bulk:${role}`}
-                  className="text-[11px] text-emerald-300 hover:underline"
-                >
-                  все вкл
-                </button>
-                <span className="text-slate-600">·</span>
-                <button
-                  onClick={() => onBulkSet(role, allCapIds, false)}
-                  disabled={savingKey === `bulk:${role}`}
-                  className="text-[11px] text-rose-300 hover:underline"
-                >
-                  все выкл
-                </button>
-              </div>
-            ))}
-          </div>
+          {canBulk && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500">Пакетно по роли:</span>
+              {roles.map((role) => (
+                <div key={role} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5">
+                  <span className="text-[11px] text-slate-300">{roleLabel(role)}:</span>
+                  <button
+                    onClick={() => onBulkSet(role, allCapIds, true)}
+                    disabled={savingKey === `bulk:${role}`}
+                    className="text-[11px] text-emerald-300 hover:underline"
+                  >
+                    все вкл
+                  </button>
+                  <span className="text-slate-600">·</span>
+                  <button
+                    onClick={() => onBulkSet(role, allCapIds, false)}
+                    disabled={savingKey === `bulk:${role}`}
+                    className="text-[11px] text-rose-300 hover:underline"
+                  >
+                    все выкл
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

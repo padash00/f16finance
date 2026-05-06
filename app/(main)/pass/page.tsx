@@ -5,6 +5,7 @@ import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getPublicAppUrl } from '@/lib/core/app-url'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Users,
   Key,
@@ -43,6 +44,13 @@ type Operator = {
 }
 
 export default function AccessPage() {
+  const { can } = useCapabilities()
+  const canResetPassword = can('operators.reset_password')
+  const canEditLogin = can('operators.edit_login')
+  const canSendTelegram = can('operators.send_credentials_telegram')
+  const canBulkSendTelegram = can('operators.bulk_send_credentials_telegram')
+  const canExport = can('operators.export_credentials') || can('pass.export_csv')
+  const canCopy = can('operators.copy_profile_data') || can('pass.copy_credentials')
   const publicAppUrl = typeof window !== 'undefined' ? getPublicAppUrl(window.location.origin) : getPublicAppUrl()
   const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
@@ -446,49 +454,57 @@ export default function AccessPage() {
 
               {/* Панель действий */}
               <div className="flex flex-wrap gap-3 mt-6">
-                <Button
-                  onClick={resetAllPasswords}
-                  disabled={resetting === 'all'}
-                  className="bg-gradient-to-r from-emerald-500 to-green-500 text-white border-0 shadow-lg shadow-emerald-500/25"
-                >
-                  {resetting === 'all' ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 mr-2" />
-                  )}
-                  Сгенерировать всем пароли
-                </Button>
+                {canResetPassword && (
+                  <Button
+                    onClick={resetAllPasswords}
+                    disabled={resetting === 'all'}
+                    className="bg-gradient-to-r from-emerald-500 to-green-500 text-white border-0 shadow-lg shadow-emerald-500/25"
+                  >
+                    {resetting === 'all' ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Сгенерировать всем пароли
+                  </Button>
+                )}
 
-                <Button
-                  onClick={copyAllData}
-                  variant="outline"
-                  className="border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  Копировать все данные
-                </Button>
+                {canCopy && (
+                  <Button
+                    onClick={copyAllData}
+                    variant="outline"
+                    className="border-white/10 bg-white/5 hover:bg-white/10"
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Копировать все данные
+                  </Button>
+                )}
 
-                <Button
-                  onClick={exportToCSV}
-                  variant="outline"
-                  className="border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Скачать Excel
-                </Button>
+                {canExport && (
+                  <Button
+                    onClick={exportToCSV}
+                    variant="outline"
+                    className="border-white/10 bg-white/5 hover:bg-white/10"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Скачать Excel
+                  </Button>
+                )}
 
-                <Button
-                  onClick={sendAllToTelegram}
-                  disabled={sendingTgId === 'all'}
-                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0 shadow-lg shadow-blue-500/25"
-                >
-                  {sendingTgId === 'all' ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4 mr-2" />
-                  )}
-                  Отправить всем в Telegram
-                </Button>
+                {canBulkSendTelegram && (
+                  <Button
+                    onClick={sendAllToTelegram}
+                    disabled={sendingTgId === 'all'}
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0 shadow-lg shadow-blue-500/25"
+                  >
+                    {sendingTgId === 'all' ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    Отправить всем в Telegram
+                  </Button>
+                )}
 
                 <Button
                   onClick={loadOperators}
@@ -593,7 +609,7 @@ export default function AccessPage() {
                                 Создайте аккаунт оператора (супер-админ), затем можно задать логин.
                               </p>
                             </div>
-                          ) : editingLoginId === op.id ? (
+                          ) : canEditLogin && editingLoginId === op.id ? (
                             <div className="flex items-center gap-1.5">
                               <input
                                 type="text"
@@ -614,7 +630,7 @@ export default function AccessPage() {
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
-                          ) : (
+                          ) : canEditLogin ? (
                             <button
                               type="button"
                               onClick={() => { setEditingLoginId(op.id); setEditingLoginValue(op.username || '') }}
@@ -623,6 +639,8 @@ export default function AccessPage() {
                               <span>{op.username || '—'}</span>
                               <Pencil className="w-3 h-3 text-gray-600 group-hover:text-gray-400 transition-colors shrink-0" />
                             </button>
+                          ) : (
+                            <span className="font-mono text-sm text-gray-300">{op.username || '—'}</span>
                           )}
                         </td>
 
@@ -645,22 +663,24 @@ export default function AccessPage() {
                                   <Eye className="w-4 h-4 text-gray-400" />
                                 )}
                               </button>
-                              <button
-                                onClick={() => sendToTelegram(op, newPassword)}
-                                disabled={sendingTgId === op.id || !op.telegram_chat_id}
-                                title={op.telegram_chat_id ? 'Отправить в Telegram' : 'Telegram ID не указан'}
-                                className="p-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-40"
-                              >
-                                {sendingTgId === op.id ? (
-                                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                                ) : sentTgIds[op.id] ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                ) : (
-                                  <Send className="w-4 h-4 text-blue-400" />
-                                )}
-                              </button>
+                              {canSendTelegram && (
+                                <button
+                                  onClick={() => sendToTelegram(op, newPassword)}
+                                  disabled={sendingTgId === op.id || !op.telegram_chat_id}
+                                  title={op.telegram_chat_id ? 'Отправить в Telegram' : 'Telegram ID не указан'}
+                                  className="p-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-40"
+                                >
+                                  {sendingTgId === op.id ? (
+                                    <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                                  ) : sentTgIds[op.id] ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                  ) : (
+                                    <Send className="w-4 h-4 text-blue-400" />
+                                  )}
+                                </button>
+                              )}
                             </div>
-                          ) : (
+                          ) : canResetPassword ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -675,6 +695,8 @@ export default function AccessPage() {
                               )}
                               Сменить пароль
                             </Button>
+                          ) : (
+                            <span className="text-xs text-gray-600">—</span>
                           )}
                         </td>
 
@@ -694,19 +716,23 @@ export default function AccessPage() {
 
                         <td className="py-4 px-4">
                           <div className="flex items-center justify-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 px-2 border-white/10 hover:bg-white/10"
-                              onClick={() => copyOperatorData(op)}
-                              disabled={!newPassword}
-                            >
-                              {copiedId === op.id ? (
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                            </Button>
+                            {canCopy ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2 border-white/10 hover:bg-white/10"
+                                onClick={() => copyOperatorData(op)}
+                                disabled={!newPassword}
+                              >
+                                {copiedId === op.id ? (
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-gray-600">—</span>
+                            )}
                           </div>
                         </td>
                       </tr>

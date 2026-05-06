@@ -33,6 +33,7 @@ import type { PageSnapshot } from "@/lib/ai/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
+import { useCapabilities } from "@/lib/client/use-capabilities"
 import type { CompanyOption } from "@/lib/analysis/types"
 import {
   BrainCircuit,
@@ -124,6 +125,7 @@ export default function AIAnalysisPage() {
   const aliveRef = useRef(true)
   const lastAiCacheKeyRef = useRef<string | null>(null)
   const aiRequestKeyRef = useRef<string | null>(null)
+  const { can } = useCapabilities()
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -482,25 +484,29 @@ export default function AIAnalysisPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => loadData()}
-                disabled={loading}
-                variant="outline"
-                className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                Обновить данные
-              </Button>
+              {can('analysis.refresh') && (
+                <Button
+                  onClick={() => loadData()}
+                  disabled={loading}
+                  variant="outline"
+                  className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                  Обновить данные
+                </Button>
+              )}
 
-              <Button
-                onClick={handleExport}
-                disabled={!analysis}
-                variant="outline"
-                className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Excel
-              </Button>
+              {can('analysis.export') && (
+                <Button
+                  onClick={handleExport}
+                  disabled={!analysis}
+                  variant="outline"
+                  className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Excel
+                </Button>
+              )}
 
               <div className="flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-200/90">
                 {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

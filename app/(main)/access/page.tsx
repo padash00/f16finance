@@ -5,6 +5,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   ACCESS_PAGE_GROUPS,
   getBuiltinRoleDefaultPaths,
@@ -95,6 +96,7 @@ function posLabel(pos: Position) {
 
 // ==================== PAGE ====================
 export default function AccessPage() {
+  const { can } = useCapabilities()
   const [tab, setTab] = useState<'positions' | 'permissions' | 'accounts'>('positions')
 
   // --- Positions state ---
@@ -493,6 +495,7 @@ export default function AccessPage() {
           )}
 
           {/* Create new position */}
+          {can('access.create_role') && (
           <Card className="p-5 bg-gray-900/80 border-gray-800">
             <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
               <Plus className="w-4 h-4 text-emerald-400" />
@@ -524,6 +527,7 @@ export default function AccessPage() {
               </button>
             </div>
           </Card>
+          )}
 
           {/* Positions list */}
           {positionsLoading ? (
@@ -588,19 +592,23 @@ export default function AccessPage() {
                         </button>
                         {!pos.is_builtin && (
                           <>
-                            <button
-                              onClick={() => startEdit(pos)}
-                              className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePosition(pos)}
-                              disabled={deletingId === pos.id}
-                              className="p-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400 transition-colors disabled:opacity-50"
-                            >
-                              {deletingId === pos.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                            </button>
+                            {can('access.edit_role') && (
+                              <button
+                                onClick={() => startEdit(pos)}
+                                className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {can('access.delete_role') && (
+                              <button
+                                onClick={() => handleDeletePosition(pos)}
+                                disabled={deletingId === pos.id}
+                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400 transition-colors disabled:opacity-50"
+                              >
+                                {deletingId === pos.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -801,7 +809,7 @@ export default function AccessPage() {
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                            ) : (
+                            ) : can('access.change_email') ? (
                               <button
                                 onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
                                 className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
@@ -810,6 +818,10 @@ export default function AccessPage() {
                                 <Pencil className="w-3 h-3" />
                                 {s.email || 'нет email'}
                               </button>
+                            ) : (
+                              <span className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300">
+                                {s.email || 'нет email'}
+                              </span>
                             )}
 
                             {/* Role / position picker */}
@@ -830,7 +842,7 @@ export default function AccessPage() {
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                            ) : (
+                            ) : can('access.manage_staff_roles') ? (
                               <button
                                 onClick={() => setChangingRoleId(s.id)}
                                 className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
@@ -839,6 +851,11 @@ export default function AccessPage() {
                                 <Briefcase className="w-3 h-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </button>
+                            ) : (
+                              <span className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300">
+                                <Briefcase className="w-3 h-3" />
+                                {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
+                              </span>
                             )}
 
                             <span className={`text-xs font-medium ${stateInfo.color}`}>{stateInfo.label}</span>
@@ -850,7 +867,7 @@ export default function AccessPage() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        {s.email && (
+                        {s.email && can('access.invite_staff') && (
                           <button
                             onClick={() => sendInvite(s.id)}
                             disabled={sendingInviteId === s.id}
@@ -860,7 +877,7 @@ export default function AccessPage() {
                             {account?.accountState === 'no_account' || account?.accountState === 'no_email' ? 'Пригласить' : 'Сбросить пароль (email)'}
                           </button>
                         )}
-                        {(account?.accountState === 'active' || account?.accountState === 'invited') && (
+                        {(account?.accountState === 'active' || account?.accountState === 'invited') && can('access.generate_password') && (
                           <button
                             onClick={() => generatePassword(s.id)}
                             disabled={generatingId === s.id}
@@ -894,12 +911,14 @@ export default function AccessPage() {
                           <code className={`flex-1 text-sm font-mono bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-700 text-white tracking-widest ${genPwd.visible ? '' : 'blur-sm select-none'}`}>
                             {genPwd.password}
                           </code>
-                          <button
-                            onClick={() => setGeneratedPasswords(prev => prev.map(p => p.staffId === s.id ? { ...p, visible: !p.visible } : p))}
-                            className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
-                          >
-                            {genPwd.visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
+                          {can('access.reveal_password') && (
+                            <button
+                              onClick={() => setGeneratedPasswords(prev => prev.map(p => p.staffId === s.id ? { ...p, visible: !p.visible } : p))}
+                              className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
+                            >
+                              {genPwd.visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          )}
                           <button
                             onClick={() => navigator.clipboard.writeText(genPwd.password)}
                             className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"

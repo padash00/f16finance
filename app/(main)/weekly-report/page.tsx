@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
 import { useIncome, type IncomeRow } from '@/hooks/use-income'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import {
   TrendingUp,
@@ -685,6 +686,7 @@ function WeeklyReportContent() {
   useEffect(() => setMounted(true), [])
 
   const [refreshing, setRefreshing] = useState(false)
+  const { can } = useCapabilities()
 
   // AI Report state
   const [aiReport, setAiReport] = useState<string | null>(null)
@@ -1754,34 +1756,38 @@ function WeeklyReportContent() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
-                <div className="relative group">
-                  <Button variant="outline" className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10">
-                    <Download className="mr-2 h-4 w-4" />
-                    Экспорт
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                  <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-white/10 bg-gray-900 py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={handleDownloadExcel}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-white/5"
-                    >
-                      <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-                      Скачать Excel
-                    </button>
+                {can('weekly-report.export') && (
+                  <div className="relative group">
+                    <Button variant="outline" className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10">
+                      <Download className="mr-2 h-4 w-4" />
+                      Экспорт
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                    <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-white/10 bg-gray-900 py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={handleDownloadExcel}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-white/5"
+                      >
+                        <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+                        Скачать Excel
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
-                  onClick={handleShare}
-                  title="Поделиться"
-                  aria-label="Поделиться"
-                >
-                  <Share2 className="h-4 w-4" />
-                </Button>
+                {can('weekly-report.share') && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+                    onClick={handleShare}
+                    title="Поделиться"
+                    aria-label="Поделиться"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                )}
               </>
             }
             toolbar={
@@ -2521,24 +2527,26 @@ function WeeklyReportContent() {
                   <p className="text-xs text-gray-400">GPT анализирует данные недели и пишет полный финансовый отчёт</p>
                 </div>
               </div>
-              <button
-                onClick={handleGenerateAiReport}
-                disabled={aiReportLoading || loading}
-                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
-              >
-                {aiReportLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Генерирую...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Сгенерировать отчёт
-                  </>
-                )}
-              </button>
-              {aiReportLoading ? (
+              {can('weekly-report.ai_generate') && (
+                <button
+                  onClick={handleGenerateAiReport}
+                  disabled={aiReportLoading || loading}
+                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
+                >
+                  {aiReportLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Генерирую...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Сгенерировать отчёт
+                    </>
+                  )}
+                </button>
+              )}
+              {aiReportLoading && can('weekly-report.ai_generate') ? (
                 <button
                   onClick={handleCancelAiReport}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-gray-200 hover:bg-white/10"

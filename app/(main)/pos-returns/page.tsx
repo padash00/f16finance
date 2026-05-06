@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Search, RotateCcw, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ export default function PosReturnsPage() {
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const { can } = useCapabilities()
   const [result, setResult] = useState<ReturnResult | null>(null)
 
   async function handleSearch(e: React.FormEvent) {
@@ -457,24 +459,26 @@ export default function PosReturnsPage() {
                   </div>
                 )}
 
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full"
-                  size="lg"
-                >
-                  {submitting ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Оформление...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      Оформить возврат
-                    </>
-                  )}
-                </Button>
+                {can('pos-returns.return') && (
+                  <Button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {submitting ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Оформление...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Оформить возврат
+                      </>
+                    )}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}

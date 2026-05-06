@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { PageSnapshot } from '@/lib/ai/types'
 import {
   BrainCircuit,
@@ -120,6 +121,7 @@ export default function ForecastPage() {
   const [error, setError] = useState<string | null>(null)
   const [scenario, setScenario] = useState<'pessimistic' | 'realistic' | 'optimistic'>('realistic')
   const abortRef = useRef<AbortController | null>(null)
+  const { can } = useCapabilities()
 
   useEffect(() => {
     let mounted = true
@@ -306,24 +308,26 @@ export default function ForecastPage() {
                     </option>
                   ))}
                 </select>
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Анализирую...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      {result ? 'Обновить прогноз' : 'Сгенерировать прогноз'}
-                    </>
-                  )}
-                </button>
-                {loading ? (
+                {can('forecast.generate') && (
+                  <button
+                    onClick={handleGenerate}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Анализирую...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        {result ? 'Обновить прогноз' : 'Сгенерировать прогноз'}
+                      </>
+                    )}
+                  </button>
+                )}
+                {loading && can('forecast.cancel_generation') ? (
                   <button
                     onClick={handleCancel}
                     className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-sm text-gray-200 hover:bg-white/10"

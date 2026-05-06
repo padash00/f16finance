@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   ArrowLeft,
   User,
@@ -354,16 +355,18 @@ function AccountInfo({ account, onCopyUsername, onCopyPassword, onClose }: {
 }
 
 // Компонент загрузки аватара
-function AvatarUpload({ 
-  operatorId, 
-  currentAvatarUrl, 
+function AvatarUpload({
+  operatorId,
+  currentAvatarUrl,
   onUploadComplete,
-  onError 
-}: { 
+  onError,
+  canUpload = true,
+}: {
   operatorId: string
   currentAvatarUrl: string | null
   onUploadComplete: (url: string) => void
   onError: (error: string) => void
+  canUpload?: boolean
 }) {
   const [uploading, setUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentAvatarUrl)
@@ -466,33 +469,35 @@ function AvatarUpload({
         )}
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-2xl">
-        <label className="cursor-pointer p-2 hover:bg-white/20 rounded-lg transition-colors">
-          {uploading ? (
-            <Loader2 className="w-5 h-5 text-white animate-spin" />
-          ) : (
-            <>
-              <Camera className="w-5 h-5 text-white" />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={uploadAvatar}
-                className="hidden"
-                disabled={uploading}
-              />
-            </>
+      {canUpload && (
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-2xl">
+          <label className="cursor-pointer p-2 hover:bg-white/20 rounded-lg transition-colors">
+            {uploading ? (
+              <Loader2 className="w-5 h-5 text-white animate-spin" />
+            ) : (
+              <>
+                <Camera className="w-5 h-5 text-white" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={uploadAvatar}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </>
+            )}
+          </label>
+          {previewUrl && !uploading && (
+            <button
+              onClick={removeAvatar}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors ml-1"
+              title="Удалить фото"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
           )}
-        </label>
-        {previewUrl && !uploading && (
-          <button
-            onClick={removeAvatar}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors ml-1"
-            title="Удалить фото"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -924,6 +929,14 @@ export default function OperatorProfilePage() {
   const params = useParams()
   const router = useRouter()
   const operatorId = params.id as string
+
+  const { can } = useCapabilities()
+  const canEditOperator = can('operators.edit')
+  const canPromote = can('operators.promote')
+  const canSaveAssignments = can('operators.save_assignments')
+  const canAvatarUpload = can('operators.avatar_upload')
+  const canDocumentUpload = can('operators.document_upload')
+  const canCreateAccount = can('operators.create_account')
 
   const [operator, setOperator] = useState<Operator | null>(null)
   const [profile, setProfile] = useState<OperatorProfile | null>(null)
@@ -1763,6 +1776,7 @@ export default function OperatorProfilePage() {
                   currentAvatarUrl={profile?.photo_url || null}
                   onUploadComplete={handleAvatarUpload}
                   onError={setUploadError}
+                  canUpload={canAvatarUpload}
                 />
 
                 <div>
@@ -1802,7 +1816,7 @@ export default function OperatorProfilePage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {!isEditing && !operatorAccount && (
+                {canCreateAccount && !isEditing && !operatorAccount && (
                   <Button
                     onClick={handleCreateAccount}
                     disabled={creatingAccount}
@@ -1816,29 +1830,33 @@ export default function OperatorProfilePage() {
                     Создать аккаунт
                   </Button>
                 )}
-                
+
                 {!isEditing ? (
-                  <Button
-                    onClick={() => setIsEditing(true)}
-                    className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Редактировать
-                  </Button>
+                  canEditOperator && (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Редактировать
+                    </Button>
+                  )
                 ) : (
                   <>
-                    <Button
-                      onClick={handleSaveProfile}
-                      disabled={saving}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-white"
-                    >
-                      {saving ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="w-4 h-4 mr-2" />
-                      )}
-                      Сохранить
-                    </Button>
+                    {canEditOperator && (
+                      <Button
+                        onClick={handleSaveProfile}
+                        disabled={saving}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                      >
+                        {saving ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Save className="w-4 h-4 mr-2" />
+                        )}
+                        Сохранить
+                      </Button>
+                    )}
                     <Button
                       onClick={() => {
                         setIsEditing(false)
@@ -2022,24 +2040,26 @@ export default function OperatorProfilePage() {
                         />
                       </div>
 
-                      <div className="flex items-end">
-                        <Button
-                          onClick={handlePromoteOperator}
-                          disabled={careerSaving || careerLoading}
-                          className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0"
-                        >
-                          {careerSaving ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Сохраняем
-                            </>
-                          ) : careerLink?.staff ? (
-                            'Обновить роль'
-                          ) : (
-                            'Повысить'
-                          )}
-                        </Button>
-                      </div>
+                      {canPromote && (
+                        <div className="flex items-end">
+                          <Button
+                            onClick={handlePromoteOperator}
+                            disabled={careerSaving || careerLoading}
+                            className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0"
+                          >
+                            {careerSaving ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Сохраняем
+                              </>
+                            ) : careerLink?.staff ? (
+                              'Обновить роль'
+                            ) : (
+                              'Повысить'
+                            )}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -2155,17 +2175,19 @@ export default function OperatorProfilePage() {
                                 </label>
                               </div>
 
-                              <div className="flex items-end justify-end">
-                                <Button
-                                  variant="outline"
-                                  size="icon-sm"
-                                  onClick={() => handleRemoveCompanyAssignment(assignment.id)}
-                                  className="border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
-                                  title={index === 0 && companyAssignments.length === 1 ? 'Убрать назначение' : 'Удалить назначение'}
-                                >
-                                  <Unlink className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
+                              {canSaveAssignments && (
+                                <div className="flex items-end justify-end">
+                                  <Button
+                                    variant="outline"
+                                    size="icon-sm"
+                                    onClick={() => handleRemoveCompanyAssignment(assignment.id)}
+                                    className="border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
+                                    title={index === 0 && companyAssignments.length === 1 ? 'Убрать назначение' : 'Удалить назначение'}
+                                  >
+                                    <Unlink className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           ))}
 
@@ -2173,33 +2195,35 @@ export default function OperatorProfilePage() {
                             <p className="text-xs text-gray-500">
                               Один оператор может работать максимум на двух активных точках. Если основная точка не выбрана, система поставит её автоматически.
                             </p>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={handleAddCompanyAssignment}
-                                disabled={assignmentSaving || assignmentLoading || companyAssignments.length >= 2 || companies.length === 0}
-                              >
-                                <LinkIcon className="w-4 h-4 mr-2" />
-                                Добавить точку
-                              </Button>
-                              <Button
-                                onClick={handleSaveCompanyAssignments}
-                                disabled={assignmentSaving || assignmentLoading}
-                                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0"
-                              >
-                                {assignmentSaving ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Сохраняем
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="w-4 h-4 mr-2" />
-                                    Сохранить назначение
-                                  </>
-                                )}
-                              </Button>
-                            </div>
+                            {canSaveAssignments && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={handleAddCompanyAssignment}
+                                  disabled={assignmentSaving || assignmentLoading || companyAssignments.length >= 2 || companies.length === 0}
+                                >
+                                  <LinkIcon className="w-4 h-4 mr-2" />
+                                  Добавить точку
+                                </Button>
+                                <Button
+                                  onClick={handleSaveCompanyAssignments}
+                                  disabled={assignmentSaving || assignmentLoading}
+                                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0"
+                                >
+                                  {assignmentSaving ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Сохраняем
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Save className="w-4 h-4 mr-2" />
+                                      Сохранить назначение
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </>
                       )}
@@ -2567,18 +2591,20 @@ export default function OperatorProfilePage() {
                   <Briefcase className="w-5 h-5 text-amber-400" />
                   История работы
                 </h3>
-                <Button 
-                  size="sm" 
-                  onClick={() => setShowWorkForm(!showWorkForm)}
-                  className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-400 border border-violet-500/30"
-                >
-                  {showWorkForm ? (
-                    <X className="w-4 h-4 mr-2" />
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  {showWorkForm ? 'Отмена' : 'Добавить запись'}
-                </Button>
+                {canEditOperator && (
+                  <Button
+                    size="sm"
+                    onClick={() => setShowWorkForm(!showWorkForm)}
+                    className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-400 border border-violet-500/30"
+                  >
+                    {showWorkForm ? (
+                      <X className="w-4 h-4 mr-2" />
+                    ) : (
+                      <Plus className="w-4 h-4 mr-2" />
+                    )}
+                    {showWorkForm ? 'Отмена' : 'Добавить запись'}
+                  </Button>
+                )}
               </div>
 
               {showWorkForm && (
@@ -2786,7 +2812,7 @@ export default function OperatorProfilePage() {
                             </div>
                           )}
 
-                          {work.is_current && (
+                          {work.is_current && canEditOperator && (
                             <div className="flex justify-end mt-2">
                               <Button
                                 size="sm"
@@ -2823,17 +2849,19 @@ export default function OperatorProfilePage() {
                   Документы
                 </h3>
                 
-                <DocumentUpload
-                  operatorId={operatorId}
-                  onUploadComplete={handleDocumentUpload}
-                  onError={setUploadError}
-                />
+                {canDocumentUpload && (
+                  <DocumentUpload
+                    operatorId={operatorId}
+                    onUploadComplete={handleDocumentUpload}
+                    onError={setUploadError}
+                  />
+                )}
               </div>
 
               <DocumentList
                 documents={documents}
-                onVerify={handleDocumentVerify}
-                onDelete={handleDocumentDelete}
+                onVerify={canDocumentUpload ? handleDocumentVerify : undefined}
+                onDelete={canDocumentUpload ? handleDocumentDelete : undefined}
                 formatDate={formatDate}
               />
             </Card>
@@ -2869,18 +2897,20 @@ export default function OperatorProfilePage() {
                     <option value="issue">Проблема</option>
                   </select>
 
-                  <Button
-                    onClick={handleAddNote}
-                    disabled={!newNote.trim() || saving}
-                    className="bg-violet-500 hover:bg-violet-600 text-white"
-                  >
-                    {saving ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Plus className="w-4 h-4 mr-2" />
-                    )}
-                    Добавить заметку
-                  </Button>
+                  {canEditOperator && (
+                    <Button
+                      onClick={handleAddNote}
+                      disabled={!newNote.trim() || saving}
+                      className="bg-violet-500 hover:bg-violet-600 text-white"
+                    >
+                      {saving ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4 mr-2" />
+                      )}
+                      Добавить заметку
+                    </Button>
+                  )}
                 </div>
               </div>
 

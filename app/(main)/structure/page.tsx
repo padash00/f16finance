@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type StaffRole = 'owner' | 'manager' | 'marketer'
 type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
@@ -255,11 +256,13 @@ function CompanyBranch({
   assignments,
   operatorsById,
   onEditOperator,
+  canEdit = true,
 }: {
   company: Company
   assignments: Assignment[]
   operatorsById: Map<string, Operator>
   onEditOperator: (operator: Operator) => void
+  canEdit?: boolean
 }) {
   const leadAssignments = assignments.filter((item) => item.role_in_company !== 'operator')
   const operatorAssignments = assignments.filter((item) => item.role_in_company === 'operator')
@@ -295,7 +298,7 @@ function CompanyBranch({
                   operator={operator}
                   role={assignment.role_in_company}
                   isPrimary={assignment.is_primary}
-                  onEdit={() => onEditOperator(operator)}
+                  onEdit={canEdit ? () => onEditOperator(operator) : undefined}
                 />
               )
             })}
@@ -320,7 +323,7 @@ function CompanyBranch({
                   operator={operator}
                   role={assignment.role_in_company}
                   isPrimary={assignment.is_primary}
-                  onEdit={() => onEditOperator(operator)}
+                  onEdit={canEdit ? () => onEditOperator(operator) : undefined}
                 />
               )
             })}
@@ -607,6 +610,8 @@ function OrgChart({
 }
 
 export default function StructurePage() {
+  const { can } = useCapabilities()
+  const canSaveAssignments = can('structure.save_assignments')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [staff, setStaff] = useState<StaffMember[]>([])
@@ -938,7 +943,8 @@ export default function StructurePage() {
                       company={company}
                       assignments={assignmentsByCompany.get(company.id) || []}
                       operatorsById={operatorsById}
-                      onEditOperator={openOperatorEditor}
+                      onEditOperator={canSaveAssignments ? openOperatorEditor : () => {}}
+                      canEdit={canSaveAssignments}
                     />
                   ))}
                 </div>
@@ -1173,10 +1179,12 @@ export default function StructurePage() {
                 <Button variant="ghost" onClick={closeOperatorEditor} disabled={savingAssignments}>
                   Отмена
                 </Button>
-                <Button onClick={saveOperatorAssignments} disabled={savingAssignments}>
-                  {savingAssignments ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Сохранить дерево
-                </Button>
+                {canSaveAssignments && (
+                  <Button onClick={saveOperatorAssignments} disabled={savingAssignments}>
+                    {savingAssignments ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Сохранить дерево
+                  </Button>
+                )}
               </div>
             </div>
           </Card>

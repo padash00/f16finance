@@ -6,6 +6,7 @@ import { ArrowLeft, Plus, Trash2, AlertCircle, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type Vendor = {
   id: string
@@ -26,6 +27,7 @@ export default function ExpenseWhitelistPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { can } = useCapabilities()
 
   const [form, setForm] = useState({
     vendor_name: '',
@@ -116,47 +118,49 @@ export default function ExpenseWhitelistPage() {
         </div>
       )}
 
-      <Card className="p-4 mb-6 space-y-3">
-        <h3 className="font-semibold">Добавить вендора</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            placeholder="Имя или название"
-            value={form.vendor_name}
-            onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))}
-            className="h-10 px-3 rounded-md border bg-background"
-          />
-          <select
-            value={form.company_id}
-            onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
-            className="h-10 px-3 rounded-md border bg-background"
-          >
-            <option value="">— Все точки —</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <select
-            value={form.default_category_id}
-            onChange={(e) => setForm((f) => ({ ...f, default_category_id: e.target.value }))}
-            className="h-10 px-3 rounded-md border bg-background"
-          >
-            <option value="">— Категория по умолчанию —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <input
-            placeholder="Заметка (опционально)"
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            className="h-10 px-3 rounded-md border bg-background"
-          />
-        </div>
-        <Button onClick={add} disabled={saving}>
-          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-          Добавить
-        </Button>
-      </Card>
+      {can('expense-whitelist.create') && (
+        <Card className="p-4 mb-6 space-y-3">
+          <h3 className="font-semibold">Добавить вендора</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input
+              placeholder="Имя или название"
+              value={form.vendor_name}
+              onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))}
+              className="h-10 px-3 rounded-md border bg-background"
+            />
+            <select
+              value={form.company_id}
+              onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
+              className="h-10 px-3 rounded-md border bg-background"
+            >
+              <option value="">— Все точки —</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <select
+              value={form.default_category_id}
+              onChange={(e) => setForm((f) => ({ ...f, default_category_id: e.target.value }))}
+              className="h-10 px-3 rounded-md border bg-background"
+            >
+              <option value="">— Категория по умолчанию —</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <input
+              placeholder="Заметка (опционально)"
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className="h-10 px-3 rounded-md border bg-background"
+            />
+          </div>
+          <Button onClick={add} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+            Добавить
+          </Button>
+        </Card>
+      )}
 
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Загрузка...</div>
@@ -178,9 +182,11 @@ export default function ExpenseWhitelistPage() {
                 </div>
                 {v.notes && <div className="text-xs text-muted-foreground italic mt-1">{v.notes}</div>}
               </div>
-              <Button variant="ghost" size="icon" onClick={() => remove(v.id)}>
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </Button>
+              {can('expense-whitelist.delete') && (
+                <Button variant="ghost" size="icon" onClick={() => remove(v.id)}>
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                </Button>
+              )}
             </Card>
           ))}
         </div>

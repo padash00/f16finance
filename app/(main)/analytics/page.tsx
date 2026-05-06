@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import type { DateRange } from 'react-day-picker'
 import { format } from 'date-fns'
@@ -153,6 +154,7 @@ export default function AnalyticsPage() {
 
   const lastReqId = useRef(0)
   const [rangeOpen, setRangeOpen] = useState(false)
+  const { can } = useCapabilities()
 
   // refs: companies
   useEffect(() => {
@@ -543,10 +545,12 @@ export default function AnalyticsPage() {
                 <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
               </Button>
 
-              <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="gap-2 ml-auto">
-                <Download className="h-4 w-4" />
-                Excel
-              </Button>
+              {can('analytics.export') && (
+                <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="gap-2 ml-auto">
+                  <Download className="h-4 w-4" />
+                  Excel
+                </Button>
+              )}
             </div>
           </div>
 

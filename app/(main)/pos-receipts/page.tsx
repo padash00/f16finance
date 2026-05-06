@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from 'lucide-react'
 import { useUrlState } from '@/lib/hooks/use-url-state'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ function detectPaymentMethod(sale: Sale): string {
 function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
   const method = detectPaymentMethod(sale)
   const pm = PAYMENT_LABELS[method] || PAYMENT_LABELS.mixed
+  const { can } = useCapabilities()
 
   const paymentBreakdown: { label: string; amount: number }[] = []
   if (sale.cash_amount > 0) paymentBreakdown.push({ label: 'Наличные', amount: sale.cash_amount })
@@ -205,12 +207,14 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
         </div>
 
         {/* Print button */}
-        <div className="mt-4 flex justify-end">
-          <Button size="sm" onClick={() => window.print()} className="gap-2">
-            <Printer className="h-4 w-4" />
-            Печать
-          </Button>
-        </div>
+        {can('pos-receipts.print') && (
+          <div className="mt-4 flex justify-end">
+            <Button size="sm" onClick={() => window.print()} className="gap-2">
+              <Printer className="h-4 w-4" />
+              Печать
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

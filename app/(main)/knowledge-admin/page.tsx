@@ -28,6 +28,7 @@ import {
   type ChecklistItemEditorValue,
   type ChecklistTemplateEditorValue,
 } from '@/components/admin/knowledge-editor-types'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 const ArticleEditorDialog = dynamic(
   () => import('@/components/admin/article-editor-dialog').then((mod) => ({ default: mod.ArticleEditorDialog })),
@@ -317,6 +318,7 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export default function KnowledgeAdminPage() {
+  const { can } = useCapabilities()
   const [data, setData] = useState<KnowledgeResponse>({
     categories: [],
     articles: [],
@@ -903,14 +905,16 @@ export default function KnowledgeAdminPage() {
                           className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
                         />
                       </div>
-                      <button
-                        type="button"
-                        onClick={openArticleDialogNew}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Новый материал
-                      </button>
+                      {can('knowledge-admin.create') && (
+                        <button
+                          type="button"
+                          onClick={openArticleDialogNew}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Новый материал
+                        </button>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <SelectInput
@@ -975,6 +979,8 @@ export default function KnowledgeAdminPage() {
                                   setData((prev) => ({ ...prev, articles: removeById(prev.articles, article.id) }))
                                 })
                               }}
+                              canEdit={can('knowledge-admin.edit')}
+                              canDelete={can('knowledge-admin.delete')}
                             />
                           ))}
                         </div>
@@ -1000,7 +1006,7 @@ export default function KnowledgeAdminPage() {
                         <p className="mt-2 text-sm leading-6 text-slate-300">Один клик — и шаблон создан. Потом останется только добавить свои пункты.</p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        {CHECKLIST_PRESETS.map((preset) => (
+                        {can('knowledge-admin.manage_checklists') && CHECKLIST_PRESETS.map((preset) => (
                           <button
                             key={preset.title}
                             type="button"
@@ -1020,15 +1026,17 @@ export default function KnowledgeAdminPage() {
                           </button>
                         ))}
                       </div>
-                      <div className="text-center">
-                        <button
-                          type="button"
-                          onClick={openChecklistTemplateNew}
-                          className="text-sm font-semibold text-slate-400 underline-offset-4 hover:text-amber-200 hover:underline"
-                        >
-                          Или создать чек-лист с нуля
-                        </button>
-                      </div>
+                      {can('knowledge-admin.manage_checklists') && (
+                        <div className="text-center">
+                          <button
+                            type="button"
+                            onClick={openChecklistTemplateNew}
+                            className="text-sm font-semibold text-slate-400 underline-offset-4 hover:text-amber-200 hover:underline"
+                          >
+                            Или создать чек-лист с нуля
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -1054,14 +1062,16 @@ export default function KnowledgeAdminPage() {
                             </option>
                           ))}
                         </SelectInput>
-                        <button
-                          type="button"
-                          onClick={openChecklistTemplateNew}
-                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Создать чек-лист
-                        </button>
+                        {can('knowledge-admin.manage_checklists') && (
+                          <button
+                            type="button"
+                            onClick={openChecklistTemplateNew}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Создать чек-лист
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid gap-4">
@@ -1098,6 +1108,7 @@ export default function KnowledgeAdminPage() {
                                       setData((prev) => ({ ...prev, items: removeById(prev.items, item.id) }))
                                     })
                                   }}
+                                  canManage={can('knowledge-admin.manage_checklists')}
                                 />
                               ))}
                             </div>
@@ -1321,14 +1332,16 @@ export default function KnowledgeAdminPage() {
                     Категории группируют материалы: правила клуба, зарплата и премии, штрафы, FAQ, проблемы техники, магазин и касса.
                   </p>
                   <div className="mb-5 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={openCategoryDialogNew}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Новая категория
-                    </button>
+                    {can('knowledge-admin.create') && (
+                      <button
+                        type="button"
+                        onClick={openCategoryDialogNew}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Новая категория
+                      </button>
+                    )}
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     {data.categories.map((category) => (
@@ -1358,6 +1371,8 @@ export default function KnowledgeAdminPage() {
                                 setData((prev) => ({ ...prev, categories: removeById(prev.categories, category.id) }))
                               })
                             }}
+                            canEdit={can('knowledge-admin.edit')}
+                            canDelete={can('knowledge-admin.delete')}
                           />
                         </div>
                       </div>
@@ -1519,12 +1534,16 @@ function ArticleCard({
   companyName,
   onEdit,
   onDelete,
+  canEdit = true,
+  canDelete = true,
 }: {
   article: KnowledgeArticle
   category?: KnowledgeCategory
   companyName?: string
   onEdit: () => void
   onDelete: () => void
+  canEdit?: boolean
+  canDelete?: boolean
 }) {
   return (
     <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
@@ -1551,7 +1570,7 @@ function ArticleCard({
             ))}
           </div>
         </div>
-        <RowActions onEdit={onEdit} onDelete={onDelete} />
+        <RowActions onEdit={onEdit} onDelete={onDelete} canEdit={canEdit} canDelete={canDelete} />
       </div>
     </article>
   )
@@ -1561,15 +1580,29 @@ function Badge({ children }: { children: React.ReactNode }) {
   return <span className="max-w-full break-words rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs font-bold text-amber-100">{children}</span>
 }
 
-function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+function RowActions({
+  onEdit,
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: {
+  onEdit: () => void
+  onDelete: () => void
+  canEdit?: boolean
+  canDelete?: boolean
+}) {
   return (
     <div className="flex shrink-0 gap-2">
-      <button onClick={onEdit} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 hover:border-amber-300/50 hover:text-amber-100">
-        <Pencil className="h-4 w-4" />
-      </button>
-      <button onClick={onDelete} className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/30 bg-red-950/20 text-red-200 hover:bg-red-950/40">
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {canEdit && (
+        <button onClick={onEdit} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 hover:border-amber-300/50 hover:text-amber-100">
+          <Pencil className="h-4 w-4" />
+        </button>
+      )}
+      {canDelete && (
+        <button onClick={onDelete} className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/30 bg-red-950/20 text-red-200 hover:bg-red-950/40">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }
@@ -1588,6 +1621,7 @@ function ChecklistTemplateCard({
   onAddItem,
   onEditItem,
   onDeleteItem,
+  canManage = true,
 }: {
   template: ChecklistTemplate
   items: ChecklistItem[]
@@ -1598,6 +1632,7 @@ function ChecklistTemplateCard({
   onAddItem: () => void
   onEditItem: (item: ChecklistItem) => void
   onDeleteItem: (item: ChecklistItem) => void
+  canManage?: boolean
 }) {
   return (
     <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
@@ -1613,7 +1648,7 @@ function ChecklistTemplateCard({
             {!template.is_active ? <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-400">черновик</span> : null}
           </div>
         </div>
-        <RowActions onEdit={onEdit} onDelete={onDelete} />
+        <RowActions onEdit={onEdit} onDelete={onDelete} canEdit={canManage} canDelete={canManage} />
       </div>
 
       <div className="mt-5 space-y-2 border-t border-slate-800 pt-4">
@@ -1642,18 +1677,20 @@ function ChecklistTemplateCard({
                   <p className="mt-1 break-words text-xs text-slate-500">{meta.join(' · ')}</p>
                 ) : null}
               </div>
-              <RowActions onEdit={() => onEditItem(item)} onDelete={() => onDeleteItem(item)} />
+              <RowActions onEdit={() => onEditItem(item)} onDelete={() => onDeleteItem(item)} canEdit={canManage} canDelete={canManage} />
             </div>
           )
         })}
-        <button
-          type="button"
-          onClick={onAddItem}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-400 transition hover:border-emerald-400/60 hover:text-emerald-200"
-        >
-          <Plus className="h-4 w-4" />
-          {items.length ? 'Добавить пункт' : 'Добавить первый пункт'}
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={onAddItem}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-400 transition hover:border-emerald-400/60 hover:text-emerald-200"
+          >
+            <Plus className="h-4 w-4" />
+            {items.length ? 'Добавить пункт' : 'Добавить первый пункт'}
+          </button>
+        )}
       </div>
     </article>
   )

@@ -9,6 +9,7 @@ import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses } from '@/hooks/use-expenses'
 import { useIncome } from '@/hooks/use-income'
 import type { PageSnapshot } from '@/lib/ai/types'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Activity, CalendarDays, Download, Loader2, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import {
   Area,
@@ -87,6 +88,7 @@ export default function CashFlowPage() {
 
   const [aiText, setAiText] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const { can } = useCapabilities()
 
   const { companies } = useCompanies()
   const { rows: incomeRows, loading: incomeLoading } = useIncome({
@@ -301,14 +303,16 @@ export default function CashFlowPage() {
                     ))}
                   </select>
                 )}
-                <button
-                  onClick={downloadCSV}
-                  disabled={dailyData.length === 0}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 disabled:opacity-40 border border-gray-700 rounded-xl text-sm text-gray-200 transition-colors"
-                >
-                  <Download className="w-4 h-4 text-emerald-400" />
-                  Excel
-                </button>
+                {can('cashflow.export') && (
+                  <button
+                    onClick={downloadCSV}
+                    disabled={dailyData.length === 0}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 disabled:opacity-40 border border-gray-700 rounded-xl text-sm text-gray-200 transition-colors"
+                  >
+                    <Download className="w-4 h-4 text-emerald-400" />
+                    Excel
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -353,30 +357,32 @@ export default function CashFlowPage() {
           </div>
 
           {/* AI Auto-Insights */}
-          <Card className="p-5 bg-gray-900/80 border border-blue-500/20">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                <Sparkles className="w-4 h-4 text-blue-400" />
+          {can('cashflow.ai_analysis') && (
+            <Card className="p-5 bg-gray-900/80 border border-blue-500/20">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-blue-500/20 rounded-lg">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                </div>
+                <h2 className="text-sm font-semibold text-white">AI-анализ Cash Flow</h2>
+                {aiLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin ml-1" />}
               </div>
-              <h2 className="text-sm font-semibold text-white">AI-анализ Cash Flow</h2>
-              {aiLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin ml-1" />}
-            </div>
 
-            {aiLoading && (
-              <div className="space-y-2.5">
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-3/4" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-5/6" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-2/3" />
-              </div>
-            )}
-            {!aiLoading && aiText && (
-              <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiText}</p>
-            )}
-            {!aiLoading && !aiText && dailyData.length === 0 && !loading && (
-              <p className="text-sm text-gray-500">Нет данных за выбранный период</p>
-            )}
-          </Card>
+              {aiLoading && (
+                <div className="space-y-2.5">
+                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-3/4" />
+                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
+                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-5/6" />
+                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-2/3" />
+                </div>
+              )}
+              {!aiLoading && aiText && (
+                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiText}</p>
+              )}
+              {!aiLoading && !aiText && dailyData.length === 0 && !loading && (
+                <p className="text-sm text-gray-500">Нет данных за выбранный период</p>
+              )}
+            </Card>
+          )}
 
           {/* Chart */}
           <Card className="p-5 bg-gray-900/80 border-gray-800">

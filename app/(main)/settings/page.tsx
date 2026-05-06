@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Plus,
   Pencil,
@@ -47,6 +48,7 @@ type ExpenseCategory = {
 }
 
 export default function SettingsPage() {
+  const { can } = useCapabilities()
   // Данные
   const [companies, setCompanies] = useState<Company[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
@@ -400,12 +402,16 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400" onClick={() => { setEditCompId(c.id); setEditCompData({ name: c.name, code: c.code || '', show_in_structure: c.show_in_structure }) }}>
-                                                <Pencil className="w-3 h-3" />
-                                            </Button>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteCompany(c.id)}>
-                                                <Trash2 className="w-3 h-3" />
-                                            </Button>
+                                            {can('settings.manage_companies') && (
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400" onClick={() => { setEditCompId(c.id); setEditCompData({ name: c.name, code: c.code || '', show_in_structure: c.show_in_structure }) }}>
+                                                    <Pencil className="w-3 h-3" />
+                                                </Button>
+                                            )}
+                                            {can('settings.delete_company') && (
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteCompany(c.id)}>
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </>
                                 )}
@@ -414,6 +420,7 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Добавление */}
+                    {can('settings.manage_companies') && (
                     <div className="pt-4 mt-2 border-t border-border">
                         <form onSubmit={handleAddCompany} className="flex gap-2">
                             <input 
@@ -442,6 +449,7 @@ export default function SettingsPage() {
                             </Button>
                         </form>
                     </div>
+                    )}
                 </Card>
             </div>
 
@@ -688,19 +696,23 @@ export default function SettingsPage() {
                             </div>
                           </div>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-amber-400" onClick={() => {
-                              setEditCatId(cat.id)
-                              setEditCatData({
-                                name: cat.name,
-                                monthly_budget: cat.monthly_budget ? String(cat.monthly_budget) : '',
-                                accounting_group: cat.accounting_group || '',
-                              })
-                            }}>
-                              <Pencil className="w-3 h-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteCategory(cat.id)}>
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                            {can('settings.manage_categories') && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-amber-400" onClick={() => {
+                                setEditCatId(cat.id)
+                                setEditCatData({
+                                  name: cat.name,
+                                  monthly_budget: cat.monthly_budget ? String(cat.monthly_budget) : '',
+                                  accounting_group: cat.accounting_group || '',
+                                })
+                              }}>
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {can('settings.manage_categories') && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteCategory(cat.id)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
                         </>
                       )}
@@ -710,6 +722,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Добавление */}
+              {can('settings.manage_categories') && (
               <div className="pt-4 mt-2 border-t border-border">
                 <form onSubmit={handleAddCategory} className="space-y-2">
                   <div className="flex gap-2">
@@ -744,6 +757,7 @@ export default function SettingsPage() {
                   </div>
                 </form>
               </div>
+              )}
             </Card>
           </div>
 

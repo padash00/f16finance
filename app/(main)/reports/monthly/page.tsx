@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCompanies } from '@/hooks/use-companies'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ export default function MonthlyReportPage() {
   const [totals, setTotals] = useState<Totals | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { can } = useCapabilities()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -179,7 +181,7 @@ export default function MonthlyReportPage() {
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Загрузить
           </Button>
-          {hasData && totals && (
+          {hasData && totals && can('reports.export') && (
             <Button variant="outline" size="sm" onClick={() => downloadCSV(daily, totals, year, month)}>
               <Download className="mr-2 h-4 w-4" />
               Скачать Excel

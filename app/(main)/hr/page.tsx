@@ -6,6 +6,7 @@ import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Search, Use
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -60,6 +61,10 @@ const ACTION_LABEL: Record<string, string> = {
 }
 
 export default function HrPage() {
+  const { can } = useCapabilities()
+  const canDismiss = can('hr.dismiss')
+  const canRestore = can('hr.restore')
+  const canViewHistory = can('hr.view_history')
   const [items, setItems] = useState<HrEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -358,18 +363,20 @@ export default function HrPage() {
                     </div>
                   )}
 
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleHistory(emp)}
-                      className="inline-flex items-center gap-1 rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-400 hover:text-white hover:border-gray-500 transition"
-                    >
-                      {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                      История действий
-                    </button>
-                  </div>
+                  {canViewHistory && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleHistory(emp)}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-400 hover:text-white hover:border-gray-500 transition"
+                      >
+                        {historyOpen[`${emp.kind}-${emp.id}`] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                        История действий
+                      </button>
+                    </div>
+                  )}
 
-                  {historyOpen[`${emp.kind}-${emp.id}`] && (
+                  {canViewHistory && historyOpen[`${emp.kind}-${emp.id}`] && (
                     <div className="mt-2 pl-2 border-l border-gray-700 text-xs space-y-1">
                       {historyLoading[`${emp.kind}-${emp.id}`] ? (
                         <div className="text-gray-500 italic">Загрузка истории…</div>
@@ -395,18 +402,24 @@ export default function HrPage() {
                     </div>
                   )}
                 </div>
-                <div className="shrink-0">
-                  {dismissed ? (
-                    <Button size="sm" variant="outline" onClick={() => restore(emp)} disabled={busy}>
-                      {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserCheck className="w-3 h-3 mr-1" />}
-                      Восстановить
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="destructive" onClick={() => openDismiss(emp)} disabled={busy}>
-                      <UserMinus className="w-3 h-3 mr-1" /> Уволить
-                    </Button>
-                  )}
-                </div>
+                {((dismissed && canRestore) || (!dismissed && canDismiss)) && (
+                  <div className="shrink-0">
+                    {dismissed ? (
+                      canRestore && (
+                        <Button size="sm" variant="outline" onClick={() => restore(emp)} disabled={busy}>
+                          {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserCheck className="w-3 h-3 mr-1" />}
+                          Восстановить
+                        </Button>
+                      )
+                    ) : (
+                      canDismiss && (
+                        <Button size="sm" variant="destructive" onClick={() => openDismiss(emp)} disabled={busy}>
+                          <UserMinus className="w-3 h-3 mr-1" /> Уволить
+                        </Button>
+                      )
+                    )}
+                  </div>
+                )}
               </Card>
             )
           })}

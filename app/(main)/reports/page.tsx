@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { PageSnapshot } from '@/lib/ai/types'
 import { supabase } from '@/lib/supabaseClient'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import {
   Activity,
@@ -917,6 +918,7 @@ function ReportsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { can } = useCapabilities()
 
   // Mount state for charts
   const [mounted, setMounted] = useState(false)
@@ -2017,22 +2019,24 @@ function ReportsContent() {
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
-                <div className="relative group">
-                  <Button 
-                    variant="outline" 
-                    className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Экспорт
-                    <ChevronDown className="w-4 h-4 ml-2" />
-                  </Button>
-                  <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4" />
-                      Скачать Excel
-                    </button>
+                {can('reports.export') && (
+                  <div className="relative group">
+                    <Button
+                      variant="outline"
+                      className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Экспорт
+                      <ChevronDown className="w-4 h-4 ml-2" />
+                    </Button>
+                    <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4" />
+                        Скачать Excel
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <Button
                   variant="outline"

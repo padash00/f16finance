@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   AlertTriangle,
   Bot,
@@ -112,6 +113,7 @@ function SectionToggle({
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function TelegramPage() {
+  const { can } = useCapabilities()
   // Status
   const [status, setStatus] = useState<BotStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -412,6 +414,7 @@ create table if not exists telegram_allowed_users (
             </p>
 
             {/* Add user form */}
+            {can('telegram.add_user') && (
             <div className="rounded-xl border border-gray-700 bg-gray-800/30 p-4 mb-4 space-y-3">
               <p className="text-xs font-medium text-gray-300">Добавить пользователя</p>
               <div className="flex gap-2">
@@ -456,6 +459,7 @@ create table if not exists telegram_allowed_users (
                 Свой Telegram ID: напишите боту <span className="text-gray-400">@userinfobot</span> — он вернёт числовой ID
               </p>
             </div>
+            )}
 
             {/* Users list */}
             {usersLoading ? (
@@ -497,24 +501,28 @@ create table if not exists telegram_allowed_users (
                       >
                         {user.can_finance ? 'Финансы' : 'Нет доступа'}
                       </span>
-                      <button
-                        onClick={() => handleToggleFinance(user)}
-                        className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors"
-                        title={user.can_finance ? 'Отключить доступ' : 'Включить доступ'}
-                      >
-                        {user.can_finance ? (
-                          <UserX className="w-3.5 h-3.5" />
-                        ) : (
-                          <UserCheck className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
-                        title="Удалить"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {can('telegram.toggle_finance') && (
+                        <button
+                          onClick={() => handleToggleFinance(user)}
+                          className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors"
+                          title={user.can_finance ? 'Отключить доступ' : 'Включить доступ'}
+                        >
+                          {user.can_finance ? (
+                            <UserX className="w-3.5 h-3.5" />
+                          ) : (
+                            <UserCheck className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                      {can('telegram.delete_user') && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
+                          title="Удалить"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -597,12 +605,14 @@ create table if not exists telegram_allowed_users (
                             <span className={`text-xs font-mono ${member.telegram_chat_id ? 'text-blue-400' : 'text-gray-600'}`}>
                               {member.telegram_chat_id || 'не привязан'}
                             </span>
-                            <button
-                              onClick={() => { setEditingStaffId(member.id); setEditingTgId(member.telegram_chat_id || '') }}
-                              className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              <Settings2 className="w-3.5 h-3.5" />
-                            </button>
+                            {can('telegram.edit_staff_telegram') && (
+                              <button
+                                onClick={() => { setEditingStaffId(member.id); setEditingTgId(member.telegram_chat_id || '') }}
+                                className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors"
+                              >
+                                <Settings2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -632,14 +642,16 @@ create table if not exists telegram_allowed_users (
                   placeholder="https://your-domain.com/api/telegram/webhook"
                   className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-blue-500/50"
                 />
-                <button
-                  onClick={handleSetupWebhook}
-                  disabled={setupLoading || !webhookUrl}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
-                >
-                  {setupLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Webhook className="w-4 h-4" />}
-                  Зарегистрировать
-                </button>
+                {can('telegram.setup_webhook') && (
+                  <button
+                    onClick={handleSetupWebhook}
+                    disabled={setupLoading || !webhookUrl}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    {setupLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Webhook className="w-4 h-4" />}
+                    Зарегистрировать
+                  </button>
+                )}
               </div>
               {setupMsg && (
                 <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${setupMsg.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
@@ -656,22 +668,26 @@ create table if not exists telegram_allowed_users (
                 Ручная отправка финансового отчёта в настроенный Telegram-канал.
               </p>
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => handleSendReport('daily')}
-                  disabled={!!reportLoading}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
-                >
-                  {reportLoading === 'daily' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
-                  Дневной отчёт
-                </button>
-                <button
-                  onClick={() => handleSendReport('weekly')}
-                  disabled={!!reportLoading}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
-                >
-                  {reportLoading === 'weekly' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
-                  Недельный отчёт
-                </button>
+                {can('telegram.send_report') && (
+                  <button
+                    onClick={() => handleSendReport('daily')}
+                    disabled={!!reportLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
+                  >
+                    {reportLoading === 'daily' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
+                    Дневной отчёт
+                  </button>
+                )}
+                {can('telegram.send_report') && (
+                  <button
+                    onClick={() => handleSendReport('weekly')}
+                    disabled={!!reportLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
+                  >
+                    {reportLoading === 'weekly' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
+                    Недельный отчёт
+                  </button>
+                )}
               </div>
               {reportMsg && (
                 <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${reportMsg.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>

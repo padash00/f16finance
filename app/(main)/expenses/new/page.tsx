@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type Category = { id: string; name: string; accounting_group: FinancialGroup | null }
 type Company = { id: string; name: string; code?: string | null }
@@ -133,6 +134,7 @@ function ExpenseWizardPageContent() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const draftRestoredRef = useRef(false)
+  const { can } = useCapabilities()
 
   useEffect(() => {
     let cancelled = false
@@ -985,17 +987,19 @@ function ExpenseWizardPageContent() {
                       </Button>
                     </div>
                   ))}
-                  <Button
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    className="w-full"
-                  >
-                    {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                    Добавить ещё чек / файл
-                  </Button>
+                  {can('expenses.import_file') && (
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="w-full"
+                    >
+                      {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                      Добавить ещё чек / файл
+                    </Button>
+                  )}
                 </div>
-              ) : (
+              ) : can('expenses.import_file') ? (
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
@@ -1005,7 +1009,7 @@ function ExpenseWizardPageContent() {
                   {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                   Загрузить файл или несколько файлов (до 10 МБ каждый)
                 </Button>
-              )}
+              ) : null}
               {(payload.document_urls.length > 0 || payload.document_url) ? (
                 <p className={validHintClass}>Загружено документов: {payload.document_urls.length || 1}</p>
               ) : null}
@@ -1186,7 +1190,7 @@ function ExpenseWizardPageContent() {
             Далее <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         )}
-        {step === 3 && (
+        {step === 3 && can('expenses.create') && (
           <Button onClick={handleSubmit} disabled={saving}>
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
             Создать расход

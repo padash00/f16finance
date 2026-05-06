@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Building2,
   ChevronDown,
@@ -489,6 +490,7 @@ function ProjectFormPanel({
 }
 
 export default function PointDevicesPage() {
+  const { can } = useCapabilities()
   const [companies, setCompanies] = useState<Company[]>([])
   const [projects, setProjects] = useState<PointProject[]>([])
   const [loading, setLoading] = useState(true)
@@ -711,20 +713,22 @@ export default function PointDevicesPage() {
       ) : null}
 
       {/* Create form */}
-      <Card className="border-border bg-card p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Plus className="h-4 w-4 text-cyan-300" />
-          <h2 className="text-lg font-semibold text-foreground">Новый проект</h2>
-        </div>
-        <ProjectFormPanel
-          title=""
-          form={newProject}
-          allCompanies={companies}
-          saving={saving}
-          onSave={handleCreate}
-          onChange={setNewProject}
-        />
-      </Card>
+      {can('point-devices.create') && (
+        <Card className="border-border bg-card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4 text-cyan-300" />
+            <h2 className="text-lg font-semibold text-foreground">Новый проект</h2>
+          </div>
+          <ProjectFormPanel
+            title=""
+            form={newProject}
+            allCompanies={companies}
+            saving={saving}
+            onSave={handleCreate}
+            onChange={setNewProject}
+          />
+        </Card>
+      )}
 
       {/* Projects list */}
       <div className="space-y-4">
@@ -784,10 +788,12 @@ export default function PointDevicesPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" onClick={() => startEdit(project)} className="gap-2">
-                          <Pencil className="h-4 w-4" />
-                          Изменить
-                        </Button>
+                        {can('point-devices.edit') && (
+                          <Button size="sm" variant="outline" onClick={() => startEdit(project)} className="gap-2">
+                            <Pencil className="h-4 w-4" />
+                            Изменить
+                          </Button>
+                        )}
                         {project.companies.some((c) => (c.feature_flags as any)?.arena_enabled === true) ? (
                           <Button size="sm" variant="outline" asChild className="gap-2">
                             <a href={`/stations/${project.id}`}>
@@ -796,23 +802,29 @@ export default function PointDevicesPage() {
                             </a>
                           </Button>
                         ) : null}
-                        <Button size="sm" variant="outline" onClick={() => handleRotate(project.id)} className="gap-2">
-                          <RefreshCw className="h-4 w-4" />
-                          Новый token
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleToggle(project.id, !project.is_active)}
-                          className="gap-2"
-                        >
-                          <Power className="h-4 w-4" />
-                          {project.is_active ? 'Выключить' : 'Включить'}
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDelete(project.id)} className="gap-2">
-                          <Trash2 className="h-4 w-4" />
-                          Удалить
-                        </Button>
+                        {can('point-devices.rotate_token') && (
+                          <Button size="sm" variant="outline" onClick={() => handleRotate(project.id)} className="gap-2">
+                            <RefreshCw className="h-4 w-4" />
+                            Новый token
+                          </Button>
+                        )}
+                        {can('point-devices.toggle_active') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleToggle(project.id, !project.is_active)}
+                            className="gap-2"
+                          >
+                            <Power className="h-4 w-4" />
+                            {project.is_active ? 'Выключить' : 'Включить'}
+                          </Button>
+                        )}
+                        {can('point-devices.delete') && (
+                          <Button size="sm" variant="destructive" onClick={() => handleDelete(project.id)} className="gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Удалить
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -863,27 +875,31 @@ export default function PointDevicesPage() {
                             Project token
                           </span>
                           <div className="flex gap-2">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                setRevealedTokens((prev) => ({
-                                  ...prev,
-                                  [project.id]: !prev[project.id],
-                                }))
-                              }
-                            >
-                              {tokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={() => copyToken(project.project_token)}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
+                            {can('point-devices.reveal_token') && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() =>
+                                  setRevealedTokens((prev) => ({
+                                    ...prev,
+                                    [project.id]: !prev[project.id],
+                                  }))
+                                }
+                              >
+                                {tokenVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </Button>
+                            )}
+                            {can('point-devices.copy_token') && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => copyToken(project.project_token)}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                         <code className="block break-all rounded-lg bg-black/40 px-3 py-2 text-xs text-cyan-200">

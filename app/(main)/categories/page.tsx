@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   FINANCIAL_GROUP_OPTIONS,
   PL_CHAIN,
@@ -37,6 +38,7 @@ type Category = {
 type PageTab = 'categories' | 'groups'
 
 export default function CategoriesPage() {
+  const { can } = useCapabilities()
   const [tab, setTab] = useState<PageTab>('categories')
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -310,12 +312,16 @@ export default function CategoriesPage() {
                         ) : null}
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-accent" onClick={() => startEdit(cat)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-500" onClick={() => handleDelete(cat.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {can('categories.edit') && (
+                          <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-accent" onClick={() => startEdit(cat)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {can('categories.delete') && (
+                          <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-red-500" onClick={() => handleDelete(cat.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -326,6 +332,7 @@ export default function CategoriesPage() {
           </div>
 
           {/* Форма создания */}
+          {can('categories.create') && (
           <div className="lg:col-span-1">
             <Card className="p-6 border-border bg-card neon-glow sticky top-6">
               <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border">
@@ -380,6 +387,7 @@ export default function CategoriesPage() {
               )}
             </Card>
           </div>
+          )}
         </div>
       )}
 
@@ -491,13 +499,15 @@ export default function CategoriesPage() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => { setNewAccountingGroup(group.value as FinancialGroup); setTab('categories') }}
-                      className="shrink-0 flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-muted-foreground transition hover:border-accent/40 hover:text-accent"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Добавить
-                    </button>
+                    {can('categories.create') && (
+                      <button
+                        onClick={() => { setNewAccountingGroup(group.value as FinancialGroup); setTab('categories') }}
+                        className="shrink-0 flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-muted-foreground transition hover:border-accent/40 hover:text-accent"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Добавить
+                      </button>
+                    )}
                   </div>
                 </Card>
               )

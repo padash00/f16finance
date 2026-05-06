@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   RefreshCcw,
   Wand2,
@@ -200,6 +201,7 @@ export default function KPIStatusAndPayoutPage() {
 
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
+  const { can } = useCapabilities()
 
   const [collectivePlans, setCollectivePlans] = useState<Record<CompanyCode, { week: number; month: number }>>({
     arena: { week: 0, month: 0 },
@@ -574,9 +576,11 @@ export default function KPIStatusAndPayoutPage() {
               <Button variant="ghost" size="sm" onClick={loadAll} disabled={loading}>
                 <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
-              <Button variant="secondary" size="sm" onClick={generatePlans} disabled={loading}>
-                <Wand2 className="w-4 h-4 mr-2 text-indigo-400" /> Генерировать планы
-              </Button>
+              {can('kpi.generate_collective_plans') && (
+                <Button variant="secondary" size="sm" onClick={generatePlans} disabled={loading}>
+                  <Wand2 className="w-4 h-4 mr-2 text-indigo-400" /> Генерировать планы
+                </Button>
+              )}
             </div>
           </div>
 

@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { formatTariffWindowLabel, parseTimeToMinutes } from '@/lib/core/arena-tariff-window'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -915,6 +916,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function StationsPageContent() {
+  const { can } = useCapabilities()
   const params = useParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -1887,7 +1889,7 @@ function StationsPageContent() {
                     </button>
                   </>
                 )}
-                {!addingZone && (
+                {!addingZone && can('stations.create_zone') && (
                   <button
                     type="button"
                     onClick={() => setAddingZone(true)}
@@ -2019,26 +2021,30 @@ function StationsPageContent() {
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 self-start sm:self-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (editingZoneId === zone.id) {
-                            setEditingZoneId(null)
-                          } else {
-                            setEditingZoneId(zone.id)
-                            setZoneEditName(zone.name)
-                            setZoneEditHourly(
-                              zone.extension_hourly_price != null && zone.extension_hourly_price > 0
-                                ? String(zone.extension_hourly_price)
-                                : '',
-                            )
-                          }
-                        }}
-                        className="rounded p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button type="button" onClick={() => handleDeleteZone(zone.id)} className="rounded p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                      {can('stations.edit_zone') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editingZoneId === zone.id) {
+                              setEditingZoneId(null)
+                            } else {
+                              setEditingZoneId(zone.id)
+                              setZoneEditName(zone.name)
+                              setZoneEditHourly(
+                                zone.extension_hourly_price != null && zone.extension_hourly_price > 0
+                                  ? String(zone.extension_hourly_price)
+                                  : '',
+                              )
+                            }
+                          }}
+                          className="rounded p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {can('stations.delete_zone') && (
+                        <button type="button" onClick={() => handleDeleteZone(zone.id)} className="rounded p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                      )}
                     </div>
                   </div>
 
@@ -2047,16 +2053,18 @@ function StationsPageContent() {
                       <div className="p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"><Monitor className="h-3.5 w-3.5" /> Станции</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewStationName('')
-                              setCrudDialog({ kind: 'station', zoneId: zone.id, zoneLabel: zone.name })
-                            }}
-                            className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                          >
-                            <Plus className="h-3 w-3" /> Добавить
-                          </button>
+                          {can('stations.create_station') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewStationName('')
+                                setCrudDialog({ kind: 'station', zoneId: zone.id, zoneLabel: zone.name })
+                              }}
+                              className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                            >
+                              <Plus className="h-3 w-3" /> Добавить
+                            </button>
+                          )}
                         </div>
                         <div className="space-y-1">
                           {zoneStations.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет станций</p>}
@@ -2169,50 +2177,62 @@ function StationsPageContent() {
                                   <div className="flex shrink-0 items-center gap-1">
                                     {/* Start / Stop session buttons — always visible */}
                                     {!st.active_session_id ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => { setQuickStartStationId(st.id); setQuickTariffId('') }}
-                                        className="rounded px-2 py-1 text-[10px] font-medium bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
-                                        title="Запустить сессию"
-                                      >
-                                        ▶ Старт
-                                      </button>
+                                      can('stations.admin_start_session') && (
+                                        <button
+                                          type="button"
+                                          onClick={() => { setQuickStartStationId(st.id); setQuickTariffId('') }}
+                                          className="rounded px-2 py-1 text-[10px] font-medium bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
+                                          title="Запустить сессию"
+                                        >
+                                          ▶ Старт
+                                        </button>
+                                      )
                                     ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleAdminEndSession(st.id)}
-                                        disabled={saving}
-                                        className="rounded px-2 py-1 text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
-                                        title="Завершить сессию"
-                                      >
-                                        ■ Стоп
-                                      </button>
+                                      can('stations.admin_end_session') && (
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleAdminEndSession(st.id)}
+                                          disabled={saving}
+                                          className="rounded px-2 py-1 text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
+                                          title="Завершить сессию"
+                                        >
+                                          ■ Стоп
+                                        </button>
+                                      )
                                     )}
                                   </div>
                                   <div className="hidden items-center gap-1 group-hover:flex">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setBindGameId(gamesCatalog[0]?.id || '')
-                                        setBindExePath('')
-                                        setBindArgs('')
-                                        setCrudDialog({ kind: 'stationGames', stationId: st.id, stationLabel: st.name })
-                                      }}
-                                      className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                                      title="Игры станции"
-                                    >
-                                      <Monitor className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => openKioskTheme(st as any)}
-                                      className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                                      title="Тема киоска"
-                                    >
-                                      <Paintbrush className="h-3 w-3" />
-                                    </button>
-                                    <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
-                                    <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                    {can('stations.edit_station_game') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setBindGameId(gamesCatalog[0]?.id || '')
+                                          setBindExePath('')
+                                          setBindArgs('')
+                                          setCrudDialog({ kind: 'stationGames', stationId: st.id, stationLabel: st.name })
+                                        }}
+                                        className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                        title="Игры станции"
+                                      >
+                                        <Monitor className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                    {can('stations.edit_kiosk_background') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openKioskTheme(st as any)}
+                                        className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                        title="Тема киоска"
+                                      >
+                                        <Paintbrush className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                    {can('stations.edit_station') && (
+                                      <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                    )}
+                                    {can('stations.delete_station') && (
+                                      <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                    )}
                                   </div>
                                 </div>
                               )}
@@ -2282,16 +2302,18 @@ function StationsPageContent() {
                       <div className="p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"><Clock className="h-3.5 w-3.5" /> Тарифы</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewTariff({ ...EMPTY_NEW_TARIFF })
-                              setCrudDialog({ kind: 'tariff', zoneId: zone.id, zoneLabel: zone.name })
-                            }}
-                            className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                          >
-                            <Plus className="h-3 w-3" /> Добавить
-                          </button>
+                          {can('stations.create_tariff') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewTariff({ ...EMPTY_NEW_TARIFF })
+                                setCrudDialog({ kind: 'tariff', zoneId: zone.id, zoneLabel: zone.name })
+                              }}
+                              className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                            >
+                              <Plus className="h-3 w-3" /> Добавить
+                            </button>
+                          )}
                         </div>
                         <div className="space-y-1">
                           {zoneTariffs.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет тарифов</p>}
@@ -2363,8 +2385,12 @@ function StationsPageContent() {
                                     )}
                                   </div>
                                   <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
-                                    <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
-                                    <button type="button" onClick={() => handleDeleteTariff(t.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                    {can('stations.edit_tariff') && (
+                                      <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                    )}
+                                    {can('stations.delete_tariff') && (
+                                      <button type="button" onClick={() => handleDeleteTariff(t.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                    )}
                                   </div>
                                 </div>
                               )}
@@ -2380,7 +2406,7 @@ function StationsPageContent() {
           </div>
         )}
 
-        {activeTab === 'manage' && (
+        {activeTab === 'manage' && can('stations.top_up_balance') && (
           <div className="rounded-xl border border-white/10 bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -2459,7 +2485,7 @@ function StationsPageContent() {
               </div>
 
               {/* Add new game form */}
-              {!editingGame && (
+              {!editingGame && can('stations.create_game_catalog') && (
                 <div className="rounded-lg border border-white/10 bg-white/3 p-4 space-y-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Новая игра</p>
                   <div className="flex gap-3 items-start">
@@ -2534,8 +2560,12 @@ function StationsPageContent() {
                       <p className="text-xs text-muted-foreground">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Программа'}{!g.is_active ? ' · выключена' : ''}</p>
                     </div>
                     <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-                      <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
-                      <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded-lg p-1.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                      {can('stations.edit_game_catalog') && (
+                        <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                      )}
+                      {can('stations.delete_game_catalog') && (
+                        <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded-lg p-1.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2543,6 +2573,7 @@ function StationsPageContent() {
             </div>
 
             {/* ─── Zone Bulk Assignment ─── */}
+            {can('stations.bulk_upsert_games') && (
             <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
               <div>
                 <h2 className="text-base font-semibold flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Назначение по зонам</h2>
@@ -2593,6 +2624,7 @@ function StationsPageContent() {
                 </div>
               )}
             </div>
+            )}
           </div>
         )}
 
@@ -2897,15 +2929,17 @@ function StationsPageContent() {
                 </label>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void handleSaveBranding()}
-                disabled={brandingSaving}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-              >
-                {brandingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Сохранить
-              </button>
+              {can('stations.update_branding') && (
+                <button
+                  type="button"
+                  onClick={() => void handleSaveBranding()}
+                  disabled={brandingSaving}
+                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {brandingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Сохранить
+                </button>
+              )}
             </div>
 
             {/* ─── Kiosk Branding ─────────────────────────────────────────── */}
@@ -3061,6 +3095,7 @@ function StationsPageContent() {
             </div>
 
             {/* Provisioning key block */}
+            {can('stations.rotate_provisioning_key') && (
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-3">
               <div>
                 <h2 className="text-sm font-semibold text-amber-400">Ключ активации киоска</h2>
@@ -3104,6 +3139,7 @@ function StationsPageContent() {
                 {provisioningKey ? 'Сгенерировать новый ключ' : 'Сгенерировать ключ'}
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
