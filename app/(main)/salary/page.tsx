@@ -911,7 +911,7 @@ export default function SalaryPage() {
 
   return (
     <>
-        <div className="mx-auto w-full max-w-[1800px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
+        <div className="app-page-wide space-y-6">
 
           <AdminPageHeader
             title="Зарплата"
@@ -1100,7 +1100,7 @@ export default function SalaryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
+                  {loading && operators.length === 0 ? (
                     <tr>
                       <td colSpan={13} className="px-4 py-6">
                         <div className="space-y-3">
@@ -1123,8 +1123,8 @@ export default function SalaryPage() {
                       </td>
                     </tr>
                   ) : null}
-                  {!loading && operators.length === 0 ? <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400">В этой неделе пока нет строк для отображения.</td></tr> : null}
-                  {!loading ? operators.map((item) => {
+                  {operators.length === 0 && !loading ? <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400">В этой неделе пока нет строк для отображения.</td></tr> : null}
+                  {operators.map((item) => {
                     const st = statusMeta(item.week.status)
                     const open = Boolean(expanded[item.operator.id])
                     const canPay = item.week.remainingAmount > 0.009
@@ -1188,7 +1188,7 @@ export default function SalaryPage() {
                           </div></td></tr> : null}
                       </Fragment>
                     )
-                  }) : null}
+                  })}
                 </tbody>
               </table>
           </AdminTableViewport>
@@ -1337,7 +1337,7 @@ export default function SalaryPage() {
                     ))}
                   </div>
                 ) : null}
-                {loading ? (
+                {loading && filteredOperatorGlobalTimeline.length === 0 ? (
                   <div className="space-y-2">
                     {Array.from({ length: 8 }).map((_, idx) => (
                       <Skeleton key={idx} className="h-10 rounded-xl" />

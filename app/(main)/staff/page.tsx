@@ -522,7 +522,7 @@ export default function StaffPageSmart() {
 
   return (
     <>
-        <div className="mx-auto max-w-[1400px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6">
+        <div className="app-page-wide space-y-6">
 
           <AdminPageHeader
             title="Команда"

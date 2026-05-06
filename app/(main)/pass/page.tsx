@@ -401,7 +401,7 @@ export default function AccessPage() {
     setSavingLoginId(null)
   }
 
-  if (loading) {
+  if (loading && operators.length === 0) {
     return (
       <>
           <div className="text-center">
@@ -417,7 +417,7 @@ export default function AccessPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
           
           {/* Уведомления */}
           {error && (

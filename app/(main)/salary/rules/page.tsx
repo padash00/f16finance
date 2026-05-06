@@ -1073,7 +1073,7 @@ function SalaryRulesContent() {
 
   return (
     <>
-        <div className="app-page mx-auto w-full max-w-[1800px] space-y-6 px-4 md:px-6 xl:px-8">
+        <div className="app-page-wide space-y-6">
           <AdminPageHeader
             backHref="/salary"
             title="Правила расчёта зарплаты"
@@ -2068,7 +2068,7 @@ function SalaryRulesContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {loading ? (
+                      {loading && seniorityTiers.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="py-8 text-center text-gray-500">
                             Загрузка правил стажа...

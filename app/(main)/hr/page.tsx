@@ -208,7 +208,7 @@ export default function HrPage() {
   }
 
   return (
-    <div className="app-page max-w-[1500px] space-y-6">
+    <div className="app-page-wide space-y-6">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-900/30 via-gray-900 to-slate-900/40 p-6 border border-indigo-500/20">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-15 pointer-events-none" />
         <div className="absolute -bottom-10 -left-8 w-56 h-56 bg-cyan-500 rounded-full blur-3xl opacity-10 pointer-events-none" />
@@ -305,7 +305,7 @@ export default function HrPage() {
         ) : null}
       </div>
 
-      {loading ? (
+      {loading && items.length === 0 ? (
         <Card className="py-12 text-center text-muted-foreground bg-gray-900/60 border-gray-800">
           <Loader2 className="w-5 h-5 animate-spin mx-auto mb-3" />
           Загрузка...

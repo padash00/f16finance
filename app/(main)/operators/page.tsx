@@ -431,7 +431,7 @@ export default function OperatorsPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
           <AdminPageHeader
             title="Операторы"
             description="Управление операторами и их профилями"

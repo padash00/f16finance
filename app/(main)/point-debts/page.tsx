@@ -294,7 +294,7 @@ export default function PointDebtsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1800px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title="Долги с точки"
         description="Позиции по неделям, выгрузка и списание"
@@ -488,7 +488,7 @@ export default function PointDebtsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-16 text-center text-slate-400">
                     <div className="inline-flex items-center gap-2">

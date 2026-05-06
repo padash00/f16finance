@@ -769,7 +769,7 @@ export default function StructurePage() {
 
   return (
     <>
-        <div className="app-page space-y-6">
+        <div className="app-page-wide space-y-6">
           <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_32%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.3)] sm:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
@@ -795,7 +795,7 @@ export default function StructurePage() {
             </div>
           </Card>
 
-          {loading ? (
+          {loading && staff.length === 0 ? (
             <Card className="border-white/10 bg-slate-950/65 p-8 text-white">
               <div className="flex items-center gap-3 text-slate-300">
                 <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
