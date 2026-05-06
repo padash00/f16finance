@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getAllCapabilityIds } from '@/lib/core/capabilities'
+import { invalidateCapabilitiesCache } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -55,6 +57,13 @@ export async function POST(req: Request) {
       const description = String(body?.description || '').trim() || null
       if (!name || name.length < 2) return json({ error: 'name обязателен (мин. 2 символа)' }, 400)
 
+      // По умолчанию что включаем для новой роли:
+      // 'open'  — все 265 capabilities включены (как у владельца)
+      // 'closed' — ничего не включено, настраивает руками
+      // 'copy_from' — копировать набор от другой роли (поле copy_from_role)
+      const seedMode = String(body?.seed || 'open') as 'open' | 'closed' | 'copy_from'
+      const copyFromRole = String(body?.copy_from_role || '').trim()
+
       const { data, error } = await supabase
         .from('positions')
         .insert({ name, description, is_builtin: false })
@@ -62,6 +71,33 @@ export async function POST(req: Request) {
         .single()
 
       if (error) throw error
+
+      // Засеять capabilities в зависимости от выбранного режима
+      try {
+        if (seedMode === 'open') {
+          const allCaps = getAllCapabilityIds()
+          const rows = allCaps.map((c) => ({ role: name, capability: c, granted: true }))
+          await supabase.from('role_capabilities').upsert(rows, { onConflict: 'role,capability' })
+        } else if (seedMode === 'copy_from' && copyFromRole) {
+          const { data: source } = await supabase
+            .from('role_capabilities')
+            .select('capability, granted')
+            .eq('role', copyFromRole)
+          const rows = (source || []).map((r: any) => ({
+            role: name,
+            capability: r.capability,
+            granted: r.granted,
+          }))
+          if (rows.length > 0) {
+            await supabase.from('role_capabilities').upsert(rows, { onConflict: 'role,capability' })
+          }
+        }
+        // 'closed' — ничего не вставляем, capabilities останутся пустыми
+      } catch (e) {
+        console.warn('Не удалось засеять capabilities для новой роли', e)
+      }
+
+      invalidateCapabilitiesCache()
       return json({ ok: true, data })
     }
 
@@ -93,10 +129,13 @@ export async function POST(req: Request) {
       if (!pos) return json({ error: 'Должность не найдена' }, 404)
       if (pos.is_builtin) return json({ error: 'Нельзя удалить встроенную должность' }, 400)
 
+      // Чистим обе системы: старую (page-level) и новую (capabilities)
       await supabase.from('role_permissions').delete().eq('role', pos.name)
+      await supabase.from('role_capabilities').delete().eq('role', pos.name)
 
       const { error } = await supabase.from('positions').delete().eq('id', id)
       if (error) throw error
+      invalidateCapabilitiesCache()
       return json({ ok: true })
     }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -618,8 +619,13 @@ export default function AccessPage() {
         </>
       )}
 
-      {/* ============ TAB: PERMISSIONS ============ */}
+      {/* ============ TAB: PERMISSIONS (capabilities v2) ============ */}
       {tab === 'permissions' && (
+        <CapabilitiesPanel />
+      )}
+
+      {/* Старая модель временно сохранена для отката (без UI) */}
+      {false && tab === 'permissions' && (
         <>
           {permsTableExists === false && (
             <Card className="p-5 bg-yellow-500/5 border border-yellow-500/30">

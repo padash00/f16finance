@@ -2,10 +2,11 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
+import { findCapabilityPageByPath } from '@/lib/core/capabilities'
 import { SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
+import { loadUserCapabilities } from '@/lib/server/capabilities'
 import { fetchLinkedCustomersForUser } from '@/lib/server/linked-customers'
-import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 const AUTH_SELF_SERVICE_PATHS = [
   '/forgot-password',
@@ -141,29 +142,17 @@ export async function proxy(request: NextRequest) {
       : []
   const isCustomer = !isSuperAdmin && !staffMember && !isOperator && linkedCustomers.length > 0
 
-  let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
+  const rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
 
-  const adminSupabase = hasAdminSupabaseCredentials()
-    ? createAdminSupabaseClient()
-    : supabase
-
-  if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
+  // Загружаем capabilities пользователя из новой системы RBAC.
+  // Если capabilities не настроены (или это оператор/клиент) — будет пустой Set,
+  // и middleware упадёт на старую canAccessPath ниже.
+  let userCapabilities: Set<string> = new Set()
+  if (!isSuperAdmin && isStaff && user.id) {
     try {
-      const { data } = await adminSupabase
-        .from('role_permissions')
-        .select('path, enabled')
-        .eq('role', staffRole)
-
-      rolePermissionOverrides = Array.isArray(data)
-        ? data
-            .filter((item: any) => item?.path)
-            .map((item: any) => ({
-              path: String(item.path),
-              enabled: item.enabled !== false,
-            }))
-        : []
+      userCapabilities = await loadUserCapabilities(user.id, staffRole)
     } catch {
-      rolePermissionOverrides = []
+      userCapabilities = new Set()
     }
   }
 
@@ -207,15 +196,32 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  const hasAccess = canAccessPath({
-    pathname: requestedPath,
-    isStaff,
-    isOperator,
-    isCustomer,
-    staffRole,
-    isSuperAdmin,
-    rolePermissionOverrides,
-  })
+  // Проверка через новую модель capabilities:
+  // если страница есть в каталоге CAPABILITY_GROUPS — нужно право <page-id>.view.
+  // Если страницы нет в каталоге → fallback на старую canAccessPath.
+  let capabilityGate: boolean | null = null
+  if (!isSuperAdmin && isStaff) {
+    const capPage = findCapabilityPageByPath(requestedPath)
+    if (capPage) {
+      const viewCap = `${capPage.id}.view`
+      capabilityGate = userCapabilities.has(viewCap)
+    }
+  }
+
+  const hasAccess =
+    capabilityGate === false
+      ? false
+      : capabilityGate === true
+        ? true
+        : canAccessPath({
+            pathname: requestedPath,
+            isStaff,
+            isOperator,
+            isCustomer,
+            staffRole,
+            isSuperAdmin,
+            rolePermissionOverrides,
+          })
 
   if (requestedPath === '/') {
     url.pathname = defaultPath
