@@ -18,7 +18,8 @@ export async function GET(request: Request) {
     const denied = await requireCapability(access, 'expenses-pending.view')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

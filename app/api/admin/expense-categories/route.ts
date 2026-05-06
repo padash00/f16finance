@@ -96,7 +96,8 @@ export async function POST(req: Request) {
     const denied = await requireCapability(access, 'categories.create')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -135,7 +136,8 @@ export async function PATCH(req: Request) {
     const denied = await requireCapability(access, 'categories.edit')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -178,7 +180,8 @@ export async function DELETE(req: Request) {
     const denied = await requireCapability(access, 'categories.delete')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

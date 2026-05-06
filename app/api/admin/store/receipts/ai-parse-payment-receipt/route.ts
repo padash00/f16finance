@@ -48,7 +48,8 @@ export async function POST(req: Request) {
     const rl = checkRateLimit(`ai-payment-receipt-parse:${access.user?.id || ip}`, 30, 60_000)
     if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

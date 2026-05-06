@@ -16,16 +16,16 @@ function canManageStore(access: {
   isSuperAdmin: boolean
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
-  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
-// Оприходование = ручное добавление товара без поставщика. Это чувствительная операция,
-// её разрешаем только владельцу/суперадмину, чтобы менеджеры не могли «нарисовать» остатки.
+// Capability checks выше уже отсеивают; здесь — любой staff
 function canPostInventory(access: {
   isSuperAdmin: boolean
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
-  return access.isSuperAdmin || access.staffRole === 'owner'
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 type Body = {

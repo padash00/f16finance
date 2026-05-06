@@ -179,8 +179,9 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
-    const canUpdateFinance = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
-    const canDeleteFinance = access.isSuperAdmin || access.staffRole === 'owner'
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    const canUpdateFinance = access.isSuperAdmin || !!access.staffRole
+    const canDeleteFinance = access.isSuperAdmin || !!access.staffRole
 
     if (body.action === 'createExpense') {
       return json({

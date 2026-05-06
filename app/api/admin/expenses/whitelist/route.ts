@@ -24,8 +24,9 @@ export async function GET(req: Request) {
     const denied = await requireCapability(access, 'expense-whitelist.view')
     if (denied) return denied as any
 
+    // Capability checks выше уже отсеивают; здесь — любой staff
     const role = access.staffRole
-    if (!access.isSuperAdmin && role !== 'owner' && role !== 'manager') {
+    if (!access.isSuperAdmin && !role) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -68,7 +69,8 @@ export async function POST(req: Request) {
     const denied = await requireCapability(access, 'expense-whitelist.create')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -134,7 +136,8 @@ export async function PATCH(req: Request) {
     const denied = await requireCapability(access, 'expense-whitelist.edit')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -202,7 +205,8 @@ export async function DELETE(req: Request) {
     const denied = await requireCapability(access, 'expense-whitelist.delete')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

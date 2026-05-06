@@ -61,7 +61,8 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const canManage = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    const canManage = access.isSuperAdmin || !!access.staffRole
     if (!canManage) return json({ error: 'forbidden' }, 403)
 
     const requestClient = createRequestSupabaseClient(req)

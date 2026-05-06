@@ -77,7 +77,8 @@ async function ensureArenaEntityAccess(
 async function getContext(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access
-  if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  if (!access.isSuperAdmin && !access.staffRole) {
     return { response: NextResponse.json({ error: 'forbidden' }, { status: 403 }) }
   }
   return access

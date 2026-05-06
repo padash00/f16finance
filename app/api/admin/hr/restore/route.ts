@@ -23,7 +23,8 @@ export async function POST(req: Request) {
     const denied = await requireCapability(access, 'staff.toggle_status')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

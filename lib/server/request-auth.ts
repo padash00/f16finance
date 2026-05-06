@@ -272,6 +272,16 @@ export async function requireStaffCapabilityRequest(request: Request, capability
     return null
   }
 
+  // Старая капабилити-матрица в STAFF_ROLE_MATRIX (захардкоженная, без UI настройки).
+  // Заменена на новую систему через requireCapability(access, '<page>.<action>')
+  // и middleware с проверкой <page>.view.
+  // Здесь пропускаем любого staff — реальная защита идёт в API через
+  // requireCapability и в proxy.ts через capability-page check.
+  if (context.staffRole) {
+    return null
+  }
+
+  // Не staff (operator/customer) — закрываем.
   if (!staffRoleHasCapability(context.staffRole, capability)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }

@@ -17,7 +17,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const denied = await requireCapability(access, 'expenses-pending.approve')
     if (denied) return denied as any
 
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

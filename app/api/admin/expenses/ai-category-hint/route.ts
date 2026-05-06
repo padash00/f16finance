@@ -66,7 +66,8 @@ export async function POST(req: Request) {
     const denied = await requireCapability(access, 'expenses.create')
     if (denied) return denied as any
 
-    const canUse = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    const canUse = access.isSuperAdmin || !!access.staffRole
     if (!canUse) return json({ error: 'forbidden' }, 403)
 
     const body = (await req.json().catch(() => null)) as Body | null

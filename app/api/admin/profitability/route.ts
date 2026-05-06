@@ -113,15 +113,16 @@ function canManageProfitability(access: {
   isSuperAdmin: boolean
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
-  return access.isSuperAdmin || access.staffRole === 'owner'
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
-/** Просмотр ОПиУ доступен владельцу и менеджеру (как маршруты в lib/core/access); правки только у owner/super_admin. */
+/** Capability checks выше уже отсеивают; здесь — любой staff */
 function canViewProfitability(access: {
   isSuperAdmin: boolean
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
-  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 function collectKaspiDailySplitCompanyIds(deviceRows: any[] | null | undefined, projectRows: any[] | null | undefined) {

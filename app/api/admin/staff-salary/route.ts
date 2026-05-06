@@ -62,7 +62,8 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'salary.view')
     if (denied) return denied as any
-    const canView = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    const canView = access.isSuperAdmin || !!access.staffRole
     if (!canView) return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
@@ -303,7 +304,8 @@ export async function GET(req: Request) {
     const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
 
     return json({
-      can_edit: access.isSuperAdmin || access.staffRole === 'owner',
+      // Capability checks выше уже отсеивают; здесь — любой staff
+      can_edit: access.isSuperAdmin || !!access.staffRole,
       staff: [...baseStaff, ...virtualStaffFromOperators],
       adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments],
       payments: paymentsRes.data ?? [],
@@ -331,7 +333,8 @@ export async function POST(req: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'salary.create_payment')
     if (denied) return denied as any
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') return json({ error: 'forbidden' }, 403)
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
     const body = await req.json().catch(() => null)

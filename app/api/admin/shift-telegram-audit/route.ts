@@ -15,7 +15,8 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
     const denied = await requireCapability(access, 'shift-telegram-audit.view')
     if (denied) return denied as any
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 

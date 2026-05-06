@@ -45,7 +45,8 @@ function canAccessKpi(access: {
   isSuperAdmin: boolean
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
-  return access.isSuperAdmin || access.staffRole === 'manager' || access.staffRole === 'owner'
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 function normalizeMonthStart(value: string | null | undefined) {

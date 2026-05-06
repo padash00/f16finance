@@ -13,7 +13,8 @@ function canViewHistory(access: {
   isSuperAdmin: boolean
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
-  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 export async function GET(request: Request) {

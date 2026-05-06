@@ -167,8 +167,9 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
-    const canCreateFinance = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
-    const canManageFinance = access.isSuperAdmin || access.staffRole === 'owner'
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    const canCreateFinance = access.isSuperAdmin || !!access.staffRole
+    const canManageFinance = access.isSuperAdmin || !!access.staffRole
 
     if (body.action === 'createIncome') {
       const denied = await requireCapability(access, 'income.create')

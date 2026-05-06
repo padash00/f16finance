@@ -14,7 +14,8 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const { staffRole, isSuperAdmin } = access
-    if (!isSuperAdmin && staffRole !== 'owner' && staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!isSuperAdmin && !staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
     const activeOrganizationId = access.activeOrganization?.id || null
@@ -55,7 +56,8 @@ export async function POST(req: Request) {
     if ('response' in access) return access.response
 
     const { staffRole, isSuperAdmin } = access
-    if (!isSuperAdmin && staffRole !== 'owner' && staffRole !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!isSuperAdmin && !staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
     const activeOrganizationId = access.activeOrganization?.id || null
