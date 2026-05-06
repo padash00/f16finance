@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { SalaryVariantsTab } from '@/components/admin/salary-variants-tab'
 import { SalaryPreviewTab } from '@/components/admin/salary-preview-tab'
@@ -279,6 +280,15 @@ function SalaryRulesLoading() {
 // MAIN COMPONENT
 // =====================
 function SalaryRulesContent() {
+  const { can } = useCapabilities()
+  const canCreateRule = can('salary-rules.create')
+  const canEditRule = can('salary-rules.edit')
+  const canDeleteRule = can('salary-rules.delete')
+  const canUpsertVersion = can('salary-rules.upsert_version')
+  const canDeleteVersion = can('salary-rules.delete_version')
+  const canUpsertSeniority = can('salary-rules.upsert_seniority')
+  const canDeleteSeniority = can('salary-rules.delete_seniority')
+
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -1083,26 +1093,30 @@ function SalaryRulesContent() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void handleSaveAll()}
-                  disabled={savingAll || dirtyIds.size === 0}
-                  className="gap-2 rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  <Save className="h-4 w-4" />
-                  {savingAll ? 'Сохранение...' : `Сохранить (${dirtyIds.size})`}
-                </Button>
+                {canEditRule && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleSaveAll()}
+                    disabled={savingAll || dirtyIds.size === 0}
+                    className="gap-2 rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+                  >
+                    <Save className="h-4 w-4" />
+                    {savingAll ? 'Сохранение...' : `Сохранить (${dirtyIds.size})`}
+                  </Button>
+                )}
 
-                <Button
-                  size="sm"
-                  className="gap-2 rounded-xl bg-violet-600 text-white hover:bg-violet-500"
-                  onClick={() => void handleAddRule()}
-                  disabled={adding}
-                >
-                  <Plus className="h-4 w-4" />
-                  {adding ? 'Создание...' : 'Добавить правило'}
-                </Button>
+                {canCreateRule && (
+                  <Button
+                    size="sm"
+                    className="gap-2 rounded-xl bg-violet-600 text-white hover:bg-violet-500"
+                    onClick={() => void handleAddRule()}
+                    disabled={adding}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {adding ? 'Создание...' : 'Добавить правило'}
+                  </Button>
+                )}
               </>
             }
             toolbar={
@@ -1608,16 +1622,18 @@ function SalaryRulesContent() {
                               >
                                 {expandedRuleId === r.id ? '▲' : '▼'} Версии ({(versionsByRule.get(r.id) || []).length})
                               </Button>
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                onClick={() => handleDeleteRule(r.id)}
-                                disabled={deletingId === r.id}
-                                title="Удалить"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
+                              {canDeleteRule && (
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                  onClick={() => handleDeleteRule(r.id)}
+                                  disabled={deletingId === r.id}
+                                  title="Удалить"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
