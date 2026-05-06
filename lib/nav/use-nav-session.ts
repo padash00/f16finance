@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { canAccessPath, type StaffRole, type SubscriptionFeature } from '@/lib/core/access'
+import { findCapabilityPageByPath } from '@/lib/core/capabilities'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { SessionRoleInfo } from '@/lib/core/types'
 import type { NavSection } from '@/lib/nav/sections'
 
@@ -29,6 +31,7 @@ export type NavSession = {
 
 export function useNavSession(): NavSession {
   const router = useRouter()
+  const { can: canDo, isLoading: capsLoading } = useCapabilities()
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null)
@@ -120,6 +123,17 @@ export function useNavSession(): NavSession {
     ...section,
     items: section.items.filter((item) => {
       if (item.href === '/operator-lead' && !isLeadOperator) return false
+
+      // Если страница есть в каталоге capabilities — приоритет у новой модели.
+      // Capabilities ещё не загружены — fallback на старую логику;
+      // загружены — смотрим <page-id>.view.
+      if (!capsLoading) {
+        const capPage = findCapabilityPageByPath(item.href)
+        if (capPage) {
+          return canDo(`${capPage.id}.view`)
+        }
+      }
+
       return canAccessPath({
         pathname: item.href,
         isStaff,
