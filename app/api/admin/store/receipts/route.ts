@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { bulkSyncInventoryItemsToPointProducts, ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -184,6 +185,8 @@ export async function POST(request: Request) {
     if (!body?.action) return json({ error: 'invalid-action' }, 400)
 
     if (body.action === 'deleteDraft') {
+      const denied = await requireCapability(access, 'store-receipts.delete')
+      if (denied) return denied as any
       const draftId = String(body.draft_id || '').trim()
       if (!draftId) return json({ error: 'draft-id-required' }, 400)
       let currentDraftQuery: any = supabase
@@ -224,6 +227,8 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'cancelReceipt') {
+      const denied = await requireCapability(access, 'store-receipts.cancel')
+      if (denied) return denied as any
       const receiptId = String(body.receipt_id || '').trim()
       if (!receiptId) return json({ error: 'receipt-id-required' }, 400)
       const reason = String(body.cancel_reason || '').trim() || null
@@ -353,6 +358,8 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'saveDraft') {
+      const denied = await requireCapability(access, 'store-receipts.create')
+      if (denied) return denied as any
       const payload = body.payload || ({} as any)
       const draftTitle = String(body.draft_title || payload.invoice_number || 'Черновик приемки').trim()
       const draftId = String(body.draft_id || '').trim()
@@ -433,6 +440,10 @@ export async function POST(request: Request) {
     }
 
     if (body.action !== 'createReceipt') return json({ error: 'invalid-action' }, 400)
+    {
+      const denied = await requireCapability(access, 'store-receipts.create')
+      if (denied) return denied as any
+    }
     if (!body.payload) return json({ error: 'payload-required' }, 400)
     const locationId = String(body.payload.location_id || '').trim()
     await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)

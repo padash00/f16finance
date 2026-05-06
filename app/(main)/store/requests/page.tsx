@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, CheckCircle2, ClipboardList, History, Loader2, MoreHorizontal, PackageCheck, RefreshCw, Search, XCircle } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -202,6 +203,15 @@ function requestItemsCount(request: InventoryRequest) {
 }
 
 function StoreRequestsPageContent() {
+  const { can } = useCapabilities()
+  const canApprove = can('store-requests.approve')
+  const canBulkApprove = can('store-requests.bulk_approve')
+  const canReject = can('store-requests.reject')
+  const canBulkReject = can('store-requests.bulk_reject')
+  const canIssue = can('store-requests.issue')
+  const canReceive = can('store-requests.receive')
+  const canUndecide = can('store-requests.undecide')
+
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -832,27 +842,31 @@ function StoreRequestsPageContent() {
                     <span className="text-xs text-muted-foreground">
                       {formatQty(approved)} ед. к выдаче · {items.length} поз.
                     </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-                      disabled={savingId === request.id}
-                      onClick={() => void undecideRequest(request.id)}
-                    >
-                      Откатить
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="gap-1.5 bg-cyan-600/90 text-white hover:bg-cyan-600"
-                      disabled={savingId === request.id}
-                      onClick={() => void transitionStatus(request.id, 'issued')}
-                    >
-                      {savingId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PackageCheck className="h-3.5 w-3.5" />}
-                      Отметить выданной
-                    </Button>
+                    {canUndecide && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                        disabled={savingId === request.id}
+                        onClick={() => void undecideRequest(request.id)}
+                      >
+                        Откатить
+                      </Button>
+                    )}
+                    {canIssue && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5 bg-cyan-600/90 text-white hover:bg-cyan-600"
+                        disabled={savingId === request.id}
+                        onClick={() => void transitionStatus(request.id, 'issued')}
+                      >
+                        {savingId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PackageCheck className="h-3.5 w-3.5" />}
+                        Отметить выданной
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="px-4 py-2 text-xs text-muted-foreground">
@@ -894,17 +908,19 @@ function StoreRequestsPageContent() {
                     <span className="text-xs text-muted-foreground">
                       Выдано {formatDateTime(request.issued_at)} · {formatQty(approved)} ед.
                     </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="gap-1.5 bg-teal-600/90 text-white hover:bg-teal-600"
-                      disabled={savingId === request.id}
-                      onClick={() => void transitionStatus(request.id, 'received')}
-                    >
-                      {savingId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      Отметить полученной
-                    </Button>
+                    {canReceive && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5 bg-teal-600/90 text-white hover:bg-teal-600"
+                        disabled={savingId === request.id}
+                        onClick={() => void transitionStatus(request.id, 'received')}
+                      >
+                        {savingId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Отметить полученной
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -919,14 +935,18 @@ function StoreRequestsPageContent() {
             Выбрано заявок: <span className="font-semibold">{selectedIds.length}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => runBulkAction('approve-full')} disabled={bulkSaving} className="gap-2">
-              {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Одобрить
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => runBulkAction('reject')} disabled={bulkSaving} className="gap-2">
-              <XCircle className="h-4 w-4" />
-              Отклонить
-            </Button>
+            {canBulkApprove && (
+              <Button size="sm" onClick={() => runBulkAction('approve-full')} disabled={bulkSaving} className="gap-2">
+                {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Одобрить
+              </Button>
+            )}
+            {canBulkReject && (
+              <Button size="sm" variant="destructive" onClick={() => runBulkAction('reject')} disabled={bulkSaving} className="gap-2">
+                <XCircle className="h-4 w-4" />
+                Отклонить
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setSelectedIds([])} disabled={bulkSaving}>
               Снять выбор
             </Button>

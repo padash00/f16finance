@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, Receipt, FileText, Wallet, X } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
@@ -76,6 +77,14 @@ const fmtDate = (value: string | null | undefined) => {
 }
 
 export default function BillingPage() {
+  const { can } = useCapabilities()
+  const canPayDebt = can('store-billing.pay_debt')
+  const canWriteOff = can('store-billing.write_off_debt')
+  const canBulkPay = can('store-billing.bulk_pay')
+  const canReschedule = can('store-billing.reschedule_debt')
+  const canParseReceipt = can('store-billing.parse_receipt')
+  const canExport = can('store-billing.export')
+
   const [activeTab, setActiveTab] = useState<'debts' | 'invoices'>('debts')
   const [statusFilter, setStatusFilter] = useState<'open' | 'paid' | 'written_off' | 'all'>('open')
   const [debts, setDebts] = useState<Debt[]>([])
@@ -539,7 +548,7 @@ export default function BillingPage() {
             <p className="text-sm text-muted-foreground">Учёт обязательств перед поставщиками и история приёмок</p>
           </div>
         </div>
-        {activeTab === 'debts' ? (
+        {activeTab === 'debts' && canExport ? (
           <Button variant="outline" size="sm" onClick={() => void exportDebtsExcel()} disabled={filteredDebts.length === 0}>
             <Download className="w-4 h-4 mr-1" /> Экспорт Excel
           </Button>
@@ -637,18 +646,20 @@ export default function BillingPage() {
                 >
                   Сбросить
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setBulkDate(new Date().toISOString().slice(0, 10))
-                    setBulkMethod('cash')
-                    setBulkReceiptUrl('')
-                    setBulkComment('')
-                    setBulkPayOpen(true)
-                  }}
-                >
-                  Оплатить выбранные
-                </Button>
+                {canBulkPay && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setBulkDate(new Date().toISOString().slice(0, 10))
+                      setBulkMethod('cash')
+                      setBulkReceiptUrl('')
+                      setBulkComment('')
+                      setBulkPayOpen(true)
+                    }}
+                  >
+                    Оплатить выбранные
+                  </Button>
+                )}
               </div>
             </Card>
           ) : null}
@@ -715,28 +726,34 @@ export default function BillingPage() {
                       </div>
                       {debt.status === 'open' ? (
                         <div className="flex flex-col gap-1.5">
-                          <Button onClick={() => openPay(debt)}>Оплатить</Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setReschedDebt(debt)
-                              setReschedDate(debt.due_date || '')
-                              setReschedReason('')
-                            }}
-                          >
-                            Перенести срок
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setWriteOffDebt(debt)
-                              setWriteOffReason('')
-                            }}
-                          >
-                            Списать
-                          </Button>
+                          {canPayDebt && (
+                            <Button onClick={() => openPay(debt)}>Оплатить</Button>
+                          )}
+                          {canReschedule && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setReschedDebt(debt)
+                                setReschedDate(debt.due_date || '')
+                                setReschedReason('')
+                              }}
+                            >
+                              Перенести срок
+                            </Button>
+                          )}
+                          {canWriteOff && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setWriteOffDebt(debt)
+                                setWriteOffReason('')
+                              }}
+                            >
+                              Списать
+                            </Button>
+                          )}
                         </div>
                       ) : null}
                     </div>

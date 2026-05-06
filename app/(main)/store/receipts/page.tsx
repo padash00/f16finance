@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -262,6 +263,15 @@ function calcMarkupPercent(unitCostRaw: string, salePriceRaw: string) {
 }
 
 export default function StoreReceiptsPage() {
+  const { can } = useCapabilities()
+  const canCreate = can('store-receipts.create')
+  const canEdit = can('store-receipts.edit')
+  const canDelete = can('store-receipts.delete')
+  const canCancel = can('store-receipts.cancel')
+  const canExport = can('store-receipts.export')
+  const canAiParse = can('store-receipts.ai_parse')
+  const canSaveTemplate = can('store-receipts.save_template')
+
   const [data, setData] = useState<ReceiptsResponse['data'] | null>(null)
   const [debtByReceiptId, setDebtByReceiptId] = useState<Map<string, { status: 'open' | 'paid' | 'written_off'; total_amount: number; due_date: string | null; is_consignment: boolean }>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -1114,14 +1124,16 @@ export default function StoreReceiptsPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
-          <Button
-            size="sm"
-            onClick={() => setFormSheetOpen(true)}
-            className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-          >
-            <PackagePlus className="h-3.5 w-3.5" />
-            Новый документ
-          </Button>
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => setFormSheetOpen(true)}
+              className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            >
+              <PackagePlus className="h-3.5 w-3.5" />
+              Новый документ
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1429,8 +1441,12 @@ export default function StoreReceiptsPage() {
                 <>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
-                    <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
-                    <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
+                    {canSaveTemplate && (
+                      <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
+                    )}
+                    {canExport && (
+                      <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
+                    )}
                   </div>
                   {savedTemplates.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -1615,6 +1631,7 @@ export default function StoreReceiptsPage() {
                   disabled={uploadingInvoice}
                 />
                 {uploadingInvoice ? <Loader2 className="h-4 w-4 animate-spin text-amber-300" /> : null}
+                {canAiParse && (
                 <Button
                   type="button"
                   variant="outline"
@@ -1626,6 +1643,7 @@ export default function StoreReceiptsPage() {
                   {aiParsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                   Распознать ИИ
                 </Button>
+                )}
               </div>
               {invoiceFileUrl ? (
                 <a href={invoiceFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
@@ -1973,7 +1991,7 @@ export default function StoreReceiptsPage() {
                       <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-xs text-rose-200">
                         Отменена{selectedReceipt.cancelled_at ? ` · ${formatDate(selectedReceipt.cancelled_at)}` : ''}
                       </span>
-                    ) : (
+                    ) : canCancel ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -1983,7 +2001,7 @@ export default function StoreReceiptsPage() {
                       >
                         Отменить приёмку
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 {selectedReceipt.cancel_reason ? (
