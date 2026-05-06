@@ -242,7 +242,9 @@ function ExpenseWizardPageContent() {
   }, [sessionId, starting])
 
   useEffect(() => {
-    if (operatorsLoaded || loadingOperators || step !== 1) return
+    // ВНИМАНИЕ: loadingOperators НЕ в deps — иначе useEffect отменяет сам себя
+    // (setLoadingOperators(true) триггерит cleanup → cancelled=true → fetch не сохраняется).
+    if (operatorsLoaded || step !== 1) return
     let cancelled = false
     const loadOperators = async () => {
       setLoadingOperators(true)
@@ -267,10 +269,11 @@ function ExpenseWizardPageContent() {
     return () => {
       cancelled = true
     }
-  }, [operatorsLoaded, loadingOperators, step])
+  }, [operatorsLoaded, step])
 
   useEffect(() => {
-    if (whitelistLoaded || loadingWhitelist || step < 2) return
+    // loadingWhitelist НЕ в deps — иначе useEffect отменяет сам себя
+    if (whitelistLoaded || step < 2) return
     let cancelled = false
     const loadWhitelist = async () => {
       setLoadingWhitelist(true)
@@ -295,7 +298,7 @@ function ExpenseWizardPageContent() {
     return () => {
       cancelled = true
     }
-  }, [whitelistLoaded, loadingWhitelist, step, whitelistReloadKey])
+  }, [whitelistLoaded, step, whitelistReloadKey])
 
   useEffect(() => {
     const refreshOnFocus = () => {
