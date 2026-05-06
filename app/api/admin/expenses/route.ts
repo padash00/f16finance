@@ -161,23 +161,7 @@ export async function GET(req: Request) {
     })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expenses GET', message: error?.message || 'error' })
-    // TEMP DIAGNOSTIC — убрать после починки
-    console.error('[expenses GET] full error:', error)
-    let json_dump = ''
-    try { json_dump = JSON.stringify(error, Object.getOwnPropertyNames(error)) } catch {}
-    return json({
-      error: humanizeDbError(error, 'Ошибка сервера'),
-      _diagnostic: {
-        name: error?.name || null,
-        message: String(error?.message || error || 'unknown'),
-        code: error?.code || null,
-        status: error?.status || error?.statusCode || null,
-        details: error?.details || null,
-        hint: error?.hint || null,
-        stack: String(error?.stack || '').split('\n').slice(0, 6).join('\n'),
-        full: json_dump.slice(0, 1500),
-      },
-    }, 500)
+    return json({ error: humanizeDbError(error, 'Ошибка сервера') }, 500)
   }
 }
 
