@@ -60,7 +60,7 @@ const h2Class =
 const leadClass =
   'text-[18px] leading-[1.6] text-[var(--color-text-secondary)] sm:text-[20px] lg:text-[22px]'
 
-const sectionClass = 'mx-auto max-w-[1320px] px-6 py-20 sm:px-10 lg:py-28 lg:px-12'
+const sectionClass = 'mx-auto max-w-[1440px] px-6 py-20 sm:px-10 lg:py-28 lg:px-14'
 
 // ─────────────────────── HERO ───────────────────────
 
@@ -421,7 +421,7 @@ export default async function MarketingHomePage() {
       <FaqStructuredData faq={faqItems} />
 
       {/* ────────── Шапка ────────── */}
-      <header className="mx-auto max-w-[1320px] px-6 pb-8 pt-8 sm:px-10 lg:px-12">
+      <header className="mx-auto max-w-[1440px] px-6 pb-8 pt-8 sm:px-10 lg:px-12">
         <div className="flex items-center justify-between rounded-[20px] border border-white/[0.08] bg-[#0d1626]/70 px-6 py-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] text-base font-bold text-[#0a0f18]">
@@ -460,7 +460,7 @@ export default async function MarketingHomePage() {
       </header>
 
       {/* ────────── 1. HERO ────────── */}
-      <section className="mx-auto max-w-[1320px] px-6 pb-24 pt-8 sm:px-10 lg:pb-32 lg:pt-12 lg:px-12">
+      <section className="mx-auto max-w-[1440px] px-6 pb-24 pt-8 sm:px-10 lg:pb-32 lg:pt-12 lg:px-12">
         <div className="grid gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="space-y-8 max-w-[680px]">
             <div className={eyebrowClass}>
@@ -580,7 +580,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── 2. ЧТО ТАКОЕ ────────── */}
       <section className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Что такое {PRODUCT}</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Система для контроля денег, продаж и операционной работы
@@ -616,7 +616,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── 3. ПРОБЛЕМЫ ────────── */}
       <section className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Знакомая ситуация?</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Что чаще всего мешает владельцу бизнеса видеть реальные деньги
@@ -649,7 +649,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── 4. ЧЕТЫРЕ СТОЛПА ────────── */}
       <section id="features" className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Что внутри {PRODUCT}</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Финансы. AI. Смены. Продажи.
@@ -752,7 +752,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── 6. ДЛЯ КОГО ────────── */}
       <section className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Для кого подходит</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Для бизнеса, где есть деньги, касса, сотрудники и товары
@@ -801,7 +801,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── 7. СРАВНЕНИЕ ────────── */}
       <section className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Сравнение</div>
           <h2 className={`mt-5 ${h2Class}`}>
             {PRODUCT} заменяет хаос из разных программ
@@ -844,7 +844,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── 8. ТАРИФЫ ────────── */}
       <section id="pricing" className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Тарифы</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Подключайте только то, что нужно бизнесу
@@ -956,7 +956,7 @@ export default async function MarketingHomePage() {
 
       {/* ────────── FAQ ────────── */}
       <section className={sectionClass}>
-        <div className="max-w-[720px]">
+        <div className="max-w-[760px]">
           <div className={eyebrowClass}>Частые вопросы</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Что владельцы спрашивают чаще всего
@@ -983,7 +983,7 @@ export default async function MarketingHomePage() {
       {/* ────────── 10. ФИНАЛЬНЫЙ CTA ────────── */}
       <section
         id="contact"
-        className="mx-auto max-w-[1320px] px-6 pb-28 pt-12 sm:px-10 lg:px-12"
+        className="mx-auto max-w-[1440px] px-6 pb-28 pt-12 sm:px-10 lg:px-12"
       >
         <Card className="rounded-[28px] border-[var(--color-accent-gold)]/30 bg-[linear-gradient(135deg,rgba(245,184,75,0.18),rgba(13,22,38,0.6))] p-10 shadow-[0_30px_80px_rgba(0,0,0,0.36)] sm:p-14">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
@@ -1024,7 +1024,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── ФУТЕР ────────── */}
-      <footer className="mx-auto max-w-[1320px] px-6 pb-12 sm:px-10 lg:px-12">
+      <footer className="mx-auto max-w-[1440px] px-6 pb-12 sm:px-10 lg:px-12">
         <div className="rounded-[20px] border border-white/[0.06] bg-[#0d1626]/60 px-7 py-6 backdrop-blur">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
