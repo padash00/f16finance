@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
@@ -272,6 +273,7 @@ async function logExpenseEvent(event: {
 
 // ================== MAIN COMPONENT ==================
 export default function ExpensesPage() {
+  const router = useRouter()
   const [isClient, setIsClient] = useState(false)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
 
@@ -904,7 +906,7 @@ export default function ExpensesPage() {
     }
     if (t.comment) params.set('comment', t.comment)
     if (t.company_id) params.set('company_id', t.company_id)
-    window.location.href = `/expenses/new?${params.toString()}`
+    router.push(`/expenses/new?${params.toString()}`)
   }
 
   const handleDeleteTemplate = async (id: string) => {
