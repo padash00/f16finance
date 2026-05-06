@@ -49,10 +49,6 @@ import {
   Building2,
   Briefcase,
   Eye,
-  Trophy,
-  Medal,
-  Crown,
-  Sparkles,
 } from 'lucide-react'
 
 import {
@@ -956,12 +952,7 @@ function OperatorAnalyticsContent() {
   const [includeExtra, setIncludeExtra] = useState(true)
   const [showInactive, setShowInactive] = useState(false)
 
-  // UI states. tab всегда берётся из URL — переключение через сайдбар.
-  const tabFromUrl = searchParams.get('tab') === 'achievements' ? 'achievements' : 'analytics'
-  const [mainTab, setMainTab] = useState<'analytics' | 'achievements'>(tabFromUrl)
-  useEffect(() => {
-    setMainTab(tabFromUrl)
-  }, [tabFromUrl])
+  // UI states
   const [sortKey, setSortKey] = useState<SortKey>('turnover')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [search, setSearch] = useState('')
@@ -1798,11 +1789,6 @@ function OperatorAnalyticsContent() {
             </div>
           </div>
 
-          {mainTab === 'achievements' ? (
-            <AchievementsBoard rows={analytics.rows} onSelect={setSelectedOperator} />
-          ) : (
-            <>
-
           {/* AI Insights */}
           {aiInsights.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2259,216 +2245,11 @@ function OperatorAnalyticsContent() {
               </Card>
             </div>
           )}
-            </>
-          )}
         </div>
     </>
   )
 }
 
-// =====================
-// ACHIEVEMENTS BOARD
-// =====================
-type AchievementDef = {
-  id: string
-  title: string
-  desc: string
-  icon: 'crown' | 'trophy' | 'medal' | 'sparkles' | 'award'
-  color: string
-  check: (row: OperatorAnalyticsRow, ctx: { rows: OperatorAnalyticsRow[]; rank: number; avgTurnover: number; avgPerShift: number }) => boolean
-}
-
-const ACHIEVEMENTS: AchievementDef[] = [
-  {
-    id: 'champion',
-    title: 'Чемпион',
-    desc: '1-е место по выручке за период',
-    icon: 'crown',
-    color: 'amber',
-    check: (_, ctx) => ctx.rank === 1,
-  },
-  {
-    id: 'top3',
-    title: 'Призёр',
-    desc: 'Вошёл в топ-3 по выручке',
-    icon: 'trophy',
-    color: 'orange',
-    check: (_, ctx) => ctx.rank > 1 && ctx.rank <= 3,
-  },
-  {
-    id: 'millionaire',
-    title: 'Миллионер',
-    desc: 'Выручка превысила 1 000 000 ₸',
-    icon: 'sparkles',
-    color: 'emerald',
-    check: (r) => r.totalTurnover >= 1_000_000,
-  },
-  {
-    id: 'marathoner',
-    title: 'Марафонец',
-    desc: 'Отработал 20+ смен за период',
-    icon: 'medal',
-    color: 'sky',
-    check: (r) => r.shifts >= 20,
-  },
-  {
-    id: 'premium',
-    title: 'Премиум-кассир',
-    desc: 'Средний чек выше среднего на 30%+',
-    icon: 'award',
-    color: 'fuchsia',
-    check: (r, ctx) => r.shifts >= 5 && ctx.avgPerShift > 0 && r.avgPerShift > ctx.avgPerShift * 1.3,
-  },
-  {
-    id: 'major',
-    title: 'Тяжеловес',
-    desc: 'Доля выручки больше 20%',
-    icon: 'trophy',
-    color: 'violet',
-    check: (r) => r.share >= 20,
-  },
-]
-
-const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
-  amber: { bg: 'bg-amber-500/15', text: 'text-amber-300', border: 'border-amber-500/30' },
-  orange: { bg: 'bg-orange-500/15', text: 'text-orange-300', border: 'border-orange-500/30' },
-  emerald: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
-  sky: { bg: 'bg-sky-500/15', text: 'text-sky-300', border: 'border-sky-500/30' },
-  fuchsia: { bg: 'bg-fuchsia-500/15', text: 'text-fuchsia-300', border: 'border-fuchsia-500/30' },
-  violet: { bg: 'bg-violet-500/15', text: 'text-violet-300', border: 'border-violet-500/30' },
-}
-
-function AchievementIcon({ kind, className }: { kind: AchievementDef['icon']; className?: string }) {
-  if (kind === 'crown') return <Crown className={className} />
-  if (kind === 'trophy') return <Trophy className={className} />
-  if (kind === 'medal') return <Medal className={className} />
-  if (kind === 'sparkles') return <Sparkles className={className} />
-  return <Award className={className} />
-}
-
-function AchievementsBoard({
-  rows,
-  onSelect,
-}: {
-  rows: OperatorAnalyticsRow[]
-  onSelect?: (row: OperatorAnalyticsRow) => void
-}) {
-  const sortedByTurnover = useMemo(() => [...rows].sort((a, b) => b.totalTurnover - a.totalTurnover), [rows])
-  const avgTurnover = useMemo(() => (rows.length ? rows.reduce((s, r) => s + r.totalTurnover, 0) / rows.length : 0), [rows])
-  const avgPerShift = useMemo(() => {
-    const filtered = rows.filter((r) => r.shifts > 0)
-    return filtered.length ? filtered.reduce((s, r) => s + r.avgPerShift, 0) / filtered.length : 0
-  }, [rows])
-
-  // Сводка достижений: сколько операторов получили каждое
-  const summary = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const ach of ACHIEVEMENTS) map.set(ach.id, 0)
-    sortedByTurnover.forEach((row, i) => {
-      const ctx = { rows, rank: i + 1, avgTurnover, avgPerShift }
-      for (const ach of ACHIEVEMENTS) {
-        if (ach.check(row, ctx)) map.set(ach.id, (map.get(ach.id) || 0) + 1)
-      }
-    })
-    return map
-  }, [sortedByTurnover, rows, avgTurnover, avgPerShift])
-
-  const operatorsWithAchievements = useMemo(() => {
-    return sortedByTurnover.map((row, i) => {
-      const ctx = { rows, rank: i + 1, avgTurnover, avgPerShift }
-      const achievements = ACHIEVEMENTS.filter((ach) => ach.check(row, ctx))
-      return { row, achievements }
-    })
-  }, [sortedByTurnover, rows, avgTurnover, avgPerShift])
-
-  return (
-    <div className="space-y-6">
-      {/* Сводка по достижениям */}
-      <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-amber-400" />
-          Сводка достижений
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {ACHIEVEMENTS.map((ach) => {
-            const c = COLOR_MAP[ach.color]
-            const count = summary.get(ach.id) || 0
-            return (
-              <div
-                key={ach.id}
-                className={`rounded-xl border ${c.border} ${c.bg} p-3 ${count === 0 ? 'opacity-40' : ''}`}
-              >
-                <div className={`flex items-center gap-2 ${c.text} mb-1`}>
-                  <AchievementIcon kind={ach.icon} className="w-4 h-4" />
-                  <span className="text-xs font-semibold">{ach.title}</span>
-                </div>
-                <div className="text-[11px] text-gray-400 leading-snug">{ach.desc}</div>
-                <div className="mt-2 text-xs text-gray-500">
-                  Получили: <span className={c.text}>{count}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </Card>
-
-      {/* Список операторов с их бейджами */}
-      <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-fuchsia-400" />
-          Кто что получил
-        </h3>
-        {operatorsWithAchievements.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 text-sm">Нет данных за выбранный период</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {operatorsWithAchievements.map(({ row, achievements }) => (
-              <button
-                key={row.operatorId}
-                type="button"
-                onClick={() => onSelect?.(row)}
-                className="text-left rounded-2xl border border-white/10 bg-gray-900/60 p-4 transition hover:border-white/20 hover:bg-gray-900/80"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30">
-                    {row.photo_url ? (
-                      <Image src={row.photo_url} alt={row.operatorName} width={40} height={40} className="rounded-full" />
-                    ) : (
-                      <User className="h-5 w-5 text-white/70" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold truncate">{row.operatorShortName || row.operatorName}</div>
-                    <div className="text-xs text-gray-400">
-                      {achievements.length === 0 ? 'Нет достижений' : `${achievements.length} достижений`}
-                    </div>
-                  </div>
-                </div>
-                {achievements.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {achievements.map((ach) => {
-                      const c = COLOR_MAP[ach.color]
-                      return (
-                        <span
-                          key={ach.id}
-                          className={`inline-flex items-center gap-1 rounded-md border ${c.border} ${c.bg} px-2 py-0.5 text-[11px] font-medium ${c.text}`}
-                          title={ach.desc}
-                        >
-                          <AchievementIcon kind={ach.icon} className="w-3 h-3" />
-                          {ach.title}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
-    </div>
-  )
-}
 
 // =====================
 // MAIN EXPORT

@@ -183,7 +183,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
       { href: '/ratings', label: 'Рейтинг операторов', icon: Trophy, note: 'Лидерборд по выручке' },
-      { href: '/operator-analytics?tab=achievements', label: 'Достижения операторов', icon: Award, note: 'Кто что получил' },
+      { href: '/operator-achievements', label: 'Достижения операторов', icon: Award, note: 'Кто что получил, прогресс' },
     ],
   },
   {

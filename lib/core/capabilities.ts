@@ -564,6 +564,14 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'operator-achievements',
+        path: '/operator-achievements',
+        label: 'Достижения операторов',
+        capabilities: [
+          { id: 'operator-achievements.view', label: 'Просмотр', severity: 'low' },
+        ],
+      },
+      {
         id: 'operator-tasks',
         path: '/operator-tasks',
         label: 'Задачи операторов',
