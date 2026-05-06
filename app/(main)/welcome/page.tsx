@@ -5,19 +5,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
+  Banknote,
+  Boxes,
   CalendarClock,
-  CalendarRange,
-  Calculator,
+  Cog,
   Crown,
-  DollarSign,
   FolderKanban,
-  LayoutDashboard,
-  Network,
   Loader2,
+  MonitorSmartphone,
   ShieldCheck,
-  Target,
-  TrendingDown,
-  TrendingUp,
+  ShoppingCart,
+  Sparkles,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -25,6 +23,8 @@ import {
 import { AppLogoMark } from '@/components/app-brand-mark'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { CAPABILITY_GROUPS } from '@/lib/core/capabilities'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { StaffRole } from '@/lib/core/access'
 import { SITE_NAME } from '@/lib/core/site'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
@@ -40,42 +40,61 @@ type SessionRoleResponse = {
   defaultPath?: string
 }
 
-type WelcomeAction = {
-  href: string
-  label: string
-  note: string
-  icon: any
+// Стиль каждой группы (иконка + цвет акцента)
+const GROUP_STYLES: Record<string, { icon: any; tone: string; bg: string; label: string }> = {
+  finance: {
+    icon: Banknote,
+    tone: 'text-emerald-300',
+    bg: 'bg-emerald-500/10 border-emerald-500/30',
+    label: 'Деньги — выручка, расходы, ОПиУ, прогноз',
+  },
+  inventory: {
+    icon: Boxes,
+    tone: 'text-sky-300',
+    bg: 'bg-sky-500/10 border-sky-500/30',
+    label: 'Магазин — каталог, склад, приёмки, заявки',
+  },
+  shifts: {
+    icon: CalendarClock,
+    tone: 'text-cyan-300',
+    bg: 'bg-cyan-500/10 border-cyan-500/30',
+    label: 'Смены — расписание и отчёты по дням',
+  },
+  staff: {
+    icon: Users,
+    tone: 'text-violet-300',
+    bg: 'bg-violet-500/10 border-violet-500/30',
+    label: 'Команда — операторы, сотрудники, зарплата, HR',
+  },
+  points: {
+    icon: MonitorSmartphone,
+    tone: 'text-blue-300',
+    bg: 'bg-blue-500/10 border-blue-500/30',
+    label: 'Точки — устройства, киоски, станции',
+  },
+  pos: {
+    icon: ShoppingCart,
+    tone: 'text-amber-300',
+    bg: 'bg-amber-500/10 border-amber-500/30',
+    label: 'POS и клиенты — чеки, возвраты, лояльность',
+  },
+  operations: {
+    icon: FolderKanban,
+    tone: 'text-rose-300',
+    bg: 'bg-rose-500/10 border-rose-500/30',
+    label: 'Операционная — задачи, инциденты, KPI, цели',
+  },
+  system: {
+    icon: Cog,
+    tone: 'text-slate-300',
+    bg: 'bg-slate-500/10 border-slate-500/30',
+    label: 'Системные настройки — доступ, телеграм, журнал',
+  },
 }
-
-const MANAGER_ACTIONS: WelcomeAction[] = [
-  { href: '/shifts', label: 'График смен', note: 'Назначения операторов и контроль недели', icon: CalendarClock },
-  { href: '/salary', label: 'Зарплата', note: 'Расчёты, начисления и выплаты', icon: Wallet },
-  { href: '/income', label: 'Доходы', note: 'Оборот, выручка и приток денег', icon: TrendingUp },
-  { href: '/expenses', label: 'Расходы', note: 'Списание средств и контроль статей', icon: TrendingDown },
-  { href: '/weekly-report', label: 'Недельный отчёт', note: 'Итоги недели и план-факт', icon: CalendarRange },
-  { href: '/tasks', label: 'Задачи', note: 'Контроль поручений, сроков и текущей работы', icon: FolderKanban },
-  { href: '/structure', label: 'Структура', note: 'Распределение ролей по команде и точкам', icon: Network },
-]
-
-const MARKETER_ACTIONS: WelcomeAction[] = [
-  { href: '/tasks', label: 'Задачи', note: 'Постановка, контроль и сопровождение задач', icon: FolderKanban },
-]
-
-const OWNER_ACTIONS: WelcomeAction[] = [
-  { href: '/dashboard', label: 'Главная панель', note: 'Общий статус бизнеса и ключевые метрики', icon: LayoutDashboard },
-  { href: '/income', label: 'Доходы', note: 'Оборот, выручка и притоки денег', icon: TrendingUp },
-  { href: '/expenses', label: 'Расходы', note: 'Списания, статьи и контроль затрат', icon: TrendingDown },
-  { href: '/cashflow', label: 'Cash Flow', note: 'Движение денег и баланс нарастающим итогом', icon: Wallet },
-  { href: '/profitability', label: 'ОПиУ и EBITDA', note: 'Полная прибыль, комиссии и рентабельность', icon: Calculator },
-  { href: '/salary', label: 'Зарплата', note: 'Расчёты, начисления и выплаты команде', icon: DollarSign },
-  { href: '/operators', label: 'Операторы', note: 'Управление командой и профили', icon: Users },
-  { href: '/kpi', label: 'KPI', note: 'Контроль плановых показателей', icon: Target },
-  { href: '/forecast', label: 'AI Прогноз', note: 'Прогноз доходов на 30/60/90 дней', icon: TrendingUp },
-  { href: '/goals', label: 'Цели и план', note: 'Плановые показатели по выручке', icon: Target },
-]
 
 export default function WelcomePage() {
   const router = useRouter()
+  const { can, isLoading: capsLoading, isSuperAdmin: capsIsSuper } = useCapabilities()
   const [loading, setLoading] = useState(true)
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null)
   const [roleLabel, setRoleLabel] = useState<string | null>(null)
@@ -110,13 +129,9 @@ export default function WelcomePage() {
         setRoleLabel((json.roleLabel as string | null) || null)
         setDisplayName((json.displayName as string | null) || null)
 
+        // Супер-админ на корневом домене перебрасывается на /dashboard
         if (json.isSuperAdmin && !(hostSaysTenant || !!json.isTenantContext)) {
           router.replace('/dashboard')
-          return
-        }
-
-        if (!json.isSuperAdmin && !['manager', 'marketer', 'owner'].includes(json.staffRole || '')) {
-          router.replace(json.defaultPath || '/unauthorized')
           return
         }
       } finally {
@@ -130,60 +145,35 @@ export default function WelcomePage() {
     }
   }, [router])
 
-  const welcomeConfig = useMemo(() => {
-    if (isSuperAdmin || staffRole === 'owner') {
-      return {
-        title: displayName ? `Добро пожаловать, ${displayName}` : 'Добро пожаловать, Владелец',
-        description: 'У вас открыт полный управленческий доступ к финансам, команде и аналитике бизнеса.',
-        checklist: [
-          'Откройте главную панель — там собраны ключевые метрики бизнеса за сегодня.',
-          'Проверьте Cash Flow за последние 30 дней: положительный ли баланс?',
-          'Сверьте рентабельность текущего месяца в разделе ОПиУ и EBITDA.',
-          'Просмотрите рейтинг операторов и KPI — кто показывает лучшие результаты.',
-          'Проверьте зарплатный расчёт перед датой выплат.',
-        ],
-        actions: OWNER_ACTIONS,
-      }
-    }
+  // Сборка карточек: только разделы и страницы где у пользователя есть <page>.view
+  const accessibleGroups = useMemo(() => {
+    if (capsLoading) return []
+    return CAPABILITY_GROUPS
+      .map((group) => {
+        const accessiblePages = group.pages
+          .filter((page) => can(`${page.id}.view`))
+          .map((page) => ({
+            id: page.id,
+            path: page.path,
+            label: page.label,
+          }))
+        return { ...group, accessiblePages }
+      })
+      .filter((g) => g.accessiblePages.length > 0)
+  }, [capsLoading, can])
 
-    if (staffRole === 'manager') {
-      return {
-        title: 'Добро пожаловать, руководитель',
-        description: 'У вас открыт доступ только к ключевым операционным и финансовым разделам.',
-        checklist: [
-          'Проверьте график смен и расставьте операторов на текущую неделю.',
-          'Сверьте структуру команды по точкам и назначьте старших операторов там, где это нужно.',
-          'Откройте зарплату и убедитесь, что расчёты по сменам актуальны.',
-          'Сверьте доходы, расходы, задачи и недельный отчёт перед началом работы.',
-        ],
-        actions: MANAGER_ACTIONS,
-      }
-    }
+  const totalAccessible = accessibleGroups.reduce((acc, g) => acc + g.accessiblePages.length, 0)
 
-    return {
-      title: 'Добро пожаловать, маркетолог',
-      description: 'У вас открыт доступ только к разделу задач. Остальные модули скрыты.',
-      checklist: [
-        'Откройте задачи и проверьте активные карточки.',
-        'Создайте новые задачи для операторов или команды, если это нужно.',
-        'Отслеживайте статусы и дедлайны только в рабочем блоке задач.',
-      ],
-      actions: MARKETER_ACTIONS,
-    }
-  }, [displayName, isSuperAdmin, staffRole])
-
-  if (loading) {
+  if (loading || capsLoading) {
     return (
-      <>
-          <div className="app-page flex min-h-[60vh] items-center justify-center">
-            <Card className="w-full max-w-xl border-white/10 bg-slate-950/70 p-6 text-white">
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300">
-                <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-                Подготавливаем ваш рабочий раздел...
-              </div>
-            </Card>
+      <div className="app-page flex min-h-[60vh] items-center justify-center">
+        <Card className="w-full max-w-xl border-white/10 bg-slate-950/70 p-6 text-white">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300">
+            <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
+            Подготавливаем ваш рабочий раздел…
           </div>
-      </>
+        </Card>
+      </div>
     )
   }
 
@@ -191,92 +181,141 @@ export default function WelcomePage() {
     return null
   }
 
-  return (
-    <>
-        <div className="app-page space-y-6">
-          <Card className={`overflow-hidden border-white/10 p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:p-8 ${
-            staffRole === 'owner'
-              ? 'bg-[radial-gradient(circle_at_top,rgba(251,146,60,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))]'
-              : 'bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))]'
-          }`}>
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-5 flex flex-wrap items-center gap-4">
-                  <AppLogoMark size="lg" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{SITE_NAME}</p>
-                    <p className="mt-0.5 text-sm text-slate-500">Рабочий кабинет</p>
-                  </div>
-                </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                    staffRole === 'owner'
-                      ? 'border border-amber-400/20 bg-amber-400/10 text-amber-200'
-                      : 'border border-violet-400/20 bg-violet-400/10 text-violet-200'
-                  }`}>
-                    {roleLabel || 'Рабочий контур'}
-                  </span>
-                  {displayName ? (
-                    <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium text-slate-300">
-                      {displayName}
-                    </span>
-                  ) : null}
-                </div>
-                <div className={`mb-4 inline-flex rounded-2xl p-4 ${staffRole === 'owner' ? 'bg-amber-500/12' : 'bg-violet-500/12'}`}>
-                  {staffRole === 'owner'
-                    ? <Crown className="h-7 w-7 text-amber-300" />
-                    : <ShieldCheck className="h-7 w-7 text-violet-300" />
-                  }
-                </div>
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">{welcomeConfig.title}</h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">{welcomeConfig.description}</p>
-              </div>
+  const headerIcon = isSuperAdmin || staffRole === 'owner' ? Crown : ShieldCheck
+  const HeaderIcon = headerIcon
+  const accentClass =
+    isSuperAdmin || staffRole === 'owner'
+      ? 'border border-amber-400/20 bg-amber-400/10 text-amber-200'
+      : 'border border-violet-400/20 bg-violet-400/10 text-violet-200'
+  const heroBg =
+    isSuperAdmin || staffRole === 'owner'
+      ? 'bg-[radial-gradient(circle_at_top,rgba(251,146,60,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))]'
+      : 'bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))]'
+  const greeting = displayName ? `Добро пожаловать, ${displayName}` : 'Добро пожаловать'
 
-              <div className="rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-slate-300">
-                После входа вы будете видеть только разрешённые разделы для своей роли.
+  return (
+    <div className="app-page space-y-6 w-full">
+      {/* Шапка */}
+      <Card className={`overflow-hidden border-white/10 p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:p-8 ${heroBg}`}>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="mb-5 flex flex-wrap items-center gap-4">
+              <AppLogoMark size="lg" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{SITE_NAME}</p>
+                <p className="mt-0.5 text-sm text-slate-500">Рабочий кабинет</p>
               </div>
             </div>
-          </Card>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${accentClass}`}>
+                {roleLabel || (isSuperAdmin ? 'Супер-админ' : 'Рабочий контур')}
+              </span>
+              {displayName ? (
+                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium text-slate-300">
+                  {displayName}
+                </span>
+              ) : null}
+            </div>
+            <div className={`mb-4 inline-flex rounded-2xl p-4 ${isSuperAdmin || staffRole === 'owner' ? 'bg-amber-500/12' : 'bg-violet-500/12'}`}>
+              <HeaderIcon className={`h-7 w-7 ${isSuperAdmin || staffRole === 'owner' ? 'text-amber-300' : 'text-violet-300'}`} />
+            </div>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">{greeting}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+              Здесь — только те разделы, к которым у вас сейчас есть доступ.
+              Если нужно открыть что-то ещё — попросите владельца настроить
+              право в разделе «Управление доступом».
+            </p>
+          </div>
 
-          <Card className="border-white/10 bg-slate-950/65 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
-            <h2 className="text-xl font-semibold">С чего начать</h2>
-            <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-6 text-slate-300">
-              {welcomeConfig.checklist.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ol>
-          </Card>
-
-          <div className={`grid gap-4 ${welcomeConfig.actions.length >= 6 ? 'xl:grid-cols-3' : welcomeConfig.actions.length === 1 ? 'md:max-w-xl' : 'xl:grid-cols-2'}`}>
-            {welcomeConfig.actions.map((action) => {
-              const Icon = action.icon
-
-              return (
-                <Card
-                  key={action.href}
-                  className="border-white/10 bg-slate-950/65 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="mb-4 inline-flex rounded-2xl bg-white/6 p-3">
-                        <Icon className="h-6 w-6 text-violet-300" />
-                      </div>
-                      <h2 className="text-xl font-semibold">{action.label}</h2>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">{action.note}</p>
-                    </div>
-                  </div>
-
-                  <Button asChild className="mt-6 w-full">
-                    <Link href={action.href}>
-                      Открыть раздел
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                </Card>
-              )
-            })}
+          <div className="rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-slate-300">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-amber-300" />
+              <span className="font-semibold text-white">{totalAccessible}</span>
+              <span>доступных страниц</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">в {accessibleGroups.length} разделах</p>
           </div>
         </div>
-    </>
+      </Card>
+
+      {/* Если совсем ничего не доступно (кастомная роль с нулевыми правами) */}
+      {accessibleGroups.length === 0 && !capsIsSuper && (
+        <Card className="border-amber-500/20 bg-amber-500/5 p-6 text-amber-200">
+          <h2 className="text-lg font-semibold">У вас пока нет открытых разделов</h2>
+          <p className="mt-2 text-sm">
+            Попросите владельца открыть нужные права на странице
+            «Управление доступом».
+          </p>
+        </Card>
+      )}
+
+      {/* Карточки разделов — только те которые доступны */}
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-2">
+        {accessibleGroups.map((group) => {
+          const style = GROUP_STYLES[group.id] || GROUP_STYLES.system
+          const Icon = style.icon
+          return (
+            <Card
+              key={group.id}
+              className={`group border ${style.bg} p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] transition hover:scale-[1.005]`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className={`mb-4 inline-flex rounded-2xl p-3 ${style.bg}`}>
+                    <Icon className={`h-6 w-6 ${style.tone}`} />
+                  </div>
+                  <h2 className="text-xl font-semibold">{group.label}</h2>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-400">
+                    {style.label}
+                  </p>
+                  <div className="mt-2 text-[11px] text-slate-500">
+                    Доступно страниц: <span className={style.tone}>{group.accessiblePages.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Список страниц */}
+              <div className="mt-5 space-y-1.5">
+                {group.accessiblePages.slice(0, 6).map((page) => (
+                  <Link
+                    key={page.id}
+                    href={page.path}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-200 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    <span className="truncate">{page.label}</span>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5" />
+                  </Link>
+                ))}
+                {group.accessiblePages.length > 6 && (
+                  <p className="text-center text-xs text-slate-500 pt-1">
+                    + ещё {group.accessiblePages.length - 6}
+                  </p>
+                )}
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Подсказка владельцу */}
+      {(isSuperAdmin || staffRole === 'owner') && (
+        <Card className="border-white/10 bg-slate-950/50 p-5 text-sm text-slate-300">
+          <div className="flex items-start gap-3">
+            <Wallet className="h-5 w-5 text-amber-300 shrink-0" />
+            <div>
+              <h3 className="font-semibold text-white mb-1">Управление правами</h3>
+              <p>
+                Эта страница автоматически собрана из ваших прав. Чтобы изменить
+                какие разделы видит роль — откройте{' '}
+                <Link href="/access" className="text-amber-300 underline hover:text-amber-200">
+                  Управление доступом
+                </Link>{' '}
+                и настройте capabilities. Карточки тут перерисуются при следующем входе.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
   )
 }
