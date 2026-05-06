@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Eye, EyeOff, KeyRound, Loader2, Mail, Save, ShieldCheck, User } from 'lucide-react'
+import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, Mail, Save, ShieldCheck, User } from 'lucide-react'
 
 import { supabase } from '@/lib/supabaseClient'
 import { Card } from '@/components/ui/card'
@@ -108,6 +108,13 @@ export default function ProfilePage() {
     if (trimmed === session?.email?.toLowerCase()) {
       setEmailNotice({ tone: 'error', text: 'Это уже ваш текущий email' })
       return
+    }
+    // Супер-админ — двойное подтверждение, потому что права привязаны к email.
+    if (session?.isSuperAdmin) {
+      const ok = window.confirm(
+        `ВНИМАНИЕ: Вы супер-администратор.\n\nВаши права привязаны к email "${session.email}" через переменную окружения ADMIN_EMAILS на Vercel.\n\nПЕРЕД сменой email нужно ОБЯЗАТЕЛЬНО:\n1. Открыть Vercel → Project → Settings → Environment Variables\n2. Добавить новый email "${trimmed}" в ADMIN_EMAILS (через запятую, рядом со старым)\n3. Передеплоить проект (или подождать следующий деплой)\n\nИначе после клика по ссылке подтверждения вы ПОТЕРЯЕТЕ права супер-админа.\n\nПродолжить отправку подтверждения?`,
+      )
+      if (!ok) return
     }
     setSavingEmail(true)
     setEmailNotice(null)
@@ -281,6 +288,18 @@ export default function ProfilePage() {
           </div>
         </div>
         <div className="space-y-3">
+          {session.isSuperAdmin ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              <div className="mb-1 flex items-center gap-2 font-semibold">
+                <AlertTriangle className="h-4 w-4" />
+                Внимание — вы супер-администратор
+              </div>
+              <p className="text-xs leading-5 text-amber-100/90">
+                Ваши права привязаны к email через переменную <code className="rounded bg-black/30 px-1">ADMIN_EMAILS</code> на Vercel.
+                Перед сменой email <strong>обязательно</strong> добавьте новый адрес в эту переменную и передеплойте проект — иначе после подтверждения вы потеряете супер-админ права.
+              </p>
+            </div>
+          ) : null}
           <div>
             <Label htmlFor="newEmail" className="text-xs text-slate-400">
               Новый email
