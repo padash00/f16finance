@@ -833,7 +833,8 @@ export default function IncomePage() {
     searchTerm !== ''
   ].filter(Boolean).length
 
-  if (loading) {
+  // Полный лоадер только при первой загрузке. При смене фильтра контент остаётся.
+  if (loading && serverRows.length === 0) {
     return (
       <>
           <div className="text-center">
