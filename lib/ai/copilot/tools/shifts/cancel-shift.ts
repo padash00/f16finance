@@ -23,17 +23,17 @@ export const cancelShiftTool: CopilotTool = {
         const today = new Date().toISOString().slice(0, 10)
         const { data } = await ctx.supabase
           .from('shifts')
-          .select('id, date, shift_type, operator:operator_id(name, short_name), company:company_id(name)')
-          .eq('status', 'scheduled')
+          .select('id, date, shift_type, operator_name, operator:operator_id(name, short_name), company:company_id(name)')
           .gte('date', today)
           .order('date')
           .limit(20)
         return (data || []).map((s: any) => {
           const op = Array.isArray(s.operator) ? s.operator[0] : s.operator
           const co = Array.isArray(s.company) ? s.company[0] : s.company
+          const opName = op?.short_name || op?.name || s.operator_name || ''
           return {
             value: s.id,
-            label: `${s.date} ${s.shift_type === 'night' ? '🌙' : '☀️'} ${co?.name || ''} · ${op?.short_name || op?.name || ''}`,
+            label: `${s.date} ${s.shift_type === 'night' ? '🌙' : '☀️'} ${co?.name || ''} · ${opName}`,
           }
         })
       },
@@ -53,16 +53,13 @@ export const cancelShiftTool: CopilotTool = {
 
     const { data: shift, error: getErr } = await ctx.supabase
       .from('shifts')
-      .select('id, date, shift_type, operator_id, company_id, status')
+      .select('id, date, shift_type, operator_id, company_id')
       .eq('id', shiftId)
       .single()
     if (getErr || !shift) return { ok: false, message: 'Смена не найдена.' }
-    if (shift.status === 'closed') return { ok: false, message: 'Смена уже закрыта, отменить нельзя.' }
 
-    const { error } = await ctx.supabase
-      .from('shifts')
-      .update({ status: 'cancelled', cancel_reason: reason, cancelled_at: new Date().toISOString() })
-      .eq('id', shiftId)
+    // В таблице shifts нет колонки status — отмена = удаление записи.
+    const { error } = await ctx.supabase.from('shifts').delete().eq('id', shiftId)
     if (error) return { ok: false, message: `Не удалось отменить: ${error.message}` }
 
     try {

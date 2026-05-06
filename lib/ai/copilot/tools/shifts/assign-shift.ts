@@ -62,9 +62,23 @@ export const assignShiftTool: CopilotTool = {
     const shiftType = String(input.shift_type || 'day')
     if (!operatorId || !companyId || !date) return { ok: false, message: 'Не хватает данных.' }
 
+    // Берём operator_name из таблицы (он required в schema shifts).
+    const { data: opRow } = await ctx.supabase
+      .from('operators')
+      .select('name, short_name')
+      .eq('id', operatorId)
+      .single()
+    const operatorName = (opRow?.short_name || opRow?.name || 'Оператор').trim()
+
     const { data, error } = await ctx.supabase
       .from('shifts')
-      .insert([{ operator_id: operatorId, company_id: companyId, date, shift_type: shiftType, status: 'scheduled' }])
+      .insert([{
+        operator_id: operatorId,
+        operator_name: operatorName,
+        company_id: companyId,
+        date,
+        shift_type: shiftType,
+      }])
       .select('id')
       .single()
     if (error) return { ok: false, message: `Не удалось назначить смену: ${error.message}` }

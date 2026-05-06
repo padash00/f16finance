@@ -38,7 +38,7 @@ export const getShiftReportTool: CopilotTool = {
 
     const { data: shifts } = await ctx.supabase
       .from('shifts')
-      .select('id, shift_type, status, operator:operator_id(name, short_name)')
+      .select('id, shift_type, operator_name, operator:operator_id(name, short_name)')
       .eq('date', date)
       .eq('company_id', companyId)
 
@@ -69,10 +69,10 @@ export const getShiftReportTool: CopilotTool = {
 
     for (const sh of (shifts || []) as any[]) {
       const op = Array.isArray(sh.operator) ? sh.operator[0] : sh.operator
-      const opName = op?.short_name || op?.name || '?'
+      const opName = op?.short_name || op?.name || sh.operator_name || '?'
       const inc = byShift.get(sh.shift_type) || { cash: 0, kaspi: 0, card: 0, online: 0 }
       const total = inc.cash + inc.kaspi + inc.card + inc.online
-      lines.push(`${sh.shift_type === 'night' ? '🌙' : '☀️'} ${opName} (${sh.status}):`)
+      lines.push(`${sh.shift_type === 'night' ? '🌙' : '☀️'} ${opName}:`)
       lines.push(`  Итого: ${fmt(total)}`)
       if (inc.cash > 0) lines.push(`  💵 Нал: ${fmt(inc.cash)}`)
       if (inc.kaspi > 0) lines.push(`  💳 Kaspi: ${fmt(inc.kaspi)}`)
