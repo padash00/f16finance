@@ -902,7 +902,7 @@ export default function SmartDashboardPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
           <HeaderBlock
             dateFrom={dateFrom}
             dateTo={dateTo}

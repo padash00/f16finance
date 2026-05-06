@@ -465,7 +465,7 @@ export default function AIAnalysisPage() {
 
   return (
     <>
-      <div className="app-page max-w-7xl space-y-6">
+      <div className="app-page-wide space-y-6">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/80 via-gray-900 to-indigo-950/40 p-6 border border-indigo-500/15">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-10 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-slate-600 rounded-full blur-3xl opacity-10 pointer-events-none" />

@@ -277,7 +277,7 @@ export default function ForecastPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
 
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-indigo-900/30 p-6 border border-purple-500/20">

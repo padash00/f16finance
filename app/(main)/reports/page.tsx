@@ -1947,7 +1947,7 @@ function ReportsContent() {
   return (
     <>
         <div
-          className={`app-page-ultra max-w-[1800px] space-y-6 relative transition-opacity duration-200 ${
+          className={`app-page-wide space-y-6 relative transition-opacity duration-200 ${
             refreshing ? 'opacity-80 ring-1 ring-violet-500/20 rounded-3xl' : ''
           }`}
         >

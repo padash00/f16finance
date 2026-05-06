@@ -260,7 +260,7 @@ export default function GoalsPage() {
 
   return (
     <>
-        <div className="app-page max-w-4xl space-y-6">
+        <div className="app-page-wide space-y-6">
 
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-900/30 via-gray-900 to-cyan-900/30 p-6 border border-teal-500/20">

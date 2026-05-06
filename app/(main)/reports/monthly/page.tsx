@@ -131,7 +131,7 @@ export default function MonthlyReportPage() {
   const maxPayment = paymentMethods.length > 0 ? Math.max(...paymentMethods.map(p => p.value), 1) : 1
 
   return (
-    <div className="app-page">
+    <div className="app-page-wide space-y-6">
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
