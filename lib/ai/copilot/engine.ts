@@ -225,17 +225,35 @@ async function askForParam(
   tool: CopilotTool,
 ): Promise<CopilotResponse> {
   if ((param.type === 'select' || param.type === 'multiselect') && param.getOptions) {
-    const options = await param.getOptions(ctx)
+    let options: Awaited<ReturnType<typeof param.getOptions>>
+    try {
+      options = await param.getOptions(ctx)
+    } catch (e: any) {
+      console.error('[copilot] getOptions failed:', param.name, e)
+      return {
+        text: `Не удалось получить варианты для "${param.label}": ${e?.message || 'unknown'}.\nМожешь ввести значение текстом.`,
+        buttons: [{ label: '❌ Отмена', callbackData: 'cancel', style: 'secondary' }],
+        meta: { activeTool: tool.name, awaitingParam: param.name },
+      }
+    }
     if (options.length === 0) {
       return {
         text: `Нет доступных вариантов для "${param.label}". Действие невозможно.`,
         buttons: [{ label: '❌ Отмена', callbackData: 'cancel', style: 'secondary' }],
       }
     }
+    // Telegram inline keyboard поддерживает много кнопок, ограничение
+    // практическое — не более ~30 чтобы не было простыни на экране.
+    // Если опций больше — показываем первые 30 + кнопку "Ввести вручную".
+    const MAX_BUTTONS = 30
+    const truncated = options.length > MAX_BUTTONS
+    const visible = options.slice(0, MAX_BUTTONS)
     return {
-      text: `${param.label}?`,
+      text: truncated
+        ? `${param.label}? (показаны первые ${MAX_BUTTONS} из ${options.length}, можешь ввести текстом если нужного нет)`
+        : `${param.label}?`,
       buttons: [
-        ...options.slice(0, 12).map((opt) => ({
+        ...visible.map((opt) => ({
           label: opt.label + (opt.hint ? ` · ${opt.hint}` : ''),
           callbackData: `param:${param.name}:${opt.value}`,
           style: 'secondary' as const,
