@@ -35,8 +35,14 @@ import { takeTaskTool } from './tasks/take-task'
 import { deleteTaskTool } from './tasks/delete-task'
 import { addStockTool } from './inventory/add-stock'
 import { updateStockThresholdTool } from './inventory/update-stock-threshold'
+import { addSupplierTool } from './inventory/add-supplier'
 import { updateOperatorTool } from './team/update-operator'
+import { updateTaskTool } from './tasks/update-task'
 import { saveMemoryTool } from './system/save-memory'
+import { sendTelegramReportTool } from './system/send-telegram-report'
+import { getTeamInfoTool } from './system/get-team-info'
+import { getKpiStatusTool } from './analytics/get-kpi-status'
+import { compareCompaniesTool } from './analytics/compare-companies'
 import { getOperatorSalaryTool } from './analytics/get-operator-salary'
 import { getOverdueDebtsTool } from './analytics/get-overdue-debts'
 import { getShiftReportTool } from './analytics/get-shift-report'
@@ -89,9 +95,12 @@ export function initializeCopilotTools(): void {
   registerTool(takeTaskTool)
   registerTool(closeTaskTool)
   registerTool(deleteTaskTool)
+  registerTool(updateTaskTool)
 
   // Системные
   registerTool(saveMemoryTool)
+  registerTool(sendTelegramReportTool)
+  registerTool(getTeamInfoTool)
 
   // Склад
   registerTool(createInventoryRequestTool)
@@ -101,6 +110,7 @@ export function initializeCopilotTools(): void {
   registerTool(writeoffItemTool)
   registerTool(addStockTool)
   registerTool(updateStockThresholdTool)
+  registerTool(addSupplierTool)
 
   // Смены
   registerTool(assignShiftTool)
@@ -135,7 +145,9 @@ export function initializeCopilotTools(): void {
   registerTool(getPaymentBreakdownTool)
   registerTool(getRecentActionsTool)
   registerTool(getTaxSummaryTool)
+  registerTool(getKpiStatusTool)
+  registerTool(compareCompaniesTool)
 
-  // Зарегистрировано: 53 tools (33 action + 19 analytics + 1 system)
-  // Покрывает >50% capabilities проекта.
+  // Зарегистрировано: 59 tools (37 action + 21 analytics + 3 system + 6 team)
+  // Покрытие ~60% capabilities проекта.
 }
