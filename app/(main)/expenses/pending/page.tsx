@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { ArrowLeft, CheckCircle2, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,10 @@ type PendingExpense = {
 type Company = { id: string; name: string }
 
 export default function PendingExpensesPage() {
+  const { can } = useCapabilities()
+  const canApprove = can('expenses-pending.approve')
+  const canDecline = can('expenses-pending.decline')
+
   const [items, setItems] = useState<PendingExpense[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
@@ -150,13 +155,17 @@ export default function PendingExpensesPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button size="sm" onClick={() => approve(item.id)} disabled={busy}>
-                    {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-                    Одобрить
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => decline(item.id)} disabled={busy}>
-                    <XCircle className="w-3 h-3 mr-1" /> Отклонить
-                  </Button>
+                  {canApprove && (
+                    <Button size="sm" onClick={() => approve(item.id)} disabled={busy}>
+                      {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                      Одобрить
+                    </Button>
+                  )}
+                  {canDecline && (
+                    <Button size="sm" variant="outline" onClick={() => decline(item.id)} disabled={busy}>
+                      <XCircle className="w-3 h-3 mr-1" /> Отклонить
+                    </Button>
+                  )}
                 </div>
               </Card>
             )

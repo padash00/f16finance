@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AlertTriangle, CheckCircle2, CreditCard, GitCompareArrows, ListOrdered, Pencil, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 
 type Row = {
@@ -35,6 +36,10 @@ const monthAgoISO = () => { const d = new Date(); d.setDate(d.getDate() - 30); r
 
 export default function KaspiTerminalPage() {
   const { companies } = useCompanies()
+  const { can } = useCapabilities()
+  const canCreate = can('kaspi-terminal.create')
+  const canEdit = can('kaspi-terminal.edit')
+  const canDelete = can('kaspi-terminal.delete')
 
   const [tab, setTab] = useState<Tab>('entries')
 
@@ -259,7 +264,8 @@ export default function KaspiTerminalPage() {
 
       {tab === 'entries' && (
       <>
-      {/* Форма добавления */}
+      {/* Форма добавления — только для тех у кого есть kaspi-terminal.create */}
+      {canCreate && (
       <Card className="p-4 border-border bg-card">
         <h2 className="text-sm font-semibold text-foreground mb-3">Добавить запись</h2>
         <form onSubmit={handleAdd} className="flex flex-wrap gap-2 items-end">
@@ -294,6 +300,7 @@ export default function KaspiTerminalPage() {
           </Button>
         </form>
       </Card>
+      )}
 
       {/* Таблица */}
       <Card className="border-border bg-card overflow-hidden">
@@ -357,13 +364,17 @@ export default function KaspiTerminalPage() {
                       <td className="px-4 py-3 text-muted-foreground text-xs">{row.note || '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400"
-                            onClick={() => { setEditId(row.id); setEditDate(row.date); setEditCompany(row.company_id); setEditAmount(String(row.amount)); setEditNote(row.note || '') }}>
-                            <Pencil className="w-3 h-3" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDelete(row.id)}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          {canEdit && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400"
+                              onClick={() => { setEditId(row.id); setEditDate(row.date); setEditCompany(row.company_id); setEditAmount(String(row.amount)); setEditNote(row.note || '') }}>
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDelete(row.id)}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </>

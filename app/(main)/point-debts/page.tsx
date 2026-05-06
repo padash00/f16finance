@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   CalendarDays,
   CheckSquare,
@@ -77,6 +78,10 @@ type LoadData = {
 const money = formatMoney
 
 export default function PointDebtsPage() {
+  const { can } = useCapabilities()
+  const canMarkPaid = can('point-debts.mark_paid')
+  const canExport = can('point-debts.export')
+
   /** Как на точке при создании долга (UTC-понедельник), иначе список пустой при сдвиге TZ. */
   const currentWeek = weekStartUtcISO(new Date())
   const [weekStart, setWeekStart] = useState(currentWeek)
@@ -297,25 +302,29 @@ export default function PointDebtsPage() {
         icon={<Receipt className="h-5 w-5" aria-hidden />}
         actions={
           <>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading || (!items.length && !legacyRows.length)}
-              className="h-8 rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10"
-              onClick={() => void downloadExcel()}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" />
-              Excel
-            </Button>
-            <Button
-              type="button"
-              disabled={!someSelected || settling}
-              className="h-8 rounded-xl bg-amber-600 text-xs text-white hover:bg-amber-500 disabled:opacity-50"
-              onClick={() => void markPaidSelected()}
-            >
-              {settling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-              Списать выбранные ({selectedIds.length})
-            </Button>
+            {canExport && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading || (!items.length && !legacyRows.length)}
+                className="h-8 rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10"
+                onClick={() => void downloadExcel()}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Excel
+              </Button>
+            )}
+            {canMarkPaid && (
+              <Button
+                type="button"
+                disabled={!someSelected || settling}
+                className="h-8 rounded-xl bg-amber-600 text-xs text-white hover:bg-amber-500 disabled:opacity-50"
+                onClick={() => void markPaidSelected()}
+              >
+                {settling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                Списать выбранные ({selectedIds.length})
+              </Button>
+            )}
             <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
               <button
                 type="button"

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -66,6 +67,9 @@ function buildMonths(from: string, to: string) {
 }
 
 export default function ProfitabilityPage() {
+  const { can } = useCapabilities()
+  const canEdit = can('profitability.edit')
+
   const defaults = useMemo(closedMonthDefaults, [])
   const [monthFrom, setMonthFrom] = useState(defaults.from)
   const [monthTo, setMonthTo] = useState(defaults.to)
@@ -681,7 +685,9 @@ export default function ProfitabilityPage() {
                     </div>
                   </div>
                 ) : null}
-                <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500"><Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем...' : `Сохранить ${monthLabel(selectedMonth)}`}</Button>
+                {canEdit && (
+                  <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500"><Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем...' : `Сохранить ${monthLabel(selectedMonth)}`}</Button>
+                )}
 
                 {/* What-if section */}
                 <div className="rounded-2xl border border-white/10 bg-slate-950/60">
