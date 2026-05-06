@@ -21,18 +21,9 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Этот endpoint используется страницей /expense-whitelist (просмотр) И
-    // формой создания расхода (выбор поставщика). Поэтому пускаем тех, у кого
-    // есть ЛЮБОЕ из прав: expense-whitelist.view ИЛИ expenses.create.
-    const wlDenied = await requireCapability(access, 'expense-whitelist.view')
-    if (wlDenied) {
-      const createDenied = await requireCapability(access, 'expenses.create')
-      if (createDenied) return createDenied as any
-    }
-
-    // Capability checks выше уже отсеивают; здесь — любой staff
-    const role = access.staffRole
-    if (!access.isSuperAdmin && !role) {
+    // Этот endpoint используется страницей /expense-whitelist И формой
+    // создания расхода. Любой авторизованный staff/super-admin получает список.
+    if (!access.isSuperAdmin && !access.staffRole) {
       return json({ error: 'forbidden' }, 403)
     }
 
@@ -63,21 +54,8 @@ export async function GET(req: Request) {
       area: 'api/admin/expenses/whitelist GET',
       message: error?.message || 'whitelist list failed',
     })
-    console.error('[expenses/whitelist GET] full error:', error)
-    let json_dump = ''
-    try { json_dump = JSON.stringify(error, Object.getOwnPropertyNames(error)) } catch {}
-    return json({
-      error: error?.message || 'Ошибка сервера',
-      _diagnostic: {
-        name: error?.name || null,
-        message: String(error?.message || error || 'unknown'),
-        code: error?.code || null,
-        status: error?.status || error?.statusCode || null,
-        details: error?.details || null,
-        hint: error?.hint || null,
-        full: json_dump.slice(0, 1500),
-      },
-    }, 500)
+    console.error('[expenses/whitelist GET]', error)
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }
 
