@@ -180,7 +180,7 @@ export default function KaspiTerminalPage() {
   const totalAmount = useMemo(() => rows.reduce((s, r) => s + r.amount, 0), [rows])
 
   return (
-    <div className="app-page max-w-5xl space-y-6">
+    <div className="app-page-wide space-y-6">
       {/* Заголовок */}
       <div className="flex items-center gap-4">
         <div className="p-3 bg-blue-500/10 rounded-xl">

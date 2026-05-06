@@ -443,6 +443,8 @@ export default function ExpensesPage() {
   const canEditExpense = canDo('expenses.edit')
   const canDeleteExpense = canDo('expenses.delete')
   const canExportExpense = canDo('expenses.export')
+  const canManageTemplates = canDo('expenses.manage_templates')
+  const canImportFile = canDo('expenses.import_file')
   const canManageExpense = canEditExpense || canDeleteExpense // legacy
   const statusLabelByValue: Record<Exclude<ExpenseStatusFilter, 'all'>, string> = {
     confirmed: 'Подтвержден',
@@ -952,7 +954,7 @@ export default function ExpensesPage() {
 
   return (
     <>
-        <div className="app-page max-w-[1600px] space-y-6">
+        <div className="app-page-wide space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-900/30 via-gray-900 to-orange-900/30 p-6 border border-red-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-red-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
@@ -1365,7 +1367,7 @@ export default function ExpensesPage() {
           ) : null}
 
           {/* Templates */}
-          {templatesTableExists && (
+          {templatesTableExists && canManageTemplates && (
             <Card className="p-4 bg-gray-900/80 border-gray-800">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -1595,21 +1597,25 @@ export default function ExpensesPage() {
                           Документ {index + 1}
                         </button>
                       ))}
-                      <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить все</button>
+                      {canImportFile && (
+                        <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить все</button>
+                      )}
                     </div>
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Добавить ещё</span>
-                      <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
-                    </label>
+                    {canImportFile && (
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Добавить ещё</span>
+                        <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
+                      </label>
+                    )}
                   </div>
-                ) : (
+                ) : canImportFile ? (
                   <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
                     <Upload className="w-3.5 h-3.5" />
                     <span>Прикрепить файл или несколько файлов</span>
                     <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
                   </label>
-                )
+                ) : null
               })() : null}
               {uploadingAttachment && <p className="text-xs text-blue-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Загрузка...</p>}
               {uploadError && <p className="text-xs text-red-400 mt-1">{uploadError}</p>}

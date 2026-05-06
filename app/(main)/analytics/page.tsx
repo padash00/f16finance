@@ -375,7 +375,7 @@ export default function AnalyticsPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-8">
+        <div className="app-page-wide space-y-8">
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -666,7 +666,7 @@ export default function AnalyticsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {loading ? (
+                      {loading && stats.months.length === 0 ? (
                         <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Загрузка данных...</td></tr>
                       ) : stats.months.map((m) => (
                         <tr key={m.monthKey} className="border-b border-border/30 hover:bg-white/5 transition-colors group">
@@ -729,7 +729,7 @@ export default function AnalyticsPage() {
           {/* ============================================================ */}
           {viewType === 'compare' && (
             <>
-              {loading ? (
+              {loading && companyStats.length === 0 ? (
                 <div className="py-16 text-center text-muted-foreground">Загрузка данных...</div>
               ) : companyStats.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground flex flex-col items-center">

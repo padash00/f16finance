@@ -306,7 +306,7 @@ export default function ShiftTelegramAuditPage() {
   const operators = data?.operators || []
 
   return (
-    <div className="app-page space-y-5">
+    <div className="app-page-wide space-y-5">
       <div>
         <h1 className="text-2xl font-semibold text-white">Сверка Telegram и доходов</h1>
         <p className="mt-1 text-sm text-slate-400">Файл Telegram читается только в браузере. В БД ничего не сохраняется.</p>

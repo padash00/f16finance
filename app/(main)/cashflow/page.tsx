@@ -231,7 +231,7 @@ export default function CashFlowPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
 
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/30 via-gray-900 to-blue-900/30 p-6 border border-emerald-500/20">

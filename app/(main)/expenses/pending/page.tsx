@@ -101,7 +101,7 @@ export default function PendingExpensesPage() {
   }
 
   return (
-    <div className="app-page-tight max-w-4xl mx-auto py-6">
+    <div className="app-page-wide space-y-6">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/expenses">
           <Button variant="outline" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
@@ -119,7 +119,7 @@ export default function PendingExpensesPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading && items.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">Загрузка...</div>
       ) : items.length === 0 ? (
         <Card className="p-8 text-center">

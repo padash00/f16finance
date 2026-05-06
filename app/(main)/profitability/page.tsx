@@ -380,7 +380,7 @@ export default function ProfitabilityPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-6">
+        <div className="app-page-wide space-y-6">
           <Card className="border border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 via-slate-950/90 to-gray-950 p-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-center gap-3">
@@ -462,7 +462,7 @@ export default function ProfitabilityPage() {
                 <div><h2 className="text-xl font-semibold text-white">Разбор месяца</h2><p className="text-sm text-slate-400">ОПиУ-структура по выбранному месяцу.</p></div>
                 <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white outline-none">{months.map((month) => <option key={month} value={month}>{monthLabel(month)}</option>)}</select>
               </div>
-              {loading ? <div className="text-sm text-slate-400">Загружаем расчёт прибыли...</div> : selected ? (
+              {loading && !selected ? <div className="text-sm text-slate-400">Загружаем расчёт прибыли...</div> : selected ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">EBITDA</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.ebitda)}</div><div className="mt-1 text-xs text-slate-400">{pct(ebitdaMargin)}</div></Card>

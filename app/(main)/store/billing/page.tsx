@@ -537,7 +537,7 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="app-page max-w-[1500px] space-y-6">
+    <div className="app-page-wide space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
@@ -664,7 +664,7 @@ export default function BillingPage() {
             </Card>
           ) : null}
 
-          {loading ? (
+          {loading && filteredDebts.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> Загрузка...
             </div>
@@ -765,7 +765,7 @@ export default function BillingPage() {
         </>
       ) : (
         <>
-          {loading ? (
+          {loading && groupedReceipts.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> Загрузка...
             </div>

@@ -154,7 +154,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="app-page max-w-6xl space-y-6">
+    <div className="app-page-wide space-y-6">
 
       {/* Хедер */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

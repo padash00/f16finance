@@ -159,7 +159,7 @@ export default function TaxPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-8">
+        <div className="app-page-wide space-y-8">
           
           {/* Заголовок и Даты */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
