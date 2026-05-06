@@ -68,6 +68,37 @@ import { createCustomerTool } from './pos/create-customer'
 import { adjustLoyaltyTool } from './pos/adjust-loyalty'
 import { setKpiPlanTool } from './system/set-kpi-plan'
 import { createGoalTool } from './system/create-goal'
+import { refundSaleTool } from './pos/refund-sale'
+import { getReceiptHistoryTool } from './pos/get-receipt-history'
+import { createReceiptTool } from './inventory/create-receipt'
+import { addItemTool } from './inventory/add-item'
+import { updateItemPriceTool } from './inventory/update-item-price'
+import { recountBalanceTool } from './inventory/recount-balance'
+import { archiveItemTool } from './inventory/archive-item'
+import { assignRoleTool } from './team/assign-role'
+import { updateOperatorPhoneTool } from './team/update-operator-phone'
+import { createCompanyTool } from './system/create-company'
+import { updateCompanyTool } from './system/update-company'
+import { archiveCompanyTool } from './system/archive-company'
+import { listGoalsTool } from './system/list-goals'
+import { closeGoalTool } from './system/close-goal'
+import { scheduleReminderTool } from './system/schedule-reminder'
+import { listRemindersTool } from './system/list-reminders'
+import { snoozeReminderTool } from './system/snooze-reminder'
+import { cancelReminderTool } from './system/cancel-reminder'
+import { listMemoriesTool } from './system/list-memories'
+import { deleteMemoryTool } from './system/delete-memory'
+import { lockPayrollPeriodTool } from './system/lock-payroll-period'
+import { calculatePayrollTool } from './salary/calculate-payroll'
+import { addDebtTool } from './finance/add-debt'
+import { getAuditLogTool } from './analytics/get-audit-log'
+import { whoChangedTool } from './analytics/who-changed'
+import { getKpiProgressTool } from './analytics/get-kpi-progress'
+import { getSupplierDebtsTool } from './analytics/get-supplier-debts'
+import { getEmployeeRatingTool } from './analytics/get-employee-rating'
+import { getStockValueTool } from './analytics/get-stock-value'
+import { getTopSellingTool } from './analytics/get-top-selling'
+import { getCustomerInfoTool } from './analytics/get-customer-info'
 
 let initialized = false
 
@@ -129,14 +160,47 @@ export function initializeCopilotTools(): void {
   registerTool(broadcastToOperatorsTool)
   registerTool(updateOperatorTool)
 
-  // POS / лояльность
+  // POS / лояльность / чеки
   registerTool(createPromoTool)
   registerTool(createCustomerTool)
   registerTool(adjustLoyaltyTool)
+  registerTool(refundSaleTool)
 
   // KPI / цели
   registerTool(setKpiPlanTool)
   registerTool(createGoalTool)
+  registerTool(closeGoalTool)
+
+  // Точки
+  registerTool(createCompanyTool)
+  registerTool(updateCompanyTool)
+  registerTool(archiveCompanyTool)
+
+  // Команда / роли
+  registerTool(assignRoleTool)
+  registerTool(updateOperatorPhoneTool)
+
+  // Каталог / склад (расширение)
+  registerTool(createReceiptTool)
+  registerTool(addItemTool)
+  registerTool(updateItemPriceTool)
+  registerTool(recountBalanceTool)
+  registerTool(archiveItemTool)
+
+  // Финансы (расширение)
+  registerTool(addDebtTool)
+
+  // Зарплата (расширение)
+  registerTool(calculatePayrollTool)
+  registerTool(lockPayrollPeriodTool)
+
+  // Напоминания
+  registerTool(scheduleReminderTool)
+  registerTool(snoozeReminderTool)
+  registerTool(cancelReminderTool)
+
+  // AI-память
+  registerTool(deleteMemoryTool)
 
   // ─── Read / analytics tools ──────────────────────────────────────────
   registerTool(queryRevenueTool)
@@ -161,7 +225,19 @@ export function initializeCopilotTools(): void {
   registerTool(getTaxSummaryTool)
   registerTool(getKpiStatusTool)
   registerTool(compareCompaniesTool)
+  registerTool(getReceiptHistoryTool)
+  registerTool(getAuditLogTool)
+  registerTool(whoChangedTool)
+  registerTool(getKpiProgressTool)
+  registerTool(getSupplierDebtsTool)
+  registerTool(getEmployeeRatingTool)
+  registerTool(getStockValueTool)
+  registerTool(getTopSellingTool)
+  registerTool(getCustomerInfoTool)
+  registerTool(listGoalsTool)
+  registerTool(listRemindersTool)
+  registerTool(listMemoriesTool)
 
-  // Зарегистрировано: 64 tools (42 action + 21 analytics + ...)
-  // Покрытие ~65% capabilities проекта.
+  // Зарегистрировано: 95 tools.
+  // Покрытие ~85% capabilities проекта.
 }
