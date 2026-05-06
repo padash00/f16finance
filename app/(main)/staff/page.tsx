@@ -639,6 +639,7 @@ export default function StaffPageSmart() {
                         onInviteAccount={() => handleInviteStaffAccount(s)}
                         onResetPassword={() => handleResetStaffPassword(s)}
                         canInviteAccount={isSuperAdmin || canInvite}
+                        canToggleStatus={canToggleStatus}
                         accountInfo={accountInfoByStaffId[s.id] || null}
                         inviteBusy={accountActionBusyKey === `inviteStaffAccount:${s.id}`}
                         resetBusy={accountActionBusyKey === `sendPasswordReset:${s.id}`}
@@ -676,6 +677,7 @@ function StaffRow({
   onInviteAccount,
   onResetPassword,
   canInviteAccount,
+  canToggleStatus: canToggleStatusProp,
   accountInfo,
   inviteBusy,
   resetBusy,
@@ -785,20 +787,22 @@ function StaffRow({
               </Button>
             )}
             
-            <Button
-              size="icon"
-              variant="ghost"
-              className={cn(
-                "h-8 w-8",
-                staff.is_active 
-                  ? "text-gray-500 hover:text-red-400 hover:bg-red-500/10" 
-                  : "text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10"
-              )}
-              onClick={onToggleStatus}
-              title={staff.is_active ? "В архив" : "Активировать"}
-            >
-              {staff.is_active ? <Trash2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            </Button>
+            {canToggleStatusProp && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className={cn(
+                  "h-8 w-8",
+                  staff.is_active
+                    ? "text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                    : "text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                )}
+                onClick={onToggleStatus}
+                title={staff.is_active ? "В архив" : "Активировать"}
+              >
+                {staff.is_active ? <Trash2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              </Button>
+            )}
           </div>
         </td>
       </tr>

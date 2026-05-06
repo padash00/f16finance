@@ -255,15 +255,16 @@ function CompanyBranch({
   company,
   assignments,
   operatorsById,
-  onEditOperator,
+  onEditOperator: rawEditor,
   canEdit = true,
 }: {
   company: Company
   assignments: Assignment[]
   operatorsById: Map<string, Operator>
-  onEditOperator: (operator: Operator) => void
+  onEditOperator?: (operator: Operator) => void
   canEdit?: boolean
 }) {
+  const onEditOperator = rawEditor
   const leadAssignments = assignments.filter((item) => item.role_in_company !== 'operator')
   const operatorAssignments = assignments.filter((item) => item.role_in_company === 'operator')
 
@@ -298,7 +299,7 @@ function CompanyBranch({
                   operator={operator}
                   role={assignment.role_in_company}
                   isPrimary={assignment.is_primary}
-                  onEdit={canEdit ? () => onEditOperator(operator) : undefined}
+                  onEdit={canEdit && onEditOperator ? () => onEditOperator(operator) : undefined}
                 />
               )
             })}
@@ -323,7 +324,7 @@ function CompanyBranch({
                   operator={operator}
                   role={assignment.role_in_company}
                   isPrimary={assignment.is_primary}
-                  onEdit={canEdit ? () => onEditOperator(operator) : undefined}
+                  onEdit={canEdit && onEditOperator ? () => onEditOperator(operator) : undefined}
                 />
               )
             })}
@@ -943,7 +944,7 @@ export default function StructurePage() {
                       company={company}
                       assignments={assignmentsByCompany.get(company.id) || []}
                       operatorsById={operatorsById}
-                      onEditOperator={canSaveAssignments ? openOperatorEditor : () => {}}
+                      onEditOperator={canSaveAssignments ? openOperatorEditor : undefined}
                       canEdit={canSaveAssignments}
                     />
                   ))}

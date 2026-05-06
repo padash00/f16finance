@@ -333,6 +333,11 @@ export default function SalaryPage() {
   const canCreateAdjustment = can('salary.create_adjustment')
   const canVoidPayment = can('salary.void_payment')
   const canUpdateChatId = can('salary.update_chat_id')
+  // Доступ к вкладкам/действиям административных сотрудников
+  const canViewStaffSalary = can('staff.view')
+  const canStaffCreatePayment = can('staff.create_payment')
+  const canStaffAddAdjustment = can('staff.add_adjustment')
+  const canStaffAddExtraDay = can('staff.add_extra_day')
 
   const currentWeek = toISODateLocal(mondayOfDate(new Date()))
   const [weekStart, setWeekStart] = useState(currentWeek)
@@ -1001,15 +1006,17 @@ export default function SalaryPage() {
                   >
                     Лента операторов
                   </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === 'staff'}
-                    onClick={() => setTab('staff')}
-                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    Административные сотрудники
-                  </button>
+                  {canViewStaffSalary && (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === 'staff'}
+                      onClick={() => setTab('staff')}
+                      className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      Административные сотрудники
+                    </button>
+                  )}
                   <button
                     type="button"
                     role="tab"
@@ -1422,7 +1429,7 @@ export default function SalaryPage() {
           )}
 
           {/* ── STAFF TAB ───────────────────────────────────────────────────── */}
-          {tab === 'staff' && (
+          {tab === 'staff' && canViewStaffSalary && (
           <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
             <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
               <div className="flex items-center gap-3">
@@ -1522,9 +1529,15 @@ export default function SalaryPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
-                          <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
-                          <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                          {canStaffAddAdjustment && (
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                          )}
+                          {canStaffAddExtraDay && (
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                          )}
+                          {canStaffCreatePayment && (
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                          )}
                         </div>
                       </div>
                       {isMonthClosed ? (
