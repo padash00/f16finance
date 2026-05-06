@@ -961,10 +961,13 @@ export default async function MarketingHomePage() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-6 sm:p-7">
-              <ContactLeadForm
-                title="Получить консультацию"
-                subtitle="Покажем как Orda Control работает на ваших данных и подскажем тариф"
-              />
+              <div className="mb-4">
+                <h3 className="text-xl font-semibold tracking-tight text-white">Получить консультацию</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Покажем как {PRODUCT} работает на ваших данных и подскажем тариф.
+                </p>
+              </div>
+              <ContactLeadForm />
             </div>
           </div>
         </Card>
