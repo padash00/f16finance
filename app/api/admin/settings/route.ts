@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -125,7 +126,9 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) {
+    // Доступ к настройкам — для super_admin или любого staff с нужной capability
+    // (capability проверяется ниже per-entity)
+    if (!access.isSuperAdmin && !access.staffRole) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 
@@ -136,6 +139,12 @@ export async function POST(req: Request) {
     const actorUserId = access.user?.id || null
 
     if (body.entity === 'company') {
+      // Капабилити-проверка зависит от действия
+      const capForCompany =
+        body.action === 'delete' ? 'settings.delete_company' : 'settings.manage_companies'
+      const denied = await requireCapability(access, capForCompany)
+      if (denied) return denied as any
+
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')
         const { data, error } = await supabase.from('companies').insert([
@@ -252,6 +261,9 @@ export async function POST(req: Request) {
     }
 
     if (body.entity === 'expense_category') {
+      const denied = await requireCapability(access, 'settings.manage_categories')
+      if (denied) return denied as any
+
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Название категории обязательно')
         const { data, error } = await supabase.from('expense_categories').insert([

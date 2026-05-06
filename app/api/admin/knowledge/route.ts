@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { listOrganizationCompanyIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
@@ -681,6 +682,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertCategory') {
+      const denied = await requireCapability(access, 'knowledge-admin.edit')
+      if (denied) return denied as any
       if (body.payload.company_id) {
         await resolveCompanyScope({
           activeOrganizationId: organizationId,
@@ -721,6 +724,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertArticle') {
+      const denied = await requireCapability(access, 'knowledge-admin.edit')
+      if (denied) return denied as any
       if (body.payload.company_id) {
         await resolveCompanyScope({
           activeOrganizationId: organizationId,
@@ -768,6 +773,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertTemplate') {
+      const denied = await requireCapability(access, 'knowledge-admin.manage_checklists')
+      if (denied) return denied as any
       if (body.payload.company_id) {
         await resolveCompanyScope({
           activeOrganizationId: organizationId,
