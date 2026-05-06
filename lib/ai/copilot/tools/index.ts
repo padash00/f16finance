@@ -17,6 +17,9 @@ import { closeTaskTool } from './tasks/close-task'
 import { createInventoryRequestTool } from './inventory/create-request'
 import { approveRequestTool, declineRequestTool } from './inventory/decide-request'
 import { assignShiftTool } from './shifts/assign-shift'
+import { cancelShiftTool } from './shifts/cancel-shift'
+import { writeoffItemTool } from './inventory/writeoff'
+import { blockOperatorTool, unblockOperatorTool } from './team/block-operator'
 import { queryRevenueTool } from './analytics/query-revenue'
 import { queryLowStockTool } from './analytics/query-low-stock'
 import { queryExpensesTool } from './analytics/query-expenses'
@@ -24,6 +27,7 @@ import { getTodayShiftsTool } from './analytics/get-today-shifts'
 import { getOverdueTasksTool } from './analytics/get-overdue-tasks'
 import { getPendingRequestsTool } from './analytics/get-pending-requests'
 import { getBirthdaysTool } from './analytics/get-birthdays'
+import { getOperatorInfoTool } from './analytics/get-operator-info'
 
 let initialized = false
 
@@ -53,6 +57,14 @@ export function initializeCopilotTools(): void {
 
   // Смены
   registerTool(assignShiftTool)
+  registerTool(cancelShiftTool)
+
+  // Списания
+  registerTool(writeoffItemTool)
+
+  // Команда
+  registerTool(blockOperatorTool)
+  registerTool(unblockOperatorTool)
 
   // ─── Read / analytics tools ──────────────────────────────────────────
   registerTool(queryRevenueTool)
@@ -62,9 +74,9 @@ export function initializeCopilotTools(): void {
   registerTool(getOverdueTasksTool)
   registerTool(getPendingRequestsTool)
   registerTool(getBirthdaysTool)
+  registerTool(getOperatorInfoTool)
 
-  // Зарегистрировано: 18 tools
-  // TODO следующие партии: get_operator_salary, get_operator_pi,
-  // compare_periods, write_off_item, transfer_to_showcase, swap_shift,
-  // create_operator, block_operator, save_to_memory, send_to_operator
+  // Зарегистрировано: 23 tools (16 action + 7 analytics)
+  // TODO: ещё партии — get_operator_salary, query_pi, compare_periods,
+  // transfer_to_showcase, swap_shift, send_to_operator, save_to_memory.
 }
