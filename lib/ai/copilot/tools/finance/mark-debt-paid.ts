@@ -25,7 +25,6 @@ export const markDebtPaidTool: CopilotTool = {
           .select('id, amount, client_name, created_at, company:companies!company_id(name)')
           .eq('status', 'active')
           .order('created_at', { ascending: false })
-          .limit(20)
         return (data || []).map((d: any) => {
           const company = Array.isArray(d.company) ? d.company[0] : d.company
           const sum = Number(d.amount || 0).toLocaleString('ru-RU') + ' ₸'

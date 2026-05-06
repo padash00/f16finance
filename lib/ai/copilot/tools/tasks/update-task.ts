@@ -25,7 +25,7 @@ export const updateTaskTool: CopilotTool = {
           .select('id, title, status, due_date')
           .neq('status', 'done')
           .order('created_at', { ascending: false })
-          .limit(20)
+          .limit(100)
         return (data || []).map((t: any) => ({
           value: t.id,
           label: `${t.title}${t.due_date ? ` · ${t.due_date}` : ''}`,

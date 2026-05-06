@@ -47,7 +47,7 @@ export const addExpenseTool: CopilotTool = {
       required: true,
       description: 'Категория расхода',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('expense_categories').select('id, name').order('name').limit(20)
+        const { data } = await ctx.supabase.from('expense_categories').select('id, name').order('name')
         return (data || []).map((c: any) => ({ value: c.name, label: c.name }))
       },
     },

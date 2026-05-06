@@ -24,7 +24,7 @@ export const updateExpenseTool: CopilotTool = {
           .from('expenses')
           .select('id, date, category, cash_amount, kaspi_amount, comment, company:companies!company_id(name)')
           .order('created_at', { ascending: false })
-          .limit(20)
+          .limit(100)
         return (data || []).map((e: any) => {
           const co = Array.isArray(e.company) ? e.company[0] : e.company
           const sum = Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0)
@@ -49,7 +49,7 @@ export const updateExpenseTool: CopilotTool = {
       required: false,
       description: 'Если меняем категорию',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('expense_categories').select('name').order('name').limit(30)
+        const { data } = await ctx.supabase.from('expense_categories').select('name').order('name')
         return (data || []).map((c: any) => ({ value: c.name, label: c.name }))
       },
     },

@@ -25,7 +25,6 @@ export const closeTaskTool: CopilotTool = {
           .select('id, title, due_date, operator:operator_id(name, short_name)')
           .eq('status', 'open')
           .order('created_at', { ascending: false })
-          .limit(20)
         return (data || []).map((t: any) => {
           const op = Array.isArray(t.operator) ? t.operator[0] : t.operator
           const opName = op?.short_name || op?.name || ''

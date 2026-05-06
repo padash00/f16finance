@@ -12,7 +12,6 @@ async function getPendingRequests(ctx: any) {
     .select('id, status, created_at, requesting_company_id, comment, company:companies!requesting_company_id(name)')
     .in('status', ['new', 'disputed'])
     .order('created_at', { ascending: false })
-    .limit(20)
   return (data || []).map((r: any) => {
     const company = Array.isArray(r.company) ? r.company[0] : r.company
     const date = r.created_at ? new Date(r.created_at).toLocaleDateString('ru-RU') : ''

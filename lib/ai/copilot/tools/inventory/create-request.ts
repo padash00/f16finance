@@ -35,7 +35,6 @@ export const createInventoryRequestTool: CopilotTool = {
           .from('inventory_items')
           .select('id, name')
           .order('name')
-          .limit(40)
         return (data || []).map((i: any) => ({ value: i.id, label: i.name }))
       },
     },

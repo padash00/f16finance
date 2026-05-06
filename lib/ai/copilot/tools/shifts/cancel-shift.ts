@@ -26,7 +26,7 @@ export const cancelShiftTool: CopilotTool = {
           .select('id, date, shift_type, operator_name, operator:operator_id(name, short_name), company:company_id(name)')
           .gte('date', today)
           .order('date')
-          .limit(20)
+          .limit(100)
         return (data || []).map((s: any) => {
           const op = Array.isArray(s.operator) ? s.operator[0] : s.operator
           const co = Array.isArray(s.company) ? s.company[0] : s.company

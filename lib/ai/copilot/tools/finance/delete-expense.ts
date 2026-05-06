@@ -24,7 +24,7 @@ export const deleteExpenseTool: CopilotTool = {
           .from('expenses')
           .select('id, date, category, cash_amount, kaspi_amount, comment, company:companies!company_id(name)')
           .order('created_at', { ascending: false })
-          .limit(20)
+          .limit(100)
         return (data || []).map((e: any) => {
           const co = Array.isArray(e.company) ? e.company[0] : e.company
           const sum = Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0)

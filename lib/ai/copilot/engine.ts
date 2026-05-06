@@ -261,16 +261,16 @@ async function askForParam(
         buttons: [{ label: '❌ Отмена', callbackData: 'cancel', style: 'secondary' }],
       }
     }
-    // Telegram inline keyboard поддерживает много кнопок, ограничение
-    // практическое — не более ~30 чтобы не было простыни на экране.
-    // Если опций больше — показываем первые 30 + кнопку "Ввести вручную".
-    const MAX_BUTTONS = 30
+    // Telegram hard-limit на inline_keyboard ≈ 100 кнопок (8 столбцов × до 13 рядов).
+    // Берём 96 чтобы оставить место под "Отмена". Если в БД больше — приглашаем
+    // ввести текстом (для редких случаев типа 200+ категорий).
+    const MAX_BUTTONS = 96
     const truncated = options.length > MAX_BUTTONS
     const visible = options.slice(0, MAX_BUTTONS)
     return {
       text: truncated
-        ? `${param.label}? (показаны первые ${MAX_BUTTONS} из ${options.length}, можешь ввести текстом если нужного нет)`
-        : `${param.label}?`,
+        ? `${param.label}? (всего ${options.length}; если нужного нет среди ${MAX_BUTTONS} — введи текстом)`
+        : `${param.label}? (всего ${options.length})`,
       buttons: [
         ...visible.map((opt) => ({
           label: opt.label + (opt.hint ? ` · ${opt.hint}` : ''),

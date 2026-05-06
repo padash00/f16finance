@@ -71,7 +71,7 @@ export const unblockOperatorTool: CopilotTool = {
       required: true,
       description: 'ID заблокированного оператора',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', false).order('name').limit(30)
+        const { data } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', false).order('name')
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },

@@ -25,7 +25,7 @@ export const voidAdjustmentTool: CopilotTool = {
           .select('id, date, kind, amount, comment, operator:operator_id(name, short_name)')
           .eq('status', 'active')
           .order('date', { ascending: false })
-          .limit(20)
+          .limit(100)
         return (data || []).map((a: any) => {
           const op = Array.isArray(a.operator) ? a.operator[0] : a.operator
           const kindLabel: Record<string, string> = { fine: '⚠ Штраф', bonus: '🎁 Бонус', advance: '💵 Аванс', debt: '📉 Долг' }

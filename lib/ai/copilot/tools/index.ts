@@ -63,6 +63,11 @@ import { getOperatorInfoTool } from './analytics/get-operator-info'
 import { comparePeriodsTool } from './analytics/compare-periods'
 import { getTopOperatorsTool } from './analytics/get-top-operators'
 import { getCashflowTool } from './analytics/get-cashflow'
+import { createPromoTool } from './pos/create-promo'
+import { createCustomerTool } from './pos/create-customer'
+import { adjustLoyaltyTool } from './pos/adjust-loyalty'
+import { setKpiPlanTool } from './system/set-kpi-plan'
+import { createGoalTool } from './system/create-goal'
 
 let initialized = false
 
@@ -124,6 +129,15 @@ export function initializeCopilotTools(): void {
   registerTool(broadcastToOperatorsTool)
   registerTool(updateOperatorTool)
 
+  // POS / лояльность
+  registerTool(createPromoTool)
+  registerTool(createCustomerTool)
+  registerTool(adjustLoyaltyTool)
+
+  // KPI / цели
+  registerTool(setKpiPlanTool)
+  registerTool(createGoalTool)
+
   // ─── Read / analytics tools ──────────────────────────────────────────
   registerTool(queryRevenueTool)
   registerTool(queryExpensesTool)
@@ -148,6 +162,6 @@ export function initializeCopilotTools(): void {
   registerTool(getKpiStatusTool)
   registerTool(compareCompaniesTool)
 
-  // Зарегистрировано: 59 tools (37 action + 21 analytics + 3 system + 6 team)
-  // Покрытие ~60% capabilities проекта.
+  // Зарегистрировано: 64 tools (42 action + 21 analytics + ...)
+  // Покрытие ~65% capabilities проекта.
 }

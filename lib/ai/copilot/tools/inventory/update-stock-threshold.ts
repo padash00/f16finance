@@ -24,7 +24,6 @@ export const updateStockThresholdTool: CopilotTool = {
           .from('inventory_items')
           .select('id, name, low_stock_threshold')
           .order('name')
-          .limit(40)
         return (data || []).map((i: any) => ({
           value: i.id,
           label: `${i.name}${i.low_stock_threshold ? ` (текущий мин: ${i.low_stock_threshold})` : ''}`,
