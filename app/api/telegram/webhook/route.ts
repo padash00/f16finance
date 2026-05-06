@@ -2545,7 +2545,9 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.7, messages, tools, tool_choice: 'auto' }),
+        // temperature=0.3: для tool use критично — детерминированность важнее
+        // креативности. Высокий temp заставляет модель угадывать инструменты.
+        body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.3, messages, tools, tool_choice: 'auto' }),
       })
       const data = await res.json().catch(() => null)
       await logAiUsageSafe(supabase, {
