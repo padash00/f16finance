@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent, useMemo, useCallback } from 'react'
 import Link from 'next/link'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -73,6 +74,13 @@ type OperatorStats = {
 }
 
 export default function OperatorsPage() {
+  const { can } = useCapabilities()
+  const canCreate = can('operators.create')
+  const canEdit = can('operators.edit')
+  const canDelete = can('operators.delete')
+  const canToggleActive = can('operators.toggle_active')
+  const canBulkDelete = can('operators.bulk_delete')
+
   const [operators, setOperators] = useState<Operator[]>([])
   const [profiles, setProfiles] = useState<Map<string, OperatorProfile>>(new Map())
   const [stats, setStats] = useState<Map<string, OperatorStats>>(new Map())
@@ -105,7 +113,8 @@ export default function OperatorsPage() {
   const [editPhone, setEditPhone] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
-  const canManageOperators = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
+  // Гибкие права — у любой роли которой выдан operators.create
+  const canManageOperators = canCreate || canDelete
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -614,7 +623,7 @@ export default function OperatorsPage() {
                 {showInactive ? 'Скрыть неактивных' : 'Показать неактивных'}
               </Button>
 
-              {canManageOperators && selectedOperators.size > 0 && (
+              {canBulkDelete && selectedOperators.size > 0 && (
                 <Button
                   onClick={handleBulkDelete}
                   variant="outline"
@@ -816,26 +825,31 @@ export default function OperatorsPage() {
                             </Link>
                             {canManageOperators ? (
                               <>
-                                <button
-                                  onClick={() => handleEdit(op)}
-                                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                                  title="Редактировать"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => toggleActive(op)}
-                                  className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${
-                                    op.is_active ? 'text-emerald-400' : 'text-gray-500'
-                                  }`}
-                                  title={op.is_active ? 'Деактивировать' : 'Активировать'}
-                                >
-                                  {op.is_active ? (
-                                    <ToggleRight className="w-4 h-4" />
-                                  ) : (
-                                    <ToggleLeft className="w-4 h-4" />
-                                  )}
-                                </button>
+                                {canEdit && (
+                                  <button
+                                    onClick={() => handleEdit(op)}
+                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                    title="Редактировать"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {canToggleActive && (
+                                  <button
+                                    onClick={() => toggleActive(op)}
+                                    className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${
+                                      op.is_active ? 'text-emerald-400' : 'text-gray-500'
+                                    }`}
+                                    title={op.is_active ? 'Деактивировать' : 'Активировать'}
+                                  >
+                                    {op.is_active ? (
+                                      <ToggleRight className="w-4 h-4" />
+                                    ) : (
+                                      <ToggleLeft className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                )}
+                                {canDelete && (
                                 <button
                                   onClick={() => handleDelete(op.id)}
                                   className="p-2 hover:bg-white/10 rounded-lg transition-colors text-rose-400"
@@ -843,6 +857,7 @@ export default function OperatorsPage() {
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
+                                )}
                               </>
                             ) : null}
                           </div>

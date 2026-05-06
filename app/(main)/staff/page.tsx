@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -211,6 +212,15 @@ function StaffLoading() {
 }
 
 export default function StaffPageSmart() {
+  const { can } = useCapabilities()
+  const canCreate = can('staff.create')
+  const canDelete = can('staff.delete')
+  const canExport = can('staff.export')
+  const canInvite = can('staff.invite')
+  const canResetPassword = can('staff.reset_password')
+  const canToggleStatus = can('staff.toggle_status')
+  const canCreatePayment = can('staff.create_payment')
+
   const today = new Date()
   const initialYM = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 
@@ -530,13 +540,17 @@ export default function StaffPageSmart() {
                 >
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт Excel">
-                  <Download className="h-4 w-4" />
-                </Button>
-                <Button onClick={() => setIsAddStaffOpen(true)} className="h-9 gap-1.5 rounded-xl bg-emerald-600 text-sm text-white hover:bg-emerald-500">
-                  <Plus className="h-4 w-4" />
-                  Добавить
-                </Button>
+                {canExport && (
+                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт Excel">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
+                {canCreate && (
+                  <Button onClick={() => setIsAddStaffOpen(true)} className="h-9 gap-1.5 rounded-xl bg-emerald-600 text-sm text-white hover:bg-emerald-500">
+                    <Plus className="h-4 w-4" />
+                    Добавить
+                  </Button>
+                )}
               </>
             }
             toolbar={
@@ -624,7 +638,7 @@ export default function StaffPageSmart() {
                         onToggleStatus={() => toggleStaffStatus(s)}
                         onInviteAccount={() => handleInviteStaffAccount(s)}
                         onResetPassword={() => handleResetStaffPassword(s)}
-                        canInviteAccount={isSuperAdmin}
+                        canInviteAccount={isSuperAdmin || canInvite}
                         accountInfo={accountInfoByStaffId[s.id] || null}
                         inviteBusy={accountActionBusyKey === `inviteStaffAccount:${s.id}`}
                         resetBusy={accountActionBusyKey === `sendPasswordReset:${s.id}`}

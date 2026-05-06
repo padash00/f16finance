@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { ensureOrganizationOperatorAccess, listOrganizationOperatorIds } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -217,6 +218,8 @@ export async function POST(req: Request) {
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
     if (body.action === 'createOperator') {
+      const denied = await requireCapability(access, 'operators.create')
+      if (denied) return denied as any
       if (!body.payload.name?.trim()) return json({ error: 'Имя оператора обязательно' }, 400)
 
       const { data: createdOperator, error: operatorError } = await supabase
@@ -261,6 +264,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateOperator') {
+      const denied = await requireCapability(access, 'operators.edit')
+      if (denied) return denied as any
       if (!body.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
       if (!body.payload.name?.trim()) return json({ error: 'Имя оператора обязательно' }, 400)
       await ensureOrganizationOperatorAccess({
@@ -324,6 +329,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'toggleOperatorActive') {
+      const denied = await requireCapability(access, 'operators.toggle_active')
+      if (denied) return denied as any
       if (!body.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
       await ensureOrganizationOperatorAccess({
         activeOrganizationId: access.activeOrganization?.id || null,
@@ -350,6 +357,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteOperator') {
+      const denied = await requireCapability(access, 'operators.delete')
+      if (denied) return denied as any
       if (!body.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
       await ensureOrganizationOperatorAccess({
         activeOrganizationId: access.activeOrganization?.id || null,
@@ -371,6 +380,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'bulkDeleteOperators') {
+      const denied = await requireCapability(access, 'operators.bulk_delete')
+      if (denied) return denied as any
       const ids = Array.isArray(body.operatorIds) ? body.operatorIds.filter(Boolean) : []
       if (ids.length === 0) return json({ error: 'Нужен список операторов' }, 400)
       if (ids.length > 100) return json({ error: 'Максимум 100 операторов за один запрос' }, 400)

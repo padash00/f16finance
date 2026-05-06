@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess, listOrganizationStaffIds } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -131,6 +132,8 @@ export async function POST(req: Request) {
     const activeOrganizationId = access.activeOrganization?.id || null
 
     if (body.action === 'createStaff') {
+      const denied = await requireCapability(access, 'staff.create')
+      if (denied) return denied as any
       const payload = body.payload
       if (!payload.full_name?.trim()) {
         return json({ error: 'ФИО обязательно' }, 400)
@@ -191,6 +194,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateStaff') {
+      const denied = await requireCapability(access, 'staff.edit')
+      if (denied) return denied as any
       const payload = body.payload
       if (!body.staffId?.trim()) {
         return json({ error: 'staffId обязателен' }, 400)
@@ -272,6 +277,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'toggleStaffStatus') {
+      const denied = await requireCapability(access, 'staff.toggle_status')
+      if (denied) return denied as any
       if (!body.staffId?.trim()) {
         return json({ error: 'staffId обязателен' }, 400)
       }
