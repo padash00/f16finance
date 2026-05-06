@@ -102,10 +102,35 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       if (inc.kind === 'bonus') bonusesTotal += Number(inc.bonus_amount || 0)
     }
 
+    // Fallback: если staff-оператор смены пустой, подтягиваем из первой продажи
+    const shiftWithOperator = shift as any
+    if (!shiftWithOperator.operator || !shiftWithOperator.operator.id) {
+      const { data: firstSale } = await supabase
+        .from('point_sales')
+        .select('operator_id, operator:operators!operator_id(id, full_name, short_name)')
+        .eq('shift_id', id)
+        .not('operator_id', 'is', null)
+        .order('sold_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (firstSale && (firstSale as any).operator) {
+        const op = (firstSale as any).operator
+        const opObj = Array.isArray(op) ? op[0] : op
+        if (opObj?.id) {
+          shiftWithOperator.operator = {
+            id: opObj.id,
+            full_name: opObj.full_name,
+            short_name: opObj.short_name,
+          }
+          shiftWithOperator.operator_source = 'sales'
+        }
+      }
+    }
+
     return json({
       ok: true,
       data: {
-        shift,
+        shift: shiftWithOperator,
         sales: salesRes.data || [],
         returns: returnsRes.data || [],
         checklist_runs: runsRes.data || [],

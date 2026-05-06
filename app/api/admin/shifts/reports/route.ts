@@ -60,7 +60,45 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    return json({ ok: true, data: { shifts: data || [] } })
+    const shifts = (data || []) as any[]
+
+    // Fallback: для смен без staff-оператора подтягиваем оператора-кассира
+    // из первой продажи (point_sales.operator_id → operators table).
+    const shiftsWithoutOperator = shifts.filter((s) => !s.operator || !s.operator.id)
+    if (shiftsWithoutOperator.length > 0) {
+      const shiftIds = shiftsWithoutOperator.map((s) => s.id)
+      const { data: salesRows } = await supabase
+        .from('point_sales')
+        .select('shift_id, operator_id, sold_at, operator:operators!operator_id(id, full_name, short_name)')
+        .in('shift_id', shiftIds)
+        .not('operator_id', 'is', null)
+        .order('sold_at', { ascending: true })
+
+      const firstOperatorByShift = new Map<string, any>()
+      for (const row of salesRows || []) {
+        const sid = String((row as any).shift_id || '')
+        if (!sid) continue
+        if (!firstOperatorByShift.has(sid)) {
+          const op = (row as any).operator
+          const opObj = Array.isArray(op) ? op[0] : op
+          if (opObj) firstOperatorByShift.set(sid, opObj)
+        }
+      }
+
+      for (const s of shifts) {
+        if ((!s.operator || !s.operator.id) && firstOperatorByShift.has(s.id)) {
+          const op = firstOperatorByShift.get(s.id)
+          s.operator = {
+            id: op.id,
+            full_name: op.full_name,
+            short_name: op.short_name,
+          }
+          s.operator_source = 'sales' // помечаем что подтянуто из продаж
+        }
+      }
+    }
+
+    return json({ ok: true, data: { shifts } })
   } catch (error) {
     return json(
       { error: 'admin-shifts-reports-failed', detail: (error as any)?.message || String(error) },
