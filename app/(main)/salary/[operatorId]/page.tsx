@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useParams, useSearchParams } from 'next/navigation'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   AlertTriangle,
   Building2,
@@ -56,6 +57,12 @@ function Modal(props: { title: string; subtitle?: string; onClose: () => void; c
 }
 
 function OperatorSalaryDetailPageContent() {
+  const { can } = useCapabilities()
+  const canCreateAdvance = can('salary.create_advance')
+  const canCreatePayment = can('salary.create_payment')
+  const canVoidPayment = can('salary.void_payment')
+  const canVoidAdjustment = can('salary.void_adjustment')
+
   const params = useParams<{ operatorId?: string | string[] }>()
   const searchParams = useSearchParams()
 
@@ -326,12 +333,16 @@ function OperatorSalaryDetailPageContent() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-3">
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />Выдать аванс
-                </Button>
+                {canCreateAdvance && (
+                  <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />Выдать аванс
+                  </Button>
+                )}
+                {canCreatePayment && (
                 <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayOpen(true)}>
                   <Wallet className="mr-2 h-4 w-4" />Выплатить
                 </Button>
+                )}
                 <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
                   {tgSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
                   {data.operator.telegram_chat_id ? 'Отправить в Telegram' : 'Нет Telegram'}
@@ -399,7 +410,7 @@ function OperatorSalaryDetailPageContent() {
                             <div className="text-right">
                               <div className={`text-sm font-semibold ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-emerald-300'}`}>{money(p.total_amount)}</div>
                             </div>
-                            {p.status === 'active' && (
+                            {p.status === 'active' && canVoidPayment && (
                               <button type="button" onClick={() => setVoidConfirm({ type: 'payment', id: p.id, label: `Выплата ${money(p.total_amount)} от ${formatRuDate(p.payment_date)}` })} className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20">
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -435,7 +446,7 @@ function OperatorSalaryDetailPageContent() {
                             </div>
                             {a.comment ? <div className="mt-1 truncate text-xs text-slate-500">{a.comment}</div> : null}
                           </div>
-                          {!isVoided && (
+                          {!isVoided && canVoidAdjustment && (
                             <button type="button" onClick={() => setVoidConfirm({ type: 'adjustment', id: a.id, label: `${kindLabel} ${money(a.amount)} от ${formatRuDate(a.date)}` })} className="shrink-0 rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20">
                               <Trash2 className="h-4 w-4" />
                             </button>

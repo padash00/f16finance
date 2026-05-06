@@ -42,6 +42,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 import type { Company, TaskPriority, TaskResponse, TaskStatus } from '@/lib/core/types'
 
@@ -311,6 +312,7 @@ function TasksContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { can } = useCapabilities()
 
   // Состояния
   const [tasks, setTasks] = useState<Task[]>([])
@@ -741,13 +743,15 @@ function TasksContent() {
                   </button>
                 </div>
 
-                <Button
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Новая задача
-                </Button>
+                {can('tasks.create') && (
+                  <Button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Новая задача
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -1006,30 +1010,36 @@ function TasksContent() {
                     {selectedTaskIds.size} задач выбрано
                   </span>
                   <div className="flex items-center gap-2 ml-auto">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10 hover:text-yellow-200 text-xs"
-                      onClick={() => bulkUpdateStatus('in_progress')}
-                    >
-                      В работу
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200 text-xs"
-                      onClick={() => bulkUpdateStatus('review')}
-                    >
-                      На проверку
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200 text-xs"
-                      onClick={() => bulkUpdateStatus('done')}
-                    >
-                      Готово
-                    </Button>
+                    {can('tasks.edit') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10 hover:text-yellow-200 text-xs"
+                        onClick={() => bulkUpdateStatus('in_progress')}
+                      >
+                        В работу
+                      </Button>
+                    )}
+                    {can('tasks.edit') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200 text-xs"
+                        onClick={() => bulkUpdateStatus('review')}
+                      >
+                        На проверку
+                      </Button>
+                    )}
+                    {can('tasks.bulk_complete') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200 text-xs"
+                        onClick={() => bulkUpdateStatus('done')}
+                      >
+                        Готово
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -1357,6 +1367,7 @@ function TaskDetailModal({
   onTaskUpdated,
 }: TaskDetailModalProps) {
   const { toast } = useToast()
+  const { can } = useCapabilities()
   const [comments, setComments] = useState<TaskComment[]>([])
   const [newComment, setNewComment] = useState('')
   const [responseNote, setResponseNote] = useState('')
@@ -1542,7 +1553,7 @@ function TaskDetailModal({
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
-              {task.operator_telegram && (
+              {task.operator_telegram && can('tasks.notify') && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -1553,21 +1564,24 @@ function TaskDetailModal({
                   Уведомить
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-              >
-                <Trash2 className="w-4 h-4" />
-                {deleting ? 'Удаляем...' : 'Удалить'}
-              </Button>
+              {can('tasks.delete') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {deleting ? 'Удаляем...' : 'Удалить'}
+                </Button>
+              )}
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {can('tasks.edit') && (
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <div className="mb-3 text-sm font-medium text-white">Редактирование задачи</div>
 
@@ -1665,6 +1679,7 @@ function TaskDetailModal({
               </div>
             </div>
           </div>
+          )}
 
           {/* Мета-информация */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1738,6 +1753,7 @@ function TaskDetailModal({
             </div>
           )}
 
+          {can('tasks.respond') && (
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <div className="mb-2 flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-violet-300" />
@@ -1775,6 +1791,7 @@ function TaskDetailModal({
               })}
             </div>
           </div>
+          )}
 
           {/* Теги */}
           {task.tags && task.tags.length > 0 && (
