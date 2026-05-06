@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -16,6 +17,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'shifts-reports.view')
+    if (denied) return denied as any
     if (!canView(access)) return json({ error: 'forbidden' }, 403)
 
     const { id } = await params
@@ -172,6 +175,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const actorUserId = access.user?.id || null
 
     if (body.action === 'closeForce') {
+      const deniedClose = await requireCapability(access, 'shifts-reports.close_force')
+      if (deniedClose) return deniedClose as any
       const { error: rpcErr } = await supabase.rpc('point_shift_admin_close', {
         p_shift_id: id,
         p_actor_user_id: actorUserId,
@@ -187,6 +192,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (body.action === 'purge') {
+      const deniedPurge = await requireCapability(access, 'shifts-reports.purge')
+      if (deniedPurge) return deniedPurge as any
       // Только super-admin может удалять смены целиком
       if (!access.isSuperAdmin) return json({ error: 'forbidden', message: 'Удаление смены — только для суперадмина' }, 403)
       if (body.confirm !== 'УДАЛИТЬ СМЕНУ') {

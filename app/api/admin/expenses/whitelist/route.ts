@@ -4,6 +4,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -19,6 +20,9 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'expense-whitelist.view')
+    if (denied) return denied as any
 
     const role = access.staffRole
     if (!access.isSuperAdmin && role !== 'owner' && role !== 'manager') {
@@ -60,6 +64,9 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'expense-whitelist.create')
+    if (denied) return denied as any
 
     if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
@@ -123,6 +130,9 @@ export async function PATCH(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'expense-whitelist.edit')
+    if (denied) return denied as any
 
     if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
@@ -188,6 +198,9 @@ export async function DELETE(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'expense-whitelist.delete')
+    if (denied) return denied as any
 
     if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)

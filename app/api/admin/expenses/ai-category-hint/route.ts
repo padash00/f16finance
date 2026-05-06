@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -61,6 +62,9 @@ export async function POST(req: Request) {
     const ip = getClientIp(req)
     const rl = checkRateLimit(`ai-expense-category-hint:${access.user?.id || ip}`, 30, 60_000)
     if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
+
+    const denied = await requireCapability(access, 'expenses.create')
+    if (denied) return denied as any
 
     const canUse = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
     if (!canUse) return json({ error: 'forbidden' }, 403)

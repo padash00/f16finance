@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { ensureInventoryCompanyAccess } from '@/lib/server/repositories/inventory'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-showcase.move')
+    if (denied) return denied as any
     if (!canManage(access)) return json({ error: 'forbidden' }, 403)
 
     const body = (await request.json().catch(() => null)) as { company_id?: string; enabled?: boolean } | null

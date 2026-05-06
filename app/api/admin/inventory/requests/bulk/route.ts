@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { decideInventoryRequest, ensureInventoryRequestAccess } from '@/lib/server/repositories/inventory'
@@ -53,6 +54,12 @@ export async function POST(request: Request) {
     const action = String(body?.action || '').trim()
     if (!requestIds.length) return json({ error: 'request-ids-required' }, 400)
     if (!['approve-full', 'reject'].includes(action)) return json({ error: 'invalid-action' }, 400)
+
+    const denied = await requireCapability(
+      access,
+      action === 'approve-full' ? 'store-requests.bulk_approve' : 'store-requests.bulk_reject',
+    )
+    if (denied) return denied as any
 
     const succeeded: string[] = []
     const failed: Array<{ requestId: string; error: string }> = []

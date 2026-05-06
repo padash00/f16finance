@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { buildDailyKaspiSeriesFromRows, sumDailyKaspiReports, type DailyKaspiReport } from '@/lib/server/services/daily-kaspi'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -151,6 +152,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'profitability.view')
+    if (denied) return denied as any
     if (!canViewProfitability(access)) return json({ error: 'forbidden' }, 403)
 
     const url = new URL(req.url)
@@ -264,6 +267,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'profitability.edit')
+    if (denied) return denied as any
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
 
     const body = (await req.json().catch(() => null)) as MutationBody | null

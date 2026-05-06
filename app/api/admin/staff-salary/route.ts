@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeAuditLog } from '@/lib/server/audit'
@@ -59,6 +60,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'salary.view')
+    if (denied) return denied as any
     const canView = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
     if (!canView) return json({ error: 'forbidden' }, 403)
 
@@ -326,6 +329,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'salary.create_payment')
+    if (denied) return denied as any
     if (!access.isSuperAdmin && access.staffRole !== 'owner') return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()

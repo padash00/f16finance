@@ -4,6 +4,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -13,6 +14,9 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'expenses-pending.view')
+    if (denied) return denied as any
 
     if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)

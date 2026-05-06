@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { assertOrganizationLimitAvailable, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -197,6 +198,9 @@ export async function GET(request: Request) {
     const access = await getContext(request)
     if ('response' in access) return access.response
 
+    const denied = await requireCapability(access, 'point-devices.view')
+    if (denied) return denied as any
+
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
@@ -242,6 +246,19 @@ export async function POST(request: Request) {
     const actorUserId = access.user?.id || null
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action) return badRequest('Неверный формат запроса')
+
+    const actionCapMap: Record<string, string> = {
+      createProject: 'point-devices.create',
+      updateProject: 'point-devices.edit',
+      toggleProjectActive: 'point-devices.edit',
+      rotateProjectToken: 'point-devices.edit',
+      deleteProject: 'point-devices.delete',
+    }
+    const capabilityForAction = actionCapMap[body.action]
+    if (capabilityForAction) {
+      const denied = await requireCapability(access, capabilityForAction)
+      if (denied) return denied as any
+    }
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { decideInventoryRequest, ensureInventoryRequestAccess, fetchInventoryRequests } from '@/lib/server/repositories/inventory'
@@ -53,6 +54,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'store-requests.view')
+    if (denied) return denied as any
     if (!canManageInventory(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
@@ -430,6 +433,8 @@ export async function POST(request: Request) {
 
     // ── transitionStatus ───────────────────────────────────────────���─────────
     if (body.action === 'transitionStatus') {
+      const denied2 = await requireCapability(access, 'store-requests.transition_status')
+      if (denied2) return denied2 as any
       const requestId = String(body.requestId || '').trim()
       if (!requestId) return json({ error: 'request-id-required' }, 400)
 
@@ -473,6 +478,8 @@ export async function POST(request: Request) {
 
     // ── undecideRequest: откат одобренной заявки (вернуть товар на склад) ─────
     if (body.action === 'undecideRequest') {
+      const denied2 = await requireCapability(access, 'store-requests.undecide')
+      if (denied2) return denied2 as any
       const actorUserId = access.user?.id || null
       const requestId = String(body.requestId || '').trim()
       if (!requestId) return json({ error: 'request-id-required' }, 400)
@@ -508,6 +515,9 @@ export async function POST(request: Request) {
     }
 
     if (body.action !== 'decideRequest') return json({ error: 'invalid-action' }, 400)
+
+    const deniedDecide = await requireCapability(access, 'store-requests.approve')
+    if (deniedDecide) return deniedDecide as any
 
     const actorUserId = access.user?.id || null
     const requestId = String(body.requestId || '').trim()

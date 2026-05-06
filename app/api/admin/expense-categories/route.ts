@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireCapability } from '@/lib/server/capabilities'
 import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -27,6 +28,9 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'categories.view')
+    if (denied) return denied as any
 
     const supabase = getSupabase(req)
     const result = await supabase
@@ -88,6 +92,10 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'categories.create')
+    if (denied) return denied as any
+
     if (!access.isSuperAdmin && access.staffRole !== 'owner') {
       return json({ error: 'forbidden' }, 403)
     }
@@ -123,6 +131,10 @@ export async function PATCH(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'categories.edit')
+    if (denied) return denied as any
+
     if (!access.isSuperAdmin && access.staffRole !== 'owner') {
       return json({ error: 'forbidden' }, 403)
     }
@@ -162,6 +174,10 @@ export async function DELETE(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const denied = await requireCapability(access, 'categories.delete')
+    if (denied) return denied as any
+
     if (!access.isSuperAdmin && access.staffRole !== 'owner') {
       return json({ error: 'forbidden' }, 403)
     }

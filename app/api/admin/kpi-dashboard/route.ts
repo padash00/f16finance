@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { calculateForecast, type CompanyCode } from '@/lib/kpiEngine'
+import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -84,6 +85,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'kpi.view')
+    if (denied) return denied as any
     if (!canAccessKpi(access)) return json({ error: 'forbidden' }, 403)
 
     const url = new URL(req.url)
@@ -187,6 +190,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireCapability(access, 'kpi.edit')
+    if (denied) return denied as any
     if (!canAccessKpi(access)) return json({ error: 'forbidden' }, 403)
 
     const body = (await req.json().catch(() => null)) as GenerateBody | null
