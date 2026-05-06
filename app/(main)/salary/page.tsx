@@ -1186,6 +1186,7 @@ export default function SalaryPage() {
               </table>
           </AdminTableViewport>
 
+          {canCreateAdjustment && (
           <Card className="border-white/10 bg-white/[0.04] p-5">
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-300">
@@ -1218,6 +1219,7 @@ export default function SalaryPage() {
             </form>
             {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
           </Card>
+          )}
 
           </>)}
 
