@@ -94,7 +94,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'expenses',
         path: '/expenses',
-        extraPaths: ['/expenses/add', '/expenses/new', '/expenses/analysis'],
+        extraPaths: ['/expenses/add', '/expenses/new', '/expenses/analysis', '/expenses-embed/new', '/expenses-embed/edit'],
         label: 'Расходы',
         capabilities: [
           ...crud('expenses', { exportData: true }),
