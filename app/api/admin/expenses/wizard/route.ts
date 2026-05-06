@@ -29,7 +29,8 @@ type WizardPayload = {
 }
 
 function canCreateExpense(role: string, isSuperAdmin: boolean) {
-  return isSuperAdmin || role === 'owner' || role === 'manager'
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return isSuperAdmin || !!role
 }
 
 export async function POST(request: Request) {

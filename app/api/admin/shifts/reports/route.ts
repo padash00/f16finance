@@ -9,7 +9,8 @@ function json(data: unknown, status = 200) {
 }
 
 function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || ['owner', 'manager', 'other'].includes(access.staffRole)
+  // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 export async function GET(request: Request) {

@@ -13,11 +13,13 @@ function json(data: unknown, status = 200) {
 }
 
 function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || ['owner', 'manager', 'other'].includes(access.staffRole)
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 function canCreateRequest(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || ['owner', 'manager', 'other'].includes(access.staffRole)
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 function normalizeQty(v: unknown) {

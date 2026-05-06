@@ -18,7 +18,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
     const { data, error } = await supabase
@@ -45,7 +46,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
 
     const body = await req.json().catch(() => null)
     const action = body?.action

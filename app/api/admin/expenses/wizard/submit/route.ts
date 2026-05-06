@@ -77,7 +77,8 @@ function validatePayload(p: WizardPayload, role: string, isSuperAdmin: boolean):
     return 'Неизвестный тип документа'
   }
 
-  if (!isSuperAdmin && role !== 'owner' && role !== 'manager') {
+  // Capability checks выше уже отсеивают; здесь — любой staff
+  if (!isSuperAdmin && !role) {
     return 'forbidden'
   }
 
@@ -90,7 +91,8 @@ export async function POST(request: Request) {
     if ('response' in access) return access.response
 
     const role = access.staffRole
-    if (!access.isSuperAdmin && role !== 'owner' && role !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !role) {
       return json({ error: 'forbidden' }, 403)
     }
 

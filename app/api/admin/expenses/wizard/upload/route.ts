@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     if ('response' in access) return access.response
 
     const role = access.staffRole
-    if (!access.isSuperAdmin && role !== 'owner' && role !== 'manager') {
+    // Capability checks выше уже отсеивают; здесь — любой staff
+    if (!access.isSuperAdmin && !role) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 

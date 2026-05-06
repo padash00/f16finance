@@ -10,7 +10,8 @@ function json(data: unknown, status = 200) {
 }
 
 function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || ['owner', 'manager'].includes(access.staffRole)
+  // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
+  return access.isSuperAdmin || !!access.staffRole
 }
 
 const ALLOWED_STATUS = new Set(['draft', 'confirmed', 'disputed', 'voided'])
