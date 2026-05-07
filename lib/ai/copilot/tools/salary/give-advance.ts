@@ -153,10 +153,33 @@ export const giveAdvanceTool: CopilotTool = {
       return { ok: false, message: `Не удалось создать расход: ${expErr.message}` }
     }
 
-    // 2. Создаём adjustment типа advance.
-    // Поля по схеме operator_salary_adjustments из salary endpoint:
-    // operator_id, date, amount, kind, comment, company_id,
-    // salary_week_id (опционально), linked_expense_id, source_type, status
+    // 2. Получаем/создаём salary_week_id чтобы аванс был виден в недельной разбивке /salary.
+    // Используем минимальный INSERT — без расчёта итогов (это сделает страница /salary
+    // при первом открытии через ensureSalaryWeekSnapshot).
+    let salaryWeekId: string | null = null
+    {
+      const { data: existing } = await ctx.supabase
+        .from('operator_salary_weeks')
+        .select('id')
+        .eq('operator_id', operatorId)
+        .eq('week_start', weekStart)
+        .maybeSingle()
+      if (existing?.id) {
+        salaryWeekId = String(existing.id)
+      } else {
+        const weekEndDate = new Date(weekStart + 'T00:00:00')
+        weekEndDate.setDate(weekEndDate.getDate() + 6)
+        const weekEndISOStr = `${weekEndDate.getFullYear()}-${String(weekEndDate.getMonth() + 1).padStart(2, '0')}-${String(weekEndDate.getDate()).padStart(2, '0')}`
+        const { data: newWeek } = await ctx.supabase
+          .from('operator_salary_weeks')
+          .insert([{ operator_id: operatorId, week_start: weekStart, week_end: weekEndISOStr, status: 'draft' }])
+          .select('id')
+          .single()
+        salaryWeekId = newWeek?.id ? String(newWeek.id) : null
+      }
+    }
+
+    // 3. Создаём adjustment типа advance с привязкой к неделе.
     const { error: adjErr } = await ctx.supabase
       .from('operator_salary_adjustments')
       .insert([
@@ -167,13 +190,13 @@ export const giveAdvanceTool: CopilotTool = {
           kind: 'advance',
           comment: comment || `Аванс через AI Copilot за неделю ${weekStart}`,
           company_id: companyId,
+          salary_week_id: salaryWeekId,
           linked_expense_id: expense?.id ? String(expense.id) : null,
           source_type: 'salary_advance',
           status: 'active',
         },
       ])
     if (adjErr) {
-      // Откатываем expense
       if (expense?.id) {
         await ctx.supabase.from('expenses').delete().eq('id', expense.id)
       }
