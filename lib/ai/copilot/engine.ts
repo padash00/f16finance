@@ -716,6 +716,20 @@ async function callLLM(
       return { text: `AI вернул ошибку: ${data?.error?.message || res.status}` }
     }
 
+    // Логируем расход токенов в ai_usage_log
+    try {
+      const { logAiUsageSafe } = await import('@/lib/ai/usage-tracker')
+      await logAiUsageSafe(ctx.supabase, {
+        userId: ctx.userId,
+        endpoint: '/api/copilot:llm',
+        model: MODEL,
+        usage: data?.usage,
+        status: res.ok && !data?.error ? 'success' : 'error',
+        error: !res.ok || data?.error ? data?.error?.message || `OpenAI ${res.status}` : null,
+        payload: { source: ctx.source, hasTools: openaiTools.length, currentPath: ctx.currentPath || null },
+      })
+    } catch {}
+
     const choice = data?.choices?.[0]
     const message = choice?.message
     if (!message) return { text: 'Не получил ответа от AI.' }
