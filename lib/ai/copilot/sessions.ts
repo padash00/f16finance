@@ -13,7 +13,8 @@
 import type { CopilotSession } from './types'
 
 const SESSIONS = new Map<string, CopilotSession>()
-const SESSION_TTL_MS = 30 * 60 * 1000 // 30 минут
+const SESSION_TTL_MS = 30 * 60 * 1000 // 30 минут — общий TTL для history контекста
+const ACTIVE_DIALOG_TTL_MS = 10 * 60 * 1000 // 10 минут — для активного сбора параметров
 
 function sessionKey(userId: string, telegramChatId?: number): string {
   return telegramChatId != null ? `tg:${telegramChatId}` : `user:${userId}`
@@ -87,11 +88,17 @@ export function pushHistory(session: CopilotSession, role: 'user' | 'assistant',
 /**
  * Проактивная очистка устаревших сессий. Вызывается из engine
  * перед обработкой нового запроса (lazy cleanup).
+ *
+ * - Активные диалоги (с awaitingParam) живут 10 минут
+ * - Просто история без активного tool — 30 минут
  */
 export function cleanupExpiredSessions(): void {
   const now = Date.now()
   for (const [key, session] of SESSIONS) {
-    if (now - session.updatedAt > SESSION_TTL_MS) {
+    const age = now - session.updatedAt
+    const inActiveDialog = !!(session.activeTool && session.awaitingParam)
+    const ttl = inActiveDialog ? ACTIVE_DIALOG_TTL_MS : SESSION_TTL_MS
+    if (age > ttl) {
       SESSIONS.delete(key)
     }
   }

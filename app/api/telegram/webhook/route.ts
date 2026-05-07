@@ -2722,6 +2722,25 @@ export async function POST(req: Request) {
       const chatId = update.callback_query.message?.chat?.id
       const messageId = update.callback_query.message?.message_id
 
+      // ─── Меню /start: категорийные подсказки ──────────────────────────
+      if (callbackData.startsWith('menu:') && chatId) {
+        await answerCallbackQuery(callbackQueryId, '...').catch(() => null)
+        const cat = callbackData.slice(5)
+        const examples: Record<string, string> = {
+          finance: '<b>💰 Финансы</b>\n\nПримеры команд:\n• "добавь расход 8500 за курьера"\n• "доход 50000 наличкой"\n• "запиши долг Айгуль 30к"\n• "отметь долг как оплаченный"\n• "одобри расход" / "отклони расход"\n• "сколько потратили на закупки за месяц"',
+          salary: '<b>💵 Зарплата</b>\n\nПримеры команд:\n• "выдай Айгерим аванс 50к"\n• "оштрафуй за опоздание 2000"\n• "выдай бонус 10к за полную посадку"\n• "отмени аванс"\n• "сколько Алтынбек заработал"',
+          shifts: '<b>📅 Смены</b>\n\nПримеры команд:\n• "поставь Айгерим на завтра ночь"\n• "отмени смену в субботу"\n• "кто работает сегодня?"\n• "отчёт смены за вчера"',
+          inventory: '<b>📦 Склад</b>\n\nПримеры команд:\n• "оформи приход 50 кока-колы по 200 от ABC"\n• "оприходуй 5 ручек — нашли в коробке"\n• "спиши 3 пива — просрочка"\n• "пересчёт остатка"\n• "перенеси 10 кофе на витрину"\n• "что заканчивается?"',
+          tasks: '<b>✅ Задачи</b>\n\nПримеры команд:\n• "поставь задачу убрать в зале на завтра"\n• "закрой задачу"\n• "взять задачу"\n• "просроченные задачи"',
+          team: '<b>👥 Команда</b>\n\nПримеры команд:\n• "создай оператора Айдан 87771112233"\n• "заблокируй Алмаса"\n• "напиши Айгерим что нужно прийти раньше"\n• "дай рассылку всем"\n• "назначь Алтынбека менеджером"',
+          analytics: '<b>📊 Аналитика</b>\n\nПримеры команд:\n• "сколько выручки за неделю"\n• "топ операторов"\n• "PI рейтинг"\n• "сравни месяц с прошлым"\n• "разбивка по способам оплаты"\n• "прогресс KPI"',
+          system: '<b>⚙ Система</b>\n\nПримеры команд:\n• "создай новую точку"\n• "поставь план 3 млн на май"\n• "напомни через час позвонить поставщику"\n• "создай цель: увеличить выручку на 15%"\n• "запомни что Алтынбек — старший на Arena"\n• "лог действий за сегодня"',
+        }
+        const text = examples[cat] || '⚠ Неизвестная категория'
+        await callTelegram('sendMessage', { chat_id: String(chatId), text, parse_mode: 'HTML' }).catch(() => null)
+        return json({ ok: true })
+      }
+
       // ─── Copilot callback (новый AI Copilot) ──────────────────────────
       if (callbackData.startsWith('cp:') && chatId) {
         await answerCallbackQuery(callbackQueryId, '...').catch(() => null)
@@ -3224,6 +3243,40 @@ export async function POST(req: Request) {
 
       // /start and /help — personalized
       if (cmd === '/start' || cmd === '/help') {
+        // Для owner/manager — расширенный help + меню категорий с примерами.
+        if (canUseFinance(botUser.role)) {
+          const menuText = [
+            '<b>👋 Привет! Я AI Copilot Orda Control.</b>',
+            '',
+            'Я выполняю действия по 9 направлениям. Просто пиши обычным языком — или нажми кнопку для примеров:',
+            '',
+            '💰 <b>Финансы</b> — расходы, доходы, долги',
+            '💵 <b>Зарплата</b> — авансы, штрафы, бонусы',
+            '📅 <b>Смены</b> — назначить, отменить',
+            '📦 <b>Склад</b> — приёмка, заявки, списания',
+            '✅ <b>Задачи</b> — поставить, закрыть',
+            '👥 <b>Команда</b> — операторы, сообщения',
+            '🛍 <b>POS</b> — клиенты, промокоды, возвраты',
+            '📊 <b>Аналитика</b> — выручка, KPI, топы',
+            '⚙ <b>Система</b> — точки, цели, напоминания',
+            '',
+            '<i>Можно голосом 🎤, фотом чека 📸, или просто текстом.</i>',
+          ].join('\n')
+          await callTelegram('sendMessage', {
+            chat_id: String(chatId),
+            text: menuText,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '💰 Финансы', callback_data: 'menu:finance' }, { text: '💵 Зарплата', callback_data: 'menu:salary' }],
+                [{ text: '📅 Смены', callback_data: 'menu:shifts' }, { text: '📦 Склад', callback_data: 'menu:inventory' }],
+                [{ text: '✅ Задачи', callback_data: 'menu:tasks' }, { text: '👥 Команда', callback_data: 'menu:team' }],
+                [{ text: '📊 Аналитика', callback_data: 'menu:analytics' }, { text: '⚙ Система', callback_data: 'menu:system' }],
+              ],
+            },
+          }).catch(() => null)
+          return json({ ok: true })
+        }
         await sendTelegramText(chatId, buildHelpText(botUser))
         return json({ ok: true })
       }
@@ -3554,6 +3607,8 @@ export async function POST(req: Request) {
       // показывает кнопки для выбора. Старый handleAIChat остаётся для
       // операторов (личная статистика).
       if (canUseFinance(botUser.role)) {
+        // Показываем "печатает..." пока обрабатываем (UX: бот не молчит)
+        await callTelegram('sendChatAction', { chat_id: String(chatId), action: 'typing' }).catch(() => null)
         try {
           const result = await runCopilotForTelegram({
             userId: botUser.entityId || telegramUserId,
@@ -3564,9 +3619,6 @@ export async function POST(req: Request) {
           })
           await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
         } catch (e: any) {
-          // Логируем полную ошибку и говорим пользователю что-то осмысленное.
-          // Не падаем в старый AI — он использует те же модели/параметры,
-          // если Copilot не смог, то и старый не сможет.
           console.error('[copilot] failed:', e?.message, e?.stack)
           await sendTelegramText(Number(chatId), `❌ Ошибка Copilot: ${e?.message || 'unknown'}.\nПопробуй переформулировать или используй конкретную команду.`).catch(() => null)
         }

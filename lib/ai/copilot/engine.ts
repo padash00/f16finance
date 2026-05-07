@@ -32,6 +32,7 @@ import {
   toolToOpenAISchema,
 } from './registry'
 import type { CopilotContext, CopilotResponse, CopilotTool, CopilotParam } from './types'
+import { fuzzyFindBest } from './fuzzy'
 
 const OPENAI_API = 'https://api.openai.com/v1/chat/completions'
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
@@ -201,11 +202,18 @@ export async function runCopilot(
           const valueStr = String(value)
           const valid = options.some((opt) => String(opt.value) === valueStr)
           if (!valid) {
+            // Может AI прислал имя ("Айгерим") вместо ID — fuzzy-найдём
+            const candidates = options.map((opt) => ({ item: opt, haystack: opt.label }))
+            const match = fuzzyFindBest(valueStr, candidates)
+            if (match) {
+              console.log(`[copilot] fuzzy-match ${param.name}: "${valueStr}" → "${match.item.label}" (${match.matchType})`)
+              setParam(session, key, match.item.value)
+              continue
+            }
             console.warn(`[copilot] AI hallucinated ${param.name}=${valueStr} — not in getOptions, asking user.`)
             continue
           }
         } catch {
-          // Если getOptions упал — лучше пропустить чем принять выдуманное
           continue
         }
       }
@@ -405,7 +413,14 @@ async function executeTool(
 ): Promise<CopilotResponse> {
   try {
     const params = session.collectedParams
-    const result = await tool.handler(params, ctx)
+    // Авто-ретрай при transient ошибках (network/timeout/temporary db).
+    // Только 1 раз — если упадёт второй — отдаём как есть.
+    let result = await tool.handler(params, ctx)
+    if (!result.ok && isTransientError(result.message)) {
+      console.warn(`[copilot] transient error, retrying once: ${result.message}`)
+      await new Promise((r) => setTimeout(r, 500))
+      result = await tool.handler(params, ctx)
+    }
 
     // Сохраняем очередь tools, потому что resetToolState её затрёт
     const queue = session.pendingToolQueue || []
@@ -439,6 +454,10 @@ async function executeTool(
                   const options = await param.getOptions(ctx)
                   if (options.some((o) => String(o.value) === String(value))) {
                     setParam(session, key, value)
+                  } else {
+                    const cand = options.map((opt) => ({ item: opt, haystack: opt.label }))
+                    const match = fuzzyFindBest(String(value), cand)
+                    if (match) setParam(session, key, match.item.value)
                   }
                 } catch {}
               } else {
@@ -452,17 +471,76 @@ async function executeTool(
       }
     }
 
-    const buttons = (result.followUps || []).map((f) => ({
+    // Кнопки follow-up: либо явно указанные tool'ом, либо дефолтные по категории.
+    let buttons = (result.followUps || []).map((f) => ({
       label: f.label,
       callbackData: f.action,
       style: 'secondary' as const,
     }))
+    if (buttons.length === 0) {
+      buttons = defaultFollowUps(tool)
+    }
+
     return { text: msg, buttons: buttons.length > 0 ? buttons : undefined }
   } catch (e: any) {
     session.pendingToolQueue = []
     resetToolState(session)
     return { text: `❌ ${friendlyError(e?.message || 'неизвестная ошибка')}` }
   }
+}
+
+/**
+ * Дефолтные follow-up кнопки в зависимости от только что выполненного tool.
+ * Цель — предложить логичный следующий шаг чтобы юзер не печатал заново.
+ */
+function defaultFollowUps(tool: CopilotTool): Array<{ label: string; callbackData: string; style: 'secondary' }> {
+  const sec = (label: string, callbackData: string) => ({ label, callbackData, style: 'secondary' as const })
+  switch (tool.name) {
+    case 'give_advance':
+      return [sec('+ ещё аванс', `tool:give_advance`), sec('💵 Зарплата', `tool:get_operator_salary`)]
+    case 'add_fine':
+      return [sec('+ ещё штраф', `tool:add_fine`), sec('🎁 Бонус', `tool:add_bonus`)]
+    case 'add_bonus':
+      return [sec('+ ещё бонус', `tool:add_bonus`), sec('⚠ Штраф', `tool:add_fine`)]
+    case 'add_expense':
+      return [sec('+ ещё расход', `tool:add_expense`), sec('📊 Расходы за неделю', `tool:query_expenses`)]
+    case 'add_income':
+      return [sec('+ ещё доход', `tool:add_income`), sec('📈 Выручка', `tool:query_revenue`)]
+    case 'create_task':
+      return [sec('+ ещё задача', `tool:create_task`), sec('📋 Все задачи', `tool:get_overdue_tasks`)]
+    case 'mark_debt_paid':
+      return [sec('Ещё долг', `tool:mark_debt_paid`), sec('📋 Все долги', `tool:get_overdue_debts`)]
+    case 'assign_shift':
+      return [sec('+ ещё смена', `tool:assign_shift`), sec('☀️ Сегодня', `tool:get_today_shifts`)]
+    case 'create_receipt':
+      return [sec('+ ещё приёмка', `tool:create_receipt`), sec('📦 Остатки', `tool:get_stock_value`)]
+    case 'add_stock':
+      return [sec('+ ещё', `tool:add_stock`), sec('📦 Остатки', `tool:get_stock_value`)]
+    case 'writeoff_item':
+      return [sec('+ ещё списание', `tool:writeoff_item`)]
+    case 'void_adjustment':
+      return [sec('💵 Зарплата', `tool:get_operator_salary`)]
+    default:
+      return []
+  }
+}
+
+/**
+ * Признаки transient (временной) ошибки — стоит повторить.
+ */
+function isTransientError(msg: string): boolean {
+  const m = String(msg || '').toLowerCase()
+  return (
+    m.includes('timeout') ||
+    m.includes('etimedout') ||
+    m.includes('econnreset') ||
+    m.includes('econnrefused') ||
+    m.includes('network') ||
+    m.includes('fetch failed') ||
+    m.includes('socket hang up') ||
+    m.includes('temporarily unavailable') ||
+    m.includes('try again')
+  )
 }
 
 /**
