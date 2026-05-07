@@ -20,6 +20,7 @@ import {
   OperatorSectionHeading,
 } from '@/components/operator/operator-mobile-ui'
 import { Button } from '@/components/ui/button'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal } from '@/lib/core/date'
 
 type ShiftItem = { date: string; shift_type: 'day' | 'night'; comment?: string | null }
@@ -52,6 +53,7 @@ export default function OperatorShiftsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [issueDraft, setIssueDraft] = useState<{ responseId: string; shiftDate: string; shiftType: 'day' | 'night'; companyName: string | null } | null>(null)
+  useModalEscape(!!issueDraft, () => { setIssueDraft(null) })
   const [issueReason, setIssueReason] = useState('')
 
   const load = useCallback(async (silent = false) => {

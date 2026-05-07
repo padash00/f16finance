@@ -19,6 +19,7 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type ShiftDetail = {
   date: string
@@ -574,6 +575,7 @@ function OperatorDetailModal({
   onClose: () => void
   periodLabel: string
 }) {
+  useModalEscape(true, onClose)
   if (typeof document === 'undefined') return null
 
   const sortedShifts = [...item.shift_details].sort((a, b) => b.date.localeCompare(a.date))

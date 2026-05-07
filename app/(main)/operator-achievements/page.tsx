@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { Button } from '@/components/ui/button'
 import {
   ACHIEVEMENTS,
@@ -392,6 +393,8 @@ function OperatorAchievementsModal({
   all: ReturnType<typeof computeAllAchievements>
   periodLabel: string
 }) {
+  useModalEscape(true, onClose)
+
   const detail = all.find((c) => c.row.operatorId === row.operatorId)
   if (!detail) return null
 

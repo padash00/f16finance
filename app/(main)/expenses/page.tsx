@@ -7,6 +7,7 @@ import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
@@ -309,6 +310,10 @@ export default function ExpensesPage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  // Esc + body scroll-lock для двух кастомных модалок
+  useModalEscape(!!editingExpense, () => setEditingExpense(null))
+  useModalEscape(!!previewUrl, () => setPreviewUrl(null))
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false)
   const [expenseModalLoading, setExpenseModalLoading] = useState(false)
 
