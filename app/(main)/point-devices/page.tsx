@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -796,10 +797,10 @@ export default function PointDevicesPage() {
                         )}
                         {project.companies.some((c) => (c.feature_flags as any)?.arena_enabled === true) ? (
                           <Button size="sm" variant="outline" asChild className="gap-2">
-                            <a href={`/stations/${project.id}`}>
+                            <Link href={`/stations/${project.id}`}>
                               <Monitor className="h-4 w-4" />
                               Станции
-                            </a>
+                            </Link>
                           </Button>
                         ) : null}
                         {can('point-devices.rotate_token') && (
