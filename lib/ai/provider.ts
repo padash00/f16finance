@@ -128,7 +128,7 @@ async function callOpenAiStream(options: StreamAiTextOptions): Promise<AiTextRes
     body: JSON.stringify({
       model,
       temperature: options.temperature,
-      max_tokens: options.maxTokens,
+      max_completion_tokens: options.maxTokens,
       messages: options.messages,
       stream: true,
       stream_options: { include_usage: true },

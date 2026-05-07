@@ -128,7 +128,7 @@ export async function GET(request: Request) {
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          max_tokens: 300,
+          max_completion_tokens: 300,
           messages: [{ role: 'user', content: prompt }],
         }),
       }).catch(() => null)

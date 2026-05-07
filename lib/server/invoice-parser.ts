@@ -137,7 +137,7 @@ ${aliasBlock}
     },
     body: JSON.stringify({
       model: 'gpt-4o',
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       messages: [
         {
           role: 'user',

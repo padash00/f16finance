@@ -48,7 +48,7 @@ ${text.slice(0, 3000)}`
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        max_tokens: 400,
+        max_completion_tokens: 400,
         temperature: 0,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -84,7 +84,7 @@ export async function parseExpenseFromImage(imageDataUrl: string, apiKey: string
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 400,
+        max_completion_tokens: 400,
         temperature: 0,
         messages: [{
           role: 'user',

@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 400,
+        max_completion_tokens: 400,
         messages: [
           {
             role: 'user',
