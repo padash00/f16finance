@@ -22,15 +22,18 @@ export const updateExpenseTool: CopilotTool = {
       getOptions: async (ctx) => {
         const { data } = await ctx.supabase
           .from('expenses')
-          .select('id, date, category, cash_amount, kaspi_amount, comment, company:companies!company_id(name)')
+          .select('id, date, category, cash_amount, kaspi_amount, comment, company_id')
           .order('created_at', { ascending: false })
           .limit(100)
-        return (data || []).map((e: any) => {
-          const co = Array.isArray(e.company) ? e.company[0] : e.company
+        const rows = data || []
+        const { resolveCompanyNames } = await import('../../query-helpers')
+        const companyMap = await resolveCompanyNames(ctx.supabase, rows as any)
+        return rows.map((e: any) => {
           const sum = Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0)
+          const co = companyMap.get(String(e.company_id)) || ''
           return {
-            value: e.id,
-            label: `${e.date} · ${co?.name || ''} · ${sum.toLocaleString('ru-RU')} ₸ · ${e.category}`,
+            value: String(e.id),
+            label: `${e.date} · ${co} · ${sum.toLocaleString('ru-RU')} ₸ · ${e.category}`,
           }
         })
       },

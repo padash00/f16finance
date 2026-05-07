@@ -23,17 +23,22 @@ export const cancelShiftTool: CopilotTool = {
         const today = new Date().toISOString().slice(0, 10)
         const { data } = await ctx.supabase
           .from('shifts')
-          .select('id, date, shift_type, operator_name, operator:operator_id(name, short_name), company:company_id(name)')
+          .select('id, date, shift_type, operator_name, operator_id, company_id')
           .gte('date', today)
           .order('date')
           .limit(100)
-        return (data || []).map((s: any) => {
-          const op = Array.isArray(s.operator) ? s.operator[0] : s.operator
-          const co = Array.isArray(s.company) ? s.company[0] : s.company
-          const opName = op?.short_name || op?.name || s.operator_name || ''
+        const rows = data || []
+        const { resolveCompanyNames, resolveOperatorNames } = await import('../../query-helpers')
+        const [companyMap, operatorMap] = await Promise.all([
+          resolveCompanyNames(ctx.supabase, rows as any),
+          resolveOperatorNames(ctx.supabase, rows as any),
+        ])
+        return rows.map((s: any) => {
+          const opName = operatorMap.get(String(s.operator_id)) || s.operator_name || ''
+          const coName = companyMap.get(String(s.company_id)) || ''
           return {
-            value: s.id,
-            label: `${s.date} ${s.shift_type === 'night' ? '🌙' : '☀️'} ${co?.name || ''} · ${opName}`,
+            value: String(s.id),
+            label: `${s.date} ${s.shift_type === 'night' ? '🌙' : '☀️'} ${coName} · ${opName}`,
           }
         })
       },

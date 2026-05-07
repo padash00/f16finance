@@ -9,15 +9,25 @@ import { writeAuditLog } from '@/lib/server/audit'
 async function getPendingRequests(ctx: any) {
   const { data } = await ctx.supabase
     .from('inventory_requests')
-    .select('id, status, created_at, requesting_company_id, comment, company:companies!requesting_company_id(name)')
+    .select('id, status, created_at, requesting_company_id, comment')
     .in('status', ['new', 'disputed'])
     .order('created_at', { ascending: false })
-  return (data || []).map((r: any) => {
-    const company = Array.isArray(r.company) ? r.company[0] : r.company
+  const rows = data || []
+  if (rows.length === 0) return []
+
+  const ids = Array.from(new Set(rows.map((r: any) => r.requesting_company_id).filter(Boolean)))
+  const companyMap = new Map<string, string>()
+  if (ids.length > 0) {
+    const { data: cos } = await ctx.supabase.from('companies').select('id, name').in('id', ids)
+    for (const c of (cos || []) as any[]) companyMap.set(String(c.id), c.name || '')
+  }
+
+  return rows.map((r: any) => {
+    const coName = companyMap.get(String(r.requesting_company_id)) || ''
     const date = r.created_at ? new Date(r.created_at).toLocaleDateString('ru-RU') : ''
     return {
-      value: r.id,
-      label: `${company?.name || ''} · ${date}` + (r.status === 'disputed' ? ' ⚠️' : ''),
+      value: String(r.id),
+      label: `${coName} · ${date}` + (r.status === 'disputed' ? ' ⚠️' : ''),
     }
   })
 }

@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { resolveOperatorNames } from '../../query-helpers'
 
 export const closeTaskTool: CopilotTool = {
   name: 'close_task',
@@ -22,14 +23,15 @@ export const closeTaskTool: CopilotTool = {
       getOptions: async (ctx) => {
         const { data } = await ctx.supabase
           .from('tasks')
-          .select('id, title, due_date, operator:operator_id(name, short_name)')
+          .select('id, title, due_date, operator_id')
           .eq('status', 'open')
           .order('created_at', { ascending: false })
-        return (data || []).map((t: any) => {
-          const op = Array.isArray(t.operator) ? t.operator[0] : t.operator
-          const opName = op?.short_name || op?.name || ''
+        const rows = data || []
+        const operatorMap = await resolveOperatorNames(ctx.supabase, rows as any)
+        return rows.map((t: any) => {
+          const opName = operatorMap.get(String(t.operator_id)) || ''
           return {
-            value: t.id,
+            value: String(t.id),
             label: `${t.title}${opName ? ` · ${opName}` : ''}${t.due_date ? ` · ${t.due_date}` : ''}`,
           }
         })
