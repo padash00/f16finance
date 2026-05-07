@@ -11,6 +11,33 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function weekStartISO(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const dt = new Date(y, (m || 1) - 1, d || 1)
+  const day = dt.getDay() === 0 ? 7 : dt.getDay()
+  dt.setDate(dt.getDate() - (day - 1))
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+async function ensureSalaryWeekId(supabase: any, operatorId: string, weekStart: string): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from('operator_salary_weeks')
+    .select('id')
+    .eq('operator_id', operatorId)
+    .eq('week_start', weekStart)
+    .maybeSingle()
+  if (existing?.id) return String(existing.id)
+  const weekEndDate = new Date(weekStart + 'T00:00:00')
+  weekEndDate.setDate(weekEndDate.getDate() + 6)
+  const weekEnd = `${weekEndDate.getFullYear()}-${String(weekEndDate.getMonth() + 1).padStart(2, '0')}-${String(weekEndDate.getDate()).padStart(2, '0')}`
+  const { data: newWeek } = await supabase
+    .from('operator_salary_weeks')
+    .insert([{ operator_id: operatorId, week_start: weekStart, week_end: weekEnd, status: 'draft' }])
+    .select('id')
+    .single()
+  return newWeek?.id ? String(newWeek.id) : null
+}
+
 export const addBonusTool: CopilotTool = {
   name: 'add_bonus',
   category: 'salary',
@@ -65,6 +92,9 @@ export const addBonusTool: CopilotTool = {
       return { ok: false, message: 'Не хватает данных.' }
     }
     const today = todayISO()
+    const weekStart = weekStartISO(today)
+    const salaryWeekId = await ensureSalaryWeekId(ctx.supabase, operatorId, weekStart)
+
     const { data, error } = await ctx.supabase
       .from('operator_salary_adjustments')
       .insert([
@@ -75,6 +105,7 @@ export const addBonusTool: CopilotTool = {
           kind: 'bonus',
           comment: reason,
           company_id: companyId,
+          salary_week_id: salaryWeekId,
           source_type: 'manual',
           status: 'active',
         },
