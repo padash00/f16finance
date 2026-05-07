@@ -20,24 +20,28 @@ export const voidAdjustmentTool: CopilotTool = {
       required: true,
       description: 'ID активной корректировки',
       getOptions: async (ctx) => {
-        // Фильтруем по voided_at IS NULL, а не по status='active' — status может
-        // отсутствовать или быть NULL на старых записях, но voided_at заполняется
-        // только при отмене.
+        // Без всяких фильтров — показываем последние 100 корректировок.
+        // Уже отменённые (status='voided') пропускаем в TS, чтобы не зависеть
+        // от того есть ли колонки voided_at / status в схеме БД.
         const { data, error } = await ctx.supabase
           .from('operator_salary_adjustments')
           .select('id, date, kind, amount, comment, status, voided_at, operator:operator_id(name, short_name)')
-          .is('voided_at', null)
           .order('date', { ascending: false })
           .limit(100)
         if (error) {
           console.error('[copilot] void-adjustment getOptions error:', error)
           return []
         }
-        return (data || []).map((a: any) => {
+        const rows = (data || []).filter((a: any) => {
+          if (a.voided_at) return false
+          if (a.status === 'voided') return false
+          return true
+        })
+        return rows.map((a: any) => {
           const op = Array.isArray(a.operator) ? a.operator[0] : a.operator
           const kindLabel: Record<string, string> = { fine: '⚠ Штраф', bonus: '🎁 Бонус', advance: '💵 Аванс', debt: '📉 Долг' }
           return {
-            value: a.id,
+            value: String(a.id),
             label: `${a.date} · ${kindLabel[a.kind] || a.kind} · ${Number(a.amount).toLocaleString('ru-RU')} ₸ · ${op?.short_name || op?.name || ''}`,
           }
         })

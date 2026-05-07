@@ -267,9 +267,13 @@ async function askForParam(
       }
     }
     if (options.length === 0) {
+      // ВАЖНО: сбрасываем сессию полностью — иначе следующее сообщение
+      // юзера попадёт в "ждём awaitingParam" и engine примет любую строку
+      // как значение, что приведёт к "invalid input syntax for type ..."
+      // на стороне Postgres.
+      clearSession(ctx.userId, ctx.telegramChatId)
       return {
-        text: `Нет доступных вариантов для "${param.label}". Действие невозможно.`,
-        buttons: [{ label: '❌ Отмена', callbackData: 'cancel', style: 'secondary' }],
+        text: `Нет доступных вариантов для "${param.label}". Действие отменено.\nВозможно нужная запись отсутствует, либо есть проблема со схемой БД. Попробуй другую команду.`,
       }
     }
     // Telegram hard-limit на inline_keyboard ≈ 100 кнопок (8 столбцов × до 13 рядов).
