@@ -55,10 +55,10 @@ export const calculatePayrollTool: CopilotTool = {
     const nightRate = 10000
     const baseSalary = dayShifts * dayRate + nightShifts * nightRate
 
-    const bonuses = (adjustments || []).filter((a: any) => a.kind === 'bonus').reduce((s, a: any) => s + Number(a.amount || 0), 0)
-    const fines = (adjustments || []).filter((a: any) => a.kind === 'fine').reduce((s, a: any) => s + Number(a.amount || 0), 0)
-    const advances = (adjustments || []).filter((a: any) => a.kind === 'advance').reduce((s, a: any) => s + Number(a.amount || 0), 0)
-    const debts = (adjustments || []).filter((a: any) => a.kind === 'debt').reduce((s, a: any) => s + Number(a.amount || 0), 0)
+    const bonuses = (adjustments || []).filter((a: any) => a.kind === 'bonus').reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
+    const fines = (adjustments || []).filter((a: any) => a.kind === 'fine').reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
+    const advances = (adjustments || []).filter((a: any) => a.kind === 'advance').reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
+    const debts = (adjustments || []).filter((a: any) => a.kind === 'debt').reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
 
     const total = baseSalary + bonuses - fines - advances - debts
 

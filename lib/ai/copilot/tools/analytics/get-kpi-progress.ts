@@ -48,7 +48,7 @@ export const getKpiProgressTool: CopilotTool = {
       .gte('date', periodStart)
       .lte('date', periodEnd)
 
-    const fact = (incomes || []).reduce((s, r: any) =>
+    const fact = (incomes || []).reduce((s: number, r: any) =>
       s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0), 0)
 
     if (!plan?.target_amount) {

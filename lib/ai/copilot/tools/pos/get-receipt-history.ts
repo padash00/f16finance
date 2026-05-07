@@ -48,7 +48,7 @@ export const getReceiptHistoryTool: CopilotTool = {
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '🧾 Чеков за период нет.' }
 
-    const total = data.reduce((s, r: any) => s + Number(r.total_amount || 0), 0)
+    const total = data.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0)
     const refunded = data.filter((r: any) => r.refunded_at).length
     const lines: string[] = [`🧾 Чеков за ${days} дн: ${data.length}, итого ${total.toLocaleString('ru-RU')} ₸${refunded ? `, возвратов: ${refunded}` : ''}\n`]
     for (const r of data.slice(0, 20) as any[]) {

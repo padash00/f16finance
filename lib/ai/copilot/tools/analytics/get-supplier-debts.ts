@@ -22,7 +22,7 @@ export const getSupplierDebtsTool: CopilotTool = {
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '✅ Перед поставщиками долгов нет.' }
 
-    const total = data.reduce((s, r: any) => s + Number(r.total_amount || 0), 0)
+    const total = data.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0)
     const lines: string[] = [`📋 Долгов поставщикам: ${data.length} на ${total.toLocaleString('ru-RU')} ₸\n`]
     for (const d of data as any[]) {
       const sup = Array.isArray(d.supplier) ? d.supplier[0] : d.supplier
