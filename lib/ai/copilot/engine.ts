@@ -417,10 +417,9 @@ async function callLLM(
         // gpt-5+ требуют max_completion_tokens вместо max_tokens.
         // gpt-4o-mini и старше поддерживают оба варианта.
         max_completion_tokens: 800,
-        // 0.1 — для надежного tool calling. gpt-4o-mini при temp >0.3
-        // часто пропускает tools и отвечает текстом.
-        // gpt-5+ может игнорировать temperature, это нормально.
-        temperature: 0.1,
+        // gpt-5+ требует temperature=1 (только дефолт). Старые модели
+        // умнее на низкой температуре для tool-calling.
+        ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0.1 }),
         messages,
         tools: openaiTools,
         tool_choice: 'auto',

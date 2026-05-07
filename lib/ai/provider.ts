@@ -90,7 +90,7 @@ async function callOpenAi(options: GenerateAiTextOptions): Promise<AiTextResult>
     body: JSON.stringify({
       model,
       temperature: options.temperature,
-      max_tokens: options.maxTokens,
+      max_completion_tokens: options.maxTokens,
       messages: options.messages,
     }),
   })

@@ -2548,7 +2548,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         // temperature=0.3: для tool use критично — детерминированность важнее
         // креативности. Высокий temp заставляет модель угадывать инструменты.
-        body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.3, messages, tools, tool_choice: 'auto' }),
+        body: JSON.stringify({ model: OPENAI_MODEL, max_completion_tokens: 1800, temperature: 0.3, messages, tools, tool_choice: 'auto' }),
       })
       const data = await res.json().catch(() => null)
       await logAiUsageSafe(supabase, {
@@ -3546,9 +3546,11 @@ export async function POST(req: Request) {
           })
           await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
         } catch (e: any) {
-          // Fallback на старый AI если Copilot упал
-          console.error('[copilot] failed, fallback to old AI:', e)
-          await handleAIChat(Number(chatId), String(chatId), text, supabase, undefined, botUser)
+          // Логируем полную ошибку и говорим пользователю что-то осмысленное.
+          // Не падаем в старый AI — он использует те же модели/параметры,
+          // если Copilot не смог, то и старый не сможет.
+          console.error('[copilot] failed:', e?.message, e?.stack)
+          await sendTelegramText(Number(chatId), `❌ Ошибка Copilot: ${e?.message || 'unknown'}.\nПопробуй переформулировать или используй конкретную команду.`).catch(() => null)
         }
         return json({ ok: true })
       }

@@ -325,7 +325,7 @@ export function streamAssistant(
           },
           body: JSON.stringify({
             model: OPENAI_MODEL,
-            max_tokens: 2000,
+            max_completion_tokens: 2000,
             temperature: 0.7,
             messages,
             stream: true,
@@ -366,7 +366,7 @@ export async function runAssistant(request: AssistantRequest, context: Assistant
 
     const result = await requestOpenAI({
       model: OPENAI_MODEL,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       temperature: 0.7,
       messages,
     })
