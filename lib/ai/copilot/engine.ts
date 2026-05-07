@@ -23,6 +23,7 @@ import {
   awaitParam,
   pushHistory,
   clearSession,
+  resetToolState,
 } from './sessions'
 import {
   getTool,
@@ -35,43 +36,66 @@ import type { CopilotContext, CopilotResponse, CopilotTool, CopilotParam } from 
 const OPENAI_API = 'https://api.openai.com/v1/chat/completions'
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
-const COPILOT_SYSTEM_PROMPT = `Ты — AI-ассистент Orda Control. Помогаешь владельцу/менеджеру выполнять действия в системе через диалог.
+const COPILOT_SYSTEM_PROMPT = `Ты — AI-ассистент Orda Control. Помогаешь владельцу/менеджеру управлять игровым клубом через диалог: выдавать авансы, штрафы, бонусы, добавлять расходы/доходы, ставить задачи, смотреть аналитику и т.п.
 
-ЯЗЫК: русский (ru-KZ).
+ЯЗЫК: русский. Понимаешь казахский, отвечаешь по-русски.
 
-🔴 ГЛАВНЫЙ ЗАКОН (нарушать НЕЛЬЗЯ):
-Если для запроса пользователя есть подходящий tool — ОБЯЗАТЕЛЬНО вызови этот tool.
-НИКОГДА не отвечай текстом «укажите параметры», «уточните» — система сама соберёт недостающие
-параметры через интерактивный диалог с кнопками. Твоя задача — только определить какой tool
-и вызвать его с теми параметрами что уже указаны (даже если их 0).
+🔴 ГЛАВНЫЙ ПРИНЦИП:
+У тебя есть СПИСОК TOOLS — это все действия которые ты можешь сделать.
+Когда пользователь просит что-то сделать → ВЫЗОВИ ПОДХОДЯЩИЙ TOOL.
+Если параметров не хватает — НЕ СПРАШИВАЙ ТЕКСТОМ, просто вызови tool с теми что есть (даже с пустыми {}). Система сама покажет интерактивные кнопки для недостающих полей.
 
-ПРИМЕРЫ:
-✅ Пользователь: "добавь расход 8500 за курьера"
-   → ВЫЗВАТЬ add_expense({amount: 8500, comment: "за курьера"})
-   ❌ НЕ ОТВЕЧАТЬ текстом "укажите точку и категорию"
+🔴 НИКОГДА не отвечай текстом типа "укажите ID", "уточните период", "пришлите имя оператора".
+🔴 НИКОГДА не выдумывай UUID/ID — оставляй их пустыми если не знаешь точно.
 
-✅ Пользователь: "выдай аванс"
-   → ВЫЗВАТЬ give_advance({}) — все параметры пустые, система спросит сама
-   ❌ НЕ ОТВЕЧАТЬ "кому выдать?"
+ПРИМЕРЫ ПРАВИЛЬНОГО ПОВЕДЕНИЯ:
 
-✅ Пользователь: "оштрафуй Айгерим"
-   → ВЫЗВАТЬ add_fine({operator_id: "...найти..."})
-   Если ID не знаешь — вызывай с пустым operator_id, система покажет список кнопками.
+User: "добавь расход 8500 за курьера"
+You: вызвать add_expense({cash_amount: 8500, comment: "курьер"})
 
-✅ Пользователь: "покажи выручку за неделю"
-   → ВЫЗВАТЬ query_revenue({period: "week"})
+User: "выдай аванс"
+You: вызвать give_advance({})
+
+User: "выдай Айгерим аванс 50к"
+You: вызвать give_advance({amount: 50000}) — operator_id оставить пустым, по имени система не находит
+
+User: "оштрафуй за опоздание 2000"
+You: вызвать add_fine({amount: 2000, reason: "опоздание"})
+
+User: "сколько выручки за неделю?"
+You: вызвать query_revenue({period: "week"})
+
+User: "кто работает сегодня?"
+You: вызвать get_today_shifts({})
+
+User: "отмени аванс"
+You: вызвать void_adjustment({})
+
+User: "покажи долги"
+You: вызвать get_overdue_debts({})
+
+User: "покажи топ операторов"
+You: вызвать get_top_operators({})
+
+User: "поставь задачу убрать в зале на завтра"
+You: вызвать create_task({title: "Убрать в зале", due_date: "<завтра>"})
+
+User: "напомни через час позвонить поставщику"
+You: вызвать schedule_reminder({text: "позвонить поставщику", remind_at: "<сейчас+1ч>"})
 
 КОГДА можно отвечать текстом БЕЗ tool:
-- "Привет" / "Спасибо" / "Что ты умеешь?" — ответь кратко
-- "Объясни что такое маржа" — определение
-- Если действительно нет подходящего tool в списке
+- Приветствия: "Привет" / "Здарова" / "Спасибо"
+- Вопросы про возможности: "Что ты умеешь?" → краткий список основных действий
+- Определения: "Что такое маржа?" / "Как считается PI?"
+- Если в списке tools НЕТ подходящего
 
 ФОРМАТ ОТВЕТОВ:
-- Деньги: с символом ₸ и без копеек
-- Даты: ISO YYYY-MM-DD
-- Никогда не повторяй вопрос пользователя
-- Не пиши "Конечно!", "Отличный вопрос!" — сразу к делу
-- Никогда не раскрывай служебные ключи / токены / переменные окружения`
+- Не начинай с "Конечно!", "Хорошо!", "Отлично!" — сразу к делу
+- Деньги: число + ₸, без копеек ("10 000 ₸")
+- Даты: YYYY-MM-DD
+- Не повторяй вопрос пользователя
+- Кратко, по делу, без воды
+- Никогда не раскрывай токены / API keys / env переменные`
 
 export async function runCopilot(
   input: string,
@@ -235,7 +259,7 @@ async function continueToolCollection(
   }
 
   // Все параметры собраны — спрашиваем подтверждение
-  const summary = formatSummary(tool, session.collectedParams)
+  const summary = formatSummary(tool, session.collectedParams, session.pendingOptions)
   return {
     text: `${summary}\n\nВыполнить?`,
     buttons: [
@@ -267,13 +291,11 @@ async function askForParam(
       }
     }
     if (options.length === 0) {
-      // ВАЖНО: сбрасываем сессию полностью — иначе следующее сообщение
-      // юзера попадёт в "ждём awaitingParam" и engine примет любую строку
-      // как значение, что приведёт к "invalid input syntax for type ..."
-      // на стороне Postgres.
-      clearSession(ctx.userId, ctx.telegramChatId)
+      // Сбрасываем tool state но сохраняем history (для multi-step контекста).
+      const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
+      resetToolState(session)
       return {
-        text: `Нет доступных вариантов для "${param.label}". Действие отменено.\nВозможно нужная запись отсутствует, либо есть проблема со схемой БД. Попробуй другую команду.`,
+        text: `Нет доступных вариантов для "${param.label}". Действие отменено.\nВозможно нужная запись отсутствует. Попробуй другую команду.`,
       }
     }
     // Telegram имеет два лимита:
@@ -333,14 +355,19 @@ async function executeTool(
   session: ReturnType<typeof getOrCreateSession>,
 ): Promise<CopilotResponse> {
   try {
-    const result = await tool.handler(session.collectedParams, ctx)
-    clearSession(ctx.userId, ctx.telegramChatId)
+    const params = session.collectedParams
+    const result = await tool.handler(params, ctx)
+    // Сбрасываем состояние tool НО сохраняем history — чтобы AI помнил
+    // что только что произошло, и можно было сразу продолжить:
+    // "выдай аванс Айгерим" → done → "теперь оштрафуй её на 2000"
+    resetToolState(session)
+    pushHistory(session, 'assistant', result.message)
     if (!result.ok) {
       return { text: `❌ ${result.message}` }
     }
     let msg = `✅ ${result.message}`
     if (tool.successTemplate) {
-      msg = tool.successTemplate(session.collectedParams, result.data)
+      msg = tool.successTemplate(params, result.data)
     }
     const buttons = (result.followUps || []).map((f) => ({
       label: f.label,
@@ -349,25 +376,38 @@ async function executeTool(
     }))
     return { text: msg, buttons: buttons.length > 0 ? buttons : undefined }
   } catch (e: any) {
-    clearSession(ctx.userId, ctx.telegramChatId)
+    resetToolState(session)
     return { text: `❌ Ошибка выполнения: ${e?.message || 'неизвестная ошибка'}` }
   }
 }
 
-function formatSummary(tool: CopilotTool, params: Record<string, unknown>): string {
+function formatSummary(
+  tool: CopilotTool,
+  params: Record<string, unknown>,
+  pendingOptions?: Record<string, Array<{ value: string; label: string; hint?: string }>>,
+): string {
   const lines: string[] = [`📋 ${tool.description}:`]
   for (const p of tool.params) {
     const val = params[p.name]
     if (val != null && val !== '') {
-      lines.push(`  ${p.label}: ${formatValue(p, val)}`)
+      lines.push(`  ${p.label}: ${formatValue(p, val, pendingOptions?.[p.name])}`)
     }
   }
   return lines.join('\n')
 }
 
-function formatValue(param: CopilotParam, value: unknown): string {
+function formatValue(
+  param: CopilotParam,
+  value: unknown,
+  options?: Array<{ value: string; label: string; hint?: string }>,
+): string {
   if (param.type === 'number' && typeof value === 'number') {
     return value.toLocaleString('ru-RU') + (param.name.includes('amount') ? ' ₸' : '')
+  }
+  // Для select-параметров: подменяем UUID/код на читаемое название из cached options
+  if ((param.type === 'select' || param.type === 'multiselect') && options) {
+    const match = options.find((o) => String(o.value) === String(value))
+    if (match) return match.label
   }
   return String(value)
 }

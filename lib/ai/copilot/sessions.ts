@@ -54,6 +54,18 @@ export function startTool(session: CopilotSession, toolName: string): void {
   session.updatedAt = Date.now()
 }
 
+/**
+ * Сбросить состояние tool (после выполнения) НО сохранить историю диалога —
+ * чтобы AI помнил предыдущие действия в этой сессии для multi-step.
+ */
+export function resetToolState(session: CopilotSession): void {
+  session.activeTool = null
+  session.collectedParams = {}
+  session.awaitingParam = null
+  session.pendingOptions = {}
+  session.updatedAt = Date.now()
+}
+
 export function setParam(session: CopilotSession, paramName: string, value: unknown): void {
   session.collectedParams[paramName] = value
   if (session.awaitingParam === paramName) session.awaitingParam = null

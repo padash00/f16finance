@@ -18,7 +18,7 @@ import { createInventoryRequestTool } from './inventory/create-request'
 import { approveRequestTool, declineRequestTool } from './inventory/decide-request'
 import { assignShiftTool } from './shifts/assign-shift'
 import { cancelShiftTool } from './shifts/cancel-shift'
-import { writeoffItemTool } from './inventory/writeoff'
+// import { writeoffItemTool } from './inventory/writeoff'  // disabled — wrong schema, use UI
 import { transferToShowcaseTool } from './inventory/transfer-to-showcase'
 import { blockOperatorTool, unblockOperatorTool } from './team/block-operator'
 import { createOperatorTool } from './team/create-operator'
@@ -33,7 +33,7 @@ import { addKaspiRecordTool } from './finance/add-kaspi-record'
 import { voidAdjustmentTool } from './salary/void-adjustment'
 import { takeTaskTool } from './tasks/take-task'
 import { deleteTaskTool } from './tasks/delete-task'
-import { addStockTool } from './inventory/add-stock'
+// import { addStockTool } from './inventory/add-stock'  // disabled — uses non-existent inventory_postings, use UI
 import { updateStockThresholdTool } from './inventory/update-stock-threshold'
 import { addSupplierTool } from './inventory/add-supplier'
 import { updateOperatorTool } from './team/update-operator'
@@ -143,8 +143,8 @@ export function initializeCopilotTools(): void {
   registerTool(approveRequestTool)
   registerTool(declineRequestTool)
   registerTool(transferToShowcaseTool)
-  registerTool(writeoffItemTool)
-  registerTool(addStockTool)
+  // registerTool(writeoffItemTool)  // disabled
+  // registerTool(addStockTool)  // disabled
   registerTool(updateStockThresholdTool)
   registerTool(addSupplierTool)
 
