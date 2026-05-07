@@ -3157,7 +3157,57 @@ export async function POST(req: Request) {
         const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
         if (!apiKey) { await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.'); return json({ ok: true }) }
 
-        await sendTelegramText(chatId, '📷 PDF не поддерживается.\n\nОтправь <b>фото чека</b> с подписью <code>расход</code> — GPT-4o распознает любой чек.')
+        // PDF: извлекаем текст через pdf-parse и отдаём в receipt parser.
+        const processingMsg = await callTelegram('sendMessage', {
+          chat_id: String(chatId),
+          text: '📄 Читаю PDF...',
+          parse_mode: 'HTML',
+        }).catch(() => null)
+        const processingId = processingMsg?.result?.message_id ?? null
+        const editMsg = async (text: string) => {
+          if (processingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, text))
+          else await sendTelegramText(chatId, text)
+        }
+
+        try {
+          const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${doc.file_id}`)
+          const fileData = await fileRes.json()
+          const filePath = fileData?.result?.file_path
+          if (!filePath) { await editMsg('❌ Не удалось скачать PDF.'); return json({ ok: true }) }
+
+          const pdfRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
+          const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
+
+          // Извлекаем текст из PDF
+          const pdfParse = (await import('pdf-parse')).default
+          const parsed = await pdfParse(pdfBuffer)
+          const pdfText = (parsed.text || '').trim()
+          if (!pdfText) { await editMsg('❌ В PDF нет извлекаемого текста (возможно скан без OCR).\n\nПопробуй сделать скрин первой страницы и прислать как фото.'); return json({ ok: true }) }
+
+          // Парсим текст через receipt parser
+          const { parseExpenseFromText } = await import('@/lib/server/expense-receipt-parser')
+          const today = todayISO()
+          const parsedExpense = await parseExpenseFromText(pdfText, apiKey, today)
+          if (!parsedExpense) { await editMsg('❌ Не удалось распознать чек в PDF. Попробуй фото.'); return json({ ok: true }) }
+
+          await logAiUsageSafe(supabase, {
+            endpoint: '/api/telegram/webhook:expense-receipt-pdf',
+            model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            payload: { chatId: String(chatId), amount: parsedExpense.amount, category: parsedExpense.category },
+          })
+
+          const { data: companiesData } = await supabase.from('companies').select('id, name')
+          const companiesList = (companiesData || []) as Array<{ id: string; name: string }>
+          const session = { parsed: parsedExpense, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
+          await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${chatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
+
+          const payMethod = parsedExpense.payment_method === 'kaspi' ? 'Kaspi' : parsedExpense.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const companyButtons = companiesList.map((c) => [{ text: (c.id === session.selectedCompanyId ? '✅ ' : '') + c.name, callback_data: `pdf_company_${chatId}_${c.id}` }])
+          const confirmText = [`📄 <b>Распознан PDF-чек</b>`, ``, `💰 Сумма: <b>${parsedExpense.amount.toLocaleString('ru-RU')} ₸</b>`, `📁 Категория: <b>${parsedExpense.category}</b>`, `📅 Дата: <b>${parsedExpense.date}</b>`, `💳 Оплата: <b>${payMethod}</b>`, parsedExpense.vendor ? `🏪 ${parsedExpense.vendor}` : '', parsedExpense.comment ? `📝 ${parsedExpense.comment}` : '', ``, `Выбери точку:`].filter(Boolean).join('\n')
+          await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text: confirmText, parse_mode: 'HTML', reply_markup: { inline_keyboard: [...companyButtons, [{ text: '✅ Добавить в расходы', callback_data: `pdf_confirm_${chatId}` }, { text: '❌ Отмена', callback_data: `pdf_cancel_${chatId}` }]] } }).catch(() => null)
+        } catch (e: any) {
+          await editMsg(`❌ Ошибка чтения PDF: ${e?.message || 'неизвестная'}`)
+        }
         return json({ ok: true })
       }
     }
