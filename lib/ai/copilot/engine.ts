@@ -182,11 +182,22 @@ export async function handleCallback(
   }
 
   if (callbackData.startsWith('param:')) {
-    // Format: param:<name>:<value>
+    // Format: param:<name>:<value> или param:<name>:#<index> для длинных опций.
     const colonAfterParam = callbackData.indexOf(':', 6)
     if (colonAfterParam < 0) return { text: 'Неверный формат кнопки.' }
     const paramName = callbackData.slice(6, colonAfterParam)
-    const value = callbackData.slice(colonAfterParam + 1)
+    let value = callbackData.slice(colonAfterParam + 1)
+
+    // Если значение начинается с `#` — это индекс опции из session.pendingOptions.
+    // Резолвим обратно в реальное value (UUID / название категории / etc).
+    if (value.startsWith('#')) {
+      const idx = Number(value.slice(1))
+      const cached = session.pendingOptions?.[paramName]
+      if (!cached || isNaN(idx) || idx < 0 || idx >= cached.length) {
+        return { text: '⚠ Сессия устарела. Начни заново.' }
+      }
+      value = String(cached[idx].value)
+    }
 
     if (!session.activeTool) return { text: 'Сначала начни действие.' }
     const tool = getTool(session.activeTool)
@@ -267,14 +278,22 @@ async function askForParam(
     const MAX_BUTTONS = 96
     const truncated = options.length > MAX_BUTTONS
     const visible = options.slice(0, MAX_BUTTONS)
+
+    // Кэшируем options в сессии и шлём в callback_data короткий индекс `#N`.
+    // Иначе длинные значения (UUID + длинное русское название) не влезают
+    // в 64 байта Telegram callback_data limit → BUTTON_DATA_INVALID.
+    const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
+    if (!session.pendingOptions) session.pendingOptions = {}
+    session.pendingOptions[param.name] = visible
+
     return {
       text: truncated
         ? `${param.label}? (всего ${options.length}; если нужного нет среди ${MAX_BUTTONS} — введи текстом)`
         : `${param.label}? (всего ${options.length})`,
       buttons: [
-        ...visible.map((opt) => ({
+        ...visible.map((opt, idx) => ({
           label: opt.label + (opt.hint ? ` · ${opt.hint}` : ''),
-          callbackData: `param:${param.name}:${opt.value}`,
+          callbackData: `param:${param.name}:#${idx}`,
           style: 'secondary' as const,
         })),
         { label: '❌ Отмена', callbackData: 'cancel', style: 'secondary' as const },

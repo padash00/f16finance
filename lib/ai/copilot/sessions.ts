@@ -50,6 +50,7 @@ export function startTool(session: CopilotSession, toolName: string): void {
   session.activeTool = toolName
   session.collectedParams = {}
   session.awaitingParam = null
+  session.pendingOptions = {}
   session.updatedAt = Date.now()
 }
 

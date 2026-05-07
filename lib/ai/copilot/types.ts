@@ -97,6 +97,10 @@ export type CopilotSession = {
   awaitingParam: string | null
   /** История последних 10 сообщений (для контекста LLM) */
   history: Array<{ role: 'user' | 'assistant'; content: string; ts: number }>
+  /** Кэш опций по имени параметра — нужен чтобы в callback_data передавать
+   *  короткий индекс `#0`, `#1` (UUID + длинное название категории
+   *  не влезают в 64 байта Telegram callback_data limit). */
+  pendingOptions?: Record<string, CopilotSelectOption[]>
   /** Когда сессия создана */
   createdAt: number
   /** Когда последняя активность */
