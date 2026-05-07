@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { resolveCompanyNames } from '../../query-helpers'
 
 export const approveExpenseTool: CopilotTool = {
   name: 'approve_expense',
@@ -20,19 +21,25 @@ export const approveExpenseTool: CopilotTool = {
       required: true,
       description: 'ID ожидающего расхода',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        const { data, error } = await ctx.supabase
           .from('expenses')
-          .select('id, date, category, cash_amount, kaspi_amount, comment, one_off_payee, company:companies!company_id(name)')
+          .select('id, date, category, cash_amount, kaspi_amount, comment, one_off_payee, company_id')
           .eq('status', 'pending_approval')
           .order('created_at', { ascending: false })
           .limit(100)
-        return (data || []).map((e: any) => {
-          const co = Array.isArray(e.company) ? e.company[0] : e.company
+        if (error) {
+          console.error('[copilot] approve-expense getOptions ERROR:', JSON.stringify(error))
+          return []
+        }
+        const rows = data || []
+        const companyMap = await resolveCompanyNames(ctx.supabase, rows as any)
+        return rows.map((e: any) => {
           const sum = Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0)
           const payee = e.one_off_payee || e.category
+          const co = companyMap.get(String(e.company_id)) || ''
           return {
-            value: e.id,
-            label: `${co?.name || ''} · ${sum.toLocaleString('ru-RU')} ₸ · ${payee}`,
+            value: String(e.id),
+            label: `${co} · ${sum.toLocaleString('ru-RU')} ₸ · ${payee}`,
           }
         })
       },
@@ -85,16 +92,22 @@ export const declineExpenseTool: CopilotTool = {
       required: true,
       description: 'ID',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        const { data, error } = await ctx.supabase
           .from('expenses')
-          .select('id, date, category, cash_amount, kaspi_amount, one_off_payee, company:companies!company_id(name)')
+          .select('id, date, category, cash_amount, kaspi_amount, one_off_payee, company_id')
           .eq('status', 'pending_approval')
           .order('created_at', { ascending: false })
           .limit(100)
-        return (data || []).map((e: any) => {
-          const co = Array.isArray(e.company) ? e.company[0] : e.company
+        if (error) {
+          console.error('[copilot] decline-expense getOptions ERROR:', JSON.stringify(error))
+          return []
+        }
+        const rows = data || []
+        const companyMap = await resolveCompanyNames(ctx.supabase, rows as any)
+        return rows.map((e: any) => {
           const sum = Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0)
-          return { value: e.id, label: `${co?.name || ''} · ${sum.toLocaleString('ru-RU')} ₸ · ${e.one_off_payee || e.category}` }
+          const co = companyMap.get(String(e.company_id)) || ''
+          return { value: String(e.id), label: `${co} · ${sum.toLocaleString('ru-RU')} ₸ · ${e.one_off_payee || e.category}` }
         })
       },
     },

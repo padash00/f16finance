@@ -20,17 +20,33 @@ export const deleteExpenseTool: CopilotTool = {
       required: true,
       description: 'ID последних расходов',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        const { data, error } = await ctx.supabase
           .from('expenses')
-          .select('id, date, category, cash_amount, kaspi_amount, comment, company:companies!company_id(name)')
+          .select('id, date, category, cash_amount, kaspi_amount, comment, company_id')
           .order('created_at', { ascending: false })
           .limit(100)
-        return (data || []).map((e: any) => {
-          const co = Array.isArray(e.company) ? e.company[0] : e.company
+        if (error) {
+          console.error('[copilot] delete-expense getOptions ERROR:', JSON.stringify(error))
+          return []
+        }
+        const rows = data || []
+        if (rows.length === 0) return []
+
+        // Подгружаем имена точек одним запросом
+        const companyIds = Array.from(new Set(rows.map((r: any) => r.company_id).filter(Boolean)))
+        const companyMap = new Map<string, string>()
+        if (companyIds.length > 0) {
+          const { data: companies } = await ctx.supabase
+            .from('companies').select('id, name').in('id', companyIds)
+          for (const c of (companies || []) as any[]) companyMap.set(String(c.id), c.name || '')
+        }
+
+        return rows.map((e: any) => {
           const sum = Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0)
+          const companyName = companyMap.get(String(e.company_id)) || ''
           return {
-            value: e.id,
-            label: `${e.date} · ${co?.name || ''} · ${sum.toLocaleString('ru-RU')} ₸ · ${e.category}`,
+            value: String(e.id),
+            label: `${e.date} · ${companyName} · ${sum.toLocaleString('ru-RU')} ₸ · ${e.category}`,
           }
         })
       },

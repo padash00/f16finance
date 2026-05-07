@@ -1,15 +1,20 @@
 /**
- * AI tool: отметить долг точки как оплаченный.
+ * AI tool: отметить долг клиента (с точки) как оплаченный.
  * Capability: point-debts.mark_paid
+ *
+ * Работает с таблицей point_debt_items (per-point client debts), которая
+ * существует с самого начала проекта. Долги записываются операторами
+ * в киоске/POS и видны на странице /point-debts.
  */
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { resolveCompanyNames } from '../../query-helpers'
 
 export const markDebtPaidTool: CopilotTool = {
   name: 'mark_debt_paid',
   category: 'finance',
-  description: 'Отметить долг точки как оплаченный',
+  description: 'Отметить долг клиента как оплаченный',
   requiredCapability: 'point-debts.mark_paid',
   severity: 'high',
   params: [
@@ -20,18 +25,25 @@ export const markDebtPaidTool: CopilotTool = {
       required: true,
       description: 'ID долга из списка активных',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
-          .from('debts')
-          .select('id, amount, client_name, created_at, company:companies!company_id(name)')
+        const { data, error } = await ctx.supabase
+          .from('point_debt_items')
+          .select('id, total_amount, client_name, item_name, quantity, created_at, company_id')
           .eq('status', 'active')
           .order('created_at', { ascending: false })
-        return (data || []).map((d: any) => {
-          const company = Array.isArray(d.company) ? d.company[0] : d.company
-          const sum = Number(d.amount || 0).toLocaleString('ru-RU') + ' ₸'
+          .limit(100)
+        if (error) {
+          console.error('[copilot] mark-debt-paid getOptions ERROR:', JSON.stringify(error))
+          return []
+        }
+        const rows = data || []
+        const companyMap = await resolveCompanyNames(ctx.supabase, rows as any)
+        return rows.map((d: any) => {
+          const sum = Number(d.total_amount || 0).toLocaleString('ru-RU') + ' ₸'
           const client = (d.client_name || '').trim() || 'Должник'
+          const co = companyMap.get(String(d.company_id)) || ''
           return {
-            value: d.id,
-            label: `${company?.name || ''} — ${client} — ${sum}`,
+            value: String(d.id),
+            label: `${co} — ${client} — ${sum}${d.item_name ? ` (${d.item_name})` : ''}`,
           }
         })
       },
@@ -42,32 +54,33 @@ export const markDebtPaidTool: CopilotTool = {
     if (!debtId) return { ok: false, message: 'Не выбран долг.' }
 
     const { data: debt, error: getErr } = await ctx.supabase
-      .from('debts')
-      .select('id, amount, client_name, status')
+      .from('point_debt_items')
+      .select('id, total_amount, client_name, status')
       .eq('id', debtId)
       .single()
     if (getErr || !debt) return { ok: false, message: 'Долг не найден.' }
-    if (debt.status === 'paid') return { ok: false, message: 'Долг уже отмечен как оплаченный.' }
+    if (debt.status === 'deleted') return { ok: false, message: 'Долг уже закрыт.' }
 
+    // Помечаем как deleted (это статус "закрыт/оплачен" в point_debt_items)
     const { error } = await ctx.supabase
-      .from('debts')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
+      .from('point_debt_items')
+      .update({ status: 'deleted', deleted_at: new Date().toISOString() })
       .eq('id', debtId)
     if (error) return { ok: false, message: `Не удалось обновить: ${error.message}` }
 
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
-        entityType: 'debt',
+        entityType: 'point-debt',
         entityId: debtId,
         action: 'mark-paid',
-        payload: { amount: debt.amount, client: debt.client_name, via: 'copilot', source: ctx.source },
+        payload: { amount: debt.total_amount, client: debt.client_name, via: 'copilot', source: ctx.source },
       })
     } catch {}
 
     return {
       ok: true,
-      message: `Долг ${Number(debt.amount).toLocaleString('ru-RU')} ₸ (${debt.client_name || 'клиент'}) отмечен как оплаченный.`,
+      message: `✅ Долг ${Number(debt.total_amount).toLocaleString('ru-RU')} ₸ (${debt.client_name || 'клиент'}) отмечен как оплаченный.`,
     }
   },
 }

@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { resolveCompanyNames } from '../../query-helpers'
 
 export const deleteIncomeTool: CopilotTool = {
   name: 'delete_income',
@@ -20,17 +21,23 @@ export const deleteIncomeTool: CopilotTool = {
       required: true,
       description: 'ID последних записей выручки',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        const { data, error } = await ctx.supabase
           .from('incomes')
-          .select('id, date, shift, cash_amount, kaspi_amount, card_amount, online_amount, company:companies!company_id(name)')
+          .select('id, date, shift, cash_amount, kaspi_amount, card_amount, online_amount, company_id')
           .order('date', { ascending: false })
           .limit(100)
-        return (data || []).map((i: any) => {
-          const co = Array.isArray(i.company) ? i.company[0] : i.company
+        if (error) {
+          console.error('[copilot] delete-income getOptions ERROR:', JSON.stringify(error))
+          return []
+        }
+        const rows = data || []
+        const companyMap = await resolveCompanyNames(ctx.supabase, rows as any)
+        return rows.map((i: any) => {
           const total = Number(i.cash_amount || 0) + Number(i.kaspi_amount || 0) + Number(i.card_amount || 0) + Number(i.online_amount || 0)
+          const co = companyMap.get(String(i.company_id)) || ''
           return {
-            value: i.id,
-            label: `${i.date} ${i.shift === 'night' ? '🌙' : '☀️'} ${co?.name || ''} · ${total.toLocaleString('ru-RU')} ₸`,
+            value: String(i.id),
+            label: `${i.date} ${i.shift === 'night' ? '🌙' : '☀️'} ${co} · ${total.toLocaleString('ru-RU')} ₸`,
           }
         })
       },
