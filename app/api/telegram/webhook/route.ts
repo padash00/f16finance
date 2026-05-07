@@ -3178,10 +3178,12 @@ export async function POST(req: Request) {
           const pdfRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
           const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
 
-          // Извлекаем текст из PDF
-          const pdfParse = (await import('pdf-parse')).default
-          const parsed = await pdfParse(pdfBuffer)
-          const pdfText = (parsed.text || '').trim()
+          // Извлекаем текст из PDF (pdf-parse v2 — class-based API)
+          const { PDFParse } = await import('pdf-parse')
+          const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) })
+          const textResult = await parser.getText()
+          await parser.destroy().catch(() => null)
+          const pdfText = String(textResult?.text || '').trim()
           if (!pdfText) { await editMsg('❌ В PDF нет извлекаемого текста (возможно скан без OCR).\n\nПопробуй сделать скрин первой страницы и прислать как фото.'); return json({ ok: true }) }
 
           // Парсим текст через receipt parser
