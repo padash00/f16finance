@@ -276,23 +276,35 @@ async function askForParam(
         text: `Нет доступных вариантов для "${param.label}". Действие отменено.\nВозможно нужная запись отсутствует, либо есть проблема со схемой БД. Попробуй другую команду.`,
       }
     }
-    // Telegram hard-limit на inline_keyboard ≈ 100 кнопок (8 столбцов × до 13 рядов).
-    // Берём 96 чтобы оставить место под "Отмена". Если в БД больше — приглашаем
-    // ввести текстом (для редких случаев типа 200+ категорий).
-    const MAX_BUTTONS = 96
-    const truncated = options.length > MAX_BUTTONS
-    const visible = options.slice(0, MAX_BUTTONS)
+    // Telegram имеет два лимита:
+    //   - hard cap ~100 кнопок (8×13)
+    //   - reply_markup JSON не более ~9KB (иначе "reply markup is too long")
+    // Сначала режем по 96 штук, потом дополнительно по размеру JSON.
+    const HARD_BUTTONS = 96
+    const MAX_MARKUP_BYTES = 8500  // оставляем запас от ~10KB лимита
+    let visible = options.slice(0, HARD_BUTTONS)
 
-    // Кэшируем options в сессии и шлём в callback_data короткий индекс `#N`.
-    // Иначе длинные значения (UUID + длинное русское название) не влезают
-    // в 64 байта Telegram callback_data limit → BUTTON_DATA_INVALID.
+    // Считаем размер JSON и режем пока не влезет
+    while (visible.length > 1) {
+      const sample = visible.map((opt, idx) => ({
+        text: opt.label + (opt.hint ? ` · ${opt.hint}` : ''),
+        callback_data: `cp:param:${param.name}:#${idx}`,
+      }))
+      const size = Buffer.byteLength(JSON.stringify(sample), 'utf8')
+      if (size <= MAX_MARKUP_BYTES) break
+      visible = visible.slice(0, Math.floor(visible.length * 0.8))
+    }
+
+    const truncated = options.length > visible.length
+
+    // Кэшируем visible в сессии — нужно для резолва индекса в callback.
     const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
     if (!session.pendingOptions) session.pendingOptions = {}
     session.pendingOptions[param.name] = visible
 
     return {
       text: truncated
-        ? `${param.label}? (всего ${options.length}; если нужного нет среди ${MAX_BUTTONS} — введи текстом)`
+        ? `${param.label}? (всего ${options.length}; показано ${visible.length} — если нужного нет, введи текстом)`
         : `${param.label}? (всего ${options.length})`,
       buttons: [
         ...visible.map((opt, idx) => ({
