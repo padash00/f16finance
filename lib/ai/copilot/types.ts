@@ -101,6 +101,10 @@ export type CopilotSession = {
    *  короткий индекс `#0`, `#1` (UUID + длинное название категории
    *  не влезают в 64 байта Telegram callback_data limit). */
   pendingOptions?: Record<string, CopilotSelectOption[]>
+  /** Очередь tool-вызовов из multi-step ответа AI. Если AI вернул несколько
+   *  tool_calls (например "выдай аванс и пометь долг"), первый запускаем,
+   *  остальные кладём сюда и берём после завершения первого. */
+  pendingToolQueue?: Array<{ name: string; args: Record<string, unknown> }>
   /** Когда сессия создана */
   createdAt: number
   /** Когда последняя активность */

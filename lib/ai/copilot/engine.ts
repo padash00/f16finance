@@ -83,6 +83,17 @@ You: вызвать create_task({title: "Убрать в зале", due_date: "<
 User: "напомни через час позвонить поставщику"
 You: вызвать schedule_reminder({text: "позвонить поставщику", remind_at: "<сейчас+1ч>"})
 
+User: "выдай Айгерим аванс 30к и оштрафуй её на 5к за опоздание"
+You: вызвать ОБА tools одновременно (parallel tool_calls):
+     give_advance({amount: 30000})
+     add_fine({amount: 5000, reason: "опоздание"})
+     Система выполнит их по очереди, спрашивая недостающие параметры.
+
+User: "поставь задачу убрать в зале и напомни мне об этом через 2 часа"
+You: вызвать ОБА:
+     create_task({title: "Убрать в зале"})
+     schedule_reminder({text: "проверить уборку зала"})
+
 КОГДА можно отвечать текстом БЕЗ tool:
 - Приветствия: "Привет" / "Здарова" / "Спасибо"
 - Вопросы про возможности ("что ты умеешь?", "что можешь?", "помощь", "/help") → ответь так:
@@ -170,6 +181,11 @@ export async function runCopilot(
       return { text: `У тебя нет права для "${tool.description}". Обратись к администратору.` }
     }
     startTool(session, tool.name)
+    // Multi-step: если AI вернул несколько tool_calls — кладём остальные в очередь.
+    // После выполнения первого, engine автоматически возьмёт следующий.
+    if (llmResponse.extraTools && llmResponse.extraTools.length > 0) {
+      session.pendingToolQueue = llmResponse.extraTools
+    }
     // Пред-заполняем те параметры что LLM смог извлечь.
     // ВАЖНО: для select-параметров валидируем значение по getOptions —
     // если AI выдумал ID/значение которого нет в реальном списке,
@@ -390,18 +406,52 @@ async function executeTool(
   try {
     const params = session.collectedParams
     const result = await tool.handler(params, ctx)
-    // Сбрасываем состояние tool НО сохраняем history — чтобы AI помнил
-    // что только что произошло, и можно было сразу продолжить:
-    // "выдай аванс Айгерим" → done → "теперь оштрафуй её на 2000"
+
+    // Сохраняем очередь tools, потому что resetToolState её затрёт
+    const queue = session.pendingToolQueue || []
     resetToolState(session)
     pushHistory(session, 'assistant', result.message)
+
     if (!result.ok) {
-      return { text: `❌ ${result.message}` }
+      // Прерываем multi-step при ошибке
+      session.pendingToolQueue = []
+      return { text: `❌ ${friendlyError(result.message)}` }
     }
+
     let msg = `✅ ${result.message}`
     if (tool.successTemplate) {
       msg = tool.successTemplate(params, result.data)
     }
+
+    // Multi-step: если есть очередь, запускаем следующий tool
+    if (queue.length > 0) {
+      const next = queue[0]
+      const nextTool = getTool(next.name)
+      if (nextTool && (ctx.isSuperAdmin || ctx.capabilities.has(nextTool.requiredCapability))) {
+        startTool(session, nextTool.name)
+        session.pendingToolQueue = queue.slice(1)
+        for (const [key, value] of Object.entries(next.args || {})) {
+          if (value != null && value !== '') {
+            const param = nextTool.params.find((p) => p.name === key)
+            if (param) {
+              if ((param.type === 'select' || param.type === 'multiselect') && param.getOptions) {
+                try {
+                  const options = await param.getOptions(ctx)
+                  if (options.some((o) => String(o.value) === String(value))) {
+                    setParam(session, key, value)
+                  }
+                } catch {}
+              } else {
+                setParam(session, key, value)
+              }
+            }
+          }
+        }
+        const nextResp = await continueToolCollection(nextTool, ctx, session)
+        return { text: `${msg}\n\n— Дальше —\n${nextResp.text}`, buttons: nextResp.buttons, meta: nextResp.meta }
+      }
+    }
+
     const buttons = (result.followUps || []).map((f) => ({
       label: f.label,
       callbackData: f.action,
@@ -409,9 +459,51 @@ async function executeTool(
     }))
     return { text: msg, buttons: buttons.length > 0 ? buttons : undefined }
   } catch (e: any) {
+    session.pendingToolQueue = []
     resetToolState(session)
-    return { text: `❌ Ошибка выполнения: ${e?.message || 'неизвестная ошибка'}` }
+    return { text: `❌ ${friendlyError(e?.message || 'неизвестная ошибка')}` }
   }
+}
+
+/**
+ * Превращает технические ошибки Postgres/Supabase в понятный русский текст.
+ */
+function friendlyError(msg: string): string {
+  const m = String(msg || '')
+  // bigint / uuid syntax errors → значит юзер ввёл текст там где ждали ID
+  if (m.includes('invalid input syntax for type bigint') || m.includes('invalid input syntax for type uuid')) {
+    return 'Ввёл что-то не то — нужен был ID из списка. Начни заново и выбери кнопкой.'
+  }
+  // FK violation
+  if (m.includes('violates foreign key constraint')) {
+    return 'Не нашлась связанная запись (оператор/точка/товар). Возможно она удалена или ты выбрал не из списка.'
+  }
+  // NOT NULL
+  if (m.includes('null value in column') || m.includes('violates not-null')) {
+    return 'Не хватает обязательных данных. Начни заново и заполни все поля.'
+  }
+  // Unique violation
+  if (m.includes('duplicate key value violates unique')) {
+    return 'Такая запись уже существует.'
+  }
+  // Check constraint
+  if (m.includes('violates check constraint')) {
+    return 'Значение не соответствует правилам (например процент скидки > 100, или сумма ≤ 0).'
+  }
+  // Permission denied
+  if (m.includes('permission denied') || m.includes('row-level security')) {
+    return 'Нет прав на это действие. Обратись к администратору.'
+  }
+  // Schema cache
+  if (m.includes('column') && m.includes('does not exist')) {
+    return 'Структура БД не синхронизирована. Скажи администратору применить миграции.'
+  }
+  // Timeout
+  if (m.includes('timeout') || m.includes('ETIMEDOUT')) {
+    return 'Сервер не ответил вовремя. Попробуй ещё раз.'
+  }
+  // Default — return original
+  return m
 }
 
 function formatSummary(
@@ -471,6 +563,8 @@ function parseParamValue(param: CopilotParam, raw: string): { ok: true; value: u
 type LLMResult = {
   text?: string
   toolCall?: { name: string; args: Record<string, unknown> }
+  /** Дополнительные tool-вызовы (multi-step) — попадают в session.pendingToolQueue */
+  extraTools?: Array<{ name: string; args: Record<string, unknown> }>
 }
 
 async function callLLM(
@@ -548,14 +642,19 @@ async function callLLM(
     const message = choice?.message
     if (!message) return { text: 'Не получил ответа от AI.' }
 
-    // Tool call
-    const toolCall = message.tool_calls?.[0]
-    if (toolCall?.function?.name) {
-      let args = {}
-      try {
-        args = JSON.parse(toolCall.function.arguments || '{}')
-      } catch {}
-      return { toolCall: { name: toolCall.function.name, args: args as Record<string, unknown> } }
+    // Tool calls (может быть несколько — multi-step)
+    const toolCalls = message.tool_calls || []
+    if (toolCalls.length > 0) {
+      const parsed = toolCalls
+        .filter((tc: any) => tc?.function?.name)
+        .map((tc: any) => {
+          let args = {}
+          try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
+          return { name: tc.function.name, args: args as Record<string, unknown> }
+        })
+      if (parsed.length > 0) {
+        return { toolCall: parsed[0], extraTools: parsed.slice(1) }
+      }
     }
 
     return { text: message.content || '' }

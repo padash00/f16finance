@@ -3053,8 +3053,10 @@ export async function POST(req: Request) {
       const photos = update.message.photo
       const bestPhoto = photos[photos.length - 1]
 
-      // If caption says "расход/чек/шығын" → expense receipt flow
-      const isExpenseReceipt = /расход|чек|шығын|receipt|expense/i.test(caption)
+      // По умолчанию — распознавание чека (расход).
+      // Если caption явно "накладная/invoice" → invoice mode.
+      const isInvoice = /накладная|invoice|поставщик|товар|приход/i.test(caption)
+      const isExpenseReceipt = !isInvoice
       if (isExpenseReceipt) {
         const apiKey = process.env.OPENAI_API_KEY
         const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
@@ -3186,11 +3188,27 @@ export async function POST(req: Request) {
       if (thinkingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingId, text: transcriptDisplay, parse_mode: 'HTML' }).catch(() => null)
       else await sendTelegramText(chatId, transcriptDisplay)
 
-      // Process through AI and get reply
-      await handleAIChat(Number(chatId), String(chatId), transcript, supabase, async (aiReply: string) => {
-        // Send voice reply back after text reply
-        await sendVoiceReply(Number(chatId), aiReply, apiKey, botToken)
-      }, botUser)
+      // Owner/menager → Copilot. Operator → старый AI чат (только своя статистика).
+      if (canUseFinance(botUser.role)) {
+        try {
+          const result = await runCopilotForTelegram({
+            userId: botUser.entityId || telegramUserId,
+            role: botUser.role === 'unknown' ? null : botUser.role,
+            isSuperAdmin: botUser.role === 'super_admin',
+            chatId: Number(chatId),
+            text: transcript,
+          })
+          await callTelegram('sendMessage', { chat_id: String(chatId), text: result.text, parse_mode: 'HTML', reply_markup: result.reply_markup })
+        } catch (e: any) {
+          console.error('[copilot voice] failed:', e?.message)
+          await sendTelegramText(Number(chatId), `❌ Ошибка: ${e?.message || 'unknown'}`).catch(() => null)
+        }
+      } else {
+        // Operators get old AI flow (личная статистика)
+        await handleAIChat(Number(chatId), String(chatId), transcript, supabase, async (aiReply: string) => {
+          await sendVoiceReply(Number(chatId), aiReply, apiKey, botToken)
+        }, botUser)
+      }
       return json({ ok: true })
     }
 
