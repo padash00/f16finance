@@ -20,11 +20,17 @@ export const voidAdjustmentTool: CopilotTool = {
       required: true,
       description: 'ID активной корректировки',
       getOptions: async (ctx) => {
-        // Без JOIN — просто базовые поля. Имя оператора получим отдельным запросом.
-        // Если query ломается — логируем И возвращаем хотя бы что-то для дебага.
+        // Только текущий месяц — старые записи отменять нельзя (бухгалтерия).
+        const now = new Date()
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+        const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
         const { data, error } = await ctx.supabase
           .from('operator_salary_adjustments')
           .select('id, date, kind, amount, comment, status, voided_at, operator_id')
+          .gte('date', monthStart)
+          .lte('date', monthEnd)
           .order('date', { ascending: false })
           .limit(100)
 
