@@ -171,6 +171,8 @@ export default function ShiftReportDetailPage({
   const [adminAction, setAdminAction] = useState<null | 'closeForce' | 'purge'>(null)
   const [adminBusy, setAdminBusy] = useState(false)
   const [purgeConfirm, setPurgeConfirm] = useState('')
+  useModalEscape(!!adminAction, () => { if (!adminBusy) setAdminAction(null) })
+  useModalEscape(showZReport, () => setShowZReport(false))
 
   const load = async () => {
     setLoading(true)

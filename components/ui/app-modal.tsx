@@ -98,6 +98,7 @@ export function AppModal({
       }}
       role="dialog"
       aria-modal="true"
+      aria-label={typeof title === 'string' ? title : 'Модальное окно'}
     >
       <div
         ref={contentRef}

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type Supplier = {
   id: string
@@ -99,6 +100,7 @@ export default function SupplierCardPage() {
   const [aliasSale, setAliasSale] = useState('')
   const [savingAlias, setSavingAlias] = useState(false)
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
+  useModalEscape(addAliasOpen, () => { if (!savingAlias) setAddAliasOpen(false) })
 
   const load = async () => {
     setError(null)

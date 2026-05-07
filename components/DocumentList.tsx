@@ -82,19 +82,25 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
   }
 
   const handleDownload = async (url: string, fileName: string) => {
+    let downloadUrl: string | null = null
     try {
       const response = await fetch(url)
+      if (!response.ok) {
+        console.error('Error downloading file:', response.status, response.statusText)
+        return
+      }
       const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
+      downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
       link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
     } catch (error) {
       console.error('Error downloading file:', error)
+    } finally {
+      if (downloadUrl) window.URL.revokeObjectURL(downloadUrl)
     }
   }
 

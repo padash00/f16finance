@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type StaffRole = 'owner' | 'manager' | 'marketer'
 type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
@@ -621,6 +622,7 @@ export default function StructurePage() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [careerLinks, setCareerLinks] = useState<CareerLink[]>([])
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null)
+  useModalEscape(!!editingOperator, () => setEditingOperator(null))
   const [editorRows, setEditorRows] = useState<AssignmentEditorRow[]>([])
   const [savingAssignments, setSavingAssignments] = useState(false)
   const [companyFilter, setCompanyFilter] = useState('all')
@@ -1052,7 +1054,8 @@ export default function StructurePage() {
         </div>
 
       {editingOperator ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingOperator(null) }}>
           <Card className="w-full max-w-3xl border-white/10 bg-slate-950/96 p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
             <div className="flex items-start justify-between gap-4">
               <div>

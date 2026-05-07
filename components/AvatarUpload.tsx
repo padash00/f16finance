@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Camera, Loader2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
@@ -20,6 +20,17 @@ export default function AvatarUpload({
 }: AvatarUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentAvatarUrl)
+  const localObjectUrlRef = useRef<string | null>(null)
+
+  // Освобождаем blob: URL при размонтировании или замене (фикс утечки памяти)
+  useEffect(() => {
+    return () => {
+      if (localObjectUrlRef.current) {
+        URL.revokeObjectURL(localObjectUrlRef.current)
+        localObjectUrlRef.current = null
+      }
+    }
+  }, [])
 
   const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -40,8 +51,10 @@ export default function AvatarUpload({
         return
       }
 
-      // Создаем превью
+      // Создаем превью. Освобождаем предыдущий blob: URL чтобы не утекала память
+      if (localObjectUrlRef.current) URL.revokeObjectURL(localObjectUrlRef.current)
       const objectUrl = URL.createObjectURL(file)
+      localObjectUrlRef.current = objectUrl
       setPreviewUrl(objectUrl)
 
       // Генерируем уникальное имя файла

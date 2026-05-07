@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -325,6 +326,7 @@ export default function IncomePage() {
   const skipBlurSaveRef = useRef(false)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
   const [editingIncome, setEditingIncome] = useState<IncomeRow | null>(null)
+  useModalEscape(!!editingIncome, () => setEditingIncome(null))
   const [editIncomeDate, setEditIncomeDate] = useState('')
   const [editIncomeOperatorId, setEditIncomeOperatorId] = useState<string>('none')
   const [editCashDraft, setEditCashDraft] = useState('')
@@ -1233,7 +1235,8 @@ export default function IncomePage() {
           )}
 
           {editingIncome && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto"
+              onClick={(e) => { if (e.target === e.currentTarget) closeIncomeEditor() }}>
               <Card className="w-full max-w-2xl border-white/10 bg-gray-900 p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div>

@@ -523,19 +523,19 @@ export default function CustomersPage() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Имя *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Иван Иванов" />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Иван Иванов" autoComplete="name" />
             </div>
             <div className="space-y-1.5">
               <Label>Телефон</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+7 777 123 45 67" />
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+7 777 123 45 67" type="tel" autoComplete="tel" />
             </div>
             <div className="space-y-1.5">
               <Label>Номер карты</Label>
-              <Input value={form.card_number} onChange={(e) => setForm({ ...form, card_number: e.target.value })} placeholder="Штрихкод карты" />
+              <Input value={form.card_number} onChange={(e) => setForm({ ...form, card_number: e.target.value })} placeholder="Штрихкод карты" autoComplete="off" />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" type="email" />
+              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" type="email" autoComplete="email" />
             </div>
             <div className="space-y-1.5">
               <Label>Заметки</Label>
@@ -559,19 +559,19 @@ export default function CustomersPage() {
           <form onSubmit={handleUpdate} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Имя *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" />
             </div>
             <div className="space-y-1.5">
               <Label>Телефон</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} type="tel" autoComplete="tel" />
             </div>
             <div className="space-y-1.5">
               <Label>Номер карты</Label>
-              <Input value={form.card_number} onChange={(e) => setForm({ ...form, card_number: e.target.value })} />
+              <Input value={form.card_number} onChange={(e) => setForm({ ...form, card_number: e.target.value })} autoComplete="off" />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} type="email" />
+              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} type="email" autoComplete="email" />
             </div>
             <div className="space-y-1.5">
               <Label>Заметки</Label>

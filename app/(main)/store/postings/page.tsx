@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type Item = {
   id: string
@@ -87,6 +88,7 @@ export default function StorePostingsPage() {
   const [search, setSearch] = useState<Record<string, string>>({})
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmPhrase, setConfirmPhrase] = useState('')
+  useModalEscape(confirmOpen, () => { if (!saving) setConfirmOpen(false) })
 
   useEffect(() => {
     let cancelled = false
@@ -431,7 +433,8 @@ export default function StorePostingsPage() {
       </Card>
 
       {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget && !saving) setConfirmOpen(false) }}>
           <Card className="w-full max-w-md border-amber-500/30 bg-card">
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center gap-2">

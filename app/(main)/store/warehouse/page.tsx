@@ -53,6 +53,7 @@ import {
 } from '@/components/ui/tooltip'
 import { isAbortError } from '@/lib/is-abort-error'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -170,6 +171,7 @@ export default function WarehousePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<'selected' | 'all' | null>(null)
+  useModalEscape(!!deleteConfirm, () => setDeleteConfirm(null))
   const [showPrintLabels, setShowPrintLabels] = useState(false)
 
   const [editingWh, setEditingWh] = useState<string | null>(null)
@@ -1381,7 +1383,8 @@ export default function WarehousePage() {
       </Sheet>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111827] p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/15">

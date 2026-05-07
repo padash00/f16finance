@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, Receipt, FileText, Wallet, X } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
@@ -125,6 +126,11 @@ export default function BillingPage() {
   const [bulkComment, setBulkComment] = useState('')
   const [bulkPaying, setBulkPaying] = useState(false)
   const [bulkUploading, setBulkUploading] = useState(false)
+  // Esc + scroll-lock для всех 4-х модалок страницы
+  useModalEscape(!!payDebt, () => { if (!paying) setPayDebt(null) })
+  useModalEscape(!!writeOffDebt, () => { if (!writingOff) setWriteOffDebt(null) })
+  useModalEscape(bulkPayOpen, () => { if (!bulkPaying) setBulkPayOpen(false) })
+  useModalEscape(!!reschedDebt, () => { if (!rescheduling) setReschedDebt(null) })
 
   const load = async () => {
     setLoading(true)

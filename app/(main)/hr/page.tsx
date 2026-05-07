@@ -7,6 +7,7 @@ import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Search, Use
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -73,6 +74,7 @@ export default function HrPage() {
   const [search, setSearch] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [dismissTarget, setDismissTarget] = useState<HrEmployee | null>(null)
+  useModalEscape(!!dismissTarget, () => setDismissTarget(null))
   const [dismissReason, setDismissReason] = useState('')
   const [dismissDate, setDismissDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [dismissType, setDismissType] = useState<DismissalType>('voluntary')
