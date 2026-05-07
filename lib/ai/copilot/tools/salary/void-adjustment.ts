@@ -20,12 +20,19 @@ export const voidAdjustmentTool: CopilotTool = {
       required: true,
       description: 'ID активной корректировки',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        // Фильтруем по voided_at IS NULL, а не по status='active' — status может
+        // отсутствовать или быть NULL на старых записях, но voided_at заполняется
+        // только при отмене.
+        const { data, error } = await ctx.supabase
           .from('operator_salary_adjustments')
-          .select('id, date, kind, amount, comment, operator:operator_id(name, short_name)')
-          .eq('status', 'active')
+          .select('id, date, kind, amount, comment, status, voided_at, operator:operator_id(name, short_name)')
+          .is('voided_at', null)
           .order('date', { ascending: false })
           .limit(100)
+        if (error) {
+          console.error('[copilot] void-adjustment getOptions error:', error)
+          return []
+        }
         return (data || []).map((a: any) => {
           const op = Array.isArray(a.operator) ? a.operator[0] : a.operator
           const kindLabel: Record<string, string> = { fine: '⚠ Штраф', bonus: '🎁 Бонус', advance: '💵 Аванс', debt: '📉 Долг' }
@@ -49,7 +56,8 @@ export const voidAdjustmentTool: CopilotTool = {
     const reason = String(input.reason || '').trim()
     if (!id || !reason) return { ok: false, message: 'Нужны корректировка и причина.' }
 
-    const { error } = await ctx.supabase
+    // Сначала пробуем со status (новая схема)
+    let { error } = await ctx.supabase
       .from('operator_salary_adjustments')
       .update({
         status: 'voided',
@@ -58,6 +66,20 @@ export const voidAdjustmentTool: CopilotTool = {
         void_reason: reason,
       })
       .eq('id', id)
+
+    // Если упало (например constraint check на status) — fallback без status
+    if (error && (error.message?.includes('status') || error.code === '23514')) {
+      const fallback = await ctx.supabase
+        .from('operator_salary_adjustments')
+        .update({
+          voided_at: new Date().toISOString(),
+          voided_by: ctx.userId,
+          void_reason: reason,
+        })
+        .eq('id', id)
+      error = fallback.error
+    }
+
     if (error) return { ok: false, message: `Не удалось отменить: ${error.message}` }
 
     try {
