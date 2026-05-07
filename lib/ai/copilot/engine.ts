@@ -391,9 +391,12 @@ async function callLLM(
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 800,
+        // gpt-5+ требуют max_completion_tokens вместо max_tokens.
+        // gpt-4o-mini и старше поддерживают оба варианта.
+        max_completion_tokens: 800,
         // 0.1 — для надежного tool calling. gpt-4o-mini при temp >0.3
         // часто пропускает tools и отвечает текстом.
+        // gpt-5+ может игнорировать temperature, это нормально.
         temperature: 0.1,
         messages,
         tools: openaiTools,
