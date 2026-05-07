@@ -6,6 +6,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AppModal } from '@/components/ui/app-modal'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { 
   Users2, 
@@ -932,116 +933,50 @@ export default function OperatorsPage() {
           </div>
         </div>
 
-      {/* Модальное окно редактирования */}
-      {showEditModal && editingOperator && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-white/5 flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Редактировать оператора</h3>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Имя оператора <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Полное ФИО
-                </label>
-                <input
-                  value={editFullName}
-                  onChange={(e) => setEditFullName(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Краткое имя
-                </label>
-                <input
-                  value={editShortName}
-                  onChange={(e) => setEditShortName(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Должность
-                </label>
-                <input
-                  value={editPosition}
-                  onChange={(e) => setEditPosition(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Телефон
-                </label>
-                <input
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">
-                  Email
-                </label>
-                <input
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  type="email"
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                />
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-white/5 flex justify-end gap-2">
-              <Button
-                onClick={() => setShowEditModal(false)}
-                variant="outline"
-                className="border-white/10"
-              >
-                Отмена
-              </Button>
-              <Button
-                onClick={saveEdit}
-                disabled={saving || !editName.trim()}
-                className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
-              >
-                {saving ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Сохранение...
-                  </>
-                ) : (
-                  'Сохранить'
-                )}
-              </Button>
-            </div>
+      <AppModal
+        open={showEditModal && !!editingOperator}
+        onClose={() => setShowEditModal(false)}
+        title="Редактировать оператора"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setShowEditModal(false)} variant="outline" className="border-white/10">Отмена</Button>
+            <Button
+              onClick={saveEdit}
+              disabled={saving || !editName.trim()}
+              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+            >
+              {saving ? (<><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Сохранение...</>) : 'Сохранить'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Имя оператора <span className="text-rose-400">*</span></label>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" required />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Полное ФИО</label>
+            <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Краткое имя</label>
+            <input value={editShortName} onChange={(e) => setEditShortName(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Должность</label>
+            <input value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Телефон</label>
+            <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Email</label>
+            <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
           </div>
         </div>
-      )}
+      </AppModal>
     </>
   )
 }

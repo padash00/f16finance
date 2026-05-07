@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AppModal } from '@/components/ui/app-modal'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
@@ -260,97 +261,60 @@ function AccountInfo({ account, onCopyUsername, onCopyPassword, onClose }: {
     typeof window !== 'undefined' ? getPublicAppUrl(window.location.origin) : getPublicAppUrl()
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-emerald-500/30 rounded-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
-        <div className="p-6 border-b border-white/5 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-emerald-500/20">
-              <Key className="w-5 h-5 text-emerald-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-white">Аккаунт создан!</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
+    <AppModal
+      open={!!account}
+      onClose={onClose}
+      maxWidth="max-w-md"
+      title={
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-emerald-500/20"><Key className="w-5 h-5 text-emerald-400" /></div>
+          <span>Аккаунт создан!</span>
         </div>
-
-        <div className="p-6 space-y-4">
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
-            <p className="text-sm text-emerald-400 mb-3 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" />
-              Сохраните данные! Они показываются только один раз.
-            </p>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Логин</label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-2 bg-gray-800 rounded-lg text-sm font-mono text-white">
-                    {account.username}
-                  </code>
-                  <button
-                    onClick={onCopyUsername}
-                    className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                    title="Копировать логин"
-                  >
-                    <Copy className="w-4 h-4 text-gray-400" />
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Пароль</label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-2 bg-gray-800 rounded-lg text-sm font-mono text-white">
-                    {account.password}
-                  </code>
-                  <button
-                    onClick={onCopyPassword}
-                    className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                    title="Копировать пароль"
-                  >
-                    <Copy className="w-4 h-4 text-gray-400" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
-            <p className="text-sm text-blue-400 mb-2">Ссылка для входа:</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 p-2 bg-gray-800 rounded-lg text-xs text-white truncate">
-                {`${publicAppUrl}/operator-login`}
-              </code>
-              <button
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    navigator.clipboard.writeText(`${publicAppUrl}/operator-login`)
-                  }
-                }}
-                className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                title="Копировать ссылку"
-              >
-                <Copy className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 border-t border-white/5 flex justify-end">
-          <Button
-            onClick={onClose}
-            className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
-          >
-            <Check className="w-4 h-4 mr-2" />
-            Понятно
+      }
+      footer={
+        <div className="flex justify-end">
+          <Button onClick={onClose} className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white">
+            <Check className="w-4 h-4 mr-2" />Понятно
           </Button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+          <p className="text-sm text-emerald-400 mb-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Сохраните данные! Они показываются только один раз.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Логин</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-2 bg-gray-800 rounded-lg text-sm font-mono text-white">{account.username}</code>
+                <button onClick={onCopyUsername} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" title="Копировать логин"><Copy className="w-4 h-4 text-gray-400" /></button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Пароль</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-2 bg-gray-800 rounded-lg text-sm font-mono text-white">{account.password}</code>
+                <button onClick={onCopyPassword} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors" title="Копировать пароль"><Copy className="w-4 h-4 text-gray-400" /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+          <p className="text-sm text-blue-400 mb-2">Ссылка для входа:</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 p-2 bg-gray-800 rounded-lg text-xs text-white truncate">{`${publicAppUrl}/operator-login`}</code>
+            <button
+              onClick={() => { if (typeof window !== 'undefined') navigator.clipboard.writeText(`${publicAppUrl}/operator-login`) }}
+              className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+              title="Копировать ссылку"
+            ><Copy className="w-4 h-4 text-gray-400" /></button>
+          </div>
+        </div>
       </div>
-    </div>
+    </AppModal>
   )
 }
 
