@@ -797,7 +797,7 @@ export default function KnowledgeAdminPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#07111c] px-4 py-8 text-slate-100 sm:px-6">
-      <section className="mx-auto flex w-full max-w-[1760px] flex-col gap-6">
+      <section className="app-page-wide flex flex-col gap-6">
         <div className="overflow-hidden rounded-[2rem] border border-amber-400/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.24),transparent_32%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] p-8 shadow-2xl shadow-black/30">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">

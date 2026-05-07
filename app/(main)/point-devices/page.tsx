@@ -686,7 +686,7 @@ export default function PointDevicesPage() {
   }
 
   return (
-    <div className="app-page max-w-7xl space-y-6">
+    <div className="app-page-wide space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-3">

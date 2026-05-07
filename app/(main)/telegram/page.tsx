@@ -306,7 +306,7 @@ create table if not exists telegram_allowed_users (
 
   return (
     <>
-        <div className="app-page max-w-3xl space-y-4">
+        <div className="app-page-wide space-y-4">
 
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-900/30 via-gray-900 to-cyan-900/30 p-6 border border-blue-500/20">

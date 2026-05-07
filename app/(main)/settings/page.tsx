@@ -312,7 +312,7 @@ export default function SettingsPage() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-8">
+        <div className="app-page-wide space-y-8">
           
           {/* Хедер */}
           <div className="flex items-center gap-4">

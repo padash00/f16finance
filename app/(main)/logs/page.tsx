@@ -625,7 +625,7 @@ export default function LogsPage() {
   ] as const
 
   return (
-    <div className="app-page space-y-6">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title="Журнал действий"
         description="Кто, что и когда сделал в системе — на понятном языке"
