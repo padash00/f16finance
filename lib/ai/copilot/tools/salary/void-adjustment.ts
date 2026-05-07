@@ -20,17 +20,24 @@ export const voidAdjustmentTool: CopilotTool = {
       required: true,
       description: 'ID активной корректировки',
       getOptions: async (ctx) => {
-        // Только текущий месяц — старые записи отменять нельзя (бухгалтерия).
+        // Только текущая ISO-неделя (пн → вс). Прошлые недели отменять нельзя —
+        // зарплата за предыдущие недели уже закрыта в учёте.
         const now = new Date()
-        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-        const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay()  // вс = 7
+        const monday = new Date(now)
+        monday.setDate(now.getDate() - (dayOfWeek - 1))
+        const sunday = new Date(monday)
+        sunday.setDate(monday.getDate() + 6)
+
+        const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const weekStart = fmt(monday)
+        const weekEnd = fmt(sunday)
 
         const { data, error } = await ctx.supabase
           .from('operator_salary_adjustments')
           .select('id, date, kind, amount, comment, status, voided_at, operator_id')
-          .gte('date', monthStart)
-          .lte('date', monthEnd)
+          .gte('date', weekStart)
+          .lte('date', weekEnd)
           .order('date', { ascending: false })
           .limit(100)
 
