@@ -15,18 +15,18 @@ export const getSupplierDebtsTool: CopilotTool = {
   handler: async (_input, ctx) => {
     const { data, error } = await ctx.supabase
       .from('supplier_debts')
-      .select('id, amount, supplier:supplier_id(name), due_date, status')
-      .eq('status', 'active')
-      .order('due_date')
+      .select('id, total_amount, supplier:supplier_id(name), due_date, status')
+      .eq('status', 'open')
+      .order('due_date', { nullsFirst: false })
       .limit(50)
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '✅ Перед поставщиками долгов нет.' }
 
-    const total = data.reduce((s, r: any) => s + Number(r.amount || 0), 0)
+    const total = data.reduce((s, r: any) => s + Number(r.total_amount || 0), 0)
     const lines: string[] = [`📋 Долгов поставщикам: ${data.length} на ${total.toLocaleString('ru-RU')} ₸\n`]
     for (const d of data as any[]) {
       const sup = Array.isArray(d.supplier) ? d.supplier[0] : d.supplier
-      lines.push(`• ${sup?.name || '?'} — ${Number(d.amount).toLocaleString('ru-RU')} ₸ (до ${d.due_date || '?'})`)
+      lines.push(`• ${sup?.name || '?'} — ${Number(d.total_amount).toLocaleString('ru-RU')} ₸ (до ${d.due_date || '—'})`)
     }
     return { ok: true, message: lines.join('\n'), data: { count: data.length, total } }
   },

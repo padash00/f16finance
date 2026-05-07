@@ -71,14 +71,15 @@ export const createPromoTool: CopilotTool = {
     const { data, error } = await ctx.supabase
       .from('discounts')
       .insert([{
-        code,
-        discount_type: type,
+        name: `Промо ${code}`,
+        type: type === 'percent' ? 'percent' : 'fixed',
         value,
+        promo_code: code,
         valid_from: todayISO(),
-        valid_until: validUntil,
+        valid_to: validUntil,
         is_active: true,
       }])
-      .select('id, code')
+      .select('id, promo_code')
       .single()
     if (error) return { ok: false, message: `Не удалось создать: ${error.message}` }
 
@@ -95,8 +96,8 @@ export const createPromoTool: CopilotTool = {
     const valueLabel = type === 'percent' ? `${value}%` : `${value.toLocaleString('ru-RU')} ₸`
     return {
       ok: true,
-      message: `🎁 Промокод "${data?.code}" создан: скидка ${valueLabel}${validUntil ? ` до ${validUntil}` : ''}.`,
-      data: { code: data?.code },
+      message: `🎁 Промокод "${data?.promo_code}" создан: скидка ${valueLabel}${validUntil ? ` до ${validUntil}` : ''}.`,
+      data: { code: data?.promo_code },
     }
   },
 }

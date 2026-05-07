@@ -45,7 +45,7 @@ export const createReceiptTool: CopilotTool = {
       required: false,
       description: 'От кого пришло',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('suppliers').select('id, name').order('name')
+        const { data } = await ctx.supabase.from('inventory_suppliers').select('id, name').order('name')
         return (data || []).map((s: any) => ({ value: s.id, label: s.name }))
       },
     },

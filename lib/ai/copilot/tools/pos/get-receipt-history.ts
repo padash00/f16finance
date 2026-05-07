@@ -37,8 +37,8 @@ export const getReceiptHistoryTool: CopilotTool = {
     const since = new Date(Date.now() - days * 86400000).toISOString()
 
     let query = ctx.supabase
-      .from('pos_sales')
-      .select('id, total, status, created_at, company:company_id(name)')
+      .from('point_sales')
+      .select('id, total_amount, refunded_at, created_at, company:company_id(name)')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -48,14 +48,14 @@ export const getReceiptHistoryTool: CopilotTool = {
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '🧾 Чеков за период нет.' }
 
-    const total = data.reduce((s, r: any) => s + Number(r.total || 0), 0)
-    const refunded = data.filter((r: any) => r.status === 'refunded').length
+    const total = data.reduce((s, r: any) => s + Number(r.total_amount || 0), 0)
+    const refunded = data.filter((r: any) => r.refunded_at).length
     const lines: string[] = [`🧾 Чеков за ${days} дн: ${data.length}, итого ${total.toLocaleString('ru-RU')} ₸${refunded ? `, возвратов: ${refunded}` : ''}\n`]
     for (const r of data.slice(0, 20) as any[]) {
       const co = Array.isArray(r.company) ? r.company[0] : r.company
       const date = r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : ''
-      const flag = r.status === 'refunded' ? ' ↩' : ''
-      lines.push(`${date} · ${co?.name || ''} · ${Number(r.total).toLocaleString('ru-RU')} ₸${flag}`)
+      const flag = r.refunded_at ? ' ↩' : ''
+      lines.push(`${date} · ${co?.name || ''} · ${Number(r.total_amount).toLocaleString('ru-RU')} ₸${flag}`)
     }
     if (data.length > 20) lines.push(`...и ещё ${data.length - 20}`)
 

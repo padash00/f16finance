@@ -19,8 +19,8 @@ export const getTopSellingTool: CopilotTool = {
     const since = new Date(Date.now() - days * 86400000).toISOString()
 
     const { data, error } = await ctx.supabase
-      .from('pos_sale_items')
-      .select('quantity, total, item:item_id(name), sale:sale_id(created_at)')
+      .from('point_sale_items')
+      .select('quantity, total_amount, item:item_id(name), sale:sale_id!inner(created_at)')
       .gte('sale.created_at', since)
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '🛍 Продаж за период нет.' }
@@ -31,7 +31,7 @@ export const getTopSellingTool: CopilotTool = {
       const name = item?.name || '?'
       const cur = byItem.get(name) || { name, qty: 0, sum: 0 }
       cur.qty += Number(r.quantity || 0)
-      cur.sum += Number(r.total || 0)
+      cur.sum += Number(r.total_amount || 0)
       byItem.set(name, cur)
     }
     const ranked = Array.from(byItem.values()).sort((a, b) => b.sum - a.sum).slice(0, 15)

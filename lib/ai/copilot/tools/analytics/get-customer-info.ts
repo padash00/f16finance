@@ -32,7 +32,7 @@ export const getCustomerInfoTool: CopilotTool = {
     if (!customer) return { ok: false, message: 'Клиент не найден.' }
 
     const { count: salesCount } = await ctx.supabase
-      .from('pos_sales')
+      .from('point_sales')
       .select('id', { count: 'exact', head: true })
       .eq('customer_id', customerId)
 
