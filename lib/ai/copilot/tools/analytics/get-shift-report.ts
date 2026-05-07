@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { resolveOperatorNames } from '../../query-helpers'
 
 export const getShiftReportTool: CopilotTool = {
   name: 'get_shift_report',
@@ -38,7 +39,7 @@ export const getShiftReportTool: CopilotTool = {
 
     const { data: shifts } = await ctx.supabase
       .from('shifts')
-      .select('id, shift_type, operator_name, operator:operator_id(name, short_name)')
+      .select('id, shift_type, operator_name, operator_id')
       .eq('date', date)
       .eq('company_id', companyId)
 
@@ -67,9 +68,10 @@ export const getShiftReportTool: CopilotTool = {
       byShift.set(key, cur)
     }
 
+    const operatorMap = await resolveOperatorNames(ctx.supabase, (shifts || []) as any)
+
     for (const sh of (shifts || []) as any[]) {
-      const op = Array.isArray(sh.operator) ? sh.operator[0] : sh.operator
-      const opName = op?.short_name || op?.name || sh.operator_name || '?'
+      const opName = operatorMap.get(String(sh.operator_id)) || sh.operator_name || '?'
       const inc = byShift.get(sh.shift_type) || { cash: 0, kaspi: 0, card: 0, online: 0 }
       const total = inc.cash + inc.kaspi + inc.card + inc.online
       lines.push(`${sh.shift_type === 'night' ? '🌙' : '☀️'} ${opName}:`)

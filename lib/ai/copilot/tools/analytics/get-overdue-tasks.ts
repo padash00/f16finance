@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { resolveOperatorNames } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -21,7 +22,7 @@ export const getOverdueTasksTool: CopilotTool = {
     const today = todayISO()
     const { data, error } = await ctx.supabase
       .from('tasks')
-      .select('id, title, due_date, operator:operator_id(name, short_name)')
+      .select('id, title, due_date, operator_id')
       .eq('status', 'open')
       .lt('due_date', today)
       .order('due_date')
@@ -31,10 +32,10 @@ export const getOverdueTasksTool: CopilotTool = {
     const rows = data || []
     if (rows.length === 0) return { ok: true, message: '✅ Нет просроченных задач.' }
 
+    const operatorMap = await resolveOperatorNames(ctx.supabase, rows as any)
     const lines: string[] = [`⚠️ Просрочено: ${rows.length} задач\n`]
     for (const t of rows.slice(0, 15) as any[]) {
-      const op = Array.isArray(t.operator) ? t.operator[0] : t.operator
-      const opName = op?.short_name || op?.name || '?'
+      const opName = operatorMap.get(String(t.operator_id)) || '?'
       lines.push(`  • ${t.title} (${opName}, дедлайн ${t.due_date})`)
     }
     if (rows.length > 15) lines.push(`  ... и ещё ${rows.length - 15}`)

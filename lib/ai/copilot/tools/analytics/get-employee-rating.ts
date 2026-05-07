@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { resolveOperatorNames } from '../../query-helpers'
 
 export const getEmployeeRatingTool: CopilotTool = {
   name: 'get_employee_rating',
@@ -20,18 +21,19 @@ export const getEmployeeRatingTool: CopilotTool = {
 
     const { data, error } = await ctx.supabase
       .from('operator_salary_adjustments')
-      .select('operator_id, kind, amount, operator:operator_id(name, short_name)')
+      .select('operator_id, kind, amount')
       .eq('status', 'active')
       .gte('date', since)
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: 'Корректировок зарплаты за период нет.' }
 
+    const operatorMap = await resolveOperatorNames(ctx.supabase, data as any)
+
     type Stat = { name: string; bonuses: number; fines: number; bonusSum: number; fineSum: number }
     const byOp = new Map<string, Stat>()
     for (const r of data as any[]) {
-      const op = Array.isArray(r.operator) ? r.operator[0] : r.operator
       const key = r.operator_id
-      const cur = byOp.get(key) || { name: op?.short_name || op?.name || '?', bonuses: 0, fines: 0, bonusSum: 0, fineSum: 0 }
+      const cur = byOp.get(key) || { name: operatorMap.get(String(key)) || '?', bonuses: 0, fines: 0, bonusSum: 0, fineSum: 0 }
       if (r.kind === 'bonus') { cur.bonuses++; cur.bonusSum += Number(r.amount || 0) }
       if (r.kind === 'fine') { cur.fines++; cur.fineSum += Number(r.amount || 0) }
       byOp.set(key, cur)

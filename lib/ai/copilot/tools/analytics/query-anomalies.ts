@@ -45,7 +45,7 @@ export const queryAnomaliesTool: CopilotTool = {
 
     const { data: rows } = await ctx.supabase
       .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, online_amount, company:companies!company_id(name)')
+      .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', from)
       .lte('date', today)
       .range(0, 19999)
