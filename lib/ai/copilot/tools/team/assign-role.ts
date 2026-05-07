@@ -11,7 +11,7 @@ export const assignRoleTool: CopilotTool = {
   category: 'team',
   description: 'Назначить роль сотруднику (владелец / менеджер / сотрудник)',
   requiredCapability: 'staff.update',
-  severity: 'critical',
+  severity: 'high',
   params: [
     {
       name: 'staff_id',

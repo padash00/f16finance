@@ -11,7 +11,7 @@ export const lockPayrollPeriodTool: CopilotTool = {
   category: 'system',
   description: 'Закрыть зарплатный период (после выплат)',
   requiredCapability: 'salary.lock_period',
-  severity: 'critical',
+  severity: 'high',
   params: [
     { name: 'period_start', label: 'Начало периода', type: 'date', required: true, description: 'YYYY-MM-DD' },
     { name: 'period_end', label: 'Конец периода', type: 'date', required: true, description: 'YYYY-MM-DD' },

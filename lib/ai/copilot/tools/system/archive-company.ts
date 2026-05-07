@@ -11,7 +11,7 @@ export const archiveCompanyTool: CopilotTool = {
   category: 'system',
   description: 'Архивировать точку (мягкое удаление)',
   requiredCapability: 'companies.archive',
-  severity: 'critical',
+  severity: 'high',
   params: [
     {
       name: 'company_id',
