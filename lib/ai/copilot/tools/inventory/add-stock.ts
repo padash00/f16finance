@@ -1,30 +1,42 @@
 /**
- * AI tool: оприходование товара (увеличение остатка без поставщика).
- * Capability: store-postings.create
+ * AI tool: оприходование товара без поставщика (излишки, корректировка остатка).
+ * Использует тот же RPC inventory_post_receipt но без supplier/invoice —
+ * быстрая форма для типичных случаев "нашли неучтённое".
  *
- * Используется для: излишки при ревизии, корректировка остатков,
- * добавление товара без накладной.
+ * Capability: receipts.create (та же что и для приёмки)
  */
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
 
+function todayISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export const addStockTool: CopilotTool = {
   name: 'add_stock',
   category: 'inventory',
-  description: 'Оприходовать товар на склад (без поставщика — корректировка)',
-  requiredCapability: 'store-postings.create',
+  description: 'Оприходовать товар (быстро, без поставщика — для излишков/корректировок)',
+  requiredCapability: 'receipts.create',
   severity: 'medium',
   params: [
     {
-      name: 'company_id',
-      label: 'На какую точку',
+      name: 'location_id',
+      label: 'Куда добавляем',
       type: 'select',
       required: true,
-      description: 'Точка',
+      description: 'Склад или витрина',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
+        const { data } = await ctx.supabase
+          .from('inventory_locations')
+          .select('id, name, kind, company:company_id(name)')
+          .order('name')
+        return (data || []).map((l: any) => {
+          const co = Array.isArray(l.company) ? l.company[0] : l.company
+          const kindLabel = l.kind === 'warehouse' ? '🏭' : '🛍'
+          return { value: l.id, label: `${kindLabel} ${l.name}${co?.name ? ` · ${co.name}` : ''}` }
+        })
       },
     },
     {
@@ -32,7 +44,7 @@ export const addStockTool: CopilotTool = {
       label: 'Товар',
       type: 'select',
       required: true,
-      description: 'Какой товар оприходовать',
+      description: 'Что добавляем',
       getOptions: async (ctx) => {
         const { data } = await ctx.supabase.from('inventory_items').select('id, name').order('name')
         return (data || []).map((i: any) => ({ value: i.id, label: i.name }))
@@ -43,7 +55,7 @@ export const addStockTool: CopilotTool = {
       label: 'Количество',
       type: 'number',
       required: true,
-      description: 'Сколько добавить',
+      description: 'Сколько шт оприходовать',
     },
     {
       name: 'reason',
@@ -55,29 +67,43 @@ export const addStockTool: CopilotTool = {
     },
   ],
   handler: async (input, ctx) => {
-    const companyId = String(input.company_id || '')
+    const locationId = String(input.location_id || '')
     const itemId = String(input.item_id || '')
-    const quantity = Number(input.quantity || 0)
+    const qty = Number(input.quantity || 0)
     const reason = String(input.reason || '').trim()
-    if (!companyId || !itemId || quantity <= 0 || !reason) return { ok: false, message: 'Не хватает данных.' }
 
-    const { data, error } = await ctx.supabase
-      .from('inventory_postings')
-      .insert([{ company_id: companyId, item_id: itemId, quantity, reason, status: 'created' }])
-      .select('id')
-      .single()
-    if (error) return { ok: false, message: `Не удалось: ${error.message}` }
+    if (!locationId || !itemId || qty <= 0 || !reason) {
+      return { ok: false, message: 'Не хватает данных.' }
+    }
+
+    // unit_cost = 0 для оприходования без накладной (это не закупка)
+    const itemsJson = [{ item_id: itemId, quantity: qty, unit_cost: 0, total_cost: 0 }]
+
+    const { data, error } = await ctx.supabase.rpc('inventory_post_receipt', {
+      p_location_id: locationId,
+      p_received_at: todayISO(),
+      p_supplier_id: null,
+      p_invoice_number: null,
+      p_comment: `Оприходование: ${reason}`,
+      p_created_by: ctx.userId,
+      p_items: itemsJson,
+    })
+
+    if (error) return { ok: false, message: `Не удалось оприходовать: ${error.message}` }
+
+    const receiptRow = Array.isArray(data) ? data[0] : data
+    const receiptId = receiptRow?.receipt_id ? String(receiptRow.receipt_id) : 'unknown'
 
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
-        entityType: 'inventory-posting',
-        entityId: data?.id || 'unknown',
-        action: 'create',
-        payload: { company_id: companyId, item_id: itemId, quantity, reason, via: 'copilot', source: ctx.source },
+        entityType: 'inventory-receipt',
+        entityId: receiptId,
+        action: 'add-stock',
+        payload: { location_id: locationId, item_id: itemId, quantity: qty, reason, via: 'copilot', source: ctx.source },
       })
     } catch {}
 
-    return { ok: true, message: `✅ Оприходовано ${quantity} шт. Причина: ${reason}` }
+    return { ok: true, message: `✅ Оприходовано ${qty} шт. Причина: ${reason}. Остаток обновлён.` }
   },
 }

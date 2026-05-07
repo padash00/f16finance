@@ -1,18 +1,45 @@
 /**
- * AI tool: оформить приход товара от поставщика.
+ * AI tool: оформить приход (приёмку) товара от поставщика.
+ * Использует Supabase RPC inventory_post_receipt — атомарно создаёт
+ * receipt header + items + обновляет balances + пишет movement.
+ *
  * Capability: receipts.create
  */
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
 
+function todayISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export const createReceiptTool: CopilotTool = {
   name: 'create_receipt',
   category: 'inventory',
-  description: 'Оформить приход товара от поставщика',
+  description: 'Оформить приход товара от поставщика (один товар за раз)',
   requiredCapability: 'receipts.create',
   severity: 'medium',
   params: [
+    {
+      name: 'location_id',
+      label: 'На какой склад',
+      type: 'select',
+      required: true,
+      description: 'Склад приёмки',
+      getOptions: async (ctx) => {
+        // Только склады, не витрины
+        const { data } = await ctx.supabase
+          .from('inventory_locations')
+          .select('id, name, kind, company:company_id(name)')
+          .eq('kind', 'warehouse')
+          .order('name')
+        return (data || []).map((l: any) => {
+          const co = Array.isArray(l.company) ? l.company[0] : l.company
+          return { value: l.id, label: `${l.name}${co?.name ? ` · ${co.name}` : ''}` }
+        })
+      },
+    },
     {
       name: 'item_id',
       label: 'Товар',
@@ -32,11 +59,11 @@ export const createReceiptTool: CopilotTool = {
       description: 'Сколько шт',
     },
     {
-      name: 'cost_per_unit',
+      name: 'unit_cost',
       label: 'Цена закупки за единицу (₸)',
       type: 'number',
       required: true,
-      description: 'Цена закупки',
+      description: 'Закупочная цена за 1 шт',
     },
     {
       name: 'supplier_id',
@@ -49,32 +76,59 @@ export const createReceiptTool: CopilotTool = {
         return (data || []).map((s: any) => ({ value: s.id, label: s.name }))
       },
     },
+    {
+      name: 'invoice_number',
+      label: 'Номер накладной',
+      type: 'string',
+      required: false,
+      description: 'Опционально',
+    },
   ],
   handler: async (input, ctx) => {
+    const locationId = String(input.location_id || '')
     const itemId = String(input.item_id || '')
     const qty = Number(input.quantity || 0)
-    const cost = Number(input.cost_per_unit || 0)
+    const unitCost = Number(input.unit_cost || 0)
     const supplierId = input.supplier_id ? String(input.supplier_id) : null
-    if (!itemId || qty <= 0 || cost < 0) return { ok: false, message: 'Не хватает данных.' }
+    const invoiceNumber = input.invoice_number ? String(input.invoice_number).trim() || null : null
 
-    const total = qty * cost
-    const { data, error } = await ctx.supabase
-      .from('inventory_receipts')
-      .insert([{ item_id: itemId, quantity: qty, cost_per_unit: cost, total_cost: total, supplier_id: supplierId, received_at: new Date().toISOString() }])
-      .select('id')
-      .single()
+    if (!locationId || !itemId || qty <= 0 || unitCost < 0) {
+      return { ok: false, message: 'Не хватает данных.' }
+    }
+
+    const totalCost = qty * unitCost
+    const itemsJson = [{ item_id: itemId, quantity: qty, unit_cost: unitCost, total_cost: totalCost }]
+
+    const { data, error } = await ctx.supabase.rpc('inventory_post_receipt', {
+      p_location_id: locationId,
+      p_received_at: todayISO(),
+      p_supplier_id: supplierId,
+      p_invoice_number: invoiceNumber,
+      p_comment: null,
+      p_created_by: ctx.userId,
+      p_items: itemsJson,
+    })
+
     if (error) return { ok: false, message: `Не удалось оприходовать: ${error.message}` }
+
+    // RPC возвращает строки (receipt_id, total_amount) — берём первую
+    const receiptRow = Array.isArray(data) ? data[0] : data
+    const receiptId = receiptRow?.receipt_id ? String(receiptRow.receipt_id) : 'unknown'
 
     try {
       await writeAuditLog(ctx.supabase, {
         actorUserId: ctx.userId,
         entityType: 'inventory-receipt',
-        entityId: data?.id || 'unknown',
+        entityId: receiptId,
         action: 'create',
-        payload: { item_id: itemId, qty, cost, total, supplier_id: supplierId, via: 'copilot', source: ctx.source },
+        payload: { location_id: locationId, item_id: itemId, qty, unit_cost: unitCost, total_cost: totalCost, supplier_id: supplierId, via: 'copilot', source: ctx.source },
       })
     } catch {}
 
-    return { ok: true, message: `📦 Приход: ${qty} шт × ${cost.toLocaleString('ru-RU')} ₸ = ${total.toLocaleString('ru-RU')} ₸ оприходовано.` }
+    return {
+      ok: true,
+      message: `📦 Приёмка оформлена: ${qty} шт × ${unitCost.toLocaleString('ru-RU')} ₸ = ${totalCost.toLocaleString('ru-RU')} ₸. Остаток на складе обновлён.`,
+      data: { receiptId },
+    }
   },
 }
