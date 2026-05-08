@@ -548,6 +548,7 @@ MemoizedPieChart.displayName = 'MemoizedPieChart'
 
 // Столбчатая диаграмма по компаниям
 const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; kaspi: number; online: number; card: number; total: number }[] }) => {
+  const cashLabels = useCashlessLabels()
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ left: 20 }}>
