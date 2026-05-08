@@ -58,6 +58,20 @@ type ForecastResult = {
     week4Expense: number
     week8Expense: number
     week13Expense: number
+    // ─── Календарные месяцы ───
+    month0Label?: string
+    month0Income?: number
+    month0Expense?: number
+    month0Fact?: { income: number; expense: number }
+    month0RemainingDays?: number
+    month1Label?: string
+    month1Income?: number
+    month1Expense?: number
+    month1Days?: number
+    month2Label?: string
+    month2Income?: number
+    month2Expense?: number
+    month2Days?: number
   }
   avgWeeklyIncome: number
   avgWeeklyExpense: number
@@ -428,39 +442,55 @@ export default function ForecastPage() {
                 </div>
               )}
 
-              {/* Forecast cards */}
+              {/* Forecast cards: календарные месяцы */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {(() => {
                   const proj = activeProjected ?? result.projected
+                  // Если есть month0/1/2 (новый API) — используем календарные месяцы.
+                  // Иначе fallback на 30/60/90 дней (старый формат).
+                  if (proj.month0Label && proj.month1Label && proj.month2Label) {
+                    return [
+                      {
+                        label: proj.month0Label,
+                        sublabel: proj.month0RemainingDays
+                          ? `факт + прогноз на ${proj.month0RemainingDays} дн.`
+                          : 'этот месяц',
+                        income: proj.month0Income ?? 0,
+                        expense: proj.month0Expense ?? 0,
+                        fact: proj.month0Fact,
+                        color: 'blue',
+                      },
+                      {
+                        label: proj.month1Label,
+                        sublabel: proj.month1Days ? `${proj.month1Days} дн.` : 'следующий месяц',
+                        income: proj.month1Income ?? 0,
+                        expense: proj.month1Expense ?? 0,
+                        color: 'purple',
+                      },
+                      {
+                        label: proj.month2Label,
+                        sublabel: proj.month2Days ? `${proj.month2Days} дн.` : 'через месяц',
+                        income: proj.month2Income ?? 0,
+                        expense: proj.month2Expense ?? 0,
+                        color: 'indigo',
+                      },
+                    ]
+                  }
+                  // Старый формат (на случай если API ещё не задеплоен)
                   return [
-                    {
-                      label: '30 дней',
-                      icon: CalendarDays,
-                      income: proj.week4Income,
-                      expense: proj.week4Expense,
-                      color: 'blue',
-                    },
-                    {
-                      label: '60 дней',
-                      icon: CalendarDays,
-                      income: proj.week8Income,
-                      expense: proj.week8Expense,
-                      color: 'purple',
-                    },
-                    {
-                      label: '90 дней',
-                      icon: CalendarDays,
-                      income: proj.week13Income,
-                      expense: proj.week13Expense,
-                      color: 'indigo',
-                    },
+                    { label: '30 дней', sublabel: 'прогноз', income: proj.week4Income, expense: proj.week4Expense, color: 'blue' },
+                    { label: '60 дней', sublabel: 'прогноз', income: proj.week8Income, expense: proj.week8Expense, color: 'purple' },
+                    { label: '90 дней', sublabel: 'прогноз', income: proj.week13Income, expense: proj.week13Expense, color: 'indigo' },
                   ]
-                })().map(({ label, income, expense }) => {
+                })().map(({ label, sublabel, income, expense, fact }: any) => {
                   const profit = income - expense
                   return (
                     <Card key={label} className="p-5 bg-gray-900/80 border-gray-700">
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Прогноз — {label}</p>
+                        <div>
+                          <p className="text-sm text-white font-semibold capitalize">{label}</p>
+                          {sublabel && <p className="text-[10px] text-gray-500 mt-0.5">{sublabel}</p>}
+                        </div>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">AI</span>
                       </div>
                       <div className="space-y-2">
@@ -487,6 +517,15 @@ export default function ForecastPage() {
                             {profit >= 0 ? '+' : ''}{fmtMoney(profit)}
                           </span>
                         </div>
+                        {fact && (fact.income > 0 || fact.expense > 0) && (
+                          <div className="border-t border-gray-800 pt-2 mt-1">
+                            <p className="text-[10px] text-gray-500 mb-1">Уже факт:</p>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-emerald-400/70">{fmtMoney(fact.income)}</span>
+                              <span className="text-red-400/70">−{fmtMoney(fact.expense)}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   )

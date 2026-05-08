@@ -295,13 +295,59 @@ export async function POST(request: Request) {
     const avgWeeklyIncome = last30Income / 30 * 7
     const avgWeeklyExpense = last30Expense / 30 * 7
 
+    // ─── Прогноз по КАЛЕНДАРНЫМ МЕСЯЦАМ ─────────────────────────────────
+    // Текущий месяц = факт за прошедшие дни + прогноз на оставшиеся
+    // Следующий месяц = чистый прогноз
+    // Через месяц = чистый прогноз с тренд-поправкой
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth() // 0-based
+    const currentDay = today.getDate()
+    const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate()
+
+    const monthLabels = [
+      new Date(currentYear, currentMonth, 1).toLocaleString('ru-RU', { month: 'long', year: 'numeric' }),
+      new Date(currentYear, currentMonth + 1, 1).toLocaleString('ru-RU', { month: 'long', year: 'numeric' }),
+      new Date(currentYear, currentMonth + 2, 1).toLocaleString('ru-RU', { month: 'long', year: 'numeric' }),
+    ]
+
+    // Месяц 0 (текущий): факт + прогноз на оставшиеся дни
+    const currentMonthStart = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`
+    const factIncomeThisMonth = sumInRange(incomeRows, currentMonthStart, dateTo, 'income')
+    const factExpenseThisMonth = sumInRange(expenseRows, currentMonthStart, dateTo, 'expense')
+    const remainingDaysThisMonth = daysInMonth(currentYear, currentMonth) - currentDay
+
+    // Месяц 1 и 2: полные месяцы
+    const daysInMonth1 = daysInMonth(currentYear, currentMonth + 1)
+    const daysInMonth2 = daysInMonth(currentYear, currentMonth + 2)
+
     const projected = {
-      week4Income: projectIncome(30),
-      week8Income: projectIncome(60),
-      week13Income: projectIncome(90),
-      week4Expense: projectExpense(30),
-      week8Expense: projectExpense(60),
-      week13Expense: projectExpense(90),
+      // ── По месяцам — это новое и главное ──
+      month0Label: monthLabels[0],
+      month0Income: factIncomeThisMonth + projectIncome(remainingDaysThisMonth),
+      month0Expense: factExpenseThisMonth + projectExpense(remainingDaysThisMonth),
+      month0Fact: { income: factIncomeThisMonth, expense: factExpenseThisMonth },
+      month0RemainingDays: remainingDaysThisMonth,
+
+      month1Label: monthLabels[1],
+      month1Income: projectIncome(daysInMonth1),
+      month1Expense: projectExpense(daysInMonth1),
+      month1Days: daysInMonth1,
+
+      month2Label: monthLabels[2],
+      // Для второго месяца тренд усиливается: чем дальше прогноз тем
+      // больше неопределённости. projectIncome уже включает trend^periods.
+      month2Income: projectIncome(daysInMonth2) * Math.pow(incomeTrendMult, 1),
+      month2Expense: projectExpense(daysInMonth2) * Math.pow(expenseTrendMult, 1),
+      month2Days: daysInMonth2,
+
+      // ── Совместимость со старым фронтом (week4/8/13) ──
+      week4Income: factIncomeThisMonth + projectIncome(remainingDaysThisMonth),
+      week4Expense: factExpenseThisMonth + projectExpense(remainingDaysThisMonth),
+      week8Income: projectIncome(daysInMonth1),
+      week8Expense: projectExpense(daysInMonth1),
+      week13Income: projectIncome(daysInMonth2) * Math.pow(incomeTrendMult, 1),
+      week13Expense: projectExpense(daysInMonth2) * Math.pow(expenseTrendMult, 1),
     }
 
     const scenarios = {
