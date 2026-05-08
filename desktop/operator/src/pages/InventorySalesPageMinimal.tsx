@@ -42,6 +42,7 @@ import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
 import * as offline from '@/lib/offline'
 import { useSyncWatcher } from '@/lib/use-sync-watcher'
+import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import {
   beep,
@@ -228,6 +229,9 @@ export default function InventorySalesPageMinimal({
       if (!silent) setLoading(false)
     }
   }
+
+  // Provider-aware лейблы (Kaspi/Halyk/Безналичный) для UI
+  const cashLabels = useCashlessLabels(session)
 
   // Realtime sync с сайтом — раз в 30с проверяем не изменились ли цены/остатки на сервере
   const { status: syncStatus, lastSyncedAt } = useSyncWatcher({
@@ -829,7 +833,7 @@ export default function InventorySalesPageMinimal({
                                     : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
                               }`}
                             >
-                              {sale.payment_method === 'cash' ? 'Наличные' : sale.payment_method === 'kaspi' ? 'Kaspi' : 'Смешанная'}
+                              {sale.payment_method === 'cash' ? 'Наличные' : sale.payment_method === 'kaspi' ? cashLabels.providerName : 'Смешанная'}
                             </span>
                           </td>
                           <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums">
@@ -1204,7 +1208,7 @@ export default function InventorySalesPageMinimal({
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  {m === 'cash' ? 'Наличные' : m === 'kaspi' ? 'Kaspi' : 'Смешанная'}
+                  {m === 'cash' ? 'Наличные' : m === 'kaspi' ? cashLabels.providerName : 'Смешанная'}
                 </button>
               ))}
             </div>
@@ -1227,7 +1231,7 @@ export default function InventorySalesPageMinimal({
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">Kaspi</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{cashLabels.providerName}</span>
                   <input
                     value={mixedKaspi}
                     onChange={(e) => {
@@ -1399,7 +1403,7 @@ export default function InventorySalesPageMinimal({
               <div className="mt-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm font-semibold">
-                    {paymentMethod === 'cash' ? 'Наличные' : paymentMethod === 'kaspi' ? 'Kaspi' : 'Смешанная'}
+                    {paymentMethod === 'cash' ? 'Наличные' : paymentMethod === 'kaspi' ? cashLabels.providerName : 'Смешанная'}
                   </span>
                   <span className="text-2xl font-bold tabular-nums">
                     {formatMoney(finalTotal)} <span className="text-sm font-medium text-slate-500">₸</span>
@@ -1412,7 +1416,7 @@ export default function InventorySalesPageMinimal({
                       <span className="tabular-nums">{formatMoney(parseMoney(mixedCash))} ₸</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Kaspi</span>
+                      <span>{cashLabels.providerName}</span>
                       <span className="tabular-nums">{formatMoney(parseMoney(mixedKaspi))} ₸</span>
                     </div>
                   </div>
@@ -1493,7 +1497,7 @@ export default function InventorySalesPageMinimal({
                         : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
                     }`}
                   >
-                    {m === 'cash' ? 'Наличные' : m === 'kaspi' ? 'Kaspi' : 'Смешан.'}
+                    {m === 'cash' ? 'Наличные' : m === 'kaspi' ? cashLabels.providerName : 'Смешан.'}
                   </button>
                 ))}
               </div>
@@ -1514,7 +1518,7 @@ export default function InventorySalesPageMinimal({
                     />
                   </label>
                   <label>
-                    <span className="text-xs text-slate-500">Kaspi</span>
+                    <span className="text-xs text-slate-500">{cashLabels.providerName}</span>
                     <input
                       value={correctionKaspi}
                       onChange={(e) => {
