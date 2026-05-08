@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import { ChangeCalculator } from '@/components/ChangeCalculator'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
 import * as offline from '@/lib/offline'
@@ -161,6 +162,35 @@ export default function InventorySalesPageMinimal({
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // Горячие клавиши (для быстрой работы):
+  //   F2 — фокус на поиск товара
+  //   F4 — открыть подтверждение оплаты (если есть товары в корзине)
+  //   Esc — закрыть модалки
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Игнорируем если фокус в инпуте (кроме Esc и F-клавиш)
+      const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName || '')
+      if (e.key === 'F2') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+        return
+      }
+      if (e.key === 'F4') {
+        if (cart.length > 0 && !showPayConfirm) {
+          e.preventDefault()
+          setShowPayConfirm(true)
+        }
+        return
+      }
+      if (e.key === 'Escape' && !inInput) {
+        if (showPayConfirm) setShowPayConfirm(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [cart.length, showPayConfirm])
 
   // Первичная загрузка с кэшем
   useEffect(() => {
@@ -1353,6 +1383,14 @@ export default function InventorySalesPageMinimal({
                 </div>
               )}
             </div>
+
+            {/* Калькулятор сдачи (только для наличных или смешанной оплаты) */}
+            {(paymentMethod === 'cash' || paymentMethod === 'mixed') && (
+              <ChangeCalculator
+                amountDue={paymentMethod === 'cash' ? finalTotal : Math.max(0, parseMoney(mixedCash))}
+                paymentLabel={paymentMethod === 'cash' ? 'Получено наличными' : 'Получено налом'}
+              />
+            )}
 
             {/* Кнопки */}
             <div className="flex flex-col gap-2 border-t border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:justify-end">
