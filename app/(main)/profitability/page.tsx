@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -67,6 +68,7 @@ function buildMonths(from: string, to: string) {
 }
 
 export default function ProfitabilityPage() {
+  const cashLabels = useCashlessLabels()
   const { can } = useCapabilities()
   const canEdit = can('profitability.edit')
 
@@ -423,7 +425,7 @@ export default function ProfitabilityPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Что такое выручка</div>
-                <p className="mt-2 text-sm text-slate-300">По умолчанию это доходы из журнала: наличные, Kaspi POS, online и карта. Если вы сверху заполнили общую выручку по POS и общую наличку, страница возьмёт именно их как базу месяца.</p>
+                <p className="mt-2 text-sm text-slate-300">По умолчанию это доходы из журнала: наличные, {cashLabels.pos}, online и карта. Если вы сверху заполнили общую выручку по POS и общую наличку, страница возьмёт именно их как базу месяца.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Что теперь идёт из журнала автоматически</div>
@@ -431,7 +433,7 @@ export default function ProfitabilityPage() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Оборот POS</div>
-                <p className="mt-2 text-sm text-slate-300">Это объём оплат, прошедших через терминал или сервис Kaspi по конкретному типу оплаты. Он нужен только для расчёта комиссии банка.</p>
+                <p className="mt-2 text-sm text-slate-300">Это объём оплат, прошедших через терминал или сервис {cashLabels.providerName} по конкретному типу оплаты. Он нужен только для расчёта комиссии банка.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Комиссия POS</div>
@@ -501,11 +503,11 @@ export default function ProfitabilityPage() {
                       <div className="space-y-2 text-sm text-slate-300">
                         <div className="flex justify-between"><span>Общая наличка</span><span>{money(selected.cashRevenue)}</span></div>
                         <div className="flex justify-between"><span>Безналичная выручка</span><span>{money(selected.cashlessRevenue)}</span></div>
-                        <div className="flex justify-between"><span>Kaspi QR</span><span>{money(selected.kaspiQrTurnover)} / {money(selected.kaspiQrCommission)}</span></div>
-                        <div className="flex justify-between"><span>Kaspi Gold</span><span>{money(selected.kaspiGoldTurnover)} / {money(selected.kaspiGoldCommission)}</span></div>
+                        <div className="flex justify-between"><span>{cashLabels.qr}</span><span>{money(selected.kaspiQrTurnover)} / {money(selected.kaspiQrCommission)}</span></div>
+                        <div className="flex justify-between"><span>{cashLabels.gold}</span><span>{money(selected.kaspiGoldTurnover)} / {money(selected.kaspiGoldCommission)}</span></div>
                         <div className="flex justify-between"><span>Другие карты</span><span>{money(selected.otherCardsTurnover)} / {money(selected.otherCardsCommission)}</span></div>
-                        <div className="flex justify-between"><span>Kaspi Red</span><span>{money(selected.kaspiRedTurnover)} / {money(selected.kaspiRedCommission)}</span></div>
-                        <div className="flex justify-between"><span>Kaspi Kredit</span><span>{money(selected.kaspiKreditTurnover)} / {money(selected.kaspiKreditCommission)}</span></div>
+                        <div className="flex justify-between"><span>{cashLabels.red}</span><span>{money(selected.kaspiRedTurnover)} / {money(selected.kaspiRedCommission)}</span></div>
+                        <div className="flex justify-between"><span>{cashLabels.kredit}</span><span>{money(selected.kaspiKreditTurnover)} / {money(selected.kaspiKreditCommission)}</span></div>
                         {selected.legacyQrGoldTurnover > 0 ? <div className="flex justify-between text-amber-300"><span>Старый общий QR/Gold</span><span>{money(selected.legacyQrGoldTurnover)} / {money(selected.legacyQrGoldCommission)}</span></div> : null}
                         <div className="flex justify-between border-t border-white/10 pt-2 font-medium text-white"><span>Итого комиссия POS</span><span>{money(selected.posCommission)}</span></div>
                       </div>
@@ -534,8 +536,8 @@ export default function ProfitabilityPage() {
                   </div>
                   {selected.hasRevenueOverride ? <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">Для этого месяца выручка считается от ручных верхних вводов: наличка {money(selected.cashRevenueOverride)} и POS {money(selected.posRevenueOverride)}. Если очистить эти поля и сохранить, страница снова возьмёт выручку из журнала доходов.</div> : null}
                   {selected.hasKaspiDailyAdjustment && !selected.hasRevenueOverride ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">Kaspi за этот месяц взят по календарным суткам. Коррекция относительно обычной сменной суммы: {selected.kaspiDailyAdjustment > 0 ? '+' : ''}{money(selected.kaspiDailyAdjustment)}. В журнале по сменам было {money(selected.rawKaspiRevenue)}, после суточной сверки в ОПиУ попало {money(selected.correctedKaspiRevenue)}.</div> : null}
-                  {selected.hasKaspiDailyWarnings && !selected.hasRevenueOverride ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для части ночных смен в этом месяце нет разделения Kaspi до и после полуночи, поэтому суточная сверка может быть неполной.</div> : null}
-                  {selected.legacyQrGoldTurnover > 0 ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для этого месяца найдены старые объединённые данные QR/Gold. Лучше переписать их отдельно в полях Kaspi QR и Kaspi Gold, чтобы комиссия считалась точнее.</div> : null}
+                  {selected.hasKaspiDailyWarnings && !selected.hasRevenueOverride ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для части ночных смен в этом месяце нет разделения {cashLabels.providerName} до и после полуночи, поэтому суточная сверка может быть неполной.</div> : null}
+                  {selected.legacyQrGoldTurnover > 0 ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для этого месяца найдены старые объединённые данные QR/Gold. Лучше переписать их отдельно в полях {cashLabels.qr} и {cashLabels.gold}, чтобы комиссия считалась точнее.</div> : null}
                 </div>
               ) : null}
             </Card>
@@ -571,7 +573,7 @@ export default function ProfitabilityPage() {
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-white">Общая выручка по POS за месяц</label>
                         <Input type="number" min="0" step="100" value={draft.pos_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, pos_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём безнал из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
-                        <div className="text-xs text-cyan-100/80">Это общая сумма по терминалу и Kaspi-сервисам за месяц. Поле необязательно.</div>
+                        <div className="text-xs text-cyan-100/80">Это общая сумма по терминалу и {cashLabels.providerName}-сервисам за месяц. Поле необязательно.</div>
                       </div>
                       <div className="text-xs text-cyan-100/80 md:col-span-2">
                         Если заполнили хотя бы одно из этих двух полей, страница возьмёт выручку месяца из них: <span className="font-medium text-white">наличка + POS</span>. Если оба поля пустые, база останется из журнала доходов.
@@ -593,10 +595,10 @@ export default function ProfitabilityPage() {
                     <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
                       <div className="font-medium text-white">Как заполнять комиссии POS</div>
                       <ul className="mt-2 space-y-1">
-                        <li>Kaspi QR: оборот оплат по QR и ставка комиссии именно для QR.</li>
-                        <li>Kaspi Gold: оборот оплат картой Gold и ставка комиссии именно для Gold.</li>
+                        <li>{cashLabels.qr}: оборот оплат по QR и ставка комиссии именно для QR.</li>
+                        <li>{cashLabels.gold}: оборот оплат картой Gold и ставка комиссии именно для Gold.</li>
                         <li>Другие карты: все остальные банковские карты.</li>
-                        <li>Kaspi Red и Kaspi Kredit: указывайте отдельно, если по ним другая ставка банка.</li>
+                        <li>{cashLabels.red} и {cashLabels.kredit}: указывайте отдельно, если по ним другая ставка банка.</li>
                       </ul>
                     </div>
                   </>
@@ -640,7 +642,7 @@ export default function ProfitabilityPage() {
                     ))}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-white">Комментарий по месяцу</label>
-                      <Textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Например: изменился договор с Kaspi или была разовая корректировка прибыли." className="min-h-28 border-white/10 bg-slate-950/70 text-white" />
+                      <Textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} placeholder={`Например: изменился договор с ${cashLabels.providerName} или была разовая корректировка прибыли.`} className="min-h-28 border-white/10 bg-slate-950/70 text-white" />
                     </div>
                   </>
                 )}
