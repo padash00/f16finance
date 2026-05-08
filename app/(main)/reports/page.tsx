@@ -2127,8 +2127,8 @@ function ReportsContent() {
             ]}
           />
 
-          {/* Filters Bar */}
-          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
+          {/* Filters Bar (sticky) */}
+          <div className="sticky top-2 z-30 rounded-2xl bg-gray-900/85 backdrop-blur-xl border border-white/10 p-4 space-y-4 shadow-2xl shadow-black/40">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-gray-400" />
