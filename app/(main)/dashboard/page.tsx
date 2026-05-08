@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
@@ -339,6 +340,7 @@ function buildSummary(status: AIInsight['status'], profitTrend: 'up' | 'down' | 
 // ==================== PAGE ====================
 
 export default function SmartDashboardPage() {
+  const cashLabels = useCashlessLabels()
   const [authResolved, setAuthResolved] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [dateFrom, setDateFrom] = useState(() => DateUtils.addDaysISO(DateUtils.todayISO(), -29))
@@ -1017,6 +1019,7 @@ export default function SmartDashboardPage() {
               previous={previous}
               topIncomeCategories={topIncomeCategories}
               topExpenseCategories={topExpenseCategories}
+              cashlessLabel={cashLabels.providerName}
             />
           )}
 
@@ -1630,10 +1633,11 @@ function Details(props: {
   previous: FinancialTotals
   topIncomeCategories: CategoryData[]
   topExpenseCategories: CategoryData[]
+  cashlessLabel: string
 }) {
   const paymentStats = [
     { name: 'Наличные', value: props.current.incomeCash, color: '#f59e0b' },
-    { name: 'Kaspi', value: props.current.incomeKaspi, color: '#2563eb' },
+    { name: props.cashlessLabel, value: props.current.incomeKaspi, color: '#2563eb' },
     { name: 'Карта', value: props.current.incomeCard, color: '#7c3aed' },
     { name: 'Онлайн', value: props.current.incomeOnline, color: '#ec4899' },
   ]
