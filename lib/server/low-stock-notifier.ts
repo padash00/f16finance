@@ -91,8 +91,22 @@ export async function checkAndNotifyLowStock(
 
     if (!staff?.length) return
 
-    // Параллельные отправки в Telegram (вместо serial)
-    const sendPromises: Promise<unknown>[] = []
+    // Параллельные отправки в Telegram (вместо serial).
+    // Заворачиваем в async/await чтобы TS не путался в типах через .catch().
+    const sendOne = async (chatId: number, text: string, staffId: string | null) => {
+      try {
+        await sendTelegramMessage(chatId, text)
+      } catch (error) {
+        await writeSystemErrorLogSafe({
+          area: 'low-stock-notifier',
+          scope: 'server',
+          message: error instanceof Error ? error.message : String(error),
+          payload: { itemIds, locationId, staffId, telegramChatId: chatId },
+        })
+      }
+    }
+
+    const sendPromises: Promise<void>[] = []
     for (const item of toAlert) {
       const balance = balanceMap.get(item.id)
       const unit = item.unit || 'шт'
@@ -107,16 +121,7 @@ export async function checkAndNotifyLowStock(
 
       for (const member of staff) {
         if (!member.telegram_chat_id) continue
-        sendPromises.push(
-          sendTelegramMessage(Number(member.telegram_chat_id), text).catch((error) =>
-            writeSystemErrorLogSafe({
-              area: 'low-stock-notifier',
-              scope: 'server',
-              message: error instanceof Error ? error.message : String(error),
-              payload: { itemIds, locationId, staffId: member.id || null, telegramChatId: member.telegram_chat_id },
-            }),
-          ),
-        )
+        sendPromises.push(sendOne(Number(member.telegram_chat_id), text, member.id || null))
       }
     }
     await Promise.all(sendPromises)
