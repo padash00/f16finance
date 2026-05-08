@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
@@ -214,7 +215,8 @@ export default function ShiftPage({
     : useArenaShiftDashboard
       ? 'Senet (система)'
       : 'Wipon (система)'
-  const kaspiLabel = useArenaShiftDashboard ? 'Kaspi POS' : 'Kaspi'
+  const cashLabels = useCashlessLabels(session)
+  const kaspiLabel = useArenaShiftDashboard ? cashLabels.pos : cashLabels.providerName
 
   useEffect(() => {
     setActiveOpenShift(openShift || null)
@@ -321,7 +323,7 @@ export default function ShiftPage({
       setDailyReport(data)
     } catch (err: any) {
       setDailyReport(null)
-      setDailyError(err?.message || 'Не удалось загрузить суточный Kaspi отчёт')
+      setDailyError(err?.message || `Не удалось загрузить суточный ${cashLabels.providerName} отчёт`)
     } finally {
       setDailyLoading(false)
     }
@@ -554,7 +556,7 @@ export default function ShiftPage({
     }
 
     if (isNightKaspiSplit && (form.kaspi_before_midnight.trim() === '' || form.kaspi_pos.trim() === '')) {
-      setError('Для ночной смены заполните Kaspi до 00:00 и после 00:00')
+      setError(`Для ночной смены заполните ${cashLabels.providerName} до 00:00 и после 00:00`)
       return
     }
 
@@ -800,7 +802,7 @@ export default function ShiftPage({
               />
               {kaspiDailySplitEnabled ? (
                 <ModeToggleCard
-                  title="Суточный Kaspi"
+                  title={`Суточный ${cashLabels.providerName}`}
                   description="Проверка календарных суток для ночной смены и ОПиУ."
                   active={viewMode === 'daily'}
                   onClick={() => setViewMode('daily')}
@@ -868,7 +870,7 @@ export default function ShiftPage({
                           Суточная сверка
                         </div>
                         <div>
-                          <h1 className="text-2xl font-semibold tracking-tight">Kaspi за календарные сутки</h1>
+                          <h1 className="text-2xl font-semibold tracking-tight">{cashLabels.providerName} за календарные сутки</h1>
                           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                             Сумма собирается из дневной смены выбранной даты, ночной смены этой даты до 00:00 и хвоста прошлой ночной смены после 00:00.
                           </p>
@@ -889,7 +891,7 @@ export default function ShiftPage({
                             <Calculator className="h-3.5 w-3.5" />
                             Режим
                           </div>
-                          <div className="mt-1 text-sm font-medium">Kaspi split</div>
+                          <div className="mt-1 text-sm font-medium">{cashLabels.providerName} split</div>
                           <div className="text-xs text-muted-foreground">Ночные смены до и после 00:00</div>
                         </div>
                       </div>
@@ -922,7 +924,7 @@ export default function ShiftPage({
 
                 <Card className="border-white/10 bg-card/90">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Разбивка суточного Kaspi</CardTitle>
+                    <CardTitle className="text-base">Разбивка суточного {cashLabels.providerName}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {dailyError ? (
@@ -966,7 +968,7 @@ export default function ShiftPage({
                 <Card className="overflow-hidden border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
                   <CardContent className="space-y-4 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Kaspi за сутки</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{cashLabels.providerName} за сутки</p>
                       <p className="mt-2 text-4xl font-semibold tabular-nums">
                         {dailyReport ? formatMoney(dailyReport.total) : '0'}
                       </p>
@@ -1026,7 +1028,7 @@ export default function ShiftPage({
                           <div className="text-lg font-bold text-foreground">{totalCash.toLocaleString('ru-RU')} ₸</div>
                         </div>
                         <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center">
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Каспи</div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{cashLabels.providerName}</div>
                           <div className="text-lg font-bold text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</div>
                         </div>
                         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-center">
@@ -1193,17 +1195,17 @@ export default function ShiftPage({
                     {doSplit ? (
                       <>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">📱 Каспи до 00:00</span>
+                          <span className="text-muted-foreground">📱 {cashLabels.providerName} до 00:00</span>
                           <span className="font-semibold">{kaspiBeforeMidnight.toLocaleString('ru-RU')} ₸</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">📱 Каспи после 00:00</span>
+                          <span className="text-muted-foreground">📱 {cashLabels.providerName} после 00:00</span>
                           <span className="font-semibold">{kaspiAfterMidnight.toLocaleString('ru-RU')} ₸</span>
                         </div>
                       </>
                     ) : (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">📱 Каспи</span>
+                        <span className="text-muted-foreground">📱 {cashLabels.providerName}</span>
                         <span className="font-semibold">{totalKaspi.toLocaleString('ru-RU')} ₸</span>
                       </div>
                     )}
@@ -1299,7 +1301,7 @@ export default function ShiftPage({
                     <TerminalMiniStat label="Введено" value={formatMoney(totalEntered)} />
                     <TerminalMiniStat
                       label="Режим"
-                      value={isNightKaspiSplit ? 'Kaspi split' : 'Стандартный'}
+                      value={isNightKaspiSplit ? `${cashLabels.providerName} split` : 'Стандартный'}
                       note={isNightKaspiSplit ? 'до и после 00:00' : 'без суточной разбивки'}
                     />
                   </div>
@@ -1357,7 +1359,7 @@ export default function ShiftPage({
                           tone={autoSalesCash >= 0 ? 'success' : 'warning'}
                         />
                         <TerminalMiniStat
-                          label={isNightKaspiSplit ? 'POS Kaspi до / после 00:00' : 'POS Kaspi'}
+                          label={isNightKaspiSplit ? `${cashLabels.pos} до / после 00:00` : cashLabels.pos}
                           value={
                             salesSummaryLoading
                               ? '...'
@@ -1464,7 +1466,7 @@ export default function ShiftPage({
                           onChange={(value) => setField('kaspi_pos', value)}
                           disabled={submitting}
                           labelWidth="w-32"
-                          note="в сумме это общий Kaspi смены"
+                          note={`в сумме это общий ${cashLabels.providerName} смены`}
                         />
                       </>
                     ) : (
@@ -1477,7 +1479,7 @@ export default function ShiftPage({
                       />
                     )}
                     {useArenaShiftDashboard ? (
-                      <MoneyInput label="Kaspi Online" value={form.kaspi_online} onChange={(value) => setField('kaspi_online', value)} disabled={submitting} labelWidth="w-32" note="не входит в ФАКТ" />
+                      <MoneyInput label={cashLabels.online} value={form.kaspi_online} onChange={(value) => setField('kaspi_online', value)} disabled={submitting} labelWidth="w-32" note="не входит в ФАКТ" />
                     ) : null}
                     <MoneyInput label="Тех. компенс." value={form.debts} onChange={(value) => setField('debts', value)} disabled={submitting} labelWidth="w-32" />
                   </CardContent>
@@ -1526,7 +1528,7 @@ export default function ShiftPage({
                         <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
                           <div className="flex items-start gap-2">
                             <SplitSquareVertical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <span>Для ночной смены Kaspi делится на две части: до 00:00 и после 00:00. В итоге смены будет учтена общая сумма.</span>
+                            <span>Для ночной смены {cashLabels.providerName} делится на две части: до 00:00 и после 00:00. В итоге смены будет учтена общая сумма.</span>
                           </div>
                         </div>
                       ) : null}
@@ -1673,7 +1675,7 @@ export default function ShiftPage({
                   <SummaryRow label={kaspiLabel} value={vKaspiTotal} />
                   {isNightKaspiSplit ? <SummaryRow label="до 00:00" value={vKaspiBeforeMidnight} dim /> : null}
                   {isNightKaspiSplit ? <SummaryRow label="после 00:00" value={vKaspi} dim /> : null}
-                  {useArenaShiftDashboard ? <SummaryRow label="Kaspi Online" value={vKaspiOnline} dim /> : null}
+                  {useArenaShiftDashboard ? <SummaryRow label={cashLabels.online} value={vKaspiOnline} dim /> : null}
                   <SummaryRow label="Тех. компенс." value={vDebts} />
                   <SummaryRow label="− Старт кассы" value={-vStart} highlight={vStart > 0} />
                   <div className="my-2 border-t border-border/70" />
@@ -1701,7 +1703,7 @@ export default function ShiftPage({
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">Режим точки</div>
                     <div className="mt-1 text-sm text-foreground/90">
                       {useArenaShiftDashboard
-                        ? 'Arena: учитываем Kaspi Online и сценарий разбивки ночной смены на две даты.'
+                        ? `Arena: учитываем ${cashLabels.online} и сценарий разбивки ночной смены на две даты.`
                         : 'Стандартный режим: быстрый отчёт без разбивки по датам.'}
                     </div>
                   </div>
@@ -1799,7 +1801,7 @@ export default function ShiftPage({
                 {vKaspiTotal > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspiTotal)} ₸</span></div> : null}
                 {isNightKaspiSplit && vKaspiBeforeMidnight > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">до 00:00</span><span>{formatMoney(vKaspiBeforeMidnight)} ₸</span></div> : null}
                 {isNightKaspiSplit && vKaspi > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">после 00:00</span><span>{formatMoney(vKaspi)} ₸</span></div> : null}
-                {useArenaShiftDashboard && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Kaspi Online</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
+                {useArenaShiftDashboard && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{cashLabels.online}</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
                 {vDebts > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Тех</span><span>{formatMoney(vDebts)} ₸</span></div> : null}
                 {vStart > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Старт</span><span>−{formatMoney(vStart)} ₸</span></div> : null}
                 {vWipon > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div> : null}
@@ -1850,13 +1852,13 @@ export default function ShiftPage({
                 labelWidth="w-36"
               />
               <MoneyInput
-                label="Kaspi POS после 00:00"
+                label={`${cashLabels.pos} после 00:00`}
                 value={splitAfter.kaspi_pos}
                 onChange={(value) => setSplitAfter((current) => ({ ...current, kaspi_pos: value }))}
                 labelWidth="w-36"
               />
               <MoneyInput
-                label="Kaspi Online после 00:00"
+                label={`${cashLabels.online} после 00:00`}
                 value={splitAfter.kaspi_online}
                 onChange={(value) => setSplitAfter((current) => ({ ...current, kaspi_online: value }))}
                 labelWidth="w-36"
