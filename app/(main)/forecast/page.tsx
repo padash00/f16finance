@@ -580,7 +580,12 @@ export default function ForecastPage() {
                   <p className="text-xs text-gray-500 mb-4">Тренд: последние 30 дней vs предыдущие 30 дней</p>
                   <div className="space-y-2">
                     {result.categories.map((c) => {
-                      const trend = c.older > 0 ? ((c.recent - c.older) / c.older) * 100 : 0
+                      // Тренд показываем только если есть данные за обе половины периода
+                      // и достаточно операций (>=3) — иначе одноразовые покупки
+                      // показывают -100% что неинформативно.
+                      const isLumpyOrSparse = c.count < 3 || c.older === 0 || c.recent === 0
+                      const trend = (!isLumpyOrSparse && c.older > 0) ? ((c.recent - c.older) / c.older) * 100 : 0
+                      const showTrend = !isLumpyOrSparse
                       const arrowColor = Math.abs(trend) < 10 ? 'text-gray-400' : trend > 0 ? 'text-red-400' : 'text-emerald-400'
                       const barWidth = Math.min(100, c.share)
                       return (
@@ -597,10 +602,16 @@ export default function ForecastPage() {
                               />
                             </div>
                             <span className="text-xs text-gray-400 w-12 text-right">{c.share.toFixed(0)}%</span>
-                            <span className={`text-xs font-medium w-16 text-right ${arrowColor}`}>
-                              {Math.abs(trend) < 10 ? '→' : trend > 0 ? '↑' : '↓'}
-                              {' '}{trend > 0 ? '+' : ''}{trend.toFixed(0)}%
-                            </span>
+                            {showTrend ? (
+                              <span className={`text-xs font-medium w-16 text-right ${arrowColor}`}>
+                                {Math.abs(trend) < 10 ? '→' : trend > 0 ? '↑' : '↓'}
+                                {' '}{trend > 0 ? '+' : ''}{trend.toFixed(0)}%
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-500 w-16 text-right">
+                                {c.count < 3 ? 'разовое' : '—'}
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-500">{c.count} операций</p>
                         </div>

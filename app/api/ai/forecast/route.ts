@@ -262,29 +262,27 @@ export async function POST(request: Request) {
       .slice(0, 5)
 
     // ─── Прогноз ──────────────────────────────────────────────────────────
-    // Используем РЕАЛЬНУЮ дневную ставку расходов/доходов за последние 30 дней.
-    // Это намного точнее регрессии для малых бизнесов с разовыми тратами.
-    // Регрессия игнорировала бы тренд — а простая пропорция честно показывает
-    // "при текущем темпе за 30 дней получим X, за 60 дней — 2X, за 90 — 3X".
-    const dailyIncomeRate = last30Income / 30  // реальная ставка ₸/день
-    const dailyExpenseRate = last30Expense / 30
+    // Используем РЕАЛЬНУЮ дневную ставку расходов/доходов.
+    // Базовая ставка — last30 / 30 (для будущих месяцев).
+    // Для прогноза ТЕКУЩЕГО месяца — используем ставку ТЕКУЩЕГО месяца
+    // (если уже прошло >= 5 дней), иначе last30.
+    const baseDailyIncomeRate = last30Income / 30
+    const baseDailyExpenseRate = last30Expense / 30
 
     // Если есть тренд (последние 30 vs предыдущие 30) — корректируем
     const incomeTrendMult = prev30Income > 0 ? Math.max(0.5, Math.min(1.5, last30Income / prev30Income)) : 1
     const expenseTrendMult = prev30Expense > 0 ? Math.max(0.5, Math.min(1.5, last30Expense / prev30Expense)) : 1
 
-    // Прогноз: ставка_в_день × кол-во_дней × поправка_на_тренд^period
-    // (тренд возводим в степень для усиления — 30 дней лёгкая корректировка,
-    //  60 дней умеренная, 90 дней более резкая)
+    // Прогноз для будущих месяцев: ставка_в_день × дни × тренд^period
     const projectIncome = (days: number) => {
       const periods = days / 30
       const trendAdjust = Math.pow(incomeTrendMult, periods - 1)
-      return Math.max(0, dailyIncomeRate * days * trendAdjust)
+      return Math.max(0, baseDailyIncomeRate * days * trendAdjust)
     }
     const projectExpense = (days: number) => {
       const periods = days / 30
       const trendAdjust = Math.pow(expenseTrendMult, periods - 1)
-      return Math.max(0, dailyExpenseRate * days * trendAdjust)
+      return Math.max(0, baseDailyExpenseRate * days * trendAdjust)
     }
 
     // Старая регрессия — оставляем для совместимости фронта если что-то её юзает
@@ -316,6 +314,16 @@ export async function POST(request: Request) {
     const factIncomeThisMonth = sumInRange(incomeRows, currentMonthStart, dateTo, 'income')
     const factExpenseThisMonth = sumInRange(expenseRows, currentMonthStart, dateTo, 'expense')
     const remainingDaysThisMonth = daysInMonth(currentYear, currentMonth) - currentDay
+    const elapsedDaysThisMonth = currentDay  // прошло дней в текущем месяце
+
+    // Ставка для прогноза ОСТАТКА текущего месяца — используем ставку самого
+    // текущего месяца если уже прошло >= 5 дней (более релевантно).
+    // Иначе fallback на last30.
+    const useThisMonthRate = elapsedDaysThisMonth >= 5
+    const thisMonthDailyIncome = useThisMonthRate ? factIncomeThisMonth / elapsedDaysThisMonth : baseDailyIncomeRate
+    const thisMonthDailyExpense = useThisMonthRate ? factExpenseThisMonth / elapsedDaysThisMonth : baseDailyExpenseRate
+    const projectThisMonthIncome = thisMonthDailyIncome * remainingDaysThisMonth
+    const projectThisMonthExpense = thisMonthDailyExpense * remainingDaysThisMonth
 
     // Месяц 1 и 2: полные месяцы
     const daysInMonth1 = daysInMonth(currentYear, currentMonth + 1)
@@ -324,8 +332,11 @@ export async function POST(request: Request) {
     const projected = {
       // ── По месяцам — это новое и главное ──
       month0Label: monthLabels[0],
-      month0Income: factIncomeThisMonth + projectIncome(remainingDaysThisMonth),
-      month0Expense: factExpenseThisMonth + projectExpense(remainingDaysThisMonth),
+      // Текущий месяц: факт + прогноз остатка по СТАВКЕ ТЕКУЩЕГО МЕСЯЦА
+      // (а не last30, иначе если последние дни были более активные/спокойные —
+      //  прогноз смещён). Это намного точнее для незакрытого месяца.
+      month0Income: factIncomeThisMonth + projectThisMonthIncome,
+      month0Expense: factExpenseThisMonth + projectThisMonthExpense,
       month0Fact: { income: factIncomeThisMonth, expense: factExpenseThisMonth },
       month0RemainingDays: remainingDaysThisMonth,
 
@@ -342,8 +353,8 @@ export async function POST(request: Request) {
       month2Days: daysInMonth2,
 
       // ── Совместимость со старым фронтом (week4/8/13) ──
-      week4Income: factIncomeThisMonth + projectIncome(remainingDaysThisMonth),
-      week4Expense: factExpenseThisMonth + projectExpense(remainingDaysThisMonth),
+      week4Income: factIncomeThisMonth + projectThisMonthIncome,
+      week4Expense: factExpenseThisMonth + projectThisMonthExpense,
       week8Income: projectIncome(daysInMonth1),
       week8Expense: projectExpense(daysInMonth1),
       week13Income: projectIncome(daysInMonth2) * Math.pow(incomeTrendMult, 1),
