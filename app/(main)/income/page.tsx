@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
@@ -289,6 +290,7 @@ async function logIncomeEvent(event: {
 
 // --- Главный компонент ---
 export default function IncomePage() {
+  const cashLabels = useCashlessLabels()
   // Фильтры (объявляем до хуков — они передаются в useIncome)
   const [dateFrom, setDateFrom] = useState(DateUtils.addDaysISO(DateUtils.todayISO(), -29))
   const [dateTo, setDateTo] = useState(DateUtils.todayISO())
@@ -1066,8 +1068,8 @@ export default function IncomePage() {
                       >
                         <option value="all">Любая оплата</option>
                         <option value="cash">Наличные 💵</option>
-                        <option value="kaspi">Kaspi POS 📱</option>
-                        <option value="online">Kaspi Online 🌐</option>
+                        <option value="kaspi">{cashLabels.pos} 📱</option>
+                        <option value="online">{cashLabels.online} 🌐</option>
                         <option value="card">Карта 💳</option>
                       </select>
                     </div>
@@ -1281,7 +1283,7 @@ export default function IncomePage() {
                   </label>
 
                   <label className="space-y-2 text-sm text-gray-300">
-                    <span>Kaspi POS</span>
+                    <span>{cashLabels.pos}</span>
                     <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
                   </label>
 
@@ -1294,7 +1296,7 @@ export default function IncomePage() {
                       <input
                         value={editKaspiBeforeMidnightDraft}
                         onChange={(e) => setEditKaspiBeforeMidnightDraft(e.target.value)}
-                        placeholder="Из кабинета Kaspi for Business — сколько Kaspi пришло до полуночи"
+                        placeholder={`Из кабинета ${cashLabels.providerName} — сколько ${cashLabels.providerName} пришло до полуночи`}
                         className="w-full rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-white outline-none focus:border-blue-500/40"
                       />
                       <p className="text-xs text-slate-400">Нужно для точного суточного расчёта в ОПиУ. Если не знаете — оставьте пустым.</p>
@@ -1392,7 +1394,7 @@ function OverviewTab({
           percentage={analytics.total ? (analytics.cash / analytics.total) * 100 : 0}
         />
         <MetricCard
-          label="Kaspi + Карта"
+          label={`${cashLabels.providerName} + Карта`}
           value={analytics.kaspi + analytics.card}
           icon={<CreditCard className="w-5 h-5" />}
           color="from-blue-500 to-cyan-500"
@@ -1888,7 +1890,7 @@ function IncomeRowFull({
             )}
             {row.kaspi_amount > 0 && (
               <div className="text-right">
-                <div className="text-[10px] text-gray-500">Kaspi</div>
+                <div className="text-[10px] text-gray-500">{cashLabels.providerName}</div>
                 <div className="text-blue-400 font-mono">{Formatters.moneyDetailed(row.kaspi_amount)}</div>
               </div>
             )}

@@ -17,6 +17,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useIncome, type IncomeRow } from '@/hooks/use-income'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -678,6 +679,7 @@ InsightCard.displayName = 'InsightCard'
 // MAIN COMPONENT
 // =====================
 function WeeklyReportContent() {
+  const cashLabels = useCashlessLabels()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -2002,7 +2004,7 @@ function WeeklyReportContent() {
                       <span className="text-xs text-gray-500">{totals.metrics.cashShare.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Kaspi</span>
+                      <span className="text-xs text-gray-400">{cashLabels.providerName}</span>
                       <span className="text-sm font-medium text-blue-400">{formatMoneyCompact(totals.incomeKaspi)}</span>
                       <span className="text-xs text-gray-500">{totals.metrics.kaspiShare.toFixed(1)}%</span>
                     </div>
@@ -2038,7 +2040,7 @@ function WeeklyReportContent() {
                       <span className="text-xs text-gray-500">{totals.expenseTotal > 0 ? ((totals.expenseCash / totals.expenseTotal) * 100).toFixed(1) : 0}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Kaspi расходы</span>
+                      <span className="text-xs text-gray-400">{cashLabels.providerName} расходы</span>
                       <span className="text-sm font-medium text-rose-400">{formatMoneyCompact(totals.expenseKaspi)}</span>
                       <span className="text-xs text-gray-500">{totals.expenseTotal > 0 ? ((totals.expenseKaspi / totals.expenseTotal) * 100).toFixed(1) : 0}%</span>
                     </div>
@@ -2228,7 +2230,7 @@ function WeeklyReportContent() {
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Kaspi</span>
+                          <span className="text-gray-400">{cashLabels.providerName}</span>
                           <span className="text-white font-medium">{totals.metrics.kaspiShare.toFixed(1)}%</span>
                         </div>
                         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
@@ -2309,7 +2311,7 @@ function WeeklyReportContent() {
                           )}
                           {s.kaspi > 0 && (
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-400">Kaspi</span>
+                              <span className="text-gray-400">{cashLabels.providerName}</span>
                               <span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span>
                             </div>
                           )}
@@ -2413,7 +2415,7 @@ function WeeklyReportContent() {
                         <p className="text-xs text-emerald-400 font-medium mb-2 uppercase tracking-wide">Доходы</p>
                         <div className="space-y-1">
                           {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Наличные</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
-                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Kaspi</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
+                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">{cashLabels.providerName}</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
                           {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Online</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
                           {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Карта</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
                           <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
