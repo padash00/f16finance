@@ -112,7 +112,7 @@ function MegaMenuPanel({
   return (
     <div
       className={cn(
-        'absolute top-full z-50 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl',
+        'absolute top-full z-50 mt-2 max-h-[calc(100vh-5rem)] max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl',
         widthClass,
         alignClass,
       )}
@@ -270,7 +270,7 @@ function OrganizationMenu({
       </button>
 
       {open && editable ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[300px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[300px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
           <div className="mb-1 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Доступные организации</div>
           <div className="space-y-1">
             {organizations.map((organization) => {
@@ -350,7 +350,7 @@ function UserMenu({
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[280px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-700">
               <User className="h-5 w-5 text-amber-300" />
