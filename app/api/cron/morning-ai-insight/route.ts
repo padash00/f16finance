@@ -218,7 +218,6 @@ export async function GET(req: Request) {
 
   try {
     const result = await generateAiText({
-      provider: 'openai',
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       maxTokens: 300,
       messages: [
