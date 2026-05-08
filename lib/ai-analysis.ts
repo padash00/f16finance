@@ -161,7 +161,7 @@ function buildFallbackAdvice(data: AnalysisData) {
     '2. Что происходит сейчас',
     `Деньги: доход ${formatMoney(data.totalIncome)}, расход ${formatMoney(data.totalExpense)}, прибыль ${formatMoney(data.totalIncome - data.totalExpense)}.`,
     `Маржа: ${formatPercent(data.avgMargin)}. Выполнение плана: ${formatPercent(data.planIncomeAchievementPct)}.`,
-    `Структура оплат: наличные ${formatMoney(data.totalCash)}, Kaspi ${formatMoney(data.totalKaspi)}, card ${formatMoney(data.totalCard)}, online ${formatMoney(data.totalOnline)}.`,
+    `Структура оплат: наличные ${formatMoney(data.totalCash)}, безналичный ${formatMoney(data.totalKaspi)}, card ${formatMoney(data.totalCard)}, online ${formatMoney(data.totalOnline)}.`,
     '',
     '3. Прогноз',
     `Текущий месяц, скорее всего, закроется на доходе ${formatMoney(data.currentMonth.projectedIncome)} и прибыли ${formatMoney(data.currentMonth.projectedProfit)}.`,

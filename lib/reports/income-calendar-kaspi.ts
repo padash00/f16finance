@@ -52,7 +52,7 @@ export function splitIncomeKaspiByCalendarDay(rows: ReportIncomeCalendarRow[]): 
         kaspi_amount: nextDateKaspi,
         online_amount: 0,
         card_amount: 0,
-        comment: row.comment ? `${row.comment} [Kaspi после 00:00]` : 'Kaspi после 00:00 (авторазбивка)',
+        comment: row.comment ? `${row.comment} [Безналичный после 00:00]` : 'Безналичный после 00:00 (авторазбивка)',
       })
     }
   }

@@ -112,8 +112,8 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
       'Смена': r.shift === 'day' ? 'День' : 'Ночь',
       'Оператор': r.operator_name || '—',
       'Наличные': r.cash,
-      'Kaspi POS': r.kaspi,
-      'Kaspi Online': r.kaspi_online,
+      'Безналичный POS': r.kaspi,
+      'Безналичный Online': r.kaspi_online,
       'Выручка': r.total,
     }))
     const ws = XLSX.utils.json_to_sheet(data)
