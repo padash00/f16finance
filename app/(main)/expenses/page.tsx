@@ -7,6 +7,7 @@ import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
@@ -274,6 +275,7 @@ async function logExpenseEvent(event: {
 
 // ================== MAIN COMPONENT ==================
 export default function ExpensesPage() {
+  const cashLabels = useCashlessLabels()
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
@@ -1173,7 +1175,7 @@ export default function ExpensesPage() {
                       >
                         <option value="all">Любая</option>
                         <option value="cash">Наличные 💵</option>
-                        <option value="kaspi">Kaspi 📱</option>
+                        <option value="kaspi">{cashLabels.providerName} 📱</option>
                       </select>
                     </div>
 
@@ -1430,7 +1432,7 @@ export default function ExpensesPage() {
                   <select value={newTemplate.payment_type} onChange={e => setNewTemplate(p=>({...p,payment_type:e.target.value}))}
                     className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 outline-none">
                     <option value="cash">Наличные</option>
-                    <option value="kaspi">Kaspi</option>
+                    <option value="kaspi">{cashLabels.providerName}</option>
                   </select>
                   <button onClick={handleSaveTemplate} className="col-span-2 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/30 rounded-lg text-xs text-amber-300 transition-colors">
                     Сохранить шаблон
@@ -1566,7 +1568,7 @@ export default function ExpensesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Kaspi</label>
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">{cashLabels.providerName}</label>
                 <input
                   inputMode="numeric"
                   value={editExpenseKaspiDraft}
@@ -1796,7 +1798,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
           percentage={analytics.total ? (analytics.cash / analytics.total) * 100 : 0}
         />
         <MetricCard
-          label="Kaspi"
+          label={cashLabels.providerName}
           value={analytics.kaspi}
           icon={<Smartphone className="w-5 h-5" />}
           color="from-orange-500 to-red-500"
@@ -2155,7 +2157,7 @@ function ListTab({
               <th className="px-4 py-3 text-left">Категория</th>
               {showControlColumns ? <th className="px-4 py-3 text-left">Статус</th> : null}
               <th className="px-4 py-3 text-right text-red-400">Нал</th>
-              <th className="px-4 py-3 text-right text-red-400">Kaspi</th>
+              <th className="px-4 py-3 text-right text-red-400">{cashLabels.providerName}</th>
               <th className="px-4 py-3 text-right text-white">Итого</th>
               {showControlColumns ? <th className="px-4 py-3 text-left">Документ</th> : null}
               <th className="px-4 py-3 text-left">Комментарий</th>

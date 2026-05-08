@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import type { PageSnapshot } from '@/lib/ai/types'
 import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 
 import {
   Activity,
@@ -859,7 +860,7 @@ function DrillDownModal({
                 )}
                 <th className="text-left px-4 py-3 font-medium">Категория / смена</th>
                 <th className="text-right px-4 py-3 font-medium">Нал</th>
-                <th className="text-right px-4 py-3 font-medium">Kaspi</th>
+                <th className="text-right px-4 py-3 font-medium">{cashLabels.providerName}</th>
                 <th
                   className="text-right px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
                   onClick={() => toggleSort('amount')}
@@ -920,6 +921,7 @@ function DrillDownModal({
 // =====================
 
 function ReportsContent() {
+  const cashLabels = useCashlessLabels()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
