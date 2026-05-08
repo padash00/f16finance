@@ -44,6 +44,28 @@ const fmtCompact = (v: number) => {
 }
 
 // ================== TYPES ==================
+type ProjectedShape = {
+  week4Income: number
+  week8Income: number
+  week13Income: number
+  week4Expense: number
+  week8Expense: number
+  week13Expense: number
+  month0Label?: string
+  month0Income?: number
+  month0Expense?: number
+  month0Fact?: { income: number; expense: number }
+  month0RemainingDays?: number
+  month1Label?: string
+  month1Income?: number
+  month1Expense?: number
+  month1Days?: number
+  month2Label?: string
+  month2Income?: number
+  month2Expense?: number
+  month2Days?: number
+}
+
 type ForecastResult = {
   text: string
   dateFrom: string
@@ -51,43 +73,13 @@ type ForecastResult = {
   weeklyIncome: number[]
   weeklyExpense: number[]
   weekLabels: string[]
-  projected: {
-    week4Income: number
-    week8Income: number
-    week13Income: number
-    week4Expense: number
-    week8Expense: number
-    week13Expense: number
-    // ─── Календарные месяцы ───
-    month0Label?: string
-    month0Income?: number
-    month0Expense?: number
-    month0Fact?: { income: number; expense: number }
-    month0RemainingDays?: number
-    month1Label?: string
-    month1Income?: number
-    month1Expense?: number
-    month1Days?: number
-    month2Label?: string
-    month2Income?: number
-    month2Expense?: number
-    month2Days?: number
-  }
+  projected: ProjectedShape
   avgWeeklyIncome: number
   avgWeeklyExpense: number
   scenarios?: {
-    pessimistic: {
-      week4Income: number; week8Income: number; week13Income: number
-      week4Expense: number; week8Expense: number; week13Expense: number
-    }
-    realistic: {
-      week4Income: number; week8Income: number; week13Income: number
-      week4Expense: number; week8Expense: number; week13Expense: number
-    }
-    optimistic: {
-      week4Income: number; week8Income: number; week13Income: number
-      week4Expense: number; week8Expense: number; week13Expense: number
-    }
+    pessimistic: ProjectedShape
+    realistic: ProjectedShape
+    optimistic: ProjectedShape
   }
   // ─── Новое в умной версии ───
   comparison?: {
