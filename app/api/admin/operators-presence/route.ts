@@ -79,7 +79,8 @@ export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
   if (!canManageDevices(access)) return json({ error: 'forbidden' }, 403)
-  if (!access.user) return json({ error: 'unauthenticated' }, 401)
+  const user = access.user
+  if (!user) return json({ error: 'unauthenticated' }, 401)
 
   const body = await request.json().catch(() => null) as
     | { deviceId?: string; deviceIds?: string[]; kind?: string; body?: string; expiresInMin?: number }
@@ -102,8 +103,8 @@ export async function POST(request: Request) {
     device_id: deviceId,
     kind,
     body: String(body.body || '').slice(0, 1000),
-    sent_by: access.user.id,
-    sent_by_name: access.user.email || null,
+    sent_by: user.id,
+    sent_by_name: user.email || null,
     expires_at: expiresAt,
   }))
 
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
   if (error) return json({ error: error.message }, 500)
 
   await writeAuditLog(supabase, {
-    actorUserId: access.user.id,
+    actorUserId: user.id,
     entityType: 'point_device',
     entityId: targets.join(','),
     action: 'point_device.message_sent',
