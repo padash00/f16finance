@@ -36,6 +36,7 @@ import {
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
+import * as offline from '@/lib/offline'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import {
   beep,
@@ -555,37 +556,35 @@ export default function InventorySalesPageMinimal({
           ? Math.max(0, finalTotal - cashAmount)
           : 0
 
-    try {
-      const result = await api.createPointInventorySale(config, session, {
-        sale_date: new Date().toISOString().slice(0, 10),
-        shift: runtimeShift.shift,
-        payment_method: paymentMethod,
-        cash_amount: cashAmount,
-        kaspi_amount: kaspiAmount,
-        kaspi_before_midnight_amount:
-          runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
-        kaspi_after_midnight_amount:
-          runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
-        comment: comment.trim() || null,
-        local_ref: localRef(),
-        items: cart.map((l) => ({
-          item_id: l.item_id,
-          universal_name: l.item_id ? null : l.name,
-          quantity: l.quantity,
-          unit_price: l.unit_price,
-        })),
-        customer_id: selectedCustomer?.id || null,
-        loyalty_points_spent: selectedCustomer ? loyaltyPointsToSpend : 0,
-        discount_amount: discountAmount,
-        loyalty_discount_amount: loyaltyDiscountAmount,
-      })
-      toastSuccess('Продажа сохранена')
-      beep('ok')
+    const ref = localRef()
+    const salePayload = {
+      sale_date: new Date().toISOString().slice(0, 10),
+      shift: runtimeShift.shift,
+      payment_method: paymentMethod,
+      cash_amount: cashAmount,
+      kaspi_amount: kaspiAmount,
+      kaspi_before_midnight_amount:
+        runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
+      kaspi_after_midnight_amount:
+        runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
+      comment: comment.trim() || null,
+      local_ref: ref,
+      items: cart.map((l) => ({
+        item_id: l.item_id,
+        universal_name: l.item_id ? null : l.name,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+      })),
+      customer_id: selectedCustomer?.id || null,
+      loyalty_points_spent: selectedCustomer ? loyaltyPointsToSpend : 0,
+      discount_amount: discountAmount,
+      loyalty_discount_amount: loyaltyDiscountAmount,
+    }
 
-      // Печать чека
+    const showReceiptPreview = (saleId: string | null) => {
       const nowTs = new Date()
       const preview: SaleReceiptPreview = {
-        saleId: result?.sale_id || null,
+        saleId,
         saleDate: nowTs.toLocaleDateString('ru-RU'),
         saleTime: nowTs.toLocaleTimeString('ru-RU'),
         shift: runtimeShift.shift,
@@ -609,15 +608,39 @@ export default function InventorySalesPageMinimal({
           unit: l.unit || null,
         })),
       }
-      // Показываем превью чека внутри программы — пользователь сам решает печатать или нет
       setLastReceipt(preview)
+    }
 
+    try {
+      const result = await api.createPointInventorySale(config, session, salePayload as any)
+      toastSuccess('Продажа сохранена')
+      beep('ok')
+      showReceiptPreview(result?.sale_id || null)
       clearAll()
       setShowPayConfirm(false)
       void load(true)
     } catch (err: any) {
-      beep('error')
-      toastError(err?.message || 'Не удалось провести продажу')
+      const isNetworkError = err?.message?.includes('Failed to fetch') ||
+                             err?.message?.includes('NetworkError') ||
+                             err?.message?.includes('Превышено время ожидания') ||
+                             err?.message?.includes('fetch failed') ||
+                             !navigator.onLine
+      if (isNetworkError) {
+        try {
+          await offline.queueInventorySale(salePayload, session, session.company.id)
+          toastSuccess('Нет интернета — продажа в очереди, отправится сама')
+          beep('ok')
+          showReceiptPreview(ref)
+          clearAll()
+          setShowPayConfirm(false)
+        } catch (queueErr: any) {
+          beep('error')
+          toastError('Не удалось сохранить даже локально: ' + (queueErr?.message || 'unknown'))
+        }
+      } else {
+        beep('error')
+        toastError(err?.message || 'Не удалось провести продажу')
+      }
     } finally {
       setSaving(false)
     }

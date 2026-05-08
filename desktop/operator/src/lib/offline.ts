@@ -1,4 +1,4 @@
-import type { AppConfig, ShiftForm, QueueItem } from '@/types'
+import type { AppConfig, ShiftForm, QueueItem, OperatorSession } from '@/types'
 import { localRef, parseMoney } from '@/lib/utils'
 import * as api from '@/lib/api'
 
@@ -40,6 +40,57 @@ export async function queueDeleteDebt(itemId: string, companyId?: string | null)
     localRef: ref,
   })
   return result.id
+}
+
+/**
+ * Очередь для продажи через POS если интернет упал.
+ * При sync будет вызвана api.createPointInventorySale с теми же параметрами.
+ */
+export async function queueInventorySale(
+  payload: Record<string, unknown>,
+  session: OperatorSession,
+  companyId?: string | null,
+): Promise<{ id: number; localRef: string }> {
+  const ref = (payload.local_ref as string) || localRef()
+  const result = await ipc.queue.add({
+    type: 'inventory_sale',
+    payload: {
+      ...payload,
+      local_ref: ref,
+      _company_id: companyId || null,
+      _session: {
+        operator: session.operator,
+        company: session.company,
+      },
+    },
+    localRef: ref,
+  })
+  return { id: result.id, localRef: ref }
+}
+
+/**
+ * Очередь для возврата продажи в офлайне.
+ */
+export async function queueInventoryReturn(
+  payload: Record<string, unknown>,
+  session: OperatorSession,
+  companyId?: string | null,
+): Promise<{ id: number; localRef: string }> {
+  const ref = (payload.local_ref as string) || localRef()
+  const result = await ipc.queue.add({
+    type: 'inventory_return',
+    payload: {
+      ...payload,
+      local_ref: ref,
+      _company_id: companyId || null,
+      _session: {
+        operator: session.operator,
+        company: session.company,
+      },
+    },
+    localRef: ref,
+  })
+  return { id: result.id, localRef: ref }
 }
 
 export async function getPendingCount(): Promise<number> {
@@ -104,6 +155,35 @@ async function processQueueItem(config: AppConfig, item: QueueItem): Promise<voi
 
   if (item.type === 'delete_debt') {
     await api.deleteDebt(config, p.itemId as string, companyId)
+    return
+  }
+
+  if (item.type === 'inventory_sale') {
+    const sessionStub = p._session as { operator: any; company: any } | undefined
+    if (!sessionStub) throw new Error('inventory_sale: нет session в payload')
+    const session: OperatorSession = {
+      operator: sessionStub.operator,
+      company: sessionStub.company,
+    } as OperatorSession
+    // Удаляем служебные поля перед отправкой на сервер
+    const cleanPayload = { ...p }
+    delete cleanPayload._company_id
+    delete cleanPayload._session
+    await api.createPointInventorySale(config, session, cleanPayload as any)
+    return
+  }
+
+  if (item.type === 'inventory_return') {
+    const sessionStub = p._session as { operator: any; company: any } | undefined
+    if (!sessionStub) throw new Error('inventory_return: нет session в payload')
+    const session: OperatorSession = {
+      operator: sessionStub.operator,
+      company: sessionStub.company,
+    } as OperatorSession
+    const cleanPayload = { ...p }
+    delete cleanPayload._company_id
+    delete cleanPayload._session
+    await api.createPointInventoryReturn(config, session, cleanPayload as any)
     return
   }
 }

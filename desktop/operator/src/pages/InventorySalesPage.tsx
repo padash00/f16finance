@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import * as api from '@/lib/api'
+import * as offline from '@/lib/offline'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
@@ -658,29 +659,30 @@ export default function InventorySalesPage({
       return
     }
 
-    try {
-      const isNightAfterMidnight = runtimeShift.shift === 'night' && runtimeShift.afterMidnightNight
-      const saleResult = await api.createPointInventorySale(config, session, {
-        sale_date: runtimeShift.date,
-        shift: runtimeShift.shift,
-        payment_method: paymentMethod,
-        cash_amount: cashAmount,
-        kaspi_amount: kaspiAmount,
-        kaspi_before_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
-        kaspi_after_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
-        customer_id: selectedCustomer?.id || null,
-        loyalty_points_spent: loyaltyPointsToSpend,
-        discount_amount: discountAmount,
-        loyalty_discount_amount: loyaltyDiscountAmount,
-        comment: comment.trim() || null,
-        local_ref: localRef(),
-        items: cartDetailed.map((line) => ({
-          item_id: line.item_id,
-          quantity: line.quantity,
-          unit_price: line.unit_price,
-        })),
-      } as any)
+    const isNightAfterMidnight = runtimeShift.shift === 'night' && runtimeShift.afterMidnightNight
+    const ref = localRef()
+    const salePayload = {
+      sale_date: runtimeShift.date,
+      shift: runtimeShift.shift,
+      payment_method: paymentMethod,
+      cash_amount: cashAmount,
+      kaspi_amount: kaspiAmount,
+      kaspi_before_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
+      kaspi_after_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
+      customer_id: selectedCustomer?.id || null,
+      loyalty_points_spent: loyaltyPointsToSpend,
+      discount_amount: discountAmount,
+      loyalty_discount_amount: loyaltyDiscountAmount,
+      comment: comment.trim() || null,
+      local_ref: ref,
+      items: cartDetailed.map((line) => ({
+        item_id: line.item_id,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+      })),
+    }
 
+    const showReceipt = (saleResult: { sale_id: string; sold_at?: string | null }, isOffline: boolean) => {
       setReceiptPreview({
         saleId: saleResult.sale_id,
         saleDate: formatDate(runtimeShift.date),
@@ -709,12 +711,33 @@ export default function InventorySalesPage({
           unit: line.item?.unit || null,
         })),
       })
+    }
 
+    try {
+      const saleResult = await api.createPointInventorySale(config, session, salePayload as any)
+      showReceipt(saleResult, false)
       toastSuccess('Продажа сохранена и добавлена в сменный контур')
       resetSaleForm()
       await load()
     } catch (err: any) {
-      toastError(err?.message || 'Не удалось провести продажу')
+      const isNetworkError = err?.message?.includes('Failed to fetch') ||
+                             err?.message?.includes('NetworkError') ||
+                             err?.message?.includes('Превышено время ожидания') ||
+                             err?.message?.includes('fetch failed') ||
+                             !navigator.onLine
+      if (isNetworkError) {
+        // Кладём в очередь и показываем чек как обычно — продажа НЕ потеряется
+        try {
+          await offline.queueInventorySale(salePayload, session, session.company.id)
+          showReceipt({ sale_id: ref, sold_at: new Date().toISOString() }, true)
+          toastSuccess('Нет интернета — продажа сохранена локально, отправится автоматически')
+          resetSaleForm()
+        } catch (queueErr: any) {
+          toastError('Не удалось сохранить даже локально: ' + (queueErr?.message || 'unknown'))
+        }
+      } else {
+        toastError(err?.message || 'Не удалось провести продажу')
+      }
     } finally {
       setSaving(false)
     }
