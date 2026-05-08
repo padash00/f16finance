@@ -13,6 +13,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { createPortal } from 'react-dom'
 import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
 import { emptyProcessedReport, processedFromBundleAggregate, type ReportBundleAggregate } from '@/lib/reports/from-api-aggregate'
 import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
@@ -782,11 +783,12 @@ function DrillDownModal({
     }
   }, [onClose])
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+  if (typeof window === 'undefined') return null
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 py-8" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-gray-900 border border-white/10 shadow-2xl"
+        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-gray-900 border border-white/10 shadow-2xl my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -913,7 +915,8 @@ function DrillDownModal({
           </table>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
