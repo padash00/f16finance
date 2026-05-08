@@ -1854,6 +1854,7 @@ function IncomeRowFull({
   deleteIncome,
   deletingIncomeId,
 }: any) {
+  const cashLabels = useCashlessLabels()
   const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
   const { can } = useCapabilities()
   const canEditIncome = can('income.edit')
