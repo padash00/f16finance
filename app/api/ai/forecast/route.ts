@@ -262,34 +262,46 @@ export async function POST(request: Request) {
       .slice(0, 5)
 
     // ─── Прогноз ──────────────────────────────────────────────────────────
+    // Используем РЕАЛЬНУЮ дневную ставку расходов/доходов за последние 30 дней.
+    // Это намного точнее регрессии для малых бизнесов с разовыми тратами.
+    // Регрессия игнорировала бы тренд — а простая пропорция честно показывает
+    // "при текущем темпе за 30 дней получим X, за 60 дней — 2X, за 90 — 3X".
+    const dailyIncomeRate = last30Income / 30  // реальная ставка ₸/день
+    const dailyExpenseRate = last30Expense / 30
+
+    // Если есть тренд (последние 30 vs предыдущие 30) — корректируем
+    const incomeTrendMult = prev30Income > 0 ? Math.max(0.5, Math.min(1.5, last30Income / prev30Income)) : 1
+    const expenseTrendMult = prev30Expense > 0 ? Math.max(0.5, Math.min(1.5, last30Expense / prev30Expense)) : 1
+
+    // Прогноз: ставка_в_день × кол-во_дней × поправка_на_тренд^period
+    // (тренд возводим в степень для усиления — 30 дней лёгкая корректировка,
+    //  60 дней умеренная, 90 дней более резкая)
+    const projectIncome = (days: number) => {
+      const periods = days / 30
+      const trendAdjust = Math.pow(incomeTrendMult, periods - 1)
+      return Math.max(0, dailyIncomeRate * days * trendAdjust)
+    }
+    const projectExpense = (days: number) => {
+      const periods = days / 30
+      const trendAdjust = Math.pow(expenseTrendMult, periods - 1)
+      return Math.max(0, dailyExpenseRate * days * trendAdjust)
+    }
+
+    // Старая регрессия — оставляем для совместимости фронта если что-то её юзает
     const nonZeroIncome = weeklyIncome.filter((v) => v > 0)
     const nonZeroExpense = weeklyExpense.filter((v) => v > 0)
     const incomeReg = linearRegression(nonZeroIncome.length >= 3 ? weeklyIncome : nonZeroIncome)
     const expenseReg = linearRegression(nonZeroExpense.length >= 3 ? weeklyExpense : nonZeroExpense)
+    const avgWeeklyIncome = last30Income / 30 * 7
+    const avgWeeklyExpense = last30Expense / 30 * 7
 
-    const avgWeeklyIncome = nonZeroIncome.length > 0
-      ? nonZeroIncome.reduce((s, v) => s + v, 0) / nonZeroIncome.length
-      : 0
-    const avgWeeklyExpense = nonZeroExpense.length > 0
-      ? nonZeroExpense.reduce((s, v) => s + v, 0) / nonZeroExpense.length
-      : 0
-
-    const projectWeek = (reg: { slope: number; intercept: number }, weekIndex: number, weeks: number, avg: number) => {
-      const fromReg = Math.max(0, reg.slope * weekIndex + reg.intercept) * weeks
-      if (fromReg < avg * weeks * 0.1 && avg > 0) {
-        return avg * weeks
-      }
-      return fromReg
-    }
-
-    const n = numWeeks
     const projected = {
-      week4Income: projectWeek(incomeReg, n + 3, 4, avgWeeklyIncome),
-      week8Income: projectWeek(incomeReg, n + 7, 8, avgWeeklyIncome),
-      week13Income: projectWeek(incomeReg, n + 12, 13, avgWeeklyIncome),
-      week4Expense: projectWeek(expenseReg, n + 3, 4, avgWeeklyExpense),
-      week8Expense: projectWeek(expenseReg, n + 7, 8, avgWeeklyExpense),
-      week13Expense: projectWeek(expenseReg, n + 12, 13, avgWeeklyExpense),
+      week4Income: projectIncome(30),
+      week8Income: projectIncome(60),
+      week13Income: projectIncome(90),
+      week4Expense: projectExpense(30),
+      week8Expense: projectExpense(60),
+      week13Expense: projectExpense(90),
     }
 
     const scenarios = {

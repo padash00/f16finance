@@ -75,6 +75,37 @@ type ForecastResult = {
       week4Expense: number; week8Expense: number; week13Expense: number
     }
   }
+  // ─── Новое в умной версии ───
+  comparison?: {
+    last30: { income: number; expense: number; profit: number; margin: number }
+    prev30: { income: number; expense: number; profit: number; margin: number }
+    prevPrev30: { income: number; expense: number }
+    momentum: { income: number; expense: number; profit: number }
+  }
+  categories?: Array<{
+    category: string
+    total: number
+    count: number
+    recent: number
+    older: number
+    share: number
+  }>
+  outliers?: Array<{
+    date: string
+    category: string
+    amount: number
+    comment: string | null
+  }>
+  seasonality?: {
+    byDay: Array<{ name: string; avg: number }>
+    best: { name: string; avg: number }
+    worst: { name: string; avg: number }
+  }
+  kpi?: {
+    plan: number
+    actual: number
+    progress: number
+  } | null
 }
 type CompanyOption = {
   id: string
@@ -461,6 +492,158 @@ export default function ForecastPage() {
                   )
                 })}
               </div>
+
+              {/* ─── Сравнение периодов (умная аналитика) ─── */}
+              {result.comparison && (
+                <Card className="p-5 bg-gray-900/80 border-gray-800">
+                  <h2 className="text-sm font-semibold text-white mb-1">📊 Что изменилось за месяц</h2>
+                  <p className="text-xs text-gray-500 mb-4">Последние 30 дней vs предыдущие 30 дней</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { label: 'Выручка', value: result.comparison.last30.income, prev: result.comparison.prev30.income, momentum: result.comparison.momentum.income, color: 'emerald' },
+                      { label: 'Расходы', value: result.comparison.last30.expense, prev: result.comparison.prev30.expense, momentum: result.comparison.momentum.expense, color: 'red', invert: true },
+                      { label: 'Прибыль', value: result.comparison.last30.profit, prev: result.comparison.prev30.profit, momentum: result.comparison.momentum.profit, color: 'blue' },
+                    ].map((m) => {
+                      const pos = m.invert ? m.momentum < 0 : m.momentum >= 0
+                      return (
+                        <div key={m.label} className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+                          <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">{m.label}</p>
+                          <p className={`text-2xl font-bold text-${m.color}-400 mb-1`}>{fmtMoney(m.value)}</p>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className={pos ? 'text-emerald-400' : 'text-red-400'}>
+                              {m.momentum > 0 ? '↑' : m.momentum < 0 ? '↓' : '→'} {Math.abs(m.momentum).toFixed(1)}%
+                            </span>
+                            <span className="text-gray-500">vs пред. 30д ({fmtMoney(m.prev)})</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-800 flex items-center gap-3 text-xs text-gray-400">
+                    <span>Маржа:</span>
+                    <span className="font-semibold text-white">{result.comparison.last30.margin.toFixed(1)}%</span>
+                    <span className="text-gray-500">(было {result.comparison.prev30.margin.toFixed(1)}%)</span>
+                  </div>
+                </Card>
+              )}
+
+              {/* ─── Топ категорий расходов с трендами ─── */}
+              {result.categories && result.categories.length > 0 && (
+                <Card className="p-5 bg-gray-900/80 border-gray-800">
+                  <h2 className="text-sm font-semibold text-white mb-1">💰 Топ категорий расходов</h2>
+                  <p className="text-xs text-gray-500 mb-4">Тренд: последние 30 дней vs предыдущие 30 дней</p>
+                  <div className="space-y-2">
+                    {result.categories.map((c) => {
+                      const trend = c.older > 0 ? ((c.recent - c.older) / c.older) * 100 : 0
+                      const arrowColor = Math.abs(trend) < 10 ? 'text-gray-400' : trend > 0 ? 'text-red-400' : 'text-emerald-400'
+                      const barWidth = Math.min(100, c.share)
+                      return (
+                        <div key={c.category} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-white font-medium truncate">{c.category}</span>
+                            <span className="font-bold text-white whitespace-nowrap ml-2">{fmtMoney(c.total)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
+                                style={{ width: `${barWidth}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-400 w-12 text-right">{c.share.toFixed(0)}%</span>
+                            <span className={`text-xs font-medium w-16 text-right ${arrowColor}`}>
+                              {Math.abs(trend) < 10 ? '→' : trend > 0 ? '↑' : '↓'}
+                              {' '}{trend > 0 ? '+' : ''}{trend.toFixed(0)}%
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">{c.count} операций</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+              )}
+
+              {/* ─── Сезонность по дням недели ─── */}
+              {result.seasonality && result.seasonality.byDay.some((d) => d.avg > 0) && (
+                <Card className="p-5 bg-gray-900/80 border-gray-800">
+                  <h2 className="text-sm font-semibold text-white mb-1">📅 Сезонность по дням недели</h2>
+                  <p className="text-xs text-gray-500 mb-4">Средняя выручка в каждый день недели</p>
+                  <div className="grid grid-cols-7 gap-2">
+                    {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
+                      const day = result.seasonality!.byDay[dayIdx]
+                      if (!day) return null
+                      const max = Math.max(...result.seasonality!.byDay.map((d) => d.avg), 1)
+                      const heightPct = (day.avg / max) * 100
+                      const isBest = day.name === result.seasonality!.best?.name
+                      const isWorst = day.name === result.seasonality!.worst?.name && day.avg > 0
+                      return (
+                        <div key={day.name} className="text-center">
+                          <div className="h-24 flex items-end mb-2">
+                            <div
+                              className={`w-full rounded-t transition-all ${
+                                isBest ? 'bg-gradient-to-t from-emerald-500 to-emerald-300'
+                                  : isWorst ? 'bg-gradient-to-t from-red-500 to-red-300'
+                                  : 'bg-gradient-to-t from-purple-500/80 to-fuchsia-400/80'
+                              }`}
+                              style={{ height: `${Math.max(5, heightPct)}%` }}
+                              title={fmtMoney(day.avg)}
+                            />
+                          </div>
+                          <p className={`text-xs font-medium ${isBest ? 'text-emerald-400' : isWorst ? 'text-red-400' : 'text-gray-400'}`}>
+                            {day.name}
+                          </p>
+                          <p className="text-[10px] text-gray-500">{fmtMoney(day.avg)}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-800 flex items-center gap-4 text-xs">
+                    <span className="text-emerald-400">★ Лучший: {result.seasonality.best?.name}</span>
+                    <span className="text-red-400">▼ Худший: {result.seasonality.worst?.name}</span>
+                  </div>
+                </Card>
+              )}
+
+              {/* ─── Выбросы (нерегулярные крупные расходы) ─── */}
+              {result.outliers && result.outliers.length > 0 && (
+                <Card className="p-5 bg-gray-900/80 border-gray-800">
+                  <h2 className="text-sm font-semibold text-white mb-1">⚡ Крупные нерегулярные расходы</h2>
+                  <p className="text-xs text-gray-500 mb-4">Выше median + 2σ — обычно одноразовые траты, не повторятся</p>
+                  <div className="space-y-2">
+                    {result.outliers.map((o, i) => (
+                      <div key={`${o.date}-${i}`} className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg border border-gray-800">
+                        <div className="w-1 h-10 bg-amber-500 rounded-full" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{o.category}</p>
+                          <p className="text-xs text-gray-500">{o.date}{o.comment ? ` · ${o.comment}` : ''}</p>
+                        </div>
+                        <span className="text-sm font-bold text-amber-400 whitespace-nowrap">{fmtMoney(o.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* ─── KPI план vs факт (если есть план) ─── */}
+              {result.kpi && (
+                <Card className="p-5 bg-gray-900/80 border-gray-800">
+                  <h2 className="text-sm font-semibold text-white mb-1">🎯 KPI план на месяц</h2>
+                  <div className="flex items-baseline gap-3 mb-3">
+                    <span className="text-2xl font-bold text-white">{fmtMoney(result.kpi.actual)}</span>
+                    <span className="text-sm text-gray-400">из {fmtMoney(result.kpi.plan)}</span>
+                    <span className={`text-sm font-bold ${result.kpi.progress >= 80 ? 'text-emerald-400' : result.kpi.progress >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {result.kpi.progress.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${result.kpi.progress >= 80 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : result.kpi.progress >= 50 ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-red-500 to-rose-500'}`}
+                      style={{ width: `${Math.min(100, result.kpi.progress)}%` }}
+                    />
+                  </div>
+                </Card>
+              )}
 
               {/* Chart */}
               <Card className="p-5 bg-gray-900/80 border-gray-800">
