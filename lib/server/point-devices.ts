@@ -20,13 +20,22 @@ export type PointDeviceContext = {
       id: string
       name: string
       code: string | null
+      brand_color?: string | null
+      brand_logo_url?: string | null
+      payment_provider?: {
+        id: string
+        code: string
+        name: string
+        country_code: string | null
+        supports_midnight_split: boolean
+      } | null
     } | null
   }
   supabase: ReturnType<typeof createAdminSupabaseClient>
 }
 
 const POINT_PROJECT_SELECT =
-  'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code, brand_color, brand_logo_url))'
+  'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code, brand_color, brand_logo_url, payment_provider:payment_provider_id(id, code, name, country_code, supports_midnight_split)))'
 
 /** Company JSONB flags override project; `null` / missing per key inherits from project (empty `{}` does not wipe project). */
 function mergePointFeatureFlags(
@@ -52,26 +61,38 @@ function deviceFromPointProjectRow(data: any, requestedCompanyId: string): Point
   const company_ids: string[] = projectCompanies.map((c: any) => c.company_id).filter(Boolean)
 
   let selectedCompanyId = ''
-  let selectedCompany: { id: string; name: string; code: string | null; brand_color?: string | null; brand_logo_url?: string | null } | null = null
+  let selectedCompany: {
+    id: string
+    name: string
+    code: string | null
+    brand_color?: string | null
+    brand_logo_url?: string | null
+    payment_provider?: { id: string; code: string; name: string; country_code: string | null; supports_midnight_split: boolean } | null
+  } | null = null
   let selectedCompanyRow: any = null
+
+  function unwrapCompany(co: any) {
+    if (!co) return null
+    const company = Array.isArray(co) ? co[0] : co
+    if (!company) return null
+    // payment_provider может прийти как объект или массив (зависит от Supabase)
+    const pp = Array.isArray(company.payment_provider) ? company.payment_provider[0] : company.payment_provider
+    return { ...company, payment_provider: pp || null }
+  }
 
   if (requestedCompanyId && company_ids.includes(requestedCompanyId)) {
     selectedCompanyId = requestedCompanyId
     const match = projectCompanies.find((c: any) => c.company_id === requestedCompanyId)
     if (match) {
       selectedCompanyRow = match
-      if (match.company) {
-        const co = Array.isArray(match.company) ? match.company[0] : match.company
-        selectedCompany = co || null
-      }
+      selectedCompany = unwrapCompany(match.company)
     }
   } else if (company_ids.length > 0) {
     selectedCompanyId = company_ids[0]
     selectedCompanyRow = projectCompanies[0]
     const first = projectCompanies[0]
     if (first?.company) {
-      const co = Array.isArray(first.company) ? first.company[0] : first.company
-      selectedCompany = co || null
+      selectedCompany = unwrapCompany(first.company)
     }
   }
 
