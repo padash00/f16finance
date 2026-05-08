@@ -217,6 +217,10 @@ let audioCtx: AudioContext | null = null
 
 export function beep(type: 'ok' | 'error' = 'ok') {
   try {
+    // Уважаем настройку оператора — если он отключил звуки, не пикаем
+    const soundEnabled = window.localStorage.getItem('orda.soundEnabled') !== '0'
+    if (!soundEnabled) return
+
     if (!audioCtx) {
       const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext
       if (!Ctx) return

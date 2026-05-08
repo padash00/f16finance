@@ -26,6 +26,7 @@ import {
   Receipt as ReceiptIcon,
   RefreshCw,
   Search,
+  Settings,
   Star,
   Tag,
   Trash2,
@@ -35,6 +36,7 @@ import {
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { ChangeCalculator } from '@/components/ChangeCalculator'
+import { PreferencesModal } from '@/components/PreferencesModal'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
 import * as offline from '@/lib/offline'
@@ -155,6 +157,7 @@ export default function InventorySalesPageMinimal({
   const [correctionSaving, setCorrectionSaving] = useState(false)
 
   const [now, setNow] = useState(() => new Date())
+  const [showPreferences, setShowPreferences] = useState(false)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   // Часы в шапке — обновляем каждую секунду чтобы не выглядели "застывшими"
@@ -710,6 +713,9 @@ export default function InventorySalesPageMinimal({
           />
           <Button variant="ghost" size="sm" onClick={() => void load(false)} disabled={loading} className="h-8 w-8 p-0">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowPreferences(true)} className="h-8 w-8 p-0" title="Настройки">
+            <Settings className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={onLogout} className="h-8 w-8 p-0">
             <LogOut className="h-4 w-4" />
@@ -1542,6 +1548,9 @@ export default function InventorySalesPageMinimal({
           </div>
         </div>
       )}
+
+      {/* Настройки оператора (тема, шрифт, звуки) */}
+      <PreferencesModal open={showPreferences} onClose={() => setShowPreferences(false)} />
     </div>
   )
 }
