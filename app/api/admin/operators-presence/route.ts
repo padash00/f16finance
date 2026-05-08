@@ -8,7 +8,6 @@
 
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { canManage } from '@/lib/server/access'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeAuditLog } from '@/lib/server/audit'
@@ -19,6 +18,10 @@ const ONLINE_THRESHOLD_MS = 2 * 60 * 1000 // 2 минуты — "онлайн"
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+function canManageDevices(access: { isSuperAdmin: boolean; staffRole?: string | null }) {
+  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
 }
 
 export async function GET(request: Request) {
@@ -75,7 +78,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
-  if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+  if (!canManageDevices(access)) return json({ error: 'forbidden' }, 403)
 
   const body = await request.json().catch(() => null) as
     | { deviceId?: string; deviceIds?: string[]; kind?: string; body?: string; expiresInMin?: number }
