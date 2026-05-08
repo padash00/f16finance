@@ -478,7 +478,7 @@ export default function ProfitabilityPage() {
                         ['Выручка', selected.revenue],
                         ...(selected.cogs > 0 ? [['COGS (Себестоимость)', -selected.cogs], ['Валовая прибыль', selected.grossProfit]] : []),
                         ['Операционные расходы из журнала', -selected.journalOperatingExpenses],
-                        ['Комиссия Kaspi POS', -selected.posCommission],
+                        [`Комиссия ${cashLabels.pos}`, -selected.posCommission],
                         ['Фонд оплаты труда', -selected.payroll],
                         ['Налоги на зарплату', -selected.payrollTaxes],
                         ['Прочие операционные', -selected.otherOperating],
@@ -528,7 +528,7 @@ export default function ProfitabilityPage() {
                         <div className="border-t border-white/10 pt-2">
                           <div className="text-xs uppercase tracking-wide text-slate-500">Комментарий месяца</div>
                           <div className="mt-1 text-sm text-slate-300">
-                            {selected.notes || 'Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам Kaspi и ручные допущения месяца.'}
+                            {selected.notes || `Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам ${cashLabels.providerName} и ручные допущения месяца.`}
                           </div>
                         </div>
                       </div>
@@ -580,11 +580,11 @@ export default function ProfitabilityPage() {
                       </div>
                     </div>
                     {[
-                      ['kaspi_qr_turnover', 'kaspi_qr_rate', 'Kaspi QR'],
-                      ['kaspi_gold_turnover', 'kaspi_gold_rate', 'Kaspi Gold'],
+                      ['kaspi_qr_turnover', 'kaspi_qr_rate', cashLabels.qr],
+                      ['kaspi_gold_turnover', 'kaspi_gold_rate', cashLabels.gold],
                       ['other_cards_turnover', 'other_cards_rate', 'Другие карты'],
-                      ['kaspi_red_turnover', 'kaspi_red_rate', 'Kaspi Red'],
-                      ['kaspi_kredit_turnover', 'kaspi_kredit_rate', 'Kaspi Kredit'],
+                      ['kaspi_red_turnover', 'kaspi_red_rate', cashLabels.red],
+                      ['kaspi_kredit_turnover', 'kaspi_kredit_rate', cashLabels.kredit],
                     ].map(([turnoverKey, rateKey, label]) => (
                       <div key={String(label)} className="grid grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 md:grid-cols-[1fr_180px_120px] md:items-center">
                         <div className="text-sm font-medium text-white">{label}</div>

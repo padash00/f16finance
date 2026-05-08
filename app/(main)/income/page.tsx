@@ -573,7 +573,7 @@ export default function IncomePage() {
 
     const paymentData: PaymentData[] = [
       { name: 'Наличные', value: totalCash, color: COLORS.cash, percentage: total ? (totalCash / total) * 100 : 0 },
-      { name: 'Kaspi POS', value: totalKaspi, color: COLORS.kaspi, percentage: total ? (totalKaspi / total) * 100 : 0 },
+      { name: cashLabels.pos, value: totalKaspi, color: COLORS.kaspi, percentage: total ? (totalKaspi / total) * 100 : 0 },
       { name: 'Карта', value: totalCard, color: COLORS.card, percentage: total ? (totalCard / total) * 100 : 0 },
       { name: 'Online', value: totalOnline, color: COLORS.online, percentage: total ? (totalOnline / total) * 100 : 0 },
     ].filter(p => p.value > 0)
@@ -802,8 +802,8 @@ export default function IncomePage() {
       { header: 'Смена', key: 'shift', width: 10, type: 'text' },
       { header: 'Зона', key: 'zone', width: 10, type: 'text' },
       { header: 'Cash', key: 'cash', width: 14, type: 'money' },
-      { header: 'Kaspi POS', key: 'kaspi', width: 14, type: 'money' },
-      { header: 'Kaspi Online', key: 'online', width: 14, type: 'money' },
+      { header: cashLabels.pos, key: 'kaspi', width: 14, type: 'money' },
+      { header: cashLabels.online, key: 'online', width: 14, type: 'money' },
       { header: 'Card', key: 'card', width: 14, type: 'money' },
       { header: 'Итого', key: 'total', width: 16, type: 'money' },
       { header: 'Комментарий', key: 'comment', width: 22, type: 'text' },
@@ -1143,7 +1143,7 @@ export default function IncomePage() {
                       )}
                       {payFilter !== 'all' && (
                         <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-lg flex items-center gap-1">
-                          Оплата: {payFilter === 'cash' ? 'Наличные' : payFilter === 'kaspi' ? 'Kaspi POS' : payFilter === 'online' ? 'Online' : 'Карта'}
+                          Оплата: {payFilter === 'cash' ? 'Наличные' : payFilter === 'kaspi' ? cashLabels.pos : payFilter === 'online' ? 'Online' : 'Карта'}
                           <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}

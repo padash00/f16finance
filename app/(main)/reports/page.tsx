@@ -1831,7 +1831,7 @@ function ReportsContent() {
       { _isTotals: true, label: 'ИТОГО ПРИБЫЛЬ', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
       { _isSection: true, _sectionLabel: 'СТРУКТУРА ДОХОДОВ' },
       { label: 'Наличные (доход)', current: totals.incomeCash, prev: totalsPrev.incomeCash, change: getPercentageChange(totals.incomeCash, totalsPrev.incomeCash) },
-      { label: 'Kaspi (доход)', current: totals.incomeKaspi, prev: totalsPrev.incomeKaspi, change: getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi) },
+      { label: `${cashLabels.providerName} (доход)`, current: totals.incomeKaspi, prev: totalsPrev.incomeKaspi, change: getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi) },
       { label: 'Online (доход)', current: totals.incomeOnline, prev: totalsPrev.incomeOnline, change: getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline) },
       { label: 'Card (доход)', current: totals.incomeCard, prev: totalsPrev.incomeCard, change: getPercentageChange(totals.incomeCard, totalsPrev.incomeCard) },
       { label: 'Безнал (доход)', current: totals.incomeNonCash, prev: totalsPrev.incomeNonCash, change: getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash) },
@@ -1845,7 +1845,7 @@ function ReportsContent() {
       { header: 'Компания', key: 'name', width: 24, type: 'text' },
       { header: 'Выручка', key: 'value', width: 18, type: 'money' },
       { header: 'Наличные', key: 'cash', width: 16, type: 'money' },
-      { header: 'Kaspi', key: 'kaspi', width: 16, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 16, type: 'money' },
       { header: 'Online', key: 'online', width: 16, type: 'money' },
       { header: 'Card', key: 'card', width: 16, type: 'money' },
       { header: 'Транзакций', key: 'count', width: 13, type: 'number', align: 'right' },
@@ -1880,7 +1880,7 @@ function ReportsContent() {
       { header: 'Категория/Смена', key: 'category', width: 22, type: 'text' },
       { header: 'Сумма', key: 'amount', width: 16, type: 'money' },
       { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
-      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
       { header: 'Online', key: 'online', width: 14, type: 'money' },
       { header: 'Card', key: 'card', width: 14, type: 'money' },
       { header: 'Примечание', key: 'note', width: 22, type: 'text' },
@@ -2327,7 +2327,7 @@ function ReportsContent() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400' },
-                  { label: 'Kaspi', value: totals.incomeKaspi, color: 'text-blue-400' },
+                  { label: cashLabels.providerName, value: totals.incomeKaspi, color: 'text-blue-400' },
                   { label: 'Online', value: totals.incomeOnline, color: 'text-violet-400' },
                   { label: 'Card', value: totals.incomeCard, color: 'text-amber-400' },
                 ].map((item) => (
@@ -2496,7 +2496,7 @@ function ReportsContent() {
                   <div className="space-y-4">
                     {[
                       { label: 'Наличные', value: totals.incomeCash, color: 'bg-emerald-500' },
-                      { label: 'Kaspi', value: totals.incomeKaspi, color: 'bg-blue-500' },
+                      { label: cashLabels.providerName, value: totals.incomeKaspi, color: 'bg-blue-500' },
                       { label: 'Online', value: totals.incomeOnline, color: 'bg-violet-500' },
                       { label: 'Карта', value: totals.incomeCard, color: 'bg-amber-500' },
                     ].map((item) => {

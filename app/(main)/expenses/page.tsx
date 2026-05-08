@@ -641,7 +641,7 @@ export default function ExpensesPage() {
           metrics: [
             { label: 'Общий расход', value: money(analytics.total) },
             { label: 'Наличные', value: money(analytics.cash) },
-            { label: 'Kaspi', value: money(analytics.kaspi) },
+            { label: cashLabels.providerName, value: money(analytics.kaspi) },
             { label: 'Средний расход', value: money(analytics.avgExpense) },
             { label: 'Период', value: periodLabel },
           ],
@@ -722,7 +722,7 @@ export default function ExpensesPage() {
       { header: 'Компания', key: 'company', width: 22, type: 'text' },
       { header: 'Категория', key: 'category', width: 26, type: 'text' },
       { header: 'Cash', key: 'cash', width: 14, type: 'money' },
-      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
       { header: 'Итого', key: 'total', width: 15, type: 'money' },
       { header: 'Комментарий', key: 'comment', width: 24, type: 'text' },
     ], expRows)
@@ -1283,7 +1283,7 @@ export default function ExpensesPage() {
                       )}
                       {payFilter !== 'all' && (
                         <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
-                          Оплата: {payFilter === 'cash' ? 'Наличные' : 'Kaspi'}
+                          Оплата: {payFilter === 'cash' ? 'Наличные' : cashLabels.providerName}
                           <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
@@ -2029,6 +2029,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
 }
 
 function AnalyticsTab({ analytics }: any) {
+  const cashLabels = useCashlessLabels()
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2038,7 +2039,7 @@ function AnalyticsTab({ analytics }: any) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
                 { name: 'Наличные', value: analytics.cash, color: '#f59e0b' },
-                { name: 'Kaspi', value: analytics.kaspi, color: '#ef4444' }
+                { name: cashLabels.providerName, value: analytics.kaspi, color: '#ef4444' }
               ]}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />

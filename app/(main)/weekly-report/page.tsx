@@ -578,7 +578,7 @@ const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; k
           formatter={(value: number, name: string) => {
             const labels: Record<string, string> = {
               cash: 'Наличные',
-              kaspi: 'Kaspi',
+              kaspi: cashLabels.providerName,
               online: 'Online',
               card: 'Карта'
             }
@@ -1438,7 +1438,7 @@ function WeeklyReportContent() {
       subtitle: `Период: ${period} | Сгенерирован: ${generated}`,
       metrics: [
         { label: 'Выручка', value: formatMoneyFull(totals.incomeTotal), hint: `Нал ${formatMoneyCompact(totals.incomeCash)} / Безнал ${formatMoneyCompact(totals.incomeKaspiOnline)}`, tone: 'good' },
-        { label: 'Расходы', value: formatMoneyFull(totals.expenseTotal), hint: `Cash ${formatMoneyCompact(totals.expenseCash)} / Kaspi ${formatMoneyCompact(totals.expenseKaspi)}`, tone: 'warn' },
+        { label: 'Расходы', value: formatMoneyFull(totals.expenseTotal), hint: `Нал ${formatMoneyCompact(totals.expenseCash)} / ${cashLabels.providerName} ${formatMoneyCompact(totals.expenseKaspi)}`, tone: 'warn' },
         { label: 'Прибыль', value: formatMoneyFull(totals.profit), hint: `Маржа ${totals.metrics.profitMargin.toFixed(1)}%`, tone: totals.profit >= 0 ? 'good' : 'danger' },
         { label: 'Общее сальдо', value: formatMoneyFull(totals.netTotal), hint: `Нал ${totals.change.netCash} / Безнал ${totals.change.netNonCash}`, tone: totals.netTotal >= 0 ? 'neutral' : 'danger' },
       ],
@@ -1462,7 +1462,7 @@ function WeeklyReportContent() {
           valueFormat: 'money',
           points: [
             { label: 'Наличные', value: totals.incomeCash },
-            { label: 'Kaspi', value: totals.incomeKaspi },
+            { label: cashLabels.providerName, value: totals.incomeKaspi },
             { label: 'Online', value: totals.incomeOnline },
             { label: 'Карта', value: totals.incomeCard },
           ],
@@ -1493,7 +1493,7 @@ function WeeklyReportContent() {
       { _isTotals: true, label: 'Общее сальдо', current: totals.netTotal, prev: null as any, change: '' },
       { _isSection: true, _sectionLabel: 'СТРУКТУРА ДОХОДОВ' },
       { label: 'Наличные', current: totals.incomeCash, prev: null as any, change: `${totals.metrics.cashShare.toFixed(1)}%` },
-      { label: 'Kaspi', current: totals.incomeKaspi, prev: null as any, change: `${totals.metrics.kaspiShare.toFixed(1)}%` },
+      { label: cashLabels.providerName, current: totals.incomeKaspi, prev: null as any, change: `${totals.metrics.kaspiShare.toFixed(1)}%` },
       { label: 'Online', current: totals.incomeOnline, prev: null as any, change: `${totals.metrics.onlineShare.toFixed(1)}%` },
       { label: 'Карта', current: totals.incomeCard, prev: null as any, change: `${totals.metrics.cardShare.toFixed(1)}%` },
       { _isTotals: true, label: 'ИТОГО ДОХОД', current: totals.incomeTotal, prev: null as any, change: '100%' },
@@ -1517,12 +1517,12 @@ function WeeklyReportContent() {
       { header: 'День', key: 'day', width: 8, type: 'text' },
       { header: 'Дата', key: 'date', width: 13, type: 'text' },
       { header: 'Доход нал', key: 'incomeCash', width: 15, type: 'money' },
-      { header: 'Доход Kaspi', key: 'incomeKaspi', width: 15, type: 'money' },
+      { header: `Доход ${cashLabels.providerName}`, key: 'incomeKaspi', width: 15, type: 'money' },
       { header: 'Доход Online', key: 'incomeOnline', width: 15, type: 'money' },
       { header: 'Доход Карта', key: 'incomeCard', width: 15, type: 'money' },
       { header: 'Итого доход', key: 'income', width: 16, type: 'money' },
       { header: 'Расход нал', key: 'expenseCash', width: 15, type: 'money' },
-      { header: 'Расход Kaspi', key: 'expenseKaspi', width: 15, type: 'money' },
+      { header: `Расход ${cashLabels.providerName}`, key: 'expenseKaspi', width: 15, type: 'money' },
       { header: 'Итого расход', key: 'expense', width: 16, type: 'money' },
       { header: 'Прибыль', key: 'profit', width: 15, type: 'money' },
       { header: 'Сальдо нал', key: 'netCash', width: 15, type: 'money' },
@@ -1542,12 +1542,12 @@ function WeeklyReportContent() {
     buildStyledSheet(wb, 'По точкам', 'Детализация по точкам', `Период: ${period}`, [
       { header: 'Точка', key: 'name', width: 22, type: 'text' },
       { header: 'Доход нал', key: 'cash', width: 15, type: 'money' },
-      { header: 'Доход Kaspi', key: 'kaspi', width: 15, type: 'money' },
+      { header: `Доход ${cashLabels.providerName}`, key: 'kaspi', width: 15, type: 'money' },
       { header: 'Доход Online', key: 'online', width: 15, type: 'money' },
       { header: 'Доход Карта', key: 'card', width: 15, type: 'money' },
       { header: 'Итого доход', key: 'total', width: 16, type: 'money' },
       { header: 'Расход нал', key: 'expenseCash', width: 15, type: 'money' },
-      { header: 'Расход Kaspi', key: 'expenseKaspi', width: 15, type: 'money' },
+      { header: `Расход ${cashLabels.providerName}`, key: 'expenseKaspi', width: 15, type: 'money' },
       { header: 'Итого расход', key: 'expenseTotal', width: 16, type: 'money' },
       { header: 'Сальдо нал', key: 'netCash', width: 15, type: 'money' },
       { header: 'Сальдо безнал', key: 'netNonCash', width: 15, type: 'money' },
@@ -1575,7 +1575,7 @@ function WeeklyReportContent() {
     buildStyledSheet(wb, 'Расходы', 'Расходы по категориям', `Период: ${period}`, [
       { header: 'Категория', key: 'name', width: 32, type: 'text' },
       { header: 'Нал', key: 'cash', width: 14, type: 'money' },
-      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
       { header: 'Всего', key: 'value', width: 16, type: 'money' },
       { header: '% от расходов', key: 'pctExpense', width: 16, type: 'percent' },
       { header: '% от выручки', key: 'pctIncome', width: 16, type: 'percent' },
@@ -1615,7 +1615,7 @@ function WeeklyReportContent() {
       { header: 'Точка', key: 'company', width: 22, type: 'text' },
       { header: 'Категория', key: 'category', width: 30, type: 'text' },
       { header: 'Нал', key: 'amountCash', width: 14, type: 'money' },
-      { header: 'Kaspi', key: 'amountKaspi', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'amountKaspi', width: 14, type: 'money' },
       { header: 'Всего', key: 'amount', width: 16, type: 'money' },
       { header: '% в точке', key: 'pct', width: 14, type: 'percent' },
     ], catByCompRows)
