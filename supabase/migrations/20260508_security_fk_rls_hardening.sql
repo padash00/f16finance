@@ -34,6 +34,25 @@ do $$ begin
     execute 'drop policy if exists point_rules_all on public.point_rules';
     execute 'create policy point_rules_all on public.point_rules for all using (true) with check (true)';
   end if;
+
+  -- Дополнительные таблицы из Supabase linter (rls_disabled_in_public)
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'operator_salary_seniority_tiers') then
+    execute 'alter table public.operator_salary_seniority_tiers enable row level security';
+    execute 'drop policy if exists operator_salary_seniority_tiers_all on public.operator_salary_seniority_tiers';
+    execute 'create policy operator_salary_seniority_tiers_all on public.operator_salary_seniority_tiers for all using (true) with check (true)';
+  end if;
+
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'operator_salary_rule_versions') then
+    execute 'alter table public.operator_salary_rule_versions enable row level security';
+    execute 'drop policy if exists operator_salary_rule_versions_all on public.operator_salary_rule_versions';
+    execute 'create policy operator_salary_rule_versions_all on public.operator_salary_rule_versions for all using (true) with check (true)';
+  end if;
+
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'custom_roles') then
+    execute 'alter table public.custom_roles enable row level security';
+    execute 'drop policy if exists custom_roles_all on public.custom_roles';
+    execute 'create policy custom_roles_all on public.custom_roles for all using (true) with check (true)';
+  end if;
 end $$;
 
 -- ============================================================================
