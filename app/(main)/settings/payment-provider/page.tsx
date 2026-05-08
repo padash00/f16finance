@@ -81,8 +81,10 @@ export default function PaymentProviderSettingsPage() {
     <div className="space-y-4 px-3 sm:px-4 py-4">
       <AdminPageHeader
         title="Платёжный провайдер"
-        subtitle="Каждой компании можно назначить свой банк/провайдер. От этого зависят лейблы в интерфейсе (например «Kaspi POS» vs «Halyk POS»)."
+        description="Каждой компании можно назначить свой банк/провайдер. От этого зависят лейблы в интерфейсе (например «Kaspi POS» vs «Halyk POS»)."
         icon={<CreditCard className="w-5 h-5 text-emerald-400" />}
+        accent="emerald"
+        backHref="/settings"
       />
 
       <Card className="p-4 sm:p-6">
