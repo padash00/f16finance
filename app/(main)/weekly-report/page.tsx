@@ -509,6 +509,7 @@ MemoizedBalanceChart.displayName = 'MemoizedBalanceChart'
 // Круговая диаграмма расходов
 const MemoizedPieChart = memo(
   ({ data }: { data: { name: string; value: number; cash?: number; kaspi?: number; percentage: number }[] }) => {
+  const cashLabels = useCashlessLabels()
   return (
     <ResponsiveContainer width="100%" height="100%">
       <RechartsPieChart>
@@ -535,7 +536,7 @@ const MemoizedPieChart = memo(
             const pl = p?.payload
             const parts = [`${formatMoneyFull(v)} (${pl?.percentage?.toFixed(1)}%)`]
             if (pl && (pl.cash != null || pl.kaspi != null)) {
-              parts.push(`Нал: ${formatMoneyFull(pl.cash ?? 0)} · Kaspi: ${formatMoneyFull(pl.kaspi ?? 0)}`)
+              parts.push(`Нал: ${formatMoneyFull(pl.cash ?? 0)} · ${cashLabels.providerName}: ${formatMoneyFull(pl.kaspi ?? 0)}`)
             }
             return [parts.join(' · '), 'Сумма']
           }}
