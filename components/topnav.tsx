@@ -517,7 +517,6 @@ export function TopNav() {
     setOpenSectionId(null)
   }, [pathname])
 
-  const canEditOrg = session.isSuperAdmin && !session.isTenantContext
 
   return (
     <>
@@ -564,14 +563,6 @@ export function TopNav() {
           </button>
 
           <NotificationsBell />
-
-          <OrganizationMenu
-            organizations={session.organizations}
-            activeOrganization={session.activeOrganization}
-            onSelect={session.handleSwitchOrganization}
-            disabled={session.isSwitchingOrganization}
-            editable={canEditOrg}
-          />
 
           <UserMenu
             onLogout={session.handleLogout}

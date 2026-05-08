@@ -627,19 +627,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
-          {isSuperAdmin && !isTenantContext ? (
-            <OrganizationSwitcher
-              organizations={organizations}
-              activeOrganization={activeOrganization}
-              onSelect={handleSwitchOrganization}
-              disabled={isSwitchingOrganization}
-            />
-          ) : (
-            <ActiveOrganizationCard activeOrganization={activeOrganization} />
-          )}
-          <div className="mt-3">
-            <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
-          </div>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
         </div>
 
         <div className="mt-4 space-y-3">
@@ -703,7 +691,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
       ) : null}
 
       {desktopEnabled ? (
-        <aside className="sticky top-0 hidden h-screen w-[300px] shrink-0 border-r border-white/5 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 md:block xl:w-[320px]">
+        <aside className="sticky top-0 hidden h-[100dvh] max-h-screen w-[300px] shrink-0 border-r border-white/5 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 md:block xl:w-[320px]">
           {navContent}
         </aside>
       ) : null}
