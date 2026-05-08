@@ -328,7 +328,7 @@ export default function ForecastPage() {
                   <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                     AI Прогноз
                   </h1>
-                  <p className="text-sm text-gray-400">Прогноз доходов, расходов и прибыли на 30/60/90 дней</p>
+                  <p className="text-sm text-gray-400">Прогноз на текущий и следующие 2 месяца</p>
                 </div>
               </div>
 
@@ -413,6 +413,21 @@ export default function ForecastPage() {
 
           {result && (
             <>
+              {/* Empty state — у точки нет данных за период */}
+              {result.weeklyIncome.every((v) => v === 0) && result.weeklyExpense.every((v) => v === 0) && (
+                <Card className="p-8 bg-gray-900/80 border-amber-500/20 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-500/10 mb-3">
+                    <BarChart2 className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">Нет данных за последние 90 дней</h3>
+                  <p className="text-sm text-gray-400 max-w-md mx-auto">
+                    {companyId !== 'all'
+                      ? 'У выбранной точки нет операций за этот период. Попробуй выбрать другую точку или добавь несколько доходов/расходов.'
+                      : 'В системе пока нет операций. Добавь несколько доходов и расходов, чтобы AI мог построить прогноз.'}
+                  </p>
+                </Card>
+              )}
+
               {/* Scenario selector */}
               {result?.scenarios && (
                 <div className="flex items-center gap-2 p-1 bg-gray-900/80 border border-gray-700 rounded-xl w-fit">
