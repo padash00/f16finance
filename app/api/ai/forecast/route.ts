@@ -153,15 +153,34 @@ export async function POST(request: Request) {
     const incomeReg = linearRegression(nonZeroIncome.length >= 3 ? weeklyIncome : nonZeroIncome)
     const expenseReg = linearRegression(nonZeroExpense.length >= 3 ? weeklyExpense : nonZeroExpense)
 
-    // Project next 13 weeks
+    // Среднее по ненулевым неделям — fallback когда регрессия даёт 0
+    const avgWeeklyIncome = nonZeroIncome.length > 0
+      ? nonZeroIncome.reduce((s, v) => s + v, 0) / nonZeroIncome.length
+      : 0
+    const avgWeeklyExpense = nonZeroExpense.length > 0
+      ? nonZeroExpense.reduce((s, v) => s + v, 0) / nonZeroExpense.length
+      : 0
+
+    // Project next 13 weeks. Если регрессия даёт 0 (мало данных, slope < 0),
+    // используем среднюю недельную сумму × количество недель — иначе
+    // прогноз "0 ₸" за 60/90 дней при наличии расходов выглядит как баг.
+    const projectWeek = (reg: { slope: number; intercept: number }, weekIndex: number, weeks: number, avg: number) => {
+      const fromReg = Math.max(0, reg.slope * weekIndex + reg.intercept) * weeks
+      // Если регрессия близка к нулю но есть исторические данные — используем среднее
+      if (fromReg < avg * weeks * 0.1 && avg > 0) {
+        return avg * weeks
+      }
+      return fromReg
+    }
+
     const n = numWeeks
     const projected = {
-      week4Income: Math.max(0, incomeReg.slope * (n + 3) + incomeReg.intercept) * 4,
-      week8Income: Math.max(0, incomeReg.slope * (n + 7) + incomeReg.intercept) * 8,
-      week13Income: Math.max(0, incomeReg.slope * (n + 12) + incomeReg.intercept) * 13,
-      week4Expense: Math.max(0, expenseReg.slope * (n + 3) + expenseReg.intercept) * 4,
-      week8Expense: Math.max(0, expenseReg.slope * (n + 7) + expenseReg.intercept) * 8,
-      week13Expense: Math.max(0, expenseReg.slope * (n + 12) + expenseReg.intercept) * 13,
+      week4Income: projectWeek(incomeReg, n + 3, 4, avgWeeklyIncome),
+      week8Income: projectWeek(incomeReg, n + 7, 8, avgWeeklyIncome),
+      week13Income: projectWeek(incomeReg, n + 12, 13, avgWeeklyIncome),
+      week4Expense: projectWeek(expenseReg, n + 3, 4, avgWeeklyExpense),
+      week8Expense: projectWeek(expenseReg, n + 7, 8, avgWeeklyExpense),
+      week13Expense: projectWeek(expenseReg, n + 12, 13, avgWeeklyExpense),
     }
 
     const scenarios = {
