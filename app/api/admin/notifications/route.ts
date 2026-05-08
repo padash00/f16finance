@@ -4,6 +4,7 @@ import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { listOrganizationCompanyIds, listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { hasCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -65,8 +66,18 @@ export async function GET(request: Request) {
 
     const groups: NotificationGroup[] = []
 
+    // Фильтр групп по capabilities. Если у юзера нет доступа к странице —
+    // не показываем уведомления связанные с ней (маркетолог не должен
+    // видеть "Заявки на склад" — у него нет к ним доступа).
+    const [canSeeRequests, canSeeBirthdays, canSeeDebts, canSeeShowcase] = await Promise.all([
+      hasCapability(access, 'store-requests.view'),
+      hasCapability(access, 'birthdays.view'),
+      hasCapability(access, 'point-debts.view'),
+      hasCapability(access, 'store-showcase.view'),
+    ])
+
     // ── Pending inventory requests ──────────────────────────────────────────
-    try {
+    if (canSeeRequests) try {
       let requestsQuery = supabase
         .from('inventory_requests')
         .select('id, status, created_at, requesting_company_id, company:companies!requesting_company_id(name)')
@@ -108,7 +119,7 @@ export async function GET(request: Request) {
     }
 
     // ── Upcoming birthdays (7 days) ─────────────────────────────────────────
-    try {
+    if (canSeeBirthdays) try {
       let operatorsQuery = supabase
         .from('operators')
         .select('id, name, short_name, operator_profiles(full_name, birth_date)')
@@ -160,7 +171,7 @@ export async function GET(request: Request) {
     }
 
     // ── Unpaid point debts ──────────────────────────────────────────────────
-    try {
+    if (canSeeDebts) try {
       let debtsQuery = supabase
         .from('debts')
         .select('id, amount, client_name, created_at, company_id, company:companies!company_id(name)')
@@ -203,7 +214,7 @@ export async function GET(request: Request) {
 
     // ── Low stock alerts (showcase = catalog - warehouse; flag items at/below threshold) ──
     let lowStockStage = 'start'
-    try {
+    if (canSeeShowcase) try {
       const allowedCompanySet = allowedCompanyIds?.length ? new Set(allowedCompanyIds) : null
 
       // Showcase activated only for points that have an active point_display location.

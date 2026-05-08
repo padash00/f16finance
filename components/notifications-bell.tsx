@@ -36,6 +36,8 @@ const REFRESH_INTERVAL_MS = 90_000
 // Дебаунс между приходом события и rеshooting к API.
 const REALTIME_DEBOUNCE_MS = 600
 const READ_AT_KEY = 'f16.notifications.lastReadAt'
+const SEEN_IDS_KEY = 'f16.notifications.seenIds'
+const SEEN_IDS_MAX = 500  // храним до 500 последних
 
 function readLastReadAt(): number {
   if (typeof window === 'undefined') return 0
@@ -49,8 +51,28 @@ function writeLastReadAt(value: number) {
   window.localStorage.setItem(READ_AT_KEY, String(value))
 }
 
-function isItemNew(item: NotificationItem, lastReadAt: number): boolean {
-  // Без timestamp считаем «новым» — иначе пользователь не увидит долги/остатки.
+function readSeenIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = window.localStorage.getItem(SEEN_IDS_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return new Set(Array.isArray(arr) ? arr : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeSeenIds(ids: Set<string>) {
+  if (typeof window === 'undefined') return
+  const arr = Array.from(ids).slice(-SEEN_IDS_MAX)
+  try { window.localStorage.setItem(SEEN_IDS_KEY, JSON.stringify(arr)) } catch {}
+}
+
+function isItemNew(item: NotificationItem, lastReadAt: number, seenIds: Set<string>): boolean {
+  // Если ID уже отмечен как просмотренный — не новый (главный фикс).
+  if (seenIds.has(item.id)) return false
+  // Без timestamp и не в seen — считаем новым (только что появился).
   if (!item.date) return true
   const ts = new Date(item.date).getTime()
   if (!Number.isFinite(ts)) return true
@@ -62,12 +84,14 @@ export function NotificationsBell() {
   const [groups, setGroups] = useState<NotificationGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [lastReadAt, setLastReadAt] = useState<number>(0)
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set())
   const ref = useRef<HTMLDivElement | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Восстанавливаем «прочитано до» при первом монтировании на клиенте.
+  // Восстанавливаем «прочитано до» и seen IDs при первом монтировании.
   useEffect(() => {
     setLastReadAt(readLastReadAt())
+    setSeenIds(readSeenIds())
   }, [])
 
   const load = useCallback(async () => {
@@ -122,13 +146,15 @@ export function NotificationsBell() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [open])
 
-  // Синхронизация lastReadAt между вкладками браузера.
+  // Синхронизация между вкладками браузера.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const onStorage = (event: StorageEvent) => {
       if (event.key === READ_AT_KEY) {
         const value = event.newValue ? Number(event.newValue) : 0
         setLastReadAt(Number.isFinite(value) ? value : 0)
+      } else if (event.key === SEEN_IDS_KEY) {
+        setSeenIds(readSeenIds())
       }
     }
     window.addEventListener('storage', onStorage)
@@ -137,7 +163,7 @@ export function NotificationsBell() {
 
   // Счётчик «новых» — то что добавилось/изменилось после lastReadAt.
   const unreadTotal = groups.reduce((sum, group) => {
-    const newItems = group.items.filter((item) => isItemNew(item, lastReadAt)).length
+    const newItems = group.items.filter((item) => isItemNew(item, lastReadAt, seenIds)).length
     return sum + newItems
   }, 0)
 
@@ -148,6 +174,15 @@ export function NotificationsBell() {
     const now = Date.now()
     writeLastReadAt(now)
     setLastReadAt(now)
+    // Сохраняем ID всех текущих айтемов как "просмотренные" — критично для
+    // айтемов без даты (низкие остатки, долги). Без этого они оставались
+    // "новыми" даже после нажатия "Прочитать всё".
+    const allIds = new Set(seenIds)
+    for (const group of groups) {
+      for (const item of group.items) allIds.add(item.id)
+    }
+    writeSeenIds(allIds)
+    setSeenIds(allIds)
   }
 
   return (
@@ -209,7 +244,7 @@ export function NotificationsBell() {
             ) : (
               groups.map((group) => {
                 const GroupIcon = iconMap[group.icon] || Bell
-                const newCount = group.items.filter((item) => isItemNew(item, lastReadAt)).length
+                const newCount = group.items.filter((item) => isItemNew(item, lastReadAt, seenIds)).length
                 return (
                   <div key={group.id} className="mb-3 last:mb-0">
                     <div className="flex items-center justify-between px-3 py-1">
@@ -235,7 +270,7 @@ export function NotificationsBell() {
                     </div>
                     <div className="space-y-1">
                       {group.items.map((item) => {
-                        const isNew = isItemNew(item, lastReadAt)
+                        const isNew = isItemNew(item, lastReadAt, seenIds)
                         return (
                           <Link
                             key={item.id}
