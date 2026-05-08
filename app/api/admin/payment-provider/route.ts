@@ -58,10 +58,11 @@ export async function GET(request: Request) {
     provider = data
   }
   if (!provider) {
+    // Fallback на generic — нейтрально для всех (показывает "Безналичный")
     const { data } = await supabase
       .from('payment_providers')
       .select('id, code, name, country_code, supports_midnight_split')
-      .eq('code', 'kaspi')
+      .eq('code', 'generic')
       .maybeSingle()
     provider = data
   }

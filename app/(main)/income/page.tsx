@@ -1290,7 +1290,7 @@ export default function IncomePage() {
                   {editingIncome?.shift === 'night' && (
                     <label className="space-y-2 text-sm text-gray-300 md:col-span-2">
                       <span className="flex items-center gap-2">
-                        Kaspi до 00:00
+                        {cashLabels.providerName} до 00:00
                         <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] text-blue-300">только для ночных смен</span>
                       </span>
                       <input
