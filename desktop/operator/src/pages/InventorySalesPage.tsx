@@ -27,6 +27,7 @@ import * as api from '@/lib/api'
 import * as offline from '@/lib/offline'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
+import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { beep } from '@/lib/receipt-html'
 import { formatDate, formatMoney, localRef, parseMoney } from '@/lib/utils'
@@ -88,9 +89,9 @@ type SaleReceiptPreview = {
   lines: ReceiptLine[]
 }
 
-function paymentBadge(paymentMethod: string) {
+function paymentBadge(paymentMethod: string, cashlessLabel = 'Безналичный') {
   if (paymentMethod === 'cash') return 'Наличные'
-  if (paymentMethod === 'kaspi') return 'Kaspi'
+  if (paymentMethod === 'kaspi') return cashlessLabel
   return 'Смешанная'
 }
 
@@ -129,7 +130,7 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;')
 }
 
-function buildReceiptHtml(preview: SaleReceiptPreview) {
+function buildReceiptHtml(preview: SaleReceiptPreview, cashlessLabel = 'Безналичный') {
   const linesHtml = preview.lines
     .map(
       (line) => `
@@ -251,7 +252,7 @@ function buildReceiptHtml(preview: SaleReceiptPreview) {
         </div>
       </div>
       <div class="payment-row">
-        <span class="payment-label">${escapeHtml(paymentBadge(preview.paymentMethod))}</span>
+        <span class="payment-label">${escapeHtml(paymentBadge(preview.paymentMethod, cashlessLabel))}</span>
         <strong>${escapeHtml(formatMoney(preview.totalAmount))} ₸</strong>
       </div>
       ${
@@ -261,7 +262,7 @@ function buildReceiptHtml(preview: SaleReceiptPreview) {
           <span>↳ Наличные</span><span>${escapeHtml(formatMoney(preview.cashAmount))} ₸</span>
         </div>
         <div class="payment-row" style="font-size:12px;color:#4b5563;">
-          <span>↳ Kaspi</span><span>${escapeHtml(formatMoney(preview.kaspiAmount))} ₸</span>
+          <span>↳ ${escapeHtml(cashlessLabel)}</span><span>${escapeHtml(formatMoney(preview.kaspiAmount))} ₸</span>
         </div>
       `
           : ''
@@ -281,7 +282,7 @@ function buildReceiptHtml(preview: SaleReceiptPreview) {
 </html>`
 }
 
-function printReceipt(preview: SaleReceiptPreview) {
+function printReceipt(preview: SaleReceiptPreview, cashlessLabel = 'Безналичный') {
   const printWindow = window.open('', '_blank', 'width=420,height=720')
   if (!printWindow) {
     toastError('Не удалось открыть окно печати чека')
@@ -289,7 +290,7 @@ function printReceipt(preview: SaleReceiptPreview) {
   }
 
   printWindow.document.open()
-  printWindow.document.write(buildReceiptHtml(preview))
+  printWindow.document.write(buildReceiptHtml(preview, cashlessLabel))
   printWindow.document.close()
 }
 
@@ -304,6 +305,7 @@ export default function InventorySalesPage({
   onSwitchToRequest,
   onOpenCabinet,
 }: Props) {
+  const cashLabels = useCashlessLabels(session)
   const runtimeShift = useMemo(() => resolveRuntimeShift(), [])
   const [context, setContext] = useState<PointInventorySaleContext | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1270,7 +1272,7 @@ export default function InventorySalesPage({
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-xs font-semibold">{formatMoney(Number(sale.total_amount || 0))}</p>
-                          <Badge variant="secondary" className="text-[10px]">{paymentBadge(sale.payment_method)}</Badge>
+                          <Badge variant="secondary" className="text-[10px]">{paymentBadge(sale.payment_method, cashLabels.providerName)}</Badge>
                         </div>
                         <p className="mt-1 truncate text-[10px] text-muted-foreground">{salePaymentDetails(sale)}</p>
                         <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -1310,7 +1312,7 @@ export default function InventorySalesPage({
                       : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {paymentBadge(method)}
+                  {paymentBadge(method, cashLabels.providerName)}
                 </button>
               ))}
             </div>
@@ -1332,7 +1334,7 @@ export default function InventorySalesPage({
                   />
                 </div>
                 <div>
-                  <p className="mb-1 text-[10px] text-muted-foreground">Kaspi</p>
+                  <p className="mb-1 text-[10px] text-muted-foreground">{cashLabels.providerName}</p>
                   <Input
                     value={mixedKaspi}
                     onChange={(e) => {
@@ -1432,7 +1434,7 @@ export default function InventorySalesPage({
                             : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        {paymentBadge(method)}
+                        {paymentBadge(method, cashLabels.providerName)}
                       </button>
                     ))}
                   </div>
@@ -1450,7 +1452,7 @@ export default function InventorySalesPage({
                       />
                     </div>
                     <div>
-                      <p className="mb-1 text-xs text-muted-foreground">Kaspi</p>
+                      <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName}</p>
                       <Input value={String(correctionKaspiAmount)} readOnly className="h-10" />
                     </div>
                   </div>
@@ -1462,7 +1464,7 @@ export default function InventorySalesPage({
                     <span className="font-semibold">{formatMoney(correctionCashAmount)}</span>
                   </div>
                   <div className="mt-2 flex items-center justify-between">
-                    <span className="text-muted-foreground">Kaspi</span>
+                    <span className="text-muted-foreground">{cashLabels.providerName}</span>
                     <span className="font-semibold">{formatMoney(correctionKaspiAmount)}</span>
                   </div>
                 </div>
@@ -1473,7 +1475,7 @@ export default function InventorySalesPage({
                     value={correctionReason}
                     onChange={(e) => setCorrectionReason(e.target.value)}
                     rows={3}
-                    placeholder="Например: клиент оплатил 500 наличными и 700 Kaspi, оператор выбрал Kaspi"
+                    placeholder={`Например: клиент оплатил 500 наличными и 700 ${cashLabels.providerName}, оператор выбрал ${cashLabels.providerName}`}
                     className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-emerald-400/50"
                   />
                 </div>
@@ -1529,7 +1531,7 @@ export default function InventorySalesPage({
                 </div>
                 <div className="mt-2 flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Оплата</span>
-                  <span>{paymentBadge(receiptPreview.paymentMethod)}</span>
+                  <span>{paymentBadge(receiptPreview.paymentMethod, cashLabels.providerName)}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Оператор</span>
@@ -1575,7 +1577,7 @@ export default function InventorySalesPage({
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итого</p>
                     <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(receiptPreview.totalAmount)}</p>
                   </div>
-                  <Badge variant="secondary">{paymentBadge(receiptPreview.paymentMethod)}</Badge>
+                  <Badge variant="secondary">{paymentBadge(receiptPreview.paymentMethod, cashLabels.providerName)}</Badge>
                 </div>
                 {receiptPreview.paymentMethod === 'mixed' ? (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -1594,7 +1596,7 @@ export default function InventorySalesPage({
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <Button className="flex-1 min-w-[180px]" onClick={() => printReceipt(receiptPreview)}>
+                <Button className="flex-1 min-w-[180px]" onClick={() => printReceipt(receiptPreview, cashLabels.providerName)}>
                   <Printer className="h-4 w-4" />
                   Печать чека
                 </Button>

@@ -160,13 +160,13 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
           )}
           {totalKaspi > 0 && (
             <div>
-              <p className="text-xs text-muted-foreground">Kaspi POS</p>
+              <p className="text-xs text-muted-foreground">Безналичный POS</p>
               <p className="text-base font-semibold tabular-nums">{formatMoney(totalKaspi)}</p>
             </div>
           )}
           {totalOnline > 0 && (
             <div>
-              <p className="text-xs text-muted-foreground">Kaspi Online</p>
+              <p className="text-xs text-muted-foreground">Безналичный Online</p>
               <p className="text-base font-semibold tabular-nums">{formatMoney(totalOnline)}</p>
             </div>
           )}
@@ -253,7 +253,7 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
                                 <span>Нал: <strong className="text-foreground tabular-nums">{formatMoney(row.cash)}</strong></span>
                               )}
                               {row.kaspi > 0 && (
-                                <span>Kaspi POS: <strong className="text-foreground tabular-nums">{formatMoney(row.kaspi)}</strong></span>
+                                <span>Безналичный POS: <strong className="text-foreground tabular-nums">{formatMoney(row.kaspi)}</strong></span>
                               )}
                               {row.kaspi_online > 0 && (
                                 <span>Online: <strong className="text-foreground tabular-nums">{formatMoney(row.kaspi_online)}</strong></span>

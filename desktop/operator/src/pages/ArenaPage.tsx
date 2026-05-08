@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
 import * as api from '@/lib/api'
+import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { arenaExtensionMinutesFromPayment } from '../../../../lib/core/arena-extension-minutes'
 import { effectiveZoneExtensionHourly } from '../../../../lib/core/arena-zone-extension-hourly'
 import type { AppConfig, ArenaMapDecoration, ArenaSession, ArenaStation, ArenaTariff, ArenaZone, BootstrapData, OperatorSession } from '@/types'
@@ -229,7 +230,7 @@ function StartSessionModal({
               />
             </div>
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+              <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName} ₸</p>
               <input
                 type="number"
                 min="0"
@@ -426,7 +427,7 @@ function ManageSessionModal({
                       <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
                     </div>
                     <div>
-                      <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+                      <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName} ₸</p>
                       <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
                     </div>
                   </div>
@@ -659,7 +660,7 @@ function MassZoneStartModal({
               <input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+              <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName} ₸</p>
               <input type="number" min="0" value={kaspiAmt} onChange={e => setKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
             </div>
           </div>
@@ -934,7 +935,7 @@ function TodayIncomeBar({ todayIncome }: { todayIncome: { cash: number; kaspi: n
         )}
         {todayIncome.kaspi > 0 && (
           <span className="flex items-center gap-1 text-muted-foreground">
-            <span className="text-xs">📱</span> Каспи: <span className="font-semibold text-foreground">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
+            <span className="text-xs">📱</span> {cashLabels.providerName}: <span className="font-semibold text-foreground">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
           </span>
         )}
       </div>
@@ -1151,6 +1152,7 @@ export default function ArenaPage({
   onSwitchToRequest,
   onOpenCabinet,
 }: Props) {
+  const cashLabels = useCashlessLabels(session)
   const [zones, setZones] = useState<ArenaZone[]>([])
   const [stations, setStations] = useState<ArenaStation[]>([])
   const [tariffs, setTariffs] = useState<ArenaTariff[]>([])
@@ -2081,7 +2083,7 @@ function SessionHistoryModal({
             <span className="text-muted-foreground">{rows.length} сессий</span>
             <div className="flex gap-4">
               {totalCash > 0 && <span className="text-muted-foreground">Нал: <span className="font-medium text-foreground">{totalCash.toLocaleString('ru-RU')} ₸</span></span>}
-              {totalKaspi > 0 && <span className="text-muted-foreground">Каспи: <span className="font-medium text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</span></span>}
+              {totalKaspi > 0 && <span className="text-muted-foreground">{cashLabels.providerName}: <span className="font-medium text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</span></span>}
               <span className="font-semibold">Итого: {totalAmount.toLocaleString('ru-RU')} ₸</span>
             </div>
           </div>
