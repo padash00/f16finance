@@ -356,15 +356,17 @@ export default function ChecklistPage({
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-amber-500/5 blur-3xl dark:bg-amber-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 py-3 no-drag">
+      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 py-3 no-drag">
         <div className="flex items-center gap-3">
           <Button type="button" variant="outline" size="sm" onClick={onBackToShift}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             К смене
           </Button>
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-md shadow-emerald-500/30">
             <ClipboardCheck className="h-5 w-5" />
           </div>
           <div>

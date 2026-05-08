@@ -885,6 +885,20 @@ export async function POST(request: Request) {
       paymentTotal,
     })
 
+    // ── Идемпотентность: если продажа с этим local_ref уже создавалась — возвращаем её
+    const localRef = body.payload?.local_ref?.trim() || null
+    if (localRef) {
+      const { data: existing } = await supabase
+        .from('point_sales')
+        .select('id, total_amount')
+        .eq('company_id', device.company_id)
+        .eq('local_ref', localRef)
+        .maybeSingle()
+      if (existing) {
+        return json({ ok: true, data: { sale_id: existing.id, total_amount: existing.total_amount, idempotent: true } })
+      }
+    }
+
     const sale = await createPointInventorySale(supabase, {
       company_id: device.company_id,
       location_id: location.id,
@@ -899,7 +913,7 @@ export async function POST(request: Request) {
       kaspi_after_midnight_amount: kaspiAfterMidnightAmount,
       comment: body.payload?.comment?.trim() || null,
       source: 'point-client',
-      local_ref: body.payload?.local_ref?.trim() || null,
+      local_ref: localRef,
       items,
     })
 

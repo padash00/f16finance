@@ -5,6 +5,7 @@ import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperat
 import * as api from '@/lib/api'
 import type { OpenShiftInfo } from '@/lib/api'
 import { toastInfo } from '@/lib/toast'
+import { applyBranding } from '@/lib/branding'
 import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState } from '@/types'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
@@ -524,6 +525,14 @@ export default function App() {
     const updatedSession = { ...session, bootstrap }
     saveOperatorSession(updatedSession).catch(() => null)
 
+    // Применяем брендинг компании (цвет + лого) — поля приходят с bootstrap.session.company
+    try {
+      const company = updatedSession.company as any
+      applyBranding(company?.brand_color || null, company?.brand_logo_url || null)
+    } catch {
+      /* брендинг — best effort */
+    }
+
     // Do not auto-open shifts: the operator must confirm the opening cash first.
     if (config && updatedSession.operator.operator_id) {
       api.getCurrentPointShift(config, updatedSession.company.id)
@@ -660,8 +669,8 @@ export default function App() {
     return withUpdateBanner(
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background">
         <div className="h-9 drag-region absolute inset-x-0 top-0" />
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary">
-          <span className="text-xl font-bold text-primary-foreground">F</span>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-lg shadow-emerald-500/30">
+          <span className="text-base font-bold tracking-tight text-white">OP</span>
         </div>
         <span className="animate-spin h-5 w-5 border-2 border-border border-t-foreground rounded-full" />
         <p className="text-xs text-muted-foreground">Подключение...</p>

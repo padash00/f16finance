@@ -1473,7 +1473,9 @@ export default function ArenaPage({
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="relative flex h-screen flex-col bg-background text-foreground">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-fuchsia-500/5 blur-3xl dark:bg-fuchsia-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-cyan-500/5 blur-3xl dark:bg-cyan-500/10" />
       {/* Drag region */}
       <div className="h-9 shrink-0 drag-region bg-card" />
 

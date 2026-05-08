@@ -684,12 +684,15 @@ export default function ShiftPage({
   const totalEntered = vCash + vCoins + vKaspiTotal + vKaspiOnline + vDebts + vStart + vWipon
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+      {/* Декоративные акценты — тонкий градиент для глубины (в обеих темах) */}
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
       <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
+      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_30px_rgba(255,255,255,0.08)]">
-            <span className="text-sm font-bold text-primary-foreground">F</span>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-lg shadow-emerald-500/30">
+            <span className="text-[10px] font-bold tracking-tight text-white">OP</span>
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2">

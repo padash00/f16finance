@@ -37,9 +37,11 @@ import {
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { ChangeCalculator } from '@/components/ChangeCalculator'
 import { PreferencesModal } from '@/components/PreferencesModal'
+import { SyncIndicator } from '@/components/SyncIndicator'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
 import * as offline from '@/lib/offline'
+import { useSyncWatcher } from '@/lib/use-sync-watcher'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import {
   beep,
@@ -226,6 +228,27 @@ export default function InventorySalesPageMinimal({
       if (!silent) setLoading(false)
     }
   }
+
+  // Realtime sync с сайтом — раз в 30с проверяем не изменились ли цены/остатки на сервере
+  const { status: syncStatus, lastSyncedAt } = useSyncWatcher({
+    config,
+    watch: ['catalogVersion', 'balancesVersion'],
+    onSyncNeeded: () => void load(true),
+    onPushMessage: (msg) => {
+      const senderLabel = msg.sent_by_name ? ` от ${msg.sent_by_name}` : ' от админа'
+      if (msg.kind === 'urgent') {
+        toastError(`🚨 Срочно${senderLabel}: ${msg.body}`)
+      } else if (msg.kind === 'warning') {
+        toastError(`⚠️ Внимание${senderLabel}: ${msg.body}`)
+      } else if (msg.kind === 'lock_sales') {
+        toastError(`🔒 Продажи заблокированы: ${msg.body}`)
+      } else if (msg.kind === 'unlock_sales') {
+        toastSuccess(`🔓 Продажи разблокированы: ${msg.body}`)
+      } else {
+        toastSuccess(`💬 Сообщение${senderLabel}: ${msg.body}`)
+      }
+    },
+  })
 
   // Поиск клиента (debounced)
   useEffect(() => {
@@ -644,13 +667,23 @@ export default function InventorySalesPageMinimal({
       setLastReceipt(preview)
     }
 
+    // ── Optimistic UI ─────────────────────────────────────────────────────
+    // Сразу показываем чек и очищаем корзину — UI отзывается мгновенно.
+    // Запрос на сервер уходит в фоне; ошибка → откатываем корзину.
+    const cartSnapshot = [...cart]
+    const customerSnapshot = selectedCustomer
+    const commentSnapshot = comment
+    showReceiptPreview(ref) // чек с временным local_ref
+    clearAll()
+    setShowPayConfirm(false)
+    setSaving(false) // оптимистично — оператор может работать дальше
+
     try {
       const result = await api.createPointInventorySale(config, session, salePayload as any)
+      // Тихо обновляем id в превью чека на настоящий
+      setLastReceipt((prev) => prev && prev.saleId === ref ? { ...prev, saleId: result?.sale_id || ref } : prev)
       toastSuccess('Продажа сохранена')
       beep('ok')
-      showReceiptPreview(result?.sale_id || null)
-      clearAll()
-      setShowPayConfirm(false)
       void load(true)
     } catch (err: any) {
       const isNetworkError = err?.message?.includes('Failed to fetch') ||
@@ -663,32 +696,40 @@ export default function InventorySalesPageMinimal({
           await offline.queueInventorySale(salePayload, session, session.company.id)
           toastSuccess('Нет интернета — продажа в очереди, отправится сама')
           beep('ok')
-          showReceiptPreview(ref)
-          clearAll()
-          setShowPayConfirm(false)
         } catch (queueErr: any) {
+          // Откат: возвращаем корзину
           beep('error')
           toastError('Не удалось сохранить даже локально: ' + (queueErr?.message || 'unknown'))
+          setCart(cartSnapshot)
+          setSelectedCustomer(customerSnapshot)
+          setComment(commentSnapshot)
+          setLastReceipt(null)
         }
       } else {
+        // Откат при серверной ошибке
         beep('error')
         toastError(err?.message || 'Не удалось провести продажу')
+        setCart(cartSnapshot)
+        setSelectedCustomer(customerSnapshot)
+        setComment(commentSnapshot)
+        setLastReceipt(null)
       }
-    } finally {
-      setSaving(false)
     }
   }
 
   const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="h-9 shrink-0 drag-region bg-white dark:bg-slate-900" />
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+      {/* Декоративные акценты */}
+      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
+      <div className="pointer-events-none absolute bottom-0 -left-32 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
+      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
 
       {/* Шапка */}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2 no-drag dark:border-slate-800 dark:bg-slate-900 sm:px-4">
+      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/70 bg-white/80 px-3 py-2 backdrop-blur-xl no-drag dark:border-slate-800/70 dark:bg-slate-900/80 sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500 text-sm font-bold text-white">F</div>
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold tracking-tight text-white shadow-md shadow-emerald-500/30">OP</div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{session.company?.name || 'Точка'}</p>
             <p className="truncate text-xs text-slate-500 dark:text-slate-400">
@@ -711,6 +752,7 @@ export default function InventorySalesPageMinimal({
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
+          <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} />
           <Button variant="ghost" size="sm" onClick={() => void load(false)} disabled={loading} className="h-8 w-8 p-0">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
@@ -724,7 +766,7 @@ export default function InventorySalesPageMinimal({
       </header>
 
       {/* Вкладки: Продажи / История */}
-      <nav className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3 dark:border-slate-800 dark:bg-slate-900 sm:px-4">
+      <nav className="relative z-10 flex shrink-0 items-center gap-1 border-b border-slate-200/70 bg-white/80 px-3 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-900/80 sm:px-4">
         {(['sale', 'history'] as const).map((mode) => (
           <button
             key={mode}
@@ -738,7 +780,7 @@ export default function InventorySalesPageMinimal({
           >
             {mode === 'sale' ? 'Продажи' : `История${(context?.sales?.length || 0) > 0 ? ` (${context?.sales?.length})` : ''}`}
             {viewMode === mode && (
-              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-emerald-500" />
+              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 shadow shadow-emerald-500/30" />
             )}
           </button>
         ))}
@@ -974,11 +1016,12 @@ export default function InventorySalesPageMinimal({
         <aside className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 lg:w-96 lg:overflow-auto lg:border-l lg:border-t-0 lg:p-4 xl:w-[420px]">
           <div className="flex h-full flex-col gap-3">
             {/* Итого */}
-            <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800">
-              <p className="text-xs text-slate-500 dark:text-slate-400">К оплате</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums sm:text-4xl">
+            <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-white p-4 shadow-sm dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-slate-900">
+              <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-emerald-400/10 blur-2xl" />
+              <p className="relative text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400">К оплате</p>
+              <p className="relative mt-1 bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-3xl font-bold tabular-nums text-transparent dark:from-emerald-400 dark:to-teal-300 sm:text-4xl">
                 {formatMoney(finalTotal)}
-                <span className="ml-1 text-lg font-medium text-slate-400">₸</span>
+                <span className="ml-1 text-lg font-medium text-emerald-500/60 dark:text-emerald-400/60">₸</span>
               </p>
               {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
                 <div className="mt-2 space-y-0.5 text-xs">
@@ -1216,7 +1259,7 @@ export default function InventorySalesPageMinimal({
                 type="button"
                 onClick={openPayConfirm}
                 disabled={saving || cart.length === 0}
-                className="h-14 rounded-2xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+                className="h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-[0.98] disabled:opacity-40 disabled:hover:shadow-lg"
               >
                 ОПЛАТИТЬ · {formatMoney(finalTotal)} ₸
               </Button>
@@ -1413,7 +1456,7 @@ export default function InventorySalesPageMinimal({
                 type="button"
                 onClick={() => void handlePay()}
                 disabled={saving}
-                className="h-14 rounded-xl bg-emerald-500 text-base font-semibold text-white hover:bg-emerald-600 disabled:opacity-50 sm:order-2 sm:h-12 sm:px-8"
+                className="h-14 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition-all hover:from-emerald-600 hover:to-teal-700 hover:shadow-xl hover:shadow-emerald-500/40 active:scale-[0.98] disabled:opacity-50 disabled:hover:shadow-lg sm:order-2 sm:h-12 sm:px-8"
               >
                 {saving ? (
                   <span className="flex items-center gap-2">

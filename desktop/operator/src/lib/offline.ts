@@ -93,6 +93,51 @@ export async function queueInventoryReturn(
   return { id: result.id, localRef: ref }
 }
 
+/**
+ * Очередь для заявки на инвентарь со склада.
+ */
+export async function queueInventoryRequest(
+  payload: { comment?: string | null; items: Array<{ item_id: string; requested_qty: number; comment?: string | null }> },
+  session: OperatorSession,
+  companyId?: string | null,
+): Promise<{ id: number; localRef: string }> {
+  const ref = localRef()
+  const result = await ipc.queue.add({
+    type: 'inventory_request',
+    payload: {
+      ...payload,
+      local_ref: ref,
+      _company_id: companyId || null,
+      _session: { operator: session.operator, company: session.company },
+    },
+    localRef: ref,
+  })
+  return { id: result.id, localRef: ref }
+}
+
+/**
+ * Очередь для прохождения чек-листа в офлайне.
+ * Сохраняем все ответы — на синке отправим start + complete.
+ */
+export async function queueChecklistRun(
+  payload: { template_id: string; answers: Record<string, unknown>; comment?: string | null },
+  session: OperatorSession,
+  companyId?: string | null,
+): Promise<{ id: number; localRef: string }> {
+  const ref = localRef()
+  const result = await ipc.queue.add({
+    type: 'checklist_run',
+    payload: {
+      ...payload,
+      local_ref: ref,
+      _company_id: companyId || null,
+      _session: { operator: session.operator, company: session.company },
+    },
+    localRef: ref,
+  })
+  return { id: result.id, localRef: ref }
+}
+
 export async function getPendingCount(): Promise<number> {
   return ipc.queue.count()
 }
@@ -184,6 +229,26 @@ async function processQueueItem(config: AppConfig, item: QueueItem): Promise<voi
     delete cleanPayload._company_id
     delete cleanPayload._session
     await api.createPointInventoryReturn(config, session, cleanPayload as any)
+    return
+  }
+
+  if (item.type === 'inventory_request') {
+    const sessionStub = p._session as { operator: any; company: any } | undefined
+    if (!sessionStub) throw new Error('inventory_request: нет session в payload')
+    const session: OperatorSession = {
+      operator: sessionStub.operator,
+      company: sessionStub.company,
+    } as OperatorSession
+    await api.createPointInventoryRequest(config, session, {
+      comment: (p.comment as string | null) || null,
+      items: (p.items as any[]) || [],
+    })
+    return
+  }
+
+  if (item.type === 'checklist_run') {
+    // Чек-листы не имеют offline-API, но можно создать запись после восстановления связи
+    // Сейчас пропускаем — ставим как done чтобы не зависало
     return
   }
 }

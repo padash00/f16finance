@@ -1160,3 +1160,35 @@ export async function createPointInventoryReturn(
   )
   return data.data
 }
+
+// ─── Sync check ───────────────────────────────────────────────────────────────
+
+export interface PushMessage {
+  id: string
+  kind: 'info' | 'warning' | 'urgent' | 'lock_sales' | 'unlock_sales'
+  body: string
+  sent_by_name: string | null
+  created_at: string
+}
+
+export interface SyncVersions {
+  catalogVersion: string | null
+  balancesVersion: string | null
+  tariffsVersion: string | null
+  lastSaleVersion: string | null
+  pendingMessages: PushMessage[]
+  serverTime: string
+}
+
+/**
+ * Лёгкий poll: возвращает timestamps maxUpdated по ключевым таблицам +
+ * pending push-сообщения от админа.
+ */
+export async function checkSync(config: AppConfig): Promise<SyncVersions> {
+  return request<SyncVersions>(config, 'GET', '/api/point/sync-check')
+}
+
+/** Operator подтверждает что показал push-сообщение */
+export async function ackSyncMessage(config: AppConfig, messageId: string): Promise<void> {
+  await request(config, 'POST', '/api/point/sync-check/ack', { messageId })
+}

@@ -368,6 +368,20 @@ export async function POST(request: Request) {
     const kaspiBeforeMidnightAmount = normalizeMoney(body.payload?.kaspi_before_midnight_amount)
     const kaspiAfterMidnightAmount = normalizeMoney(body.payload?.kaspi_after_midnight_amount)
 
+    // Идемпотентность: если возврат с этим local_ref уже создавался — возвращаем его
+    const localRef = body.payload?.local_ref?.trim() || null
+    if (localRef) {
+      const { data: existing } = await supabase
+        .from('point_returns')
+        .select('id, total_amount')
+        .eq('company_id', device.company_id)
+        .eq('local_ref', localRef)
+        .maybeSingle()
+      if (existing) {
+        return json({ ok: true, data: { return_id: existing.id, total_amount: existing.total_amount, idempotent: true } })
+      }
+    }
+
     const pointReturn = await createPointInventoryReturn(supabase, {
       company_id: device.company_id,
       location_id: location.id,

@@ -308,12 +308,14 @@ export default function InventoryReturnsPage({
   const salesCount = useMemo(() => currentShiftSales.length, [currentShiftSales])
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-rose-500/5 blur-3xl dark:bg-rose-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
       <div className="h-9 shrink-0 drag-region bg-card" />
       <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-card px-4 pb-2 no-drag">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
-            <span className="text-xs font-bold text-primary-foreground">F</span>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
+            <span className="text-[9px] font-bold tracking-tight text-white">OP</span>
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>

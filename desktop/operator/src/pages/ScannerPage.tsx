@@ -395,12 +395,14 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background overflow-hidden">
+    <div className="relative flex h-screen flex-col bg-background overflow-hidden">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-cyan-500/5 blur-3xl dark:bg-cyan-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="h-9 shrink-0 drag-region bg-card" />
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">F</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
+            <span className="text-[10px] font-bold tracking-tight text-white">OP</span>
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>

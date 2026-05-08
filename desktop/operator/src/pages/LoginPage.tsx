@@ -324,17 +324,24 @@ export default function LoginPage({
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+      {/* Декоративные градиентные пятна на фоне */}
+      <div className="pointer-events-none absolute -top-40 -left-40 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-fuchsia-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute top-1/3 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+
       <div className="h-9 drag-region" />
 
-      <div className="flex flex-1 items-center justify-center p-6">
+      <div className="relative z-10 flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-6">
-          <div className="space-y-2 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <span className="text-xl font-bold text-primary-foreground">F</span>
+          <div className="space-y-3 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-105">
+              <span className="text-xl font-bold tracking-tight text-white">OP</span>
             </div>
-            <h1 className="mt-3 text-xl font-bold">Orda Point</h1>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            <div>
+              <h1 className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-2xl font-bold text-transparent">Orda Point</h1>
+              <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
+            </div>
           </div>
 
           {isOffline && (
@@ -344,7 +351,7 @@ export default function LoginPage({
             </div>
           )}
 
-          <div className="no-drag flex gap-1 rounded-lg border p-1">
+          <div className="no-drag flex gap-1 rounded-xl border border-white/10 bg-slate-900/40 p-1 backdrop-blur-sm">
             <button
               type="button"
               onClick={() => {
@@ -352,8 +359,10 @@ export default function LoginPage({
                 setOperatorAuthMode('password')
                 setError(null)
               }}
-              className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
-                mode === 'operator' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+                mode === 'operator'
+                  ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-white shadow-lg shadow-emerald-500/10 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Оператор
@@ -365,8 +374,10 @@ export default function LoginPage({
                 setOperatorAuthMode('password')
                 setError(null)
               }}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition-colors ${
-                mode === 'admin' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all ${
+                mode === 'admin'
+                  ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-white shadow-lg shadow-amber-500/10 border border-amber-500/30'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <Shield className="h-3.5 w-3.5" />
@@ -375,15 +386,17 @@ export default function LoginPage({
           </div>
 
           {mode === 'operator' ? (
-            <div className="no-drag flex gap-1 rounded-lg border p-1">
+            <div className="no-drag flex gap-1 rounded-xl border border-white/10 bg-slate-900/40 p-1 backdrop-blur-sm">
               <button
                 type="button"
                 onClick={() => {
                   setOperatorAuthMode('password')
                   setError(null)
                 }}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-colors ${
-                  operatorAuthMode === 'password' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-all ${
+                  operatorAuthMode === 'password'
+                    ? 'bg-white/10 text-white border border-white/15 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <KeyRound className="h-3.5 w-3.5" />
@@ -395,8 +408,10 @@ export default function LoginPage({
                   setOperatorAuthMode('qr')
                   setError(null)
                 }}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-colors ${
-                  operatorAuthMode === 'qr' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-all ${
+                  operatorAuthMode === 'qr'
+                    ? 'bg-white/10 text-white border border-white/15 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <QrCode className="h-3.5 w-3.5" />
@@ -405,9 +420,9 @@ export default function LoginPage({
             </div>
           ) : null}
 
-          <Card>
+          <Card className="border-white/10 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">
+              <CardTitle className="text-base text-white">
                 {mode === 'operator' ? 'Вход для оператора' : 'Вход администратора'}
               </CardTitle>
               <CardDescription className="text-xs">
@@ -460,7 +475,7 @@ export default function LoginPage({
               <form onSubmit={handleSubmit} className="space-y-3">
                 {mode === 'operator' ? (
                   <div className="space-y-1.5">
-                    <Label htmlFor="username" className="text-xs">Логин</Label>
+                    <Label htmlFor="username" className="text-xs text-slate-300">Логин</Label>
                     <Input
                       id="username"
                       value={username}
@@ -469,12 +484,12 @@ export default function LoginPage({
                       autoComplete="username"
                       autoFocus
                       disabled={loading}
-                      className="no-drag"
+                      className="no-drag h-11 bg-slate-800/40 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-400/50 transition-colors"
                     />
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-xs">Email</Label>
+                    <Label htmlFor="email" className="text-xs text-slate-300">Email</Label>
                     <Input
                       id="email"
                       type="email"
@@ -484,13 +499,13 @@ export default function LoginPage({
                       autoComplete="email"
                       autoFocus
                       disabled={loading}
-                      className="no-drag"
+                      className="no-drag h-11 bg-slate-800/40 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-amber-500/40 focus-visible:border-amber-400/50 transition-colors"
                     />
                   </div>
                 )}
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="password" className="text-xs">Пароль</Label>
+                  <Label htmlFor="password" className="text-xs text-slate-300">Пароль</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -500,12 +515,12 @@ export default function LoginPage({
                       placeholder="••••••••"
                       autoComplete="current-password"
                       disabled={loading}
-                      className="no-drag pr-10"
+                      className="no-drag pr-10 h-11 bg-slate-800/40 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-400/50 transition-colors"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPass((value) => !value)}
-                      className="no-drag absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="no-drag absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                     >
                       {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -518,9 +533,13 @@ export default function LoginPage({
                   </p>
                 )}
 
-                <Button type="submit" className="w-full gap-2 no-drag" disabled={loading}>
+                <Button
+                  type="submit"
+                  className="w-full gap-2 no-drag h-11 bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
+                  disabled={loading}
+                >
                   {loading ? (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                   ) : (
                     <LogIn className="h-4 w-4" />
                   )}
@@ -531,13 +550,16 @@ export default function LoginPage({
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{appVersion ? `Версия ${appVersion}` : 'Orda Point'}</span>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 shadow shadow-emerald-400/60" />
+              {appVersion ? `Версия ${appVersion}` : 'Orda Point'}
+            </span>
             {mode === 'admin' ? (
               <button
                 type="button"
                 onClick={openSetupGate}
-                className="no-drag inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                className="no-drag inline-flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-white/5 hover:text-white"
               >
                 <Settings className="h-3.5 w-3.5" />
                 Настроить устройство

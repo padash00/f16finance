@@ -341,6 +341,62 @@ app.on('second-instance', () => {
   }
 })
 
+// ─── Crash tracking + auto-rollback ─────────────────────────────────────────
+// Если новая версия падает 3 раза подряд после установки — откатываемся к
+// предыдущей. Используем счётчик в config: версия + count of unclean exits.
+const crashCounterPath = () => path.join(app.getPath('userData'), 'crash-counter.json')
+
+function loadCrashCounter() {
+  try { return JSON.parse(fs.readFileSync(crashCounterPath(), 'utf-8')) } catch { return null }
+}
+function saveCrashCounter(data) {
+  try { fs.writeFileSync(crashCounterPath(), JSON.stringify(data)) } catch { /* ignore */ }
+}
+
+const CRASH_THRESHOLD = 3
+let cleanExitMarker = false
+
+function startCrashTracking() {
+  const current = loadCrashCounter() || { version: app.getVersion(), uncleanExits: 0, previousVersion: null }
+  // Если версия сменилась — сбросим счётчик и запомним предыдущую
+  if (current.version !== app.getVersion()) {
+    current.previousVersion = current.version
+    current.version = app.getVersion()
+    current.uncleanExits = 0
+  }
+  // Инкремент: считаем как "нечистый старт", очистится при graceful shutdown
+  current.uncleanExits = (current.uncleanExits || 0) + 1
+  saveCrashCounter(current)
+
+  appendUpdaterLog(`Crash tracker: version=${current.version}, uncleanStreak=${current.uncleanExits}, previous=${current.previousVersion || '-'}`)
+
+  // Если streak > порога — попробуем откат
+  if (current.uncleanExits >= CRASH_THRESHOLD && current.previousVersion) {
+    appendUpdaterLog(`AUTO-ROLLBACK triggered: ${current.version} falls back to ${current.previousVersion}`)
+    // Сбрасываем счётчик чтобы не зацикливаться
+    saveCrashCounter({ version: current.version, uncleanExits: 0, previousVersion: current.previousVersion, rolledBack: true })
+    // Показываем диалог пользователю и предлагаем переустановить старую версию
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Orda Point — нестабильная версия',
+      message: `Версия ${current.version} падает несколько раз подряд. Рекомендуем откатиться на ${current.previousVersion}.`,
+      detail: 'Откройте страницу релизов и установите предыдущую версию вручную, либо обратитесь к админу.',
+      buttons: ['Открыть страницу релизов', 'Закрыть'],
+      defaultId: 0,
+    }).then((result) => {
+      if (result.response === 0) shell.openExternal(releasePageUrl)
+    })
+  }
+}
+
+app.on('before-quit', () => {
+  cleanExitMarker = true
+  // Чистый выход — сбросить счётчик
+  const current = loadCrashCounter() || {}
+  saveCrashCounter({ ...current, uncleanExits: 0 })
+  appendUpdaterLog('Clean exit — crash counter reset')
+})
+
 app.whenReady().then(() => {
   // Inject CORS headers so renderer can make API requests without webSecurity: false
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -354,6 +410,7 @@ app.whenReady().then(() => {
     })
   })
 
+  startCrashTracking()
   createWindow()
   initAutoUpdater()
   app.on('activate', () => {

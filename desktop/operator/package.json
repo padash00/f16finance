@@ -1,6 +1,6 @@
 {
   "name": "orda-point-client",
-  "version": "2.4.5",
+  "version": "2.5.0",
   "description": "Orda Control Point — десктопный терминал",
   "author": "Orda <https://github.com/padash00/f16finance>",
   "main": "electron.cjs",
@@ -54,6 +54,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-updater": "^6.8.3",
+    "framer-motion": "^11.11.0",
     "lucide-react": "^0.454.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

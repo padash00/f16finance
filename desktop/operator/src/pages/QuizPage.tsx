@@ -172,9 +172,11 @@ export default function QuizPage({ config, session, onComplete, onSkip }: QuizPa
   const progress = ((currentIdx + 1) / questions.length) * 100
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+    <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
       {/* Header */}
-      <div className="border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="relative z-10 border-b border-slate-200 bg-white/90 px-6 py-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BookOpen className="h-5 w-5 text-emerald-500" />

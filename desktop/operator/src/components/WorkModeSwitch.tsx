@@ -22,8 +22,8 @@ interface Props {
 
 function itemClass(active: boolean) {
   return active
-    ? 'bg-background text-foreground shadow-sm'
-    : 'text-muted-foreground hover:text-foreground'
+    ? 'bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-foreground shadow-sm border border-emerald-500/30'
+    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
 }
 
 export default function WorkModeSwitch({

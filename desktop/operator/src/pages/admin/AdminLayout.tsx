@@ -42,11 +42,13 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
       <header className="drag-region flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
         <div className="no-drag flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">F</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
+            <span className="text-[10px] font-bold tracking-tight text-white">OP</span>
           </div>
           <div className="space-y-1">
             <p className="text-sm font-semibold leading-none">Глобальный администратор</p>
@@ -80,10 +82,10 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'no-drag flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                  'no-drag flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-all',
                   activeTab === tab.id
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    ? 'bg-gradient-to-r from-emerald-500/15 to-teal-500/15 border border-emerald-500/30 text-foreground shadow-sm'
+                    : 'text-sidebar-foreground hover:bg-white/5 hover:text-foreground',
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />

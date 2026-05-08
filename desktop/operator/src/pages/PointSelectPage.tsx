@@ -14,9 +14,11 @@ export default function PointSelectPage({ session, allCompanies, onSelect, onLog
   const operatorName = session.operator.short_name || session.operator.name || session.operator.username
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="relative flex h-screen flex-col bg-background">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
       <div className="h-9 drag-region" />
-      <div className="flex flex-1 items-center justify-center p-6">
+      <div className="relative z-10 flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-4">
           <div className="text-center space-y-1">
             <MapPin className="mx-auto h-10 w-10 text-muted-foreground" />
