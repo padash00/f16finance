@@ -28,6 +28,7 @@ import * as offline from '@/lib/offline'
 import { getCachedSalesContext, saveSalesContextCache } from '@/lib/cache'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
+import { beep } from '@/lib/receipt-html'
 import { formatDate, formatMoney, localRef, parseMoney } from '@/lib/utils'
 import type {
   AppConfig,
@@ -716,6 +717,7 @@ export default function InventorySalesPage({
     try {
       const saleResult = await api.createPointInventorySale(config, session, salePayload as any)
       showReceipt(saleResult, false)
+      beep('ok')
       toastSuccess('Продажа сохранена и добавлена в сменный контур')
       resetSaleForm()
       await load()
@@ -726,16 +728,18 @@ export default function InventorySalesPage({
                              err?.message?.includes('fetch failed') ||
                              !navigator.onLine
       if (isNetworkError) {
-        // Кладём в очередь и показываем чек как обычно — продажа НЕ потеряется
         try {
           await offline.queueInventorySale(salePayload, session, session.company.id)
           showReceipt({ sale_id: ref, sold_at: new Date().toISOString() }, true)
+          beep('ok')
           toastSuccess('Нет интернета — продажа сохранена локально, отправится автоматически')
           resetSaleForm()
         } catch (queueErr: any) {
+          beep('error')
           toastError('Не удалось сохранить даже локально: ' + (queueErr?.message || 'unknown'))
         }
       } else {
+        beep('error')
         toastError(err?.message || 'Не удалось провести продажу')
       }
     } finally {
