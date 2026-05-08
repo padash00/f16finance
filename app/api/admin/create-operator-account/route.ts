@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function generatePassword() {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -35,10 +36,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    const denied = await requireCapability(access, 'operators.create_account')
+    if (denied) return denied
 
     const body = await request.json().catch(() => null)
     const operatorId = typeof body?.operatorId === 'string' ? body.operatorId : ''

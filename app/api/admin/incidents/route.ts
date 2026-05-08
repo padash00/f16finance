@@ -4,6 +4,7 @@ import { writeAuditLog } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -108,7 +109,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireCapability(access, 'incidents.create')
+    if (denied) return denied
 
     const body = (await request.json().catch(() => ({}))) as CreateBody
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase

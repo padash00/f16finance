@@ -49,72 +49,77 @@ export async function checkAndNotifyLowStock(
     const now = new Date()
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
 
-    for (const item of items) {
+    // Pre-фильтр: только items которые ниже порога
+    const triggered = items.filter((item) => {
       const threshold = Number(item.low_stock_threshold)
-      if (!threshold || threshold <= 0) continue
+      if (!threshold || threshold <= 0) return false
+      const balance = balanceMap.get(item.id)
+      return balance !== undefined && balance !== null && balance <= threshold
+    })
 
-      const balance = balanceMap.get(item.id) ?? null
-      if (balance === null || balance > threshold) continue
+    if (triggered.length === 0) return
 
-      // 3a. Check if alert was sent in last 24h
-      const { data: recentLog } = await supabase
-        .from('low_stock_alert_log')
-        .select('id')
-        .eq('item_id', item.id)
-        .eq('location_id', locationId)
-        .gte('sent_at', cutoff)
-        .limit(1)
-        .maybeSingle()
+    // Один SELECT вместо N: проверяем какие items уже алертили в последние 24ч
+    const { data: recentLogs } = await supabase
+      .from('low_stock_alert_log')
+      .select('item_id')
+      .in('item_id', triggered.map((i) => i.id))
+      .eq('location_id', locationId)
+      .gte('sent_at', cutoff)
+    const recentItemIds = new Set((recentLogs || []).map((r: any) => String(r.item_id)))
 
-      if (recentLog?.id) continue
+    const toAlert = triggered.filter((item) => !recentItemIds.has(String(item.id)))
+    if (toAlert.length === 0) return
 
-      // 3b. Insert into low_stock_alert_log
-      await supabase.from('low_stock_alert_log').insert({
+    // Один INSERT batch
+    await supabase.from('low_stock_alert_log').insert(
+      toAlert.map((item) => ({
         item_id: item.id,
         location_id: locationId,
-        current_qty: balance,
-        threshold,
+        current_qty: balanceMap.get(item.id),
+        threshold: Number(item.low_stock_threshold),
         sent_at: now.toISOString(),
-      })
+      })),
+    )
 
-      // 3c. Build Telegram message
+    // Один SELECT staff (раньше делался N раз)
+    const { data: staff } = await supabase
+      .from('staff')
+      .select('id, telegram_chat_id, full_name')
+      .in('role', ['owner', 'manager'])
+      .not('telegram_chat_id', 'is', null)
+
+    if (!staff?.length) return
+
+    // Параллельные отправки в Telegram (вместо serial)
+    const sendPromises: Promise<void>[] = []
+    for (const item of toAlert) {
+      const balance = balanceMap.get(item.id)
       const unit = item.unit || 'шт'
       const text = [
         `<b>⚠️ Низкий остаток</b>`,
         ``,
         `<b>${escapeTelegramHtml(item.name)}</b>`,
         `📊 Сейчас: <b>${balance}</b> ${escapeTelegramHtml(unit)}`,
-        `📏 Порог: <b>${threshold}</b> ${escapeTelegramHtml(unit)}`,
+        `📏 Порог: <b>${Number(item.low_stock_threshold)}</b> ${escapeTelegramHtml(unit)}`,
         `📍 Точка: <b>${escapeTelegramHtml(locationName)}</b>`,
       ].join('\n')
 
-      // 3d. Fetch all staff with telegram_chat_id and role in ('owner', 'manager')
-      const { data: staff } = await supabase
-        .from('staff')
-        .select('id, telegram_chat_id, full_name')
-        .in('role', ['owner', 'manager'])
-        .not('telegram_chat_id', 'is', null)
-
-      if (!staff?.length) continue
-
-      // 3e. Send Telegram message to each
       for (const member of staff) {
         if (!member.telegram_chat_id) continue
-        await sendTelegramMessage(Number(member.telegram_chat_id), text).catch((error) =>
-          writeSystemErrorLogSafe({
-            area: 'low-stock-notifier',
-            scope: 'server',
-            message: error instanceof Error ? error.message : String(error),
-            payload: {
-              itemIds,
-              locationId,
-              staffId: member.id || null,
-              telegramChatId: member.telegram_chat_id,
-            },
-          }),
+        sendPromises.push(
+          sendTelegramMessage(Number(member.telegram_chat_id), text).catch((error) =>
+            writeSystemErrorLogSafe({
+              area: 'low-stock-notifier',
+              scope: 'server',
+              message: error instanceof Error ? error.message : String(error),
+              payload: { itemIds, locationId, staffId: member.id || null, telegramChatId: member.telegram_chat_id },
+            }),
+          ),
         )
       }
     }
+    await Promise.all(sendPromises)
   } catch (error) {
     await writeSystemErrorLogSafe({
       area: 'low-stock-notifier',

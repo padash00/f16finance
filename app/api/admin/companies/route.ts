@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { requireCapability } from '@/lib/server/capabilities'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -36,11 +37,8 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    // Capability checks выше уже отсеивают; здесь — любой staff
-    const canManageCompanies = access.isSuperAdmin || !!access.staffRole
-    if (!canManageCompanies) {
-      return json({ error: 'forbidden' }, 403)
-    }
+    const denied = await requireCapability(access, 'settings.manage_companies')
+    if (denied) return denied
 
     const body = (await req.json().catch(() => null)) as { name?: string | null; code?: string | null; showInStructure?: boolean | null } | null
     const name = String(body?.name || '').trim()
