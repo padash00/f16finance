@@ -647,7 +647,7 @@ export default function CustomersPage() {
               {historyData.map((sale) => {
                 const paymentParts: string[] = []
                 if (sale.cash_amount > 0) paymentParts.push(`Нал: ${formatMoney(sale.cash_amount)}`)
-                if (sale.kaspi_amount > 0) paymentParts.push(`Kaspi: ${formatMoney(sale.kaspi_amount)}`)
+                if (sale.kaspi_amount > 0) paymentParts.push(`Безналичный: ${formatMoney(sale.kaspi_amount)}`)
                 if (sale.card_amount > 0) paymentParts.push(`Карта: ${formatMoney(sale.card_amount)}`)
                 if (sale.online_amount > 0) paymentParts.push(`Онлайн: ${formatMoney(sale.online_amount)}`)
                 return (

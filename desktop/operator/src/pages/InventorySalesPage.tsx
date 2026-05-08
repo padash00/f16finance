@@ -106,8 +106,8 @@ function formatSaleTime(soldAt: string | null | undefined) {
 
 function salePaymentDetails(sale: PointInventorySaleRow) {
   if (sale.payment_method === 'cash') return `Наличные: ${formatMoney(Number(sale.cash_amount || 0))}`
-  if (sale.payment_method === 'kaspi') return `Kaspi: ${formatMoney(Number(sale.kaspi_amount || 0))}`
-  return `Наличные: ${formatMoney(Number(sale.cash_amount || 0))} · Kaspi: ${formatMoney(Number(sale.kaspi_amount || 0))}`
+  if (sale.payment_method === 'kaspi') return `Безналичный: ${formatMoney(Number(sale.kaspi_amount || 0))}`
+  return `Наличные: ${formatMoney(Number(sale.cash_amount || 0))} · Безналичный: ${formatMoney(Number(sale.kaspi_amount || 0))}`
 }
 
 function splitKaspiForSale(sale: PointInventorySaleRow, kaspiAmount: number) {
@@ -657,7 +657,7 @@ export default function InventorySalesPage({
     const kaspiAmount = paymentMethod === 'kaspi' ? finalTotal : paymentMethod === 'mixed' ? finalTotal - cashAmount : 0
 
     if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
-      toastError('Для смешанной оплаты укажите часть наличными, а остальное уйдёт в Kaspi')
+      toastError('Для смешанной оплаты укажите часть наличными, а остальное уйдёт в Безналичный')
       setSaving(false)
       return
     }
@@ -788,7 +788,7 @@ export default function InventorySalesPage({
     if (!correctionSale) return
 
     if (correctionMethod === 'mixed' && (correctionCashAmount <= 0 || correctionKaspiAmount <= 0)) {
-      toastError('Для смешанной оплаты укажите часть наличными, остальное будет Kaspi')
+      toastError('Для смешанной оплаты укажите часть наличными, остальное будет Безналичный')
       return
     }
 
@@ -1581,7 +1581,7 @@ export default function InventorySalesPage({
                 </div>
                 {receiptPreview.paymentMethod === 'mixed' ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Наличные: {formatMoney(receiptPreview.cashAmount)} · Kaspi: {formatMoney(receiptPreview.kaspiAmount)}
+                    Наличные: {formatMoney(receiptPreview.cashAmount)} · Безналичный: {formatMoney(receiptPreview.kaspiAmount)}
                   </p>
                 ) : null}
                 {receiptPreview.customer ? (

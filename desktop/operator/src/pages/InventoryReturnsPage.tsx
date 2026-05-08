@@ -43,7 +43,7 @@ type ReturnLine = {
 
 function paymentBadge(paymentMethod: string) {
   if (paymentMethod === 'cash') return 'Наличные'
-  if (paymentMethod === 'kaspi') return 'Kaspi'
+  if (paymentMethod === 'kaspi') return 'Безналичный'
   return 'Смешанная'
 }
 
@@ -527,7 +527,7 @@ export default function InventoryReturnsPage({
                 )}
                 {refund.kaspiAmount > 0 && (
                   <div className="flex items-center justify-between">
-                    <span>Kaspi</span><span>{formatMoney(refund.kaspiAmount)}</span>
+                    <span>Безналичный</span><span>{formatMoney(refund.kaspiAmount)}</span>
                   </div>
                 )}
               </div>

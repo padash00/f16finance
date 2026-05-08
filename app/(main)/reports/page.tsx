@@ -1810,7 +1810,7 @@ function ReportsContent() {
         },
       ],
         highlights: [
-        `Ночной Kaspi в отчёте делится по календарным суткам, если в доходах заполнено «Kaspi до 00:00»; иначе суточное распределение может быть неточным.`,
+        `Ночной Безналичный в отчёте делится по календарным суткам, если в доходах заполнено «Безналичный до 00:00»; иначе суточное распределение может быть неточным.`,
         `Сравнение с прошлым периодом: выручка ${getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)}, прибыль ${getPercentageChange(totals.profit, totalsPrev.profit)}.`,
         topCompany ? `Лидер по выручке: ${topCompany.name} (${formatMoneyCompact(topCompany.value)}).` : 'Лидер по выручке не определён: нет данных по компаниям.',
         topExpense ? `Главная статья расходов: ${topExpense.name} (${formatMoneyCompact(topExpense.amount)}).` : 'Главная статья расходов не определена: нет данных по расходам.',
@@ -2299,7 +2299,7 @@ function ReportsContent() {
                 <StatCard
                   title="Расходы"
                   value={formatMoneyFull(totals.totalExpense)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} Kaspi`}
+                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} Безналичный`}
                   icon={TrendingDown}
                   trend={totalsPrev.totalExpense > 0 ? Number(((totals.totalExpense - totalsPrev.totalExpense) / totalsPrev.totalExpense * 100).toFixed(1)) : undefined}
                   color="red"
@@ -2723,7 +2723,7 @@ function ReportsContent() {
                                 {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
-                                Нал: {formatMoneyCompact(row.cashAmount)} | Kaspi: {formatMoneyCompact(row.kaspiAmount)}
+                                Нал: {formatMoneyCompact(row.cashAmount)} | Безналичный: {formatMoneyCompact(row.kaspiAmount)}
                                 {row.onlineAmount ? ` | Online: ${formatMoneyCompact(row.onlineAmount)}` : ''}
                                 {row.cardAmount ? ` | Card: ${formatMoneyCompact(row.cardAmount)}` : ''}
                               </div>

@@ -115,7 +115,7 @@ function buildDailyKaspiReportFromRows(date: string, rows: IncomeRow[]): DailyKa
     isPrecise,
     warning: isPrecise
       ? null
-      : 'Есть старые ночные смены без разбивки Kaspi. Суточная сумма показана по доступным данным и может быть неточной.',
+      : 'Есть старые ночные смены без разбивки Безналичный. Суточная сумма показана по доступным данным и может быть неточной.',
     parts,
   }
 }

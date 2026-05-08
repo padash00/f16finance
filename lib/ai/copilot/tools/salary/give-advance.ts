@@ -7,7 +7,7 @@
  *  - operator_id (select) — из активных операторов
  *  - amount (number) — сумма
  *  - company_id (select) — из доступных точек
- *  - cash_or_kaspi (select) — наличные или Kaspi (по умолчанию наличные)
+ *  - cash_or_kaspi (select) — наличные или Безналичный (по умолчанию наличные)
  *  - comment (string, optional)
  *
  * После выполнения создаёт expense с категорией "Аванс" и
@@ -93,10 +93,10 @@ export const giveAdvanceTool: CopilotTool = {
       label: 'Способ оплаты',
       type: 'select',
       required: true,
-      description: 'Наличные или Kaspi',
+      description: 'Наличные или Безналичный',
       getOptions: async () => [
         { value: 'cash', label: '💵 Наличные' },
-        { value: 'kaspi', label: '💳 Kaspi' },
+        { value: 'kaspi', label: '💳 Безналичный' },
       ],
     },
     {

@@ -453,17 +453,17 @@ function validatePaymentBreakdown(params: {
   if (Math.abs(params.kaspiAmount - (params.kaspiBeforeMidnightAmount + params.kaspiAfterMidnightAmount)) > 0.01) {
     return {
       error: 'sale-kaspi-split-mismatch',
-      message: 'Разделение Kaspi до/после полуночи не совпадает с общей суммой Kaspi.',
+      message: 'Разделение Безналичный до/после полуночи не совпадает с общей суммой Безналичный.',
     }
   }
   if (params.paymentMethod === 'cash' && (Math.abs(params.cashAmount - params.totalAmount) > 0.01 || params.kaspiAmount > 0)) {
     return { error: 'sale-cash-payment-invalid', message: 'Для наличной оплаты вся сумма должна быть в наличных.' }
   }
   if (params.paymentMethod === 'kaspi' && (params.cashAmount > 0 || Math.abs(params.kaspiAmount - params.totalAmount) > 0.01)) {
-    return { error: 'sale-kaspi-payment-invalid', message: 'Для Kaspi-оплаты вся сумма должна быть в Kaspi.' }
+    return { error: 'sale-kaspi-payment-invalid', message: 'Для Безналичный-оплаты вся сумма должна быть в Безналичный.' }
   }
   if (params.paymentMethod === 'mixed' && (params.cashAmount <= 0 || params.kaspiAmount <= 0)) {
-    return { error: 'sale-mixed-payment-invalid', message: 'Для смешанной оплаты должны быть и наличные, и Kaspi.' }
+    return { error: 'sale-mixed-payment-invalid', message: 'Для смешанной оплаты должны быть и наличные, и Безналичный.' }
   }
   return null
 }

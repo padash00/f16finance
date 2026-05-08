@@ -67,7 +67,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'expense-wizard': 'мастер расходов',
   'expense-approval': 'заявку расхода',
   'profitability-input': 'ОПиУ',
-  kaspi_terminal: 'Kaspi терминал',
+  kaspi_terminal: 'Безналичный терминал',
   'operator-salary-adjustment': 'корректировку зарплаты',
   'staff-payment': 'выплату зарплаты',
   salary_payment: 'выплату зарплаты',
@@ -164,7 +164,7 @@ function compact(parts: Array<string | null | undefined>) {
   return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ')
 }
 
-const MONEY_DETAIL_LABELS = new Set(['Наличные', 'Kaspi', 'Online', 'Карта', 'Итого', 'Сумма', 'Цена за единицу', 'Стоимость', 'Старт кассы', 'Монеты', 'Долги', 'Wipon', 'Расхождение'])
+const MONEY_DETAIL_LABELS = new Set(['Наличные', 'Безналичный', 'Online', 'Карта', 'Итого', 'Сумма', 'Цена за единицу', 'Стоимость', 'Старт кассы', 'Монеты', 'Долги', 'Wipon', 'Расхождение'])
 
 const VALUE_LABELS: Record<string, string> = {
   success: 'успешно',
@@ -252,7 +252,7 @@ const FIELD_LABELS: Record<string, string> = {
   category: 'Категория',
   comment: 'Комментарий',
   cash_amount: 'Наличные',
-  kaspi_amount: 'Kaspi',
+  kaspi_amount: 'Безналичный',
   online_amount: 'Online',
   card_amount: 'Карта',
   total_amount: 'Итого',
@@ -425,7 +425,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Дата', dateLabel(src.date))
     addDetail(details, 'Смена', src.shift === 'day' ? 'день' : src.shift === 'night' ? 'ночь' : src.shift)
     addDetail(details, 'Наличные', src.cash_amount)
-    addDetail(details, 'Kaspi', src.kaspi_amount)
+    addDetail(details, 'Безналичный', src.kaspi_amount)
     addDetail(details, 'Online', src.online_amount)
     addDetail(details, 'Карта', src.card_amount)
     const detailRows = act === 'update'
@@ -441,7 +441,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Категория', src.category)
     addDetail(details, 'Дата', dateLabel(src.date))
     addDetail(details, 'Наличные', src.cash_amount)
-    addDetail(details, 'Kaspi', src.kaspi_amount)
+    addDetail(details, 'Безналичный', src.kaspi_amount)
     addDetail(details, 'Комментарий', src.comment)
     const detailRows = act === 'update'
       ? describeChanges(prev, src)
@@ -475,7 +475,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Позиций', p.item_count)
     addDetail(details, 'Итого', p.total_amount)
     addDetail(details, 'Оплата', p.payment_mode === 'deferred' ? 'отсрочка' : 'оплачено сразу')
-    addDetail(details, 'Метод оплаты', p.payment_method === 'kaspi' ? 'Kaspi' : p.payment_method === 'cash' ? 'наличные' : p.payment_method)
+    addDetail(details, 'Метод оплаты', p.payment_method === 'kaspi' ? 'Безналичный' : p.payment_method === 'cash' ? 'наличные' : p.payment_method)
     addDetail(details, 'Долг поставщика', p.supplier_debt_status === 'open' ? 'открыт' : p.supplier_debt_status === 'paid' ? 'закрыт' : p.supplier_debt_status)
     addDetail(details, 'Срок оплаты', dateLabel(p.due_date))
     addDetail(details, 'Категория расхода', p.auto_expense_category_name)

@@ -2147,7 +2147,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const fmt = (v: number) => v.toLocaleString('ru-RU') + ' ₸'
       const lines: string[] = [
         `Период: ${date_from} — ${date_to}${companyFilter ? ` | Точка: ${companyFilter.name}` : ' | Все точки'}`,
-        `Доходы: ${fmt(totalIncome)} (нал ${fmt(totalCash)}, Kaspi ${fmt(totalKaspi)}, онлайн ${fmt(totalOnline)}, карта ${fmt(totalCard)})`,
+        `Доходы: ${fmt(totalIncome)} (нал ${fmt(totalCash)}, Безналичный ${fmt(totalKaspi)}, онлайн ${fmt(totalOnline)}, карта ${fmt(totalCard)})`,
         `Расходы: ${fmt(totalExpense)}`,
         `Прибыль: ${fmt(profit)} | Маржа: ${margin}%`,
       ]
@@ -2660,7 +2660,7 @@ async function handleDetailedReport(chatId: number) {
     '',
     `💰 Выручка: <b>${fmtMoney(totalIncome)}</b>`,
     `  • Нал: ${fmtMoney(totalCash)}`,
-    `  • Kaspi: ${fmtMoney(totalKaspi)}`,
+    `  • Безналичный: ${fmtMoney(totalKaspi)}`,
     `  • Online: ${fmtMoney(totalOnline)}`,
     `📉 Расходы: <b>${fmtMoney(totalExpense)}</b>`,
     `💼 Прибыль: <b>${sign}${fmtMoney(profit)}</b>`,
@@ -2808,7 +2808,7 @@ export async function POST(req: Request) {
           session.selectedCompanyId = companyId
           await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${sessionChatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
           const { parsed, companies } = session
-          const payMethod = parsed.payment_method === 'kaspi' ? 'Kaspi' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const payMethod = parsed.payment_method === 'kaspi' ? 'Безналичный' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
           const selectedCompany = companies.find((c: any) => c.id === companyId)
           const companyButtons = companies.map((c: any) => [{ text: (c.id === companyId ? '✅ ' : '') + c.name, callback_data: `pdf_company_${sessionChatId}_${c.id}` }])
           const confirmText = [`📄 <b>Распознан чек</b>`, ``, `💰 Сумма: <b>${parsed.amount.toLocaleString('ru-RU')} ₸</b>`, `📁 Категория: <b>${parsed.category}</b>`, `📅 Дата: <b>${parsed.date}</b>`, `💳 Оплата: <b>${payMethod}</b>`, parsed.vendor ? `🏪 Поставщик: <b>${parsed.vendor}</b>` : '', `🏢 Точка: <b>${selectedCompany?.name || companyId}</b>`, ``, `Подтверди добавление:`].filter(Boolean).join('\n')
@@ -3113,7 +3113,7 @@ export async function POST(req: Request) {
           const session = { parsed, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
           await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${chatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
 
-          const payMethod = parsed.payment_method === 'kaspi' ? 'Kaspi' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const payMethod = parsed.payment_method === 'kaspi' ? 'Безналичный' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
           const companyButtons = companiesList.map((c) => [{ text: (c.id === session.selectedCompanyId ? '✅ ' : '') + c.name, callback_data: `pdf_company_${chatId}_${c.id}` }])
           const confirmText = [`🧾 <b>Распознан чек</b>`, ``, `💰 Сумма: <b>${parsed.amount.toLocaleString('ru-RU')} ₸</b>`, `📁 Категория: <b>${parsed.category}</b>`, `📅 Дата: <b>${parsed.date}</b>`, `💳 Оплата: <b>${payMethod}</b>`, parsed.vendor ? `🏪 ${parsed.vendor}` : '', parsed.comment ? `📝 ${parsed.comment}` : '', ``, `Выбери точку:`].filter(Boolean).join('\n')
           await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text: confirmText, parse_mode: 'HTML', reply_markup: { inline_keyboard: [...companyButtons, [{ text: '✅ Добавить в расходы', callback_data: `pdf_confirm_${chatId}` }, { text: '❌ Отмена', callback_data: `pdf_cancel_${chatId}` }]] } }).catch(() => null)
@@ -3203,7 +3203,7 @@ export async function POST(req: Request) {
           const session = { parsed: parsedExpense, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
           await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${chatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
 
-          const payMethod = parsedExpense.payment_method === 'kaspi' ? 'Kaspi' : parsedExpense.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const payMethod = parsedExpense.payment_method === 'kaspi' ? 'Безналичный' : parsedExpense.payment_method === 'card' ? 'Карта' : 'Наличные'
           const companyButtons = companiesList.map((c) => [{ text: (c.id === session.selectedCompanyId ? '✅ ' : '') + c.name, callback_data: `pdf_company_${chatId}_${c.id}` }])
           const confirmText = [`📄 <b>Распознан PDF-чек</b>`, ``, `💰 Сумма: <b>${parsedExpense.amount.toLocaleString('ru-RU')} ₸</b>`, `📁 Категория: <b>${parsedExpense.category}</b>`, `📅 Дата: <b>${parsedExpense.date}</b>`, `💳 Оплата: <b>${payMethod}</b>`, parsedExpense.vendor ? `🏪 ${parsedExpense.vendor}` : '', parsedExpense.comment ? `📝 ${parsedExpense.comment}` : '', ``, `Выбери точку:`].filter(Boolean).join('\n')
           await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text: confirmText, parse_mode: 'HTML', reply_markup: { inline_keyboard: [...companyButtons, [{ text: '✅ Добавить в расходы', callback_data: `pdf_confirm_${chatId}` }, { text: '❌ Отмена', callback_data: `pdf_cancel_${chatId}` }]] } }).catch(() => null)

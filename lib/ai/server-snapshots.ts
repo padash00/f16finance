@@ -274,7 +274,7 @@ export async function getAnalysisServerSnapshot(
         title: 'Структура оплат',
         metrics: [
           { label: 'Наличные', value: formatMoney(data.totals.incomeCash) },
-          { label: 'Kaspi', value: formatMoney(data.totals.incomeKaspi) },
+          { label: 'Безналичный', value: formatMoney(data.totals.incomeKaspi) },
           { label: 'Онлайн', value: formatMoney(data.totals.incomeOnline) },
           { label: 'Банковские карты', value: formatMoney(data.totals.incomeCard) },
           { label: 'Доля безнала', value: formatPercent(data.totals.cashlessShare) },
@@ -439,7 +439,7 @@ export async function getExpensesServerSnapshot(
         title: 'Платёжная структура расходов',
         metrics: [
           { label: 'Наличные', value: formatMoney(data.totals.expenseCash) },
-          { label: 'Kaspi', value: formatMoney(data.totals.expenseKaspi) },
+          { label: 'Безналичный', value: formatMoney(data.totals.expenseKaspi) },
           { label: 'Всего расходов', value: formatMoney(data.totals.totalExpense) },
         ],
       },

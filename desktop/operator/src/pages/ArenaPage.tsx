@@ -210,7 +210,7 @@ function StartSessionModal({
                   : 'border-white/10 text-muted-foreground hover:text-foreground'
               }`}
             >
-              {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+              {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Безналичный' : 'Смешанный'}
             </button>
           ))}
         </div>
@@ -415,7 +415,7 @@ function ManageSessionModal({
                           : 'border-white/10 text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+                      {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Безналичный' : 'Смешанный'}
                     </button>
                   ))}
                 </div>
@@ -649,7 +649,7 @@ function MassZoneStartModal({
                   : 'border-white/10 text-muted-foreground hover:text-foreground'
               }`}
             >
-              {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+              {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Безналичный' : 'Смешанный'}
             </button>
           ))}
         </div>
@@ -1343,7 +1343,7 @@ export default function ArenaPage({
       setSessions((prev) => prev.filter((s) => s.id !== manageTarget.session.id))
       setManageTarget(null)
       if (refund.amount > 0) {
-        toastInfo(`Возврат: ${refund.amount.toLocaleString('ru-RU')} ₸${refund.cash > 0 ? ` (нал ${refund.cash} ₸)` : ''}${refund.kaspi > 0 ? ` (Каспи ${refund.kaspi} ₸)` : ''}`)
+        toastInfo(`Возврат: ${refund.amount.toLocaleString('ru-RU')} ₸${refund.cash > 0 ? ` (нал ${refund.cash} ₸)` : ''}${refund.kaspi > 0 ? ` (Безналичный ${refund.kaspi} ₸)` : ''}`)
       } else {
         toastInfo('Сессия завершена, возврат не начислен (время уже истекло)')
       }
@@ -1452,7 +1452,7 @@ export default function ArenaPage({
         s.status,
       ]
     })
-    const header = ['Станция', 'Тариф', 'Длит.(мин)', 'Начало', 'Конец', 'Сумма', 'Наличные', 'Каспи', 'Способ оплаты', 'Статус']
+    const header = ['Станция', 'Тариф', 'Длит.(мин)', 'Начало', 'Конец', 'Сумма', 'Наличные', 'Безналичный', 'Способ оплаты', 'Статус']
     const csvContent = [header, ...rows]
       .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n')
@@ -1811,8 +1811,8 @@ function PrintReceiptModal({
       receipt.paymentMethod === 'cash'
         ? `Наличные: ${formatReceiptMoney(receipt.cashAmount)}`
         : receipt.paymentMethod === 'kaspi'
-        ? `Каспи: ${formatReceiptMoney(receipt.kaspiAmount)}`
-        : `Наличные: ${formatReceiptMoney(receipt.cashAmount)}, Каспи: ${formatReceiptMoney(receipt.kaspiAmount)}`
+        ? `Безналичный: ${formatReceiptMoney(receipt.kaspiAmount)}`
+        : `Наличные: ${formatReceiptMoney(receipt.cashAmount)}, Безналичный: ${formatReceiptMoney(receipt.kaspiAmount)}`
 
     const html = `<!DOCTYPE html>
 <html lang="ru">
@@ -1943,7 +1943,7 @@ function SessionHistoryModal({
   }
 
   function exportCsv() {
-    const header = ['Станция', 'Тариф', 'Начало', 'Конец', 'Статус', 'Сумма', 'Нал', 'Каспи', 'Способ']
+    const header = ['Станция', 'Тариф', 'Начало', 'Конец', 'Статус', 'Сумма', 'Нал', 'Безналичный', 'Способ']
     const csvRows = rows.map((r) => {
       const st = stations.find(x => x.id === r.station_id)
       const t = tariffs.find(x => x.id === r.tariff_id)

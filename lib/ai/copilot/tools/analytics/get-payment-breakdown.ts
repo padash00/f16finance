@@ -20,7 +20,7 @@ function addDaysISO(iso: string, diff: number): string {
 export const getPaymentBreakdownTool: CopilotTool = {
   name: 'get_payment_breakdown',
   category: 'analytics',
-  description: 'Разбивка выручки по способам оплаты (нал/Kaspi/карта/онлайн) с долями',
+  description: 'Разбивка выручки по способам оплаты (нал/Безналичный/карта/онлайн) с долями',
   requiredCapability: 'analytics.view',
   severity: 'low',
   params: [
@@ -71,7 +71,7 @@ export const getPaymentBreakdownTool: CopilotTool = {
       ok: true,
       message: `💳 Разбивка платежей за ${period === 'week' ? 'неделю' : period === 'month' ? 'месяц' : 'квартал'}:
   💵 Наличные: ${fmt(cash)} (${pct(cash)})
-  💳 Kaspi: ${fmt(kaspi)} (${pct(kaspi)})
+  💳 Безналичный: ${fmt(kaspi)} (${pct(kaspi)})
   💸 Карта: ${fmt(card)} (${pct(card)})
   🌐 Онлайн: ${fmt(online)} (${pct(online)})
 

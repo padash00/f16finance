@@ -45,7 +45,7 @@ export function ReportsMethodologyBanner({
         <span className="font-medium text-white">Как формируется отчёт</span>
         {impreciseNightKaspiCount > 0 && (
           <span className="ml-auto text-xs text-amber-400 whitespace-nowrap">
-            Ночных смен без «Kaspi до 00:00»: {impreciseNightKaspiCount}
+            Ночных смен без «Безналичный до 00:00»: {impreciseNightKaspiCount}
           </span>
         )}
       </button>
@@ -58,10 +58,10 @@ export function ReportsMethodologyBanner({
               {comparisonMode ? ' (включено).' : '.'}
             </li>
             <li>
-              Для <strong className="text-gray-200">ночных смен</strong> Kaspi в этом отчёте делится по календарным суткам: сумма до полуночи остаётся на дате смены, остаток переносится на следующий день (если заполнено поле «Kaspi до 00:00» в доходах).
+              Для <strong className="text-gray-200">ночных смен</strong> Безналичный в этом отчёте делится по календарным суткам: сумма до полуночи остаётся на дате смены, остаток переносится на следующий день (если заполнено поле «Безналичный до 00:00» в доходах).
             </li>
             <li>
-              Если у ночной смены есть Kaspi, но нет разбивки до полуночи, суточное распределение Kaspi в отчёте может быть неточным — заполните поле в доходах.
+              Если у ночной смены есть Безналичный, но нет разбивки до полуночи, суточное распределение Безналичный в отчёте может быть неточным — заполните поле в доходах.
             </li>
           </ul>
           <div className="flex flex-wrap gap-2">
@@ -76,7 +76,7 @@ export function ReportsMethodologyBanner({
               href={kaspiHref}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-gray-800/60 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
             >
-              Сверка Kaspi с доходами
+              Сверка Безналичный с доходами
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />
             </Link>
           </div>

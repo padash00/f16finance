@@ -63,7 +63,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/logs': 'Журнал событий',
   '/operators': 'Операторы',
   '/staff': 'Сотрудники',
-  '/kaspi-terminal': 'Kaspi-терминал',
+  '/kaspi-terminal': 'безналичный терминал',
   '/salary': 'Зарплата',
   '/tasks': 'Задачи',
   '/weekly-report': 'Еженедельный отчёт',
@@ -186,7 +186,7 @@ export function formatAuditEvent(input: Input): FormattedEvent {
     const date = shortDate(src.date)
     const breakdown = [
       money(src.cash_amount) ? `нал ${money(src.cash_amount)}` : '',
-      money(src.kaspi_amount) ? `Kaspi ${money(src.kaspi_amount)}` : '',
+      money(src.kaspi_amount) ? `Безналичный ${money(src.kaspi_amount)}` : '',
       money(src.online_amount) ? `Online ${money(src.online_amount)}` : '',
       money(src.card_amount) ? `карта ${money(src.card_amount)}` : '',
     ].filter(Boolean)
@@ -253,7 +253,7 @@ export function formatAuditEvent(input: Input): FormattedEvent {
         title: `${who} добавил расход ${catLabel} -${moneyOrZero(total)}${date ? ` за ${date}` : ''}`,
         details: [
           money(src.cash_amount) ? `нал ${money(src.cash_amount)}` : '',
-          money(src.kaspi_amount) ? `Kaspi ${money(src.kaspi_amount)}` : '',
+          money(src.kaspi_amount) ? `Безналичный ${money(src.kaspi_amount)}` : '',
           str(src.comment) ? `комментарий: ${str(src.comment)}` : '',
           pointInfo,
         ].filter(Boolean) as string[],
@@ -323,7 +323,7 @@ export function formatAuditEvent(input: Input): FormattedEvent {
         title: `${who} выплатил зарплату ${recipient}: ${moneyOrZero(total)}`,
         details: [
           money(p.cash_amount) ? `нал ${money(p.cash_amount)}` : '',
-          money(p.kaspi_amount) ? `Kaspi ${money(p.kaspi_amount)}` : '',
+          money(p.kaspi_amount) ? `Безналичный ${money(p.kaspi_amount)}` : '',
           str(p.comment) ? `комментарий: ${str(p.comment)}` : '',
           pointInfo,
         ].filter(Boolean) as string[],
@@ -419,7 +419,7 @@ export function formatAuditEvent(input: Input): FormattedEvent {
       const revenue = num(p.cash_total ?? p.revenue ?? p.total_revenue)
       return shifts(`🌙 ${who} закрыл смену${date ? ` за ${date}` : ''}: выручка ${moneyOrZero(revenue)}`, [
         money(p.cash_total) ? `нал ${money(p.cash_total)}` : '',
-        money(p.kaspi_total) ? `Kaspi ${money(p.kaspi_total)}` : '',
+        money(p.kaspi_total) ? `Безналичный ${money(p.kaspi_total)}` : '',
         pointInfo,
       ].filter(Boolean) as string[], 'important')
     }
@@ -619,9 +619,9 @@ export function formatAuditEvent(input: Input): FormattedEvent {
 
   if (et === 'kaspi_terminal') {
     const total = num(p.amount)
-    if (act === 'create') return finance(`💳 ${who} добавил оборот Kaspi-терминала: ${moneyOrZero(total)}`, [pointInfo].filter(Boolean) as string[], 'normal')
-    if (act === 'update') return finance(`✏️ ${who} изменил оборот Kaspi-терминала`, [pointInfo].filter(Boolean) as string[], 'normal')
-    if (act === 'delete') return finance(`🗑 ${who} удалил запись Kaspi-терминала`, [pointInfo].filter(Boolean) as string[], 'normal')
+    if (act === 'create') return finance(`💳 ${who} добавил оборот безналичный терминала: ${moneyOrZero(total)}`, [pointInfo].filter(Boolean) as string[], 'normal')
+    if (act === 'update') return finance(`✏️ ${who} изменил оборот безналичный терминала`, [pointInfo].filter(Boolean) as string[], 'normal')
+    if (act === 'delete') return finance(`🗑 ${who} удалил запись безналичный терминала`, [pointInfo].filter(Boolean) as string[], 'normal')
   }
 
   if (et === 'expense_vendor_whitelist' || et === 'expense_wizard') {
@@ -738,7 +738,7 @@ const ENTITY_FALLBACK: Record<string, string> = {
   'point-debt': 'долг точки',
   'supplier_debt': 'долг поставщику',
   'staff-payment': 'выплата зарплаты',
-  'kaspi_terminal': 'оборот Kaspi',
+  'kaspi_terminal': 'оборот Безналичный',
   'profitability-input': 'ОПиУ',
   'system-error': 'ошибка системы',
   'page-view': 'просмотр страницы',

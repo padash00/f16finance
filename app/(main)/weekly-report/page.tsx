@@ -1927,7 +1927,7 @@ function WeeklyReportContent() {
                 <StatCard
                   title="ОБЩЕЕ САЛЬДО"
                   value={formatMoneyFull(totals.netTotal)}
-                  subValue={`Нал + Kaspi/Online + Карта`}
+                  subValue={`Нал + Безналичный/Online + Карта`}
                   icon={Scale}
                   trend={comparisonMode ? Number(totals.change.profit.replace('%', '')) : undefined}
                   color="violet"
@@ -1962,7 +1962,7 @@ function WeeklyReportContent() {
                       </tr>
                       <tr>
                         <td className="py-2.5 pr-4 text-xs font-medium text-blue-400 flex items-center gap-2">
-                          <CreditCard className="w-3.5 h-3.5" /> Kaspi + Online
+                          <CreditCard className="w-3.5 h-3.5" /> Безналичный + Online
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs text-white">
                           <span className="text-white">{formatMoneyCompact(totals.incomeKaspiOnline)}</span>

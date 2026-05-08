@@ -56,10 +56,10 @@ export const addExpenseTool: CopilotTool = {
       label: 'Способ оплаты',
       type: 'select',
       required: true,
-      description: 'Наличные или Kaspi',
+      description: 'Наличные или Безналичный',
       getOptions: async () => [
         { value: 'cash', label: '💵 Наличные' },
-        { value: 'kaspi', label: '💳 Kaspi' },
+        { value: 'kaspi', label: '💳 Безналичный' },
       ],
     },
     {

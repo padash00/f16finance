@@ -141,7 +141,7 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'kaspi-terminal',
         path: '/kaspi-terminal',
-        label: 'Kaspi-терминал',
+        label: 'безналичный терминал',
         capabilities: [
           ...crud('kaspi-terminal', { exportData: true }),
           { id: 'kaspi-terminal.reconcile', label: 'Реконсиляция платежей', severity: 'medium' },

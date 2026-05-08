@@ -538,7 +538,7 @@ async function seedDefaults(organizationId: string | null, actorUserId: string |
       blocks_shift: true,
       sort_order: 30,
       items: [
-        { title: 'Сверить кассу, Kaspi и итог сменного отчёта', requires_photo: false, severity: 'warning' },
+        { title: 'Сверить кассу, Безналичный и итог сменного отчёта', requires_photo: false, severity: 'warning' },
         { title: 'Проверить активные долги и сканер', requires_photo: false, severity: 'warning' },
         { title: 'Сделать фото состояния зала после уборки', requires_photo: true, severity: 'normal' },
         { title: 'Выключить/проверить оборудование по правилам точки', requires_photo: false, severity: 'normal' },

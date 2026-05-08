@@ -113,7 +113,7 @@ export const queryRevenueTool: CopilotTool = {
       message: `📊 Выручка за ${periodLabel[period] || period}${companyLabel}:
 Итого: ${fmtMoney(total)}
   💵 Наличные: ${fmtMoney(cash)}
-  💳 Kaspi: ${fmtMoney(kaspi)}
+  💳 Безналичный: ${fmtMoney(kaspi)}
   💸 Карта: ${fmtMoney(card)}
   🌐 Онлайн: ${fmtMoney(online)}
 Записей в incomes: ${rows.length}`,

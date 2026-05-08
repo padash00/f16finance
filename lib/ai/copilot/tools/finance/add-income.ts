@@ -49,10 +49,10 @@ export const addIncomeTool: CopilotTool = {
     },
     {
       name: 'kaspi_amount',
-      label: 'Kaspi (₸)',
+      label: 'Безналичный (₸)',
       type: 'number',
       required: false,
-      description: 'Сумма по Kaspi',
+      description: 'Сумма по Безналичный',
     },
     {
       name: 'card_amount',

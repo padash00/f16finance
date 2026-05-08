@@ -444,7 +444,7 @@ export default function OperatorCabinetPage({
                     <input
                       value={knowledgeQuery}
                       onChange={(event) => setKnowledgeQuery(event.target.value)}
-                      placeholder="Поиск: Kaspi, штраф, закрытие смены, клиент, техника..."
+                      placeholder="Поиск: Безналичный, штраф, закрытие смены, клиент, техника..."
                       className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                   </div>
@@ -515,7 +515,7 @@ export default function OperatorCabinetPage({
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-semibold tabular-nums">{formatMoney(shift.total)}</div>
-                            <div className="text-xs text-muted-foreground">Нал {formatMoney(shift.cash)} · Kaspi {formatMoney(shift.kaspi + shift.kaspi_online)}</div>
+                            <div className="text-xs text-muted-foreground">Нал {formatMoney(shift.cash)} · Безналичный {formatMoney(shift.kaspi + shift.kaspi_online)}</div>
                           </div>
                         </div>
                       </div>

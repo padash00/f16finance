@@ -97,7 +97,7 @@ export const navSections: NavSection[] = [
     icon: PieChart,
     items: [
       { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
-      { href: '/kaspi-terminal', label: 'Kaspi терминал', icon: CreditCard, note: 'Суточные итоги с POS' },
+      { href: '/kaspi-terminal', label: 'Безналичный терминал', icon: CreditCard, note: 'Суточные итоги с POS' },
       { href: '/shift-telegram-audit', label: 'Сверка Telegram', icon: ScanSearch, note: 'Смена: Telegram против сайта', badge: 'new', badgeColor: 'blue' },
       { href: '/analytics', label: 'Аналитика доходов', icon: BarChart3, note: 'Сравнение точек и тренды' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },

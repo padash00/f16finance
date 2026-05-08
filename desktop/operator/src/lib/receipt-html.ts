@@ -33,7 +33,7 @@ export type SaleReceiptPreview = {
 
 export function paymentBadge(method: string) {
   if (method === 'cash') return 'Наличные'
-  if (method === 'kaspi') return 'Kaspi'
+  if (method === 'kaspi') return 'Безналичный'
   return 'Смешанная'
 }
 
@@ -159,7 +159,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
           <span>↳ Наличные</span><span>${escapeHtml(formatMoney(preview.cashAmount))} ₸</span>
         </div>
         <div class="payment-row" style="font-size:12px;color:#4b5563;">
-          <span>↳ Kaspi</span><span>${escapeHtml(formatMoney(preview.kaspiAmount))} ₸</span>
+          <span>↳ Безналичный</span><span>${escapeHtml(formatMoney(preview.kaspiAmount))} ₸</span>
         </div>
       `
           : ''

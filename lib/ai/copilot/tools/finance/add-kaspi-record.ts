@@ -1,5 +1,5 @@
 /**
- * AI tool: добавить запись Kaspi-терминала.
+ * AI tool: добавить запись безналичный терминала.
  * Capability: kaspi-terminal.create
  */
 
@@ -14,7 +14,7 @@ function todayISO(): string {
 export const addKaspiRecordTool: CopilotTool = {
   name: 'add_kaspi_record',
   category: 'finance',
-  description: 'Записать сумму с Kaspi-терминала за день',
+  description: 'Записать сумму с безналичный терминала за день',
   requiredCapability: 'kaspi-terminal.create',
   severity: 'medium',
   params: [
@@ -67,6 +67,6 @@ export const addKaspiRecordTool: CopilotTool = {
       })
     } catch {}
 
-    return { ok: true, message: `✅ Kaspi-запись ${amount.toLocaleString('ru-RU')} ₸ за ${date} сохранена.` }
+    return { ok: true, message: `✅ запись безнала ${amount.toLocaleString('ru-RU')} ₸ за ${date} сохранена.` }
   },
 }

@@ -132,7 +132,7 @@ export async function PATCH(request: Request) {
         return json({ error: 'Сумма наличных не может быть отрицательной' }, 400)
       }
       if (incoming.amount_kaspi != null && Number(incoming.amount_kaspi) < 0) {
-        return json({ error: 'Сумма Kaspi не может быть отрицательной' }, 400)
+        return json({ error: 'Сумма Безналичный не может быть отрицательной' }, 400)
       }
       if (incoming.date) {
         const d = new Date(incoming.date)

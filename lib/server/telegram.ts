@@ -79,8 +79,8 @@ export async function notifyShiftReport(params: {
   const rows: Row[] = [
     { k: 'Наличные', v: cash },
     { k: 'Мелочь', v: coins },
-    { k: 'Kaspi POS', v: kaspi },
-    { k: 'Kaspi Online', v: online },
+    { k: 'Безналичный POS', v: kaspi },
+    { k: 'Безналичный Online', v: online },
     { k: 'Тех / прочее', v: tech },
     { k: 'Старт кассы', v: start },
     { k: 'Вычет (сист.)', v: wipon },

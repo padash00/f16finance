@@ -97,7 +97,7 @@ export default function AddIncomePage() {
 
   // Extra: PS5 и VR отдельно
   const [ps5Cash, setPs5Cash] = useState('')
-  const [ps5Kaspi, setPs5Kaspi] = useState('')
+  const [ps5Безналичный, setPs5Безналичный] = useState('')
   const [vrCash, setVrCash] = useState('')
   const [vrKaspi, setVrKaspi] = useState('')
 
@@ -157,7 +157,7 @@ export default function AddIncomePage() {
     setCard('')
     setOnline('')
     setPs5Cash('')
-    setPs5Kaspi('')
+    setPs5Безналичный('')
     setVrCash('')
     setVrKaspi('')
   }, [companyId])
@@ -165,10 +165,10 @@ export default function AddIncomePage() {
   // ---- расчет предварительной суммы ----
   const previewTotal = useMemo(() => {
     if (isExtra) {
-      return parseAmount(ps5Cash) + parseAmount(ps5Kaspi) + parseAmount(vrCash) + parseAmount(vrKaspi)
+      return parseAmount(ps5Cash) + parseAmount(ps5Безналичный) + parseAmount(vrCash) + parseAmount(vrKaspi)
     }
     return parseAmount(cash) + parseAmount(kaspi) + parseAmount(online) + parseAmount(card)
-  }, [isExtra, ps5Cash, ps5Kaspi, vrCash, vrKaspi, cash, kaspi, online, card])
+  }, [isExtra, ps5Cash, ps5Безналичный, vrCash, vrKaspi, cash, kaspi, online, card])
 
   // ---- валидация ----
   const validation = useMemo(() => {
@@ -178,7 +178,7 @@ export default function AddIncomePage() {
     if (!operators.length) return { ok: false, msg: 'Нет активных операторов' }
 
     if (isExtra) {
-      const ps5Total = parseAmount(ps5Cash) + parseAmount(ps5Kaspi)
+      const ps5Total = parseAmount(ps5Cash) + parseAmount(ps5Безналичный)
       const vrTotal = parseAmount(vrCash) + parseAmount(vrKaspi)
       if (ps5Total <= 0 && vrTotal <= 0) return { ok: false, msg: 'Укажите сумму для PS5 или VR' }
       return { ok: true, msg: '' }
@@ -191,7 +191,7 @@ export default function AddIncomePage() {
     if (c <= 0 && k <= 0 && o <= 0 && cd <= 0) return { ok: false, msg: 'Введите сумму дохода' }
 
     return { ok: true, msg: '' }
-  }, [companyId, operatorId, date, operators.length, isExtra, ps5Cash, ps5Kaspi, vrCash, vrKaspi, cash, kaspi, online, card, showOnline])
+  }, [companyId, operatorId, date, operators.length, isExtra, ps5Cash, ps5Безналичный, vrCash, vrKaspi, cash, kaspi, online, card, showOnline])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -205,7 +205,7 @@ export default function AddIncomePage() {
 
       if (isExtra) {
         const pCash = parseAmount(ps5Cash)
-        const pKaspi = parseAmount(ps5Kaspi)
+        const pKaspi = parseAmount(ps5Безналичный)
         const vCash = parseAmount(vrCash)
         const vKaspi = parseAmount(vrKaspi)
 
@@ -600,7 +600,7 @@ export default function AddIncomePage() {
 
                       <div className="space-y-2">
                         <label className="text-xs text-gray-400 flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-blue-400" /> Kaspi QR / POS
+                          <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный QR / POS
                         </label>
                         <div className="relative">
                           <input
@@ -608,8 +608,8 @@ export default function AddIncomePage() {
                             type="number"
                             placeholder="0"
                             min="0"
-                            value={ps5Kaspi}
-                            onChange={(e) => setPs5Kaspi(e.target.value)}
+                            value={ps5Безналичный}
+                            onChange={(e) => setPs5Безналичный(e.target.value)}
                             className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
@@ -648,7 +648,7 @@ export default function AddIncomePage() {
 
                       <div className="space-y-2">
                         <label className="text-xs text-gray-400 flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-blue-400" /> Kaspi QR / POS
+                          <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный QR / POS
                         </label>
                         <div className="relative">
                           <input
@@ -688,7 +688,7 @@ export default function AddIncomePage() {
 
                   <div className="space-y-2">
                     <label className="text-xs text-gray-400 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-blue-400" /> Kaspi POS / переводы
+                      <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный POS / переводы
                     </label>
                     <div className="relative">
                       <input
@@ -707,7 +707,7 @@ export default function AddIncomePage() {
                   {showOnline && (
                     <div className="sm:col-span-2 space-y-2">
                       <label className="text-xs text-gray-400 flex items-center gap-2">
-                        <Smartphone className="w-4 h-4 text-pink-400" /> Kaspi Online (Senet)
+                        <Smartphone className="w-4 h-4 text-pink-400" /> Безналичный Online (Senet)
                       </label>
                       <div className="relative">
                         <input

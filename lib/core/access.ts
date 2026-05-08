@@ -368,7 +368,7 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/salary', label: 'Зарплата' },
       { path: '/salary/rules', label: 'Правила зарплаты' },
       { path: '/point-debts', label: 'Долги с точки' },
-      { path: '/kaspi-terminal', label: 'Kaspi терминал' },
+      { path: '/kaspi-terminal', label: 'Безналичный терминал' },
       { path: '/categories', label: 'Категории расходов' },
       { path: '/tax', label: 'Налоги' },
       { path: '/profitability', label: 'ОПиУ и EBITDA' },

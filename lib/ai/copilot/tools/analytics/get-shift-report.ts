@@ -77,7 +77,7 @@ export const getShiftReportTool: CopilotTool = {
       lines.push(`${sh.shift_type === 'night' ? '🌙' : '☀️'} ${opName}:`)
       lines.push(`  Итого: ${fmt(total)}`)
       if (inc.cash > 0) lines.push(`  💵 Нал: ${fmt(inc.cash)}`)
-      if (inc.kaspi > 0) lines.push(`  💳 Kaspi: ${fmt(inc.kaspi)}`)
+      if (inc.kaspi > 0) lines.push(`  💳 Безналичный: ${fmt(inc.kaspi)}`)
       if (inc.card > 0) lines.push(`  💸 Карта: ${fmt(inc.card)}`)
       if (inc.online > 0) lines.push(`  🌐 Онлайн: ${fmt(inc.online)}`)
     }

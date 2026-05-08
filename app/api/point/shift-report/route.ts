@@ -363,6 +363,6 @@ export async function GET(request: Request) {
       area: 'point-shift-report:get',
       message: error?.message || 'Unknown point shift report GET error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить суточный Kaspi отчёт' }, 500)
+    return json({ error: error?.message || 'Не удалось загрузить суточный Безналичный отчёт' }, 500)
   }
 }
