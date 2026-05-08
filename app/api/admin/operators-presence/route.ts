@@ -79,6 +79,7 @@ export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
   if (!canManageDevices(access)) return json({ error: 'forbidden' }, 403)
+  if (!access.user) return json({ error: 'unauthenticated' }, 401)
 
   const body = await request.json().catch(() => null) as
     | { deviceId?: string; deviceIds?: string[]; kind?: string; body?: string; expiresInMin?: number }
