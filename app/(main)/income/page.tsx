@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
@@ -1236,7 +1237,7 @@ export default function IncomePage() {
             />
           )}
 
-          {editingIncome && (
+          {editingIncome && typeof window !== 'undefined' && createPortal(
             <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 p-4 py-8 backdrop-blur-sm overflow-y-auto"
               onClick={(e) => { if (e.target === e.currentTarget) closeIncomeEditor() }}>
               <Card className="w-full max-w-2xl border-white/10 bg-gray-900 p-5 my-auto">
@@ -1331,7 +1332,8 @@ export default function IncomePage() {
                   </Button>
                 </div>
               </Card>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
     </>
