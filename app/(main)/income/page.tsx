@@ -1237,9 +1237,9 @@ export default function IncomePage() {
           )}
 
           {editingIncome && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto"
+            <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 p-4 py-8 backdrop-blur-sm overflow-y-auto"
               onClick={(e) => { if (e.target === e.currentTarget) closeIncomeEditor() }}>
-              <Card className="w-full max-w-2xl border-white/10 bg-gray-900 p-5">
+              <Card className="w-full max-w-2xl border-white/10 bg-gray-900 p-5 my-auto">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-white">Редактирование дохода</h3>
