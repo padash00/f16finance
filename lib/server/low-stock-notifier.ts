@@ -92,7 +92,7 @@ export async function checkAndNotifyLowStock(
     if (!staff?.length) return
 
     // Параллельные отправки в Telegram (вместо serial)
-    const sendPromises: Promise<void>[] = []
+    const sendPromises: Promise<unknown>[] = []
     for (const item of toAlert) {
       const balance = balanceMap.get(item.id)
       const unit = item.unit || 'шт'
