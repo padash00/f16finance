@@ -124,7 +124,7 @@ function parseTelegramHtml(html: string): TgReport[] {
     if (!textEl) continue
     const text = (textEl as HTMLElement).innerText.replace(/\r/g, '').trim()
     if (!text.includes('Смена закрыта') && !text.includes('Отчет по смене')) continue
-    if (!/(Kaspi|Kaspi POS|Наличные)/i.test(text)) continue
+    if (!/(Безналичный|Безналичный POS|Наличные)/i.test(text)) continue
 
     const dateTitle = message.querySelector('.date')?.getAttribute('title') || null
     const messageAt = parseTelegramDateTitle(dateTitle)
@@ -150,8 +150,8 @@ function parseTelegramHtml(html: string): TgReport[] {
       pointText,
       operatorText: operator,
       cash: getLineAmount(text, ['Наличные']),
-      kaspi: getLineAmount(text, ['Kaspi POS', 'Kaspi']),
-      online: getLineAmount(text, ['Kaspi Online', 'Online']),
+      kaspi: getLineAmount(text, ['Безналичный POS', 'Безналичный']),
+      online: getLineAmount(text, ['Безналичный Online', 'Online']),
       coins: getLineAmount(text, ['Мелочь']),
       tech: getLineAmount(text, ['Тех / прочее', 'Долги']),
       startCash: getLineAmount(text, ['Старт кассы', 'Касса на начало']),
@@ -365,8 +365,8 @@ export default function ShiftTelegramAuditPage() {
                 <th className="py-2 pr-3">Telegram нал</th>
                 <th className="py-2 pr-3">Сайт нал</th>
                 <th className="py-2 pr-3">Разница</th>
-                <th className="py-2 pr-3">Telegram Kaspi</th>
-                <th className="py-2 pr-3">Сайт Kaspi</th>
+                <th className="py-2 pr-3">Telegram Безналичный</th>
+                <th className="py-2 pr-3">Сайт Безналичный</th>
                 <th className="py-2 pr-3">Разница</th>
                 <th className="py-2 pr-3">Изменения</th>
               </tr>
@@ -432,7 +432,7 @@ export default function ShiftTelegramAuditPage() {
                 <th className="py-2 pr-3">Точка</th>
                 <th className="py-2 pr-3">Оператор</th>
                 <th className="py-2 pr-3">Наличные</th>
-                <th className="py-2 pr-3">Kaspi</th>
+                <th className="py-2 pr-3">Безналичный</th>
                 <th className="py-2 pr-3">Комментарий</th>
               </tr>
             </thead>

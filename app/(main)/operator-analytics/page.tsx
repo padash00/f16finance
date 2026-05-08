@@ -780,7 +780,7 @@ const OperatorDetailsModal = memo(({
                   </p>
                 </div>
                 <div className="p-4 bg-gray-800/30 rounded-xl border border-blue-500/20">
-                  <p className="text-xs text-gray-500 mb-2">Kaspi</p>
+                  <p className="text-xs text-gray-500 mb-2">Безналичный</p>
                   <p className="text-xl font-bold text-blue-400">{formatMoneyCompact(operator.kaspiAmount)}</p>
                   <p className="text-xs text-gray-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.kaspiAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
@@ -1373,7 +1373,7 @@ function OperatorAnalyticsContent() {
 
       op.paymentBreakdown = [
         { name: 'Наличные', value: op.cashAmount, color: PAYMENT_COLORS.cash },
-        { name: 'Kaspi', value: op.kaspiAmount, color: PAYMENT_COLORS.kaspi },
+        { name: 'Безналичный', value: op.kaspiAmount, color: PAYMENT_COLORS.kaspi },
         { name: 'Online', value: op.onlineAmount, color: PAYMENT_COLORS.online },
         { name: 'Карта', value: op.cardAmount, color: PAYMENT_COLORS.card },
       ].filter(item => item.value > 0)
@@ -1673,7 +1673,7 @@ function OperatorAnalyticsContent() {
       { header: 'Ср. смена', key: 'avgShift', width: 14, type: 'money' },
       { header: 'Доля %', key: 'share', width: 10, type: 'percent' },
       { header: 'Нал', key: 'cash', width: 14, type: 'money' },
-      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Безналичный', key: 'kaspi', width: 14, type: 'money' },
       { header: 'Online', key: 'online', width: 14, type: 'money' },
       { header: 'Карта', key: 'card', width: 14, type: 'money' },
       { header: 'Долги', key: 'debts', width: 13, type: 'money' },
@@ -1989,7 +1989,7 @@ function OperatorAnalyticsContent() {
                     </th>
                     <th className="py-3 px-2 text-right">Доля</th>
                     <th className="py-3 px-2 text-right text-emerald-400">Нал</th>
-                    <th className="py-3 px-2 text-right text-blue-400">Kaspi</th>
+                    <th className="py-3 px-2 text-right text-blue-400">Безналичный</th>
                     <th className="py-3 px-2 text-right text-violet-400">Online</th>
                     <th className="py-3 px-2 text-right text-amber-400">Карта</th>
                     <th className="py-3 px-2 text-right text-red-400">Долги</th>
@@ -2220,7 +2220,7 @@ function OperatorAnalyticsContent() {
                       <Pie
                         data={[
                           { name: 'Наличные', value: analytics.rows.reduce((s, r) => s + r.cashAmount, 0), color: PAYMENT_COLORS.cash },
-                          { name: 'Kaspi', value: analytics.rows.reduce((s, r) => s + r.kaspiAmount, 0), color: PAYMENT_COLORS.kaspi },
+                          { name: 'Безналичный', value: analytics.rows.reduce((s, r) => s + r.kaspiAmount, 0), color: PAYMENT_COLORS.kaspi },
                           { name: 'Online', value: analytics.rows.reduce((s, r) => s + r.onlineAmount, 0), color: PAYMENT_COLORS.online },
                           { name: 'Карта', value: analytics.rows.reduce((s, r) => s + r.cardAmount, 0), color: PAYMENT_COLORS.card },
                         ].filter(item => item.value > 0)}

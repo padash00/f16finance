@@ -97,7 +97,7 @@ const ENTITY_LABELS: Record<string, string> = {
   operator: 'Оператор',
   'expense_category': 'Категория расходов',
   'profitability-input': 'ОПиУ ввод',
-  'kaspi_terminal': 'Kaspi терминал',
+  'kaspi_terminal': 'Безналичный терминал',
   'operator-salary-adjustment': 'Корректировка зарплаты',
   'staff-payment': 'Выплата зарплаты',
   'auth-attempt': 'Вход в систему',
@@ -165,8 +165,8 @@ const PAGE_LABELS: Record<string, string> = {
   '/logs': 'Логи',
   'operators': 'Операторы',
   '/operators': 'Операторы',
-  'kaspi-terminal': 'Kaspi терминал',
-  '/kaspi-terminal': 'Kaspi терминал',
+  'kaspi-terminal': 'Безналичный терминал',
+  '/kaspi-terminal': 'Безналичный терминал',
   'salary': 'Зарплата',
   '/salary': 'Зарплата',
   'tasks': 'Задачи',
@@ -359,7 +359,7 @@ function PayloadRows({ item }: { item: LogItem }) {
     const prev = act === 'update' ? ((p.previous as Record<string, unknown>) || {}) : null
     add('Дата', fmtDate(src.date as string))
     add('Наличные', fmtMoney(src.cash_amount))
-    add('Kaspi', fmtMoney(src.kaspi_amount))
+    add('Безналичный', fmtMoney(src.kaspi_amount))
     add('Online', fmtMoney(src.online_amount))
     add('Карта', fmtMoney(src.card_amount))
     if (act === 'update-online') {
@@ -380,7 +380,7 @@ function PayloadRows({ item }: { item: LogItem }) {
     add('Дата', fmtDate(src.date as string))
     add('Категория', src.category)
     add('Наличные', fmtMoney(src.cash_amount))
-    add('Kaspi', fmtMoney(src.kaspi_amount))
+    add('Безналичный', fmtMoney(src.kaspi_amount))
     const total = Number(src.cash_amount || 0) + Number(src.kaspi_amount || 0)
     if (total) add('Итого', fmtMoney(total), true)
     if (src.comment) add('Комментарий', src.comment)
@@ -402,7 +402,7 @@ function PayloadRows({ item }: { item: LogItem }) {
   if (et === 'staff-payment' || et === 'salary_payment') {
     add('Сумма', fmtMoney(p.total_amount || p.amount), true)
     add('Наличными', fmtMoney(p.cash_amount))
-    add('Kaspi', fmtMoney(p.kaspi_amount))
+    add('Безналичный', fmtMoney(p.kaspi_amount))
     add('Комментарий', p.comment)
   }
 

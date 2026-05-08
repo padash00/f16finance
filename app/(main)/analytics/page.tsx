@@ -366,7 +366,7 @@ export default function AnalyticsPage() {
       { header: 'Дата', key: 'date', width: 13, type: 'text' },
       { header: 'Компания', key: 'company', width: 22, type: 'text' },
       { header: 'Наличные', key: 'cash', width: 16, type: 'money' },
-      { header: 'Kaspi', key: 'kaspi', width: 16, type: 'money' },
+      { header: 'Безналичный', key: 'kaspi', width: 16, type: 'money' },
       { header: 'Карта', key: 'card', width: 16, type: 'money' },
       { header: 'Итого', key: 'total', width: 16, type: 'money' },
     ], analRows)

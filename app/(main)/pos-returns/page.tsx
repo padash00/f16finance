@@ -322,7 +322,7 @@ export default function PosReturnsPage() {
                 )}
                 {sale.kaspi_amount > 0 && (
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <p className="text-xs text-muted-foreground">Kaspi</p>
+                    <p className="text-xs text-muted-foreground">Безналичный</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.kaspi_amount)}</p>
                   </div>
                 )}

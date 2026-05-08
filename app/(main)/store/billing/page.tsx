@@ -848,7 +848,7 @@ export default function BillingPage() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Наличные</SelectItem>
-                    <SelectItem value="kaspi">Kaspi</SelectItem>
+                    <SelectItem value="kaspi">Безналичный</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -882,7 +882,7 @@ export default function BillingPage() {
                 {receiptParseHint ? (
                   <div className="rounded-lg border border-emerald-300/20 bg-emerald-500/[0.06] p-2 text-[11px] text-emerald-100 space-y-1">
                     {receiptParseHint.total != null ? <p>Сумма в чеке: <b>{Math.round(receiptParseHint.total)} ₸</b></p> : null}
-                    {receiptParseHint.method ? <p>Способ: {receiptParseHint.method === 'kaspi' ? 'Kaspi' : 'Наличные'}</p> : null}
+                    {receiptParseHint.method ? <p>Способ: {receiptParseHint.method === 'kaspi' ? 'Безналичный' : 'Наличные'}</p> : null}
                     {receiptParseHint.paid_at ? <p>Дата: {receiptParseHint.paid_at}</p> : null}
                     {receiptParseHint.merchant ? <p>Получатель: {receiptParseHint.merchant}</p> : null}
                     {receiptParseHint.warning ? (
@@ -979,7 +979,7 @@ export default function BillingPage() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Наличные</SelectItem>
-                    <SelectItem value="kaspi">Kaspi</SelectItem>
+                    <SelectItem value="kaspi">Безналичный</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

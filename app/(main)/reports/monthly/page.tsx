@@ -67,7 +67,7 @@ async function downloadCSV(daily: DailyRow[], totals: Totals, year: number, mont
     { header: 'Продаж', key: 'count', width: 10, type: 'number', align: 'right' },
     { header: 'Выручка', key: 'total', width: 16, type: 'money' },
     { header: 'Наличные', key: 'cash', width: 15, type: 'money' },
-    { header: 'Kaspi', key: 'kaspi', width: 15, type: 'money' },
+    { header: 'Безналичный', key: 'kaspi', width: 15, type: 'money' },
     { header: 'Карта', key: 'card', width: 15, type: 'money' },
     { header: 'Онлайн', key: 'online', width: 15, type: 'money' },
     { header: 'Скидки', key: 'discount', width: 13, type: 'money' },
@@ -123,7 +123,7 @@ export default function MonthlyReportPage() {
   // Payment methods for bar visualization
   const paymentMethods = hasData && totals ? [
     { label: 'Наличные', value: totals.cash, color: 'bg-emerald-500' },
-    { label: 'Kaspi', value: totals.kaspi, color: 'bg-sky-500' },
+    { label: 'Безналичный', value: totals.kaspi, color: 'bg-sky-500' },
     { label: 'Карта', value: totals.card, color: 'bg-violet-500' },
     { label: 'Онлайн', value: totals.online, color: 'bg-amber-500' },
   ] : []
@@ -291,7 +291,7 @@ export default function MonthlyReportPage() {
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Продаж</th>
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Выручка</th>
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Нал</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Kaspi</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Безналичный</th>
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Карта</th>
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Онлайн</th>
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Скидки</th>

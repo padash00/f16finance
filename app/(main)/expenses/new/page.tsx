@@ -843,7 +843,7 @@ function ExpenseWizardPageContent() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">Kaspi / Карта ₸</label>
+              <label className="text-sm font-medium mb-1 block">Безналичный / Карта ₸</label>
               <input
                 type="number"
                 min="0"
@@ -1155,7 +1155,7 @@ function ExpenseWizardPageContent() {
           <SummaryRow label="Комментарий" value={payload.comment} multiline />
           <SummaryRow label="Сумма" value={fmtMoney(total)} />
           {payload.amount_cash > 0 && <SummaryRow label="  Наличные" value={fmtMoney(payload.amount_cash)} />}
-          {payload.amount_kaspi > 0 && <SummaryRow label="  Kaspi/карта" value={fmtMoney(payload.amount_kaspi)} />}
+          {payload.amount_kaspi > 0 && <SummaryRow label="  Безналичный/карта" value={fmtMoney(payload.amount_kaspi)} />}
           <SummaryRow label="Дата" value={payload.date} />
           {payload.operator_id && (
             <SummaryRow label="Оператор" value={operators.find((o) => o.id === payload.operator_id)?.short_name || operators.find((o) => o.id === payload.operator_id)?.name || ''} />

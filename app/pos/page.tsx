@@ -208,7 +208,7 @@ function ReceiptModal({
             )}
             {receiptData.kaspi_amount > 0 && (
               <div className="flex justify-between text-sm text-gray-600">
-                <span>Kaspi:</span>
+                <span>Безналичный:</span>
                 <span>{fmt(receiptData.kaspi_amount)} ₸</span>
               </div>
             )}
@@ -1382,7 +1382,7 @@ export default function PosPage() {
                   {(['cash', 'kaspi', 'card', 'mixed'] as PaymentMethod[]).map((method) => {
                     const labels: Record<PaymentMethod, string> = {
                       cash: '💵 Наличные',
-                      kaspi: '📱 Kaspi',
+                      kaspi: '📱 Безналичный',
                       card: '💳 Карта',
                       online: '🔗 Онлайн',
                       mixed: '🔀 Смешанная',
@@ -1412,7 +1412,7 @@ export default function PosPage() {
                 {paymentMethod === 'mixed' && (
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {(['cash', 'kaspi', 'card', 'online'] as const).map((method) => {
-                      const labels = { cash: 'Наличные', kaspi: 'Kaspi', card: 'Карта', online: 'Онлайн' }
+                      const labels = { cash: 'Наличные', kaspi: 'Безналичный', card: 'Карта', online: 'Онлайн' }
                       return (
                         <div key={method}>
                           <label className="text-[10px] text-gray-500">{labels[method]}</label>

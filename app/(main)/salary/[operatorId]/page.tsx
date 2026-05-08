@@ -406,7 +406,7 @@ function OperatorSalaryDetailPageContent() {
                               <div className={`text-sm font-medium ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-white'}`}>{formatRuDate(p.payment_date)}</div>
                               {p.status === 'voided' && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">аннулирован</span>}
                             </div>
-                            <div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} · Kaspi: {money(p.kaspi_amount)}</div>
+                            <div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} · Безналичный: {money(p.kaspi_amount)}</div>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-right">
@@ -496,7 +496,7 @@ function OperatorSalaryDetailPageContent() {
                         <th className="px-4 py-3 text-center">Смена</th>
                         <th className="px-4 py-3 text-left">Точка</th>
                         <th className="px-4 py-3 text-right text-green-400">Нал</th>
-                        <th className="px-4 py-3 text-right text-blue-400">Kaspi</th>
+                        <th className="px-4 py-3 text-right text-blue-400">Безналичный</th>
                         <th className="px-4 py-3 text-right text-purple-400">Карта</th>
                         <th className="px-4 py-3 text-right">Выручка</th>
                         <th className="px-4 py-3 text-left">Комментарий</th>
@@ -546,7 +546,7 @@ function OperatorSalaryDetailPageContent() {
                 <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Kaspi</label>
+                <label className="mb-2 block text-sm text-slate-300">Безналичный</label>
                 <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
@@ -595,7 +595,7 @@ function OperatorSalaryDetailPageContent() {
                 <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Kaspi</label>
+                <label className="mb-2 block text-sm text-slate-300">Безналичный</label>
                 <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>

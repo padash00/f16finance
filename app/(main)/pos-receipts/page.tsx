@@ -47,7 +47,7 @@ type Sale = {
 
 const PAYMENT_LABELS: Record<string, { label: string; color: string }> = {
   cash: { label: 'Наличные', color: 'bg-green-100 text-green-800' },
-  kaspi: { label: 'Kaspi', color: 'bg-orange-100 text-orange-800' },
+  kaspi: { label: 'Безналичный', color: 'bg-orange-100 text-orange-800' },
   card: { label: 'Карта', color: 'bg-blue-100 text-blue-800' },
   online: { label: 'Онлайн', color: 'bg-purple-100 text-purple-800' },
   mixed: { label: 'Смешанный', color: 'bg-gray-100 text-gray-800' },
@@ -87,7 +87,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
   const paymentBreakdown: { label: string; amount: number }[] = []
   if (sale.cash_amount > 0) paymentBreakdown.push({ label: 'Наличные', amount: sale.cash_amount })
-  if (sale.kaspi_amount > 0) paymentBreakdown.push({ label: 'Kaspi', amount: sale.kaspi_amount })
+  if (sale.kaspi_amount > 0) paymentBreakdown.push({ label: 'Безналичный', amount: sale.kaspi_amount })
   if (sale.card_amount > 0) paymentBreakdown.push({ label: 'Карта', amount: sale.card_amount })
   if (sale.online_amount > 0) paymentBreakdown.push({ label: 'Онлайн', amount: sale.online_amount })
 

@@ -1203,7 +1203,7 @@ function StationsPageContent() {
       showFlash('err', 'Нет данных для экспорта за период')
       return
     }
-    const headers = ['Начало', 'Окончание', 'Статус', 'Станция', 'Тариф', 'Сумма', 'Наличные', 'Kaspi', 'Способ оплаты']
+    const headers = ['Начало', 'Окончание', 'Статус', 'Станция', 'Тариф', 'Сумма', 'Наличные', 'Безналичный', 'Способ оплаты']
     const rows: string[][] = [headers]
     for (const s of sessions) {
       rows.push([
@@ -2704,7 +2704,7 @@ function StationsPageContent() {
                     { label: 'Сессий', value: totalSessions.toString(), icon: CheckCircle2, color: 'text-blue-400' },
                     { label: 'Средний чек', value: totalSessions > 0 ? formatPrice(Math.round(totalRevenue / totalSessions)) : '—', icon: TrendingUp, color: 'text-violet-400' },
                     { label: 'Наличка', value: formatPrice(totalCash), icon: Banknote, color: 'text-amber-400' },
-                    { label: 'Каспи', value: formatPrice(totalKaspi), icon: Banknote, color: 'text-cyan-400' },
+                    { label: 'Безналичный', value: formatPrice(totalKaspi), icon: Banknote, color: 'text-cyan-400' },
                   ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="rounded-xl border border-white/10 bg-card p-4">
                       <div className={`flex items-center gap-1.5 text-xs mb-1 ${color}`}><Icon className="h-3.5 w-3.5" />{label}</div>
@@ -2719,7 +2719,7 @@ function StationsPageContent() {
                   <div className="flex gap-4">
                     {[
                       { label: 'Наличка', amount: paymentBreakdown.cash, color: '#f59e0b' },
-                      { label: 'Каспи', amount: paymentBreakdown.kaspi, color: '#06b6d4' },
+                      { label: 'Безналичный', amount: paymentBreakdown.kaspi, color: '#06b6d4' },
                       { label: 'Смешанный', amount: paymentBreakdown.mixed, color: '#8b5cf6' },
                     ].filter(p => p.amount > 0).map(p => (
                       <div key={p.label} className="flex-1">

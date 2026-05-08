@@ -55,7 +55,7 @@ type ReportData = {
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Нал',
-  kaspi: 'Kaspi',
+  kaspi: 'Безналичный',
   card: 'Карта',
   online: 'Онлайн',
   mixed: 'Смешан.',
@@ -275,7 +275,7 @@ export default function ShiftReportPage() {
               <Card className="border-border bg-card p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Безнал</div>
                 <div className="mt-2 text-3xl font-bold text-blue-400 tabular-nums">{fmt(nonCash)}</div>
-                <div className="mt-1 text-xs text-muted-foreground">Kaspi + Карта + Онлайн</div>
+                <div className="mt-1 text-xs text-muted-foreground">Безналичный + Карта + Онлайн</div>
               </Card>
             </div>
 
@@ -286,7 +286,7 @@ export default function ShiftReportPage() {
               </div>
               <div className="flex flex-col gap-3">
                 {payBar('Нал', totals!.cash, totals!.amount, 'bg-green-500')}
-                {payBar('Kaspi', totals!.kaspi, totals!.amount, 'bg-orange-500')}
+                {payBar('Безналичный', totals!.kaspi, totals!.amount, 'bg-orange-500')}
                 {payBar('Карта', totals!.card, totals!.amount, 'bg-blue-500')}
                 {payBar('Онлайн', totals!.online, totals!.amount, 'bg-purple-500')}
               </div>

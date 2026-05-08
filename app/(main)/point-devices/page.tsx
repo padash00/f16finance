@@ -122,7 +122,7 @@ const PROJECT_FLAG_OPTIONS: Array<{
   {
     key: 'shift_report',
     label: 'Сменные отчёты',
-    hint: 'Форма смены: наличные, Kaspi, итоги → Telegram и зарплата.',
+    hint: 'Форма смены: наличные, Безналичный, итоги → Telegram и зарплата.',
   },
   {
     key: 'income_report',
@@ -136,8 +136,8 @@ const PROJECT_FLAG_OPTIONS: Array<{
   },
   {
     key: 'kaspi_daily_split',
-    label: 'Суточная сверка Kaspi',
-    hint: 'Для ночной смены: Kaspi до 00:00 и после 00:00.',
+    label: 'Суточная сверка Безналичный',
+    hint: 'Для ночной смены: Безналичный до 00:00 и после 00:00.',
   },
   {
     key: 'start_cash_prompt',

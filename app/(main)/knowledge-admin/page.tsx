@@ -892,7 +892,7 @@ export default function KnowledgeAdminPage() {
                 <Panel title="Материалы для операторов" icon={FileText}>
                   <TabHint
                     title="Что здесь создавать?"
-                    text="Это сами правила и ответы: как открыть смену, что делать если не работает Kaspi, когда штраф, когда премия, как разговаривать с клиентом."
+                    text="Это сами правила и ответы: как открыть смену, что делать если не работает Безналичный, когда штраф, когда премия, как разговаривать с клиентом."
                   />
                   <div className="mb-4 flex flex-col gap-2">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">

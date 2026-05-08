@@ -307,7 +307,7 @@ export default function ShiftReportDetailPage({
                 <div className="text-right text-slate-200">{fmtMoney(shift.opening_cash)}</div>
                 <div className="text-slate-500">Закрытие:</div>
                 <div className="text-right text-slate-200">{fmtMoney(shift.closing_cash)}</div>
-                <div className="text-slate-500">Kaspi:</div>
+                <div className="text-slate-500">Безналичный:</div>
                 <div className="text-right text-slate-200">{fmtMoney(shift.closing_kaspi)}</div>
                 {(shift.closing_kaspi_before_midnight || shift.closing_kaspi_after_midnight) && (
                   <>
@@ -537,7 +537,7 @@ export default function ShiftReportDetailPage({
                     <th className="px-3 py-2">Время</th>
                     <th className="px-3 py-2">Оплата</th>
                     <th className="px-3 py-2 text-right">Cash</th>
-                    <th className="px-3 py-2 text-right">Kaspi</th>
+                    <th className="px-3 py-2 text-right">Безналичный</th>
                     <th className="px-3 py-2 text-right">Итого</th>
                     <th className="px-3 py-2">Комментарий</th>
                   </tr>
@@ -583,7 +583,7 @@ export default function ShiftReportDetailPage({
                     <th className="px-3 py-2">Время</th>
                     <th className="px-3 py-2">Оплата</th>
                     <th className="px-3 py-2 text-right">Cash</th>
-                    <th className="px-3 py-2 text-right">Kaspi</th>
+                    <th className="px-3 py-2 text-right">Безналичный</th>
                     <th className="px-3 py-2 text-right">Итого</th>
                     <th className="px-3 py-2">Комментарий</th>
                   </tr>
@@ -810,7 +810,7 @@ function ZReportModal({
             <div className="flex justify-between"><span>Чеков</span><span>{sales.length}</span></div>
             <div className="flex justify-between"><span>Сумма</span><span className="tabular-nums">{fmt(totalSales)} ₸</span></div>
             <div className="flex justify-between"><span>  ↳ Наличными</span><span className="tabular-nums">{fmt(cashSales)} ₸</span></div>
-            <div className="flex justify-between"><span>  ↳ Kaspi</span><span className="tabular-nums">{fmt(kaspiSales)} ₸</span></div>
+            <div className="flex justify-between"><span>  ↳ Безналичный</span><span className="tabular-nums">{fmt(kaspiSales)} ₸</span></div>
           </div>
 
           {returns.length > 0 && (
@@ -821,7 +821,7 @@ function ZReportModal({
                 <div className="flex justify-between"><span>Возвратов</span><span>{returns.length}</span></div>
                 <div className="flex justify-between"><span>Сумма</span><span className="tabular-nums">−{fmt(totalReturns)} ₸</span></div>
                 <div className="flex justify-between"><span>  ↳ Наличными</span><span className="tabular-nums">−{fmt(cashReturns)} ₸</span></div>
-                <div className="flex justify-between"><span>  ↳ Kaspi</span><span className="tabular-nums">−{fmt(kaspiReturns)} ₸</span></div>
+                <div className="flex justify-between"><span>  ↳ Безналичный</span><span className="tabular-nums">−{fmt(kaspiReturns)} ₸</span></div>
               </div>
             </>
           )}
@@ -831,7 +831,7 @@ function ZReportModal({
           <div className="mt-1 space-y-0.5 text-xs">
             <div className="flex justify-between"><span>Старт</span><span className="tabular-nums">{fmt(shift.opening_cash)} ₸</span></div>
             <div className="flex justify-between"><span>Заявлено налом</span><span className="tabular-nums">{fmt(declaredCash)} ₸</span></div>
-            <div className="flex justify-between"><span>Заявлено Kaspi</span><span className="tabular-nums">{fmt(declaredKaspi)} ₸</span></div>
+            <div className="flex justify-between"><span>Заявлено Безналичный</span><span className="tabular-nums">{fmt(declaredKaspi)} ₸</span></div>
             <div className="flex justify-between"><span>Расчётно нал</span><span className="tabular-nums">{fmt(cashSales - cashReturns)} ₸</span></div>
             <div className={`flex justify-between font-semibold ${cashDelta < 0 ? 'text-red-700' : cashDelta > 0 ? 'text-green-700' : ''}`}>
               <span>Расхождение</span>

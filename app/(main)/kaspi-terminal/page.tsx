@@ -187,7 +187,7 @@ export default function KaspiTerminalPage() {
           <CreditCard className="w-8 h-8 text-blue-400" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Kaspi POS терминал</h1>
+          <h1 className="text-3xl font-bold text-foreground">Безналичный POS терминал</h1>
           <p className="text-muted-foreground mt-1">Суточные итоги с терминала — без привязки к оператору</p>
         </div>
       </div>
@@ -283,7 +283,7 @@ export default function KaspiTerminalPage() {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Сумма Kaspi ₸</label>
+            <label className="text-xs text-muted-foreground">Сумма Безналичный ₸</label>
             <input type="number" value={newAmount} onChange={e => setNewAmount(e.target.value)}
               placeholder="0" min="1" step="1"
               className="bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-blue-500 w-36" required />
@@ -317,7 +317,7 @@ export default function KaspiTerminalPage() {
               <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3 text-left">Дата</th>
                 <th className="px-4 py-3 text-left">Компания</th>
-                <th className="px-4 py-3 text-right">Kaspi сумма</th>
+                <th className="px-4 py-3 text-right">Безналичный сумма</th>
                 <th className="px-4 py-3 text-left">Заметка</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -434,7 +434,7 @@ function ReconciliationView({
           <div>
             <h2 className="text-sm font-semibold text-foreground">Сверка терминала с доходами</h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Сравнение суммы с Kaspi POS терминала и Kaspi-поступлений в доходах за день × точку.
+              Сравнение суммы с Безналичный POS терминала и Безналичный-поступлений в доходах за день × точку.
               Допуск ±{tolerance.toLocaleString('ru-RU')} ₸ — расхождения в пределах допуска считаются совпадением.
             </p>
           </div>
@@ -489,7 +489,7 @@ function ReconciliationView({
                   <th className="px-4 py-3 text-left">Дата</th>
                   <th className="px-4 py-3 text-left">Точка</th>
                   <th className="px-4 py-3 text-right">Терминал</th>
-                  <th className="px-4 py-3 text-right">Доходы (Kaspi)</th>
+                  <th className="px-4 py-3 text-right">Доходы (Безналичный)</th>
                   <th className="px-4 py-3 text-right">Разница</th>
                   <th className="px-4 py-3 text-center">Статус</th>
                 </tr>

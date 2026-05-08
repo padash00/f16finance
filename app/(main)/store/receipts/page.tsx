@@ -1573,7 +1573,7 @@ export default function StoreReceiptsPage() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="cash">Наличные</SelectItem>
-                        <SelectItem value="kaspi">Kaspi</SelectItem>
+                        <SelectItem value="kaspi">Безналичный</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

@@ -245,7 +245,7 @@ export default function ExpensesDashboard() {
             <Card className="p-6 bg-card/40 border-border/40">
                  <div className="flex items-center gap-2 mb-2">
                     <div className="w-2 h-2 rounded-full bg-muted-foreground" />
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kaspi</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Безналичный</p>
                  </div>
                  <div className="text-xl font-bold">{formatMoney(stats.kaspi)} ₸</div>
             </Card>
@@ -384,7 +384,7 @@ export default function ExpensesDashboard() {
                             </div>
                             <div className="text-right">
                                 <div className="font-bold text-red-400 text-sm">-{formatMoney(t.sum)} ₸</div>
-                                <div className="text-[10px] text-muted-foreground">{t.cash_amount ? 'Нал' : 'Kaspi'}</div>
+                                <div className="text-[10px] text-muted-foreground">{t.cash_amount ? 'Нал' : 'Безналичный'}</div>
                             </div>
                         </div>
                     ))}

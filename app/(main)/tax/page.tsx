@@ -124,7 +124,7 @@ export default function TaxPage() {
 
           // ЛОГИКА ПОЛЬЗОВАТЕЛЯ:
           if (row.company_id === arenaId) {
-              // АРЕНА: Каспи -> Налог, Нал -> Игнор
+              // АРЕНА: Безналичный -> Налог, Нал -> Игнор
               rowTaxable += kaspi;
               rowIgnored += cash;
           } else if (row.company_id === ramenId) {
@@ -169,7 +169,7 @@ export default function TaxPage() {
                 Налоговый калькулятор (3%)
               </h1>
               <p className="text-muted-foreground mt-1 text-sm">
-                Расчет обязательств: Арена (только Kaspi) + Рамен (Всё)
+                Расчет обязательств: Арена (только Безналичный) + Рамен (Всё)
               </p>
             </div>
             
@@ -233,8 +233,8 @@ export default function TaxPage() {
                       {formatMoney(calculation.totalTaxable)}
                   </div>
                   <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Kaspi Арены</p>
-                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Нал + Kaspi Рамена</p>
+                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Безналичный Арены</p>
+                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Нал + Безналичный Рамена</p>
                   </div>
               </Card>
 

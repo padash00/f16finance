@@ -393,7 +393,7 @@ export default function AIAnalysisPage() {
           title: "Структура денег и рисков",
           metrics: [
             { label: "Наличные", value: formatMoney(dataForAi.totalCash) },
-            { label: "Kaspi", value: formatMoney(dataForAi.totalKaspi) },
+            { label: "Безналичный", value: formatMoney(dataForAi.totalKaspi) },
             { label: "Card", value: formatMoney(dataForAi.totalCard) },
             { label: "Online", value: formatMoney(dataForAi.totalOnline) },
             {
@@ -448,7 +448,7 @@ export default function AIAnalysisPage() {
         { header: "Расход", key: "expense", width: 16, type: "money" },
         { header: "Прибыль", key: "profit", width: 16, type: "money" },
         { header: "Нал", key: "income_cash", width: 14, type: "money" },
-        { header: "Kaspi", key: "income_kaspi", width: 14, type: "money" },
+        { header: "Безналичный", key: "income_kaspi", width: 14, type: "money" },
         { header: "Card", key: "income_card", width: 14, type: "money" },
         { header: "Online", key: "income_online", width: 14, type: "money" },
         { header: "План доход", key: "planned_income", width: 16, type: "money" },
@@ -980,7 +980,7 @@ export default function AIAnalysisPage() {
                               props.payload.method === "cash"
                                 ? "Нал"
                                 : props.payload.method === "kaspi"
-                                  ? "Kaspi"
+                                  ? "Безналичный"
                                   : props.payload.method === "card"
                                     ? "Карта"
                                     : "Онлайн",
@@ -1002,7 +1002,7 @@ export default function AIAnalysisPage() {
                               {trend.method === "cash"
                                 ? "Нал"
                                 : trend.method === "kaspi"
-                                  ? "Kaspi"
+                                  ? "Безналичный"
                                   : trend.method === "card"
                                     ? "Карта"
                                     : "Онлайн"}
@@ -1220,7 +1220,7 @@ export default function AIAnalysisPage() {
                             {a.paymentMethod === "cash"
                               ? "нал"
                               : a.paymentMethod === "kaspi"
-                                ? "Kaspi"
+                                ? "Безналичный"
                                 : a.paymentMethod === "card"
                                   ? "карта"
                                   : "онлайн"}
