@@ -879,11 +879,12 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
 
           <div className="space-y-2">
             <label className="text-xs text-gray-400 font-medium">ФИО *</label>
-            <Input 
-              value={form.full_name} 
+            <Input
+              value={form.full_name}
               onChange={e => setForm({...form, full_name: e.target.value})}
               className="bg-gray-800/50 border-white/10 text-white"
               placeholder="Иванов Иван Иванович"
+              autoComplete="name"
               required
             />
           </div>
@@ -916,9 +917,11 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
             </div>
             <div className="space-y-2">
               <label className="text-xs text-gray-400 font-medium">Оклад (₸) *</label>
-              <Input 
+              <Input
                 type="number"
-                value={form.monthly_salary} 
+                step="0.01"
+                inputMode="decimal"
+                value={form.monthly_salary}
                 onChange={e => setForm({...form, monthly_salary: e.target.value})}
                 className="bg-gray-800/50 border-white/10 text-white"
                 placeholder="200000"
@@ -930,8 +933,10 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs text-gray-400 font-medium">Телефон</label>
-              <Input 
-                value={form.phone} 
+              <Input
+                type="tel"
+                autoComplete="tel"
+                value={form.phone}
                 onChange={e => setForm({...form, phone: e.target.value})}
                 className="bg-gray-800/50 border-white/10 text-white"
                 placeholder="+7 (777) 123-45-67"
@@ -939,9 +944,10 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
             </div>
             <div className="space-y-2">
               <label className="text-xs text-gray-400 font-medium">Email</label>
-              <Input 
+              <Input
                 type="email"
-                value={form.email} 
+                autoComplete="email"
+                value={form.email}
                 onChange={e => setForm({...form, email: e.target.value})}
                 className="bg-gray-800/50 border-white/10 text-white"
                 placeholder="ivan@example.com"

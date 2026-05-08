@@ -1997,6 +1997,8 @@ export default function OperatorProfilePage() {
                         <input
                           type="number"
                           min="0"
+                          step="0.01"
+                          inputMode="decimal"
                           value={careerForm.monthly_salary}
                           onChange={(e) => setCareerForm((prev) => ({ ...prev, monthly_salary: e.target.value }))}
                           placeholder="Например 250000"
@@ -2641,6 +2643,8 @@ export default function OperatorProfilePage() {
                       <label className="text-xs text-gray-500 mb-1 block">Зарплата</label>
                       <input
                         type="number"
+                        step="0.01"
+                        inputMode="decimal"
                         value={newWork.salary}
                         onChange={(e) => setNewWork({ ...newWork, salary: e.target.value })}
                         className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
