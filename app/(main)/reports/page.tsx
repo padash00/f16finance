@@ -684,6 +684,7 @@ function DrillDownModal({
   dateTo: string
   onClose: () => void
 }) {
+  const cashLabels = useCashlessLabels()
   const [filterCompany, setFilterCompany] = useState<'all' | string>('all')
   const [sortField, setSortField] = useState<'date' | 'company' | 'amount'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
