@@ -155,9 +155,9 @@ export default function InventorySalesPageMinimal({
   const [now, setNow] = useState(() => new Date())
   const searchRef = useRef<HTMLInputElement | null>(null)
 
-  // Часы в шапке
+  // Часы в шапке — обновляем каждую секунду чтобы не выглядели "застывшими"
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000)
+    const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -538,6 +538,10 @@ export default function InventorySalesPageMinimal({
   }
 
   async function handlePay() {
+    // Защита от двойного клика
+    if (saving) return
+    setSaving(true)
+
     const cashAmount =
       paymentMethod === 'cash'
         ? finalTotal
@@ -551,7 +555,6 @@ export default function InventorySalesPageMinimal({
           ? Math.max(0, finalTotal - cashAmount)
           : 0
 
-    setSaving(true)
     try {
       const result = await api.createPointInventorySale(config, session, {
         sale_date: new Date().toISOString().slice(0, 10),

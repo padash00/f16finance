@@ -31,6 +31,7 @@ import { parseMoney } from '@/lib/utils'
 // ─── Client ───────────────────────────────────────────────────────────────────
 
 const REQUEST_TIMEOUT_MS = 30_000
+const RETRY_5XX_DELAYS_MS = [500, 1500] // 2 повтора с экспоненциальной задержкой
 
 async function request<T>(
   config: AppConfig,
@@ -39,6 +40,11 @@ async function request<T>(
   body?: unknown,
   extraHeaders?: Record<string, string>,
 ): Promise<T> {
+  // Защита от пустого токена — иначе сервер ответит непредсказуемо
+  if (!config.deviceToken || config.deviceToken.trim().length === 0) {
+    throw new Error('Не настроен токен устройства. Откройте Настройки → Токен.')
+  }
+
   const url = `${config.apiUrl.replace(/\/$/, '')}${path}`
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -46,41 +52,59 @@ async function request<T>(
     ...extraHeaders,
   }
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  // Retry-loop: первый попытка + до 2 повторов на 5xx/network
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= RETRY_5XX_DELAYS_MS.length; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
-  let res: Response
-  try {
-    res = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    })
-  } catch (err: unknown) {
-    clearTimeout(timeoutId)
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Превышено время ожидания (30 с). Проверьте соединение.')
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      })
+    } catch (err: unknown) {
+      clearTimeout(timeoutId)
+      if (err instanceof Error && err.name === 'AbortError') {
+        lastError = new Error('Превышено время ожидания (30 с). Проверьте соединение.')
+      } else {
+        lastError = err instanceof Error ? err : new Error(String(err))
+      }
+      // На GET и idempotent методах повторяем при сетевых ошибках
+      if (method === 'GET' && attempt < RETRY_5XX_DELAYS_MS.length) {
+        await new Promise((r) => setTimeout(r, RETRY_5XX_DELAYS_MS[attempt]))
+        continue
+      }
+      throw lastError
     }
-    throw err
+    clearTimeout(timeoutId)
+
+    // Повтор только для GET на 5xx (не для POST — иначе дубликаты)
+    if (res.status >= 500 && res.status < 600 && method === 'GET' && attempt < RETRY_5XX_DELAYS_MS.length) {
+      await new Promise((r) => setTimeout(r, RETRY_5XX_DELAYS_MS[attempt]))
+      continue
+    }
+
+    const json = await res.json().catch(() => ({ error: 'Ошибка ответа сервера' }))
+
+    if (res.status === 401) {
+      try { window.dispatchEvent(new CustomEvent('orda:unauthorized')) } catch {}
+    }
+
+    if (!res.ok) {
+      const error = new Error(json.message || json.error || `HTTP ${res.status}`)
+      ;(error as Error & { status?: number; payload?: unknown }).status = res.status
+      ;(error as Error & { status?: number; payload?: unknown }).payload = json
+      throw error
+    }
+
+    return json as T
   }
-  clearTimeout(timeoutId)
 
-  const json = await res.json().catch(() => ({ error: 'Ошибка ответа сервера' }))
-
-  if (res.status === 401) {
-    // Session expired — notify app to re-show login
-    try { window.dispatchEvent(new CustomEvent('orda:unauthorized')) } catch {}
-  }
-
-  if (!res.ok) {
-    const error = new Error(json.message || json.error || `HTTP ${res.status}`)
-    ;(error as Error & { status?: number; payload?: unknown }).status = res.status
-    ;(error as Error & { status?: number; payload?: unknown }).payload = json
-    throw error
-  }
-
-  return json as T
+  throw lastError || new Error('Сервер недоступен. Попробуйте позже.')
 }
 
 function operatorHeaders(session: OperatorSession) {

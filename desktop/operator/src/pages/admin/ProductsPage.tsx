@@ -101,21 +101,28 @@ export default function ProductsPage({ config, session }: Props) {
         if (result.failed > 0) parts.push(`ошибок: ${result.failed}`)
         setImportStatus(parts.join(' · '))
       } catch {
-        // Сервер не поддерживает batch — fallback: по одному с паузой
+        // Сервер не поддерживает batch — fallback: параллельные пачки по 5
+        // (раньше было: serial × 100 товаров × 0.3с = 30 секунд)
+        // Теперь: 5 параллельно за раз → ~ в 5 раз быстрее
         let imported = 0; let skipped = 0; let failed = 0
-        for (let i = 0; i < products.length; i++) {
-          const p = products[i]
-          setImportStatus(`Загружаю ${i + 1} / ${products.length}...`)
-          try {
-            await api.createProduct(config, session.token, p)
-            imported++
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : ''
-            if (msg === 'barcode-already-exists') skipped++
-            else failed++
+        const BATCH = 5
+        for (let i = 0; i < products.length; i += BATCH) {
+          const batch = products.slice(i, i + BATCH)
+          setImportStatus(`Загружаю ${i + batch.length} / ${products.length}...`)
+          const results = await Promise.allSettled(
+            batch.map((p) => api.createProduct(config, session.token, p))
+          )
+          for (const r of results) {
+            if (r.status === 'fulfilled') {
+              imported++
+            } else {
+              const msg = r.reason instanceof Error ? r.reason.message : ''
+              if (msg === 'barcode-already-exists') skipped++
+              else failed++
+            }
           }
-          // Пауза 300мс чтобы не триггерить rate limit Supabase Auth
-          if (i < products.length - 1) await new Promise(r => setTimeout(r, 300))
+          // Короткая пауза 200мс между батчами чтобы не триггерить rate limit
+          if (i + BATCH < products.length) await new Promise(r => setTimeout(r, 200))
         }
         const parts = [`Добавлено: ${imported}`]
         if (skipped > 0) parts.push(`дублей пропущено: ${skipped}`)

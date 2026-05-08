@@ -175,8 +175,8 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
     <script>
       window.onload = () => {
         try { window.focus(); } catch (e) {}
-        // Небольшая задержка чтобы стили успели применится перед печатью
-        setTimeout(() => { try { window.focus(); window.print(); } catch (e) {} }, 100);
+        // 500мс — хватит даже на медленных принтерах чтобы стили применились
+        setTimeout(() => { try { window.focus(); window.print(); } catch (e) {} }, 500);
       };
     </script>
   </body>

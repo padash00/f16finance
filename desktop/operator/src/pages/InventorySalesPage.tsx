@@ -634,8 +634,13 @@ export default function InventorySalesPage({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    // Защита от двойного клика — сразу блокируем кнопку
+    if (saving) return
+    setSaving(true)
+
     if (cartDetailed.length === 0) {
       toastError('Добавьте хотя бы один товар в продажу')
+      setSaving(false)
       return
     }
 
@@ -649,10 +654,10 @@ export default function InventorySalesPage({
 
     if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
       toastError('Для смешанной оплаты укажите часть наличными, а остальное уйдёт в Kaspi')
+      setSaving(false)
       return
     }
 
-    setSaving(true)
     try {
       const isNightAfterMidnight = runtimeShift.shift === 'night' && runtimeShift.afterMidnightNight
       const saleResult = await api.createPointInventorySale(config, session, {
