@@ -1356,22 +1356,24 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   )
 }
 
-function OverviewTab({ 
-  analytics, 
-  displayRows,
-  companyName,
-  operatorName,
-  isExtraRow,
-  canManageIncome,
-  editingOnlineId,
-  setEditingOnlineId,
-  onlineDraft,
-  setOnlineDraft,
-  savingOnlineId,
-  saveOnlineAmount,
-  skipBlurSaveRef
-}: any) {
-  const trendIcon = analytics.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-400" /> : 
+function OverviewTab(props: any) {
+  const cashLabels = useCashlessLabels()
+  const {
+    analytics,
+    displayRows,
+    companyName,
+    operatorName,
+    isExtraRow,
+    canManageIncome,
+    editingOnlineId,
+    setEditingOnlineId,
+    onlineDraft,
+    setOnlineDraft,
+    savingOnlineId,
+    saveOnlineAmount,
+    skipBlurSaveRef,
+  } = props
+  const trendIcon = analytics.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-400" /> :
                    analytics.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-400" /> : 
                    <MinusIcon className="w-4 h-4 text-gray-400" />
 

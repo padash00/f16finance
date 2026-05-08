@@ -1778,6 +1778,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 }
 
 function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, categoryBudgets, dateFrom, dateTo }: any) {
+  const cashLabels = useCashlessLabels()
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -2110,6 +2111,7 @@ function ListTab({
   deletingExpenseId,
   onPreview,
 }: any) {
+  const cashLabels = useCashlessLabels()
   const { can: canDoTbl } = useCapabilities()
   const canEditExpense = canDoTbl('expenses.edit')
   const canDeleteExpense = canDoTbl('expenses.delete')
