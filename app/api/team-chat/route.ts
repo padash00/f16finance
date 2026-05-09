@@ -113,3 +113,87 @@ export async function POST(request: Request) {
 
   return json({ message: data })
 }
+
+/**
+ * PATCH — редактировать своё сообщение.
+ * Body: { id, message }
+ */
+export async function PATCH(request: Request) {
+  const access = await getRequestAccessContext(request, { allowCustomer: false })
+  if ('response' in access) return access.response
+
+  const body = (await request.json().catch(() => null)) as
+    | { id?: string; message?: string }
+    | null
+  if (!body?.id || typeof body?.message !== 'string') {
+    return json({ error: 'id и message обязательны' }, 400)
+  }
+  const newText = body.message.trim()
+  if (!newText) return json({ error: 'Пустое сообщение' }, 400)
+  if (newText.length > 2000) return json({ error: 'Слишком длинное' }, 400)
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+  // Проверяем что сообщение принадлежит этому юзеру/оператору
+  const { data: existing } = await supabase
+    .from('team_chat_messages')
+    .select('id, sender_user_id, sender_operator_id')
+    .eq('id', body.id)
+    .maybeSingle()
+
+  if (!existing) return json({ error: 'Сообщение не найдено' }, 404)
+
+  const ownsByUser = access.user && existing.sender_user_id === access.user.id
+  const ownsByOperator =
+    access.operatorAuth && existing.sender_operator_id === access.operatorAuth.operator_id
+  if (!ownsByUser && !ownsByOperator && !access.isSuperAdmin) {
+    return json({ error: 'Можно редактировать только свои сообщения' }, 403)
+  }
+
+  const { data, error } = await supabase
+    .from('team_chat_messages')
+    .update({ message: newText, edited_at: new Date().toISOString() })
+    .eq('id', body.id)
+    .select('id, sender_user_id, sender_operator_id, sender_name, sender_role, message, attachments, reply_to_id, edited_at, created_at')
+    .single()
+  if (error) return json({ error: error.message }, 500)
+
+  return json({ message: data })
+}
+
+/**
+ * DELETE — мягкое удаление (выставляет deleted_at).
+ * Body: { id }
+ */
+export async function DELETE(request: Request) {
+  const access = await getRequestAccessContext(request, { allowCustomer: false })
+  if ('response' in access) return access.response
+
+  const body = (await request.json().catch(() => null)) as { id?: string } | null
+  if (!body?.id) return json({ error: 'id обязателен' }, 400)
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+  const { data: existing } = await supabase
+    .from('team_chat_messages')
+    .select('id, sender_user_id, sender_operator_id')
+    .eq('id', body.id)
+    .maybeSingle()
+
+  if (!existing) return json({ error: 'Сообщение не найдено' }, 404)
+
+  const ownsByUser = access.user && existing.sender_user_id === access.user.id
+  const ownsByOperator =
+    access.operatorAuth && existing.sender_operator_id === access.operatorAuth.operator_id
+  if (!ownsByUser && !ownsByOperator && !access.isSuperAdmin) {
+    return json({ error: 'Можно удалять только свои сообщения' }, 403)
+  }
+
+  const { error } = await supabase
+    .from('team_chat_messages')
+    .update({ deleted_at: new Date().toISOString(), message: '', attachments: null })
+    .eq('id', body.id)
+  if (error) return json({ error: error.message }, 500)
+
+  return json({ ok: true })
+}
