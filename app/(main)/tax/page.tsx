@@ -822,8 +822,7 @@ export default function TaxPage() {
       </Card>
 
       {/* Помесячный график — на calc */}
-      {activeTab === 'calc' &&
-      {chartData.length > 0 && (
+      {activeTab === 'calc' && chartData.length > 0 && (
         <Card className="p-5">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
             <Calculator className="w-4 h-4 text-emerald-400" />
