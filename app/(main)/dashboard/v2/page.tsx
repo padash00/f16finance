@@ -24,7 +24,12 @@ import {
   RefreshCw,
   HelpCircle,
   X,
+  Target,
+  Pencil,
+  ArrowRight,
+  Calendar as CalendarIcon,
 } from 'lucide-react'
+import Link from 'next/link'
 
 type IncomeRow = {
   date: string
@@ -180,7 +185,40 @@ export default function DashboardV2Page() {
   const [askA, setAskA] = useState<string | null>(null)
   const [asking, setAsking] = useState(false)
 
+  // Цель на месяц
+  const [goal, setGoal] = useState<number>(0)
+  const [goalEditing, setGoalEditing] = useState(false)
+  const [goalDraft, setGoalDraft] = useState('')
+
+  // Drill-down по дню графика
+  const [selectedDay, setSelectedDay] = useState<{
+    date: string
+    label: string
+    income: number
+    expense: number
+    profit: number
+  } | null>(null)
+
   const period = useMemo(() => getPeriod(range), [range])
+
+  // Загрузка цели из localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const v = localStorage.getItem('dashboard-v2-goal')
+    if (v) setGoal(Number(v) || 0)
+  }, [])
+
+  // Прогресс к месячной цели
+  const monthGoal = useMemo(() => {
+    if (!goal || range !== 'month' || !totals) return null
+    const now = new Date()
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    const daysLeft = lastDayOfMonth - now.getDate()
+    const remaining = Math.max(0, goal - totals.profit)
+    const dailyNeeded = daysLeft > 0 ? Math.round(remaining / daysLeft) : 0
+    const pct = Math.max(0, Math.min(100, Math.round((totals.profit / goal) * 100)))
+    return { pct, daysLeft, dailyNeeded, remaining }
+  }, [goal, range, totals])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -332,6 +370,26 @@ export default function DashboardV2Page() {
   const dExpense = totals && prevTotals ? delta(totals.expense, prevTotals.expense) : 0
   const dAvg = totals && prevTotals ? delta(totals.avgCheck, prevTotals.avgCheck) : 0
 
+  // CTA — что показать пользователю под брифингом, исходя из данных
+  const cta = useMemo<{ label: string; href: string } | null>(() => {
+    if (!totals) return null
+    if (totals.profit < 0) return { label: 'Открыть отчёты — разобраться почему минус', href: '/reports' }
+    if (dExpense > 25 && totals.expense > totals.income * 0.7)
+      return { label: 'Открыть расходы — что выросло', href: '/expenses' }
+    if (totals.txCount === 0 && range === 'today')
+      return { label: 'Создать смену на сегодня', href: '/shifts' }
+    if (dProfit < -15)
+      return { label: 'Открыть отчёты — прибыль упала', href: '/reports' }
+    return null
+  }, [totals, dExpense, dProfit, range])
+
+  const saveGoal = () => {
+    const v = Number(goalDraft.replace(/\s/g, '')) || 0
+    setGoal(v)
+    if (typeof window !== 'undefined') localStorage.setItem('dashboard-v2-goal', String(v))
+    setGoalEditing(false)
+  }
+
   return (
     <div className="app-page-wide space-y-5">
       {/* Header */}
@@ -378,6 +436,63 @@ export default function DashboardV2Page() {
         </Card>
       )}
 
+      {/* Цель на месяц — только когда range=month */}
+      {range === 'month' && (
+        <Card className="p-4 border-border bg-card">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/10 rounded-lg">
+              <Target className="w-4 h-4 text-emerald-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              {goal > 0 && monthGoal ? (
+                <>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="text-xs text-muted-foreground">
+                      Цель на месяц:{' '}
+                      <span className="text-foreground font-medium">{fmtMoney(goal)}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {monthGoal.pct}% · осталось {monthGoal.daysLeft} дн ·{' '}
+                      {monthGoal.dailyNeeded > 0
+                        ? `нужно ${fmtMoney(monthGoal.dailyNeeded)}/день`
+                        : 'цель достигнута 🎉'}
+                    </div>
+                  </div>
+                  <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        monthGoal.pct >= 100
+                          ? 'bg-emerald-400'
+                          : monthGoal.pct >= 70
+                            ? 'bg-emerald-500/80'
+                            : monthGoal.pct >= 40
+                              ? 'bg-amber-400/80'
+                              : 'bg-red-400/70'
+                      }`}
+                      style={{ width: `${monthGoal.pct}%` }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Поставь цель по прибыли на месяц — увидишь прогресс и сколько нужно в день.
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setGoalDraft(goal ? String(goal) : '')
+                setGoalEditing(true)
+              }}
+              className="text-muted-foreground hover:text-emerald-300 text-xs inline-flex items-center gap-1"
+            >
+              <Pencil className="w-3 h-3" />
+              {goal ? 'Изменить' : 'Поставить'}
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* Утренний брифинг */}
       <Card className="p-6 border-border bg-gradient-to-br from-orange-500/[0.04] to-amber-500/[0.02]">
         <div className="flex items-start gap-4">
@@ -403,6 +518,15 @@ export default function DashboardV2Page() {
                   ? 'AI анализирует...'
                   : brief || localBrief || 'Нет данных за период.'}
             </p>
+            {cta && (
+              <Link
+                href={cta.href}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-orange-300 hover:text-orange-200 group"
+              >
+                {cta.label}
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            )}
           </div>
         </div>
       </Card>
@@ -476,7 +600,15 @@ export default function DashboardV2Page() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart
+                data={series}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                onClick={(e: any) => {
+                  const p = e?.activePayload?.[0]?.payload
+                  if (p) setSelectedDay(p)
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <defs>
                   <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#fb923c" stopOpacity={0.5} />
@@ -523,12 +655,157 @@ export default function DashboardV2Page() {
       </Card>
 
       <p className="text-xs text-muted-foreground text-center">
-        Подробности — в{' '}
+        Кликни по графику чтобы открыть детали дня. Подробности — в{' '}
         <a href="/reports" className="underline hover:text-foreground">
           Отчётах
         </a>
         . {cash.providerShort} вместе с картой и онлайн = доход.
       </p>
+
+      {/* Модалка цели */}
+      {goalEditing && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setGoalEditing(false)}
+        >
+          <Card
+            className="w-full max-w-sm p-5 border-border bg-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Target className="w-4 h-4 text-emerald-300" />
+              Цель по прибыли на месяц
+            </h3>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={goalDraft}
+              onChange={(e) => setGoalDraft(e.target.value.replace(/[^\d]/g, ''))}
+              placeholder="Например: 5000000"
+              className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-emerald-500 mb-2"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground mb-4">
+              Сохраняется только в этом браузере. Прогресс считается от начала месяца.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={saveGoal} className="flex-1">
+                Сохранить
+              </Button>
+              {goal > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setGoal(0)
+                    if (typeof window !== 'undefined') localStorage.removeItem('dashboard-v2-goal')
+                    setGoalEditing(false)
+                  }}
+                >
+                  Убрать
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setGoalEditing(false)}>
+                Отмена
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Drill-down модалка дня */}
+      {selectedDay && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setSelectedDay(null)}
+        >
+          <Card
+            className="w-full max-w-md p-5 border-border bg-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 text-orange-300" />
+                <h3 className="text-sm font-semibold">{selectedDay.label}</h3>
+                <span className="text-xs text-muted-foreground">{selectedDay.date}</span>
+              </div>
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-3 rounded-lg bg-blue-500/[0.06] border border-blue-500/20">
+                <div className="text-[10px] uppercase text-muted-foreground tracking-wide">
+                  Доход
+                </div>
+                <div className="text-base font-semibold text-blue-300 mt-0.5">
+                  {fmtMoney(selectedDay.income)}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-amber-500/[0.06] border border-amber-500/20">
+                <div className="text-[10px] uppercase text-muted-foreground tracking-wide">
+                  Расход
+                </div>
+                <div className="text-base font-semibold text-amber-300 mt-0.5">
+                  {fmtMoney(selectedDay.expense)}
+                </div>
+              </div>
+              <div
+                className={`p-3 rounded-lg border ${
+                  selectedDay.profit >= 0
+                    ? 'bg-emerald-500/[0.06] border-emerald-500/20'
+                    : 'bg-red-500/[0.06] border-red-500/20'
+                }`}
+              >
+                <div className="text-[10px] uppercase text-muted-foreground tracking-wide">
+                  Прибыль
+                </div>
+                <div
+                  className={`text-base font-semibold mt-0.5 ${
+                    selectedDay.profit >= 0 ? 'text-emerald-300' : 'text-red-300'
+                  }`}
+                >
+                  {fmtMoney(selectedDay.profit)}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/incomes?from=${selectedDay.date}&to=${selectedDay.date}`}
+                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:border-blue-500/40 hover:bg-blue-500/5 transition-colors"
+              >
+                Доходы за день
+              </Link>
+              <Link
+                href={`/expenses?from=${selectedDay.date}&to=${selectedDay.date}`}
+                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:border-amber-500/40 hover:bg-amber-500/5 transition-colors"
+              >
+                Расходы за день
+              </Link>
+              <Link
+                href={`/shifts?date=${selectedDay.date}`}
+                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:border-orange-500/40 hover:bg-orange-500/5 transition-colors"
+              >
+                Смены за день
+              </Link>
+              <button
+                onClick={() => {
+                  setAskQ(`Что произошло ${selectedDay.label}? Доход ${fmtMoney(selectedDay.income)}, расход ${fmtMoney(selectedDay.expense)}, прибыль ${fmtMoney(selectedDay.profit)}. Объясни почему такие цифры.`)
+                  setSelectedDay(null)
+                  setAskOpen(true)
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:border-orange-500/40 hover:bg-orange-500/5 transition-colors inline-flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3" /> Объясни этот день
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Drawer "Объясни мне" */}
       {askOpen && (
