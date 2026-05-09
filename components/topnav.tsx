@@ -370,13 +370,22 @@ function UserMenu({
               <span className="text-xs font-medium text-slate-300">{roleLabel || 'control'}</span>
             </div>
           </div>
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-sm text-slate-300 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-300"
+          >
+            <User className="h-4 w-4" />
+            Мой профиль
+            <span className="ml-auto text-[10px] text-slate-500">пароль · email · имя</span>
+          </Link>
           <Button
             variant="ghost"
             onClick={async () => {
               setOpen(false)
               await onLogout()
             }}
-            className="mt-3 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
+            className="mt-2 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
           >
             <span className="flex items-center gap-2 text-sm">
               <LogOut className="h-4 w-4" />
