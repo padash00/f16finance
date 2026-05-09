@@ -149,6 +149,16 @@ export default function TaxPage() {
     try { return JSON.parse(localStorage.getItem('tax_filter') || '{}') } catch { return {} }
   })
 
+  // Активная вкладка
+  const [activeTab, setActiveTab] = useState<'calc' | 'employees' | 'sources' | 'calendar' | 'thresholds' | 'help'>(() => {
+    if (typeof window === 'undefined') return 'calc'
+    return (sessionStorage.getItem('tax_tab') as any) || 'calc'
+  })
+  function changeTab(t: typeof activeTab) {
+    setActiveTab(t)
+    sessionStorage.setItem('tax_tab', t)
+  }
+
   // Режим ввода окладов — "брутто" (как в договоре) или "net" (на руки)
   const [salaryMode, setSalaryMode] = useState<'gross' | 'net'>(() => {
     if (typeof window === 'undefined') return 'gross'
@@ -458,7 +468,33 @@ export default function TaxPage() {
         </Card>
       </div>
 
-      {/* Параметры расчёта */}
+      {/* Tabs */}
+      <div className="sticky top-2 z-30 flex flex-wrap gap-1 rounded-2xl bg-gray-900/85 backdrop-blur-xl border border-white/10 p-1.5 shadow-2xl shadow-black/40">
+        {([
+          ['calc', '💰 Расчёт'],
+          ['employees', '👥 Сотрудники'],
+          ['sources', '🔎 Фильтр доходов'],
+          ['calendar', '📅 Календарь и реквизиты'],
+          ['thresholds', '⚠️ Пороги и НДС'],
+          ['help', '📚 Справка'],
+        ] as const).map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => changeTab(k)}
+            className={`px-3 py-2 text-sm rounded-xl transition ${
+              activeTab === k
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Параметры расчёта (видны на всех вкладках кроме help/calendar) */}
+      {activeTab !== 'help' && activeTab !== 'calendar' && (
       <Card className="p-4 sm:p-6">
         <div className="flex flex-wrap items-end gap-6">
           <div>
@@ -491,8 +527,10 @@ export default function TaxPage() {
           </div>
         </div>
       </Card>
+      )}
 
-      {/* KPI карточки */}
+      {/* KPI карточки — только на calc */}
+      {activeTab === 'calc' && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">ИПН ({iknRate}%)</div>
@@ -512,9 +550,10 @@ export default function TaxPage() {
           <p className="mt-2 text-xs text-emerald-400/80">Эффективная ставка: {calc.effectiveRate.toFixed(2)}%</p>
         </Card>
       </div>
+      )}
 
       {/* === ФИЛЬТР: что включать в налогооблагаемый оборот === */}
-      {companyBreakdown.length > 0 && (
+      {activeTab === 'sources' && companyBreakdown.length > 0 && (
         <Card className="p-5">
           <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
             <Info className="w-4 h-4 text-blue-400" />
@@ -574,6 +613,7 @@ export default function TaxPage() {
       )}
 
       {/* === СОТРУДНИКИ === */}
+      {activeTab === 'employees' && (
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div>
@@ -722,9 +762,10 @@ export default function TaxPage() {
           </div>
         )}
       </Card>
+      )}
 
-      {/* === ИТОГО ВСЕ НАЛОГИ === */}
-      <Card className="p-5 border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent">
+      {/* === ИТОГО ВСЕ НАЛОГИ === — sticky-bottom видно везде */}
+      <Card className="sticky bottom-2 z-30 p-5 border-emerald-500/40 bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-slate-950/95 backdrop-blur-xl shadow-2xl shadow-emerald-500/20">
         <h3 className="text-sm font-semibold text-emerald-300 mb-4 flex items-center gap-2">
           <Landmark className="w-4 h-4" />
           ИТОГО ВСЕ НАЛОГИ за {calc.monthsInPeriod} мес
@@ -749,7 +790,8 @@ export default function TaxPage() {
         </div>
       </Card>
 
-      {/* Помесячный график */}
+      {/* Помесячный график — на calc */}
+      {activeTab === 'calc' &&
       {chartData.length > 0 && (
         <Card className="p-5">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
@@ -777,7 +819,8 @@ export default function TaxPage() {
         </Card>
       )}
 
-      {/* Расшифровка соцплатежей */}
+      {/* Расшифровка соцплатежей — на employees */}
+      {activeTab === 'employees' && (
       <Card className="p-5">
         <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-400" />
@@ -805,8 +848,10 @@ export default function TaxPage() {
           Итого: {fmt(SOCIAL_FIXED_MONTHLY)}/мес = {fmt(SOCIAL_FIXED_MONTHLY * 6)}/полугодие
         </p>
       </Card>
+      )}
 
-      {/* Контроль порогов */}
+      {/* Контроль порогов — на thresholds */}
+      {activeTab === 'thresholds' && (
       <Card className="p-5">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -865,8 +910,15 @@ export default function TaxPage() {
           ) : null}
         </div>
       </Card>
+      )}
 
-      {/* Справка */}
+      {/* Календарь и реквизиты — на calendar */}
+      {activeTab === 'calendar' && (
+        <CalendarSection iknRate={iknRate} calc={calc} employeeCalc={employeeCalc} hasEmployees={employees.length > 0} />
+      )}
+
+      {/* Справка — на help */}
+      {activeTab === 'help' && (
       <Card className="p-5 bg-blue-500/5 border-blue-500/20">
         <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
@@ -893,6 +945,7 @@ export default function TaxPage() {
           </li>
         </ul>
       </Card>
+      )}
 
       <p className="text-[10px] text-slate-600 text-center">
         Расчёт ориентировочный. Точные ставки и обязательства уточняйте у бухгалтера или на kgd.gov.kz
@@ -900,3 +953,132 @@ export default function TaxPage() {
     </div>
   )
 }
+
+// =================================================================
+// Календарь платежей + реквизиты КБК/КНП (Казахстан 2026)
+// =================================================================
+
+function CalendarSection({
+  iknRate, calc, employeeCalc, hasEmployees,
+}: {
+  iknRate: number
+  calc: { ipn: number; social: number; total: number; monthsInPeriod: number }
+  employeeCalc: { monthlyTaxFromEmployees: number; totalIpn: number; totalOpv: number; totalVosmsEmp: number; totalOpvr: number; totalSo: number; totalOsms: number }
+  hasEmployees: boolean
+}) {
+  // Реквизиты — официальные КБК и КНП (Казахстан 2026)
+  const REQUISITES = [
+    { name: 'ИПН с упрощёнки (форма 910.00)', kbk: '101202', knp: '911', deadline: 'до 25 числа 2-го месяца после полугодия (25 авг / 25 фев)' },
+    { name: 'ИПН с зарплаты работников', kbk: '101201', knp: '911', deadline: 'до 25 числа след. месяца' },
+    { name: 'ОПВ работодателя за себя', kbk: '904101', knp: '010', deadline: 'до 25 числа след. месяца' },
+    { name: 'ОПВ за работника', kbk: '904101', knp: '010', deadline: 'до 25 числа след. месяца' },
+    { name: 'ОПВР работодателя', kbk: '904102', knp: '010', deadline: 'до 25 числа след. месяца' },
+    { name: 'ВОСМС работника (2%)', kbk: '904201', knp: '121', deadline: 'до 25 числа след. месяца' },
+    { name: 'ОСМС работодателя (3%)', kbk: '904201', knp: '122', deadline: 'до 25 числа след. месяца' },
+    { name: 'СО (соц. отчисления, 3.5%)', kbk: '904103', knp: '015', deadline: 'до 25 числа след. месяца' },
+  ]
+
+  function copy(text: string) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(text)
+    }
+  }
+
+  // Ближайшие даты платежей
+  const today = new Date()
+  const nextMonthly = new Date(today.getFullYear(), today.getMonth(), 25)
+  if (today > nextMonthly) nextMonthly.setMonth(nextMonthly.getMonth() + 1)
+  const halfYearDue = today.getMonth() < 7
+    ? new Date(today.getFullYear(), 7, 25)  // 25 августа за 1-е полугодие
+    : new Date(today.getFullYear() + 1, 1, 25)  // 25 февраля за 2-е полугодие
+
+  const daysToMonthly = Math.ceil((nextMonthly.getTime() - today.getTime()) / 86400000)
+  const daysToHalfYear = Math.ceil((halfYearDue.getTime() - today.getTime()) / 86400000)
+
+  return (
+    <>
+      {/* Дедлайны */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-5 border-amber-500/30 bg-amber-500/5">
+          <div className="text-xs uppercase tracking-wider text-amber-300 mb-2">Ближайший ежемесячный платёж</div>
+          <div className="text-2xl font-bold text-white">25 {nextMonthly.toLocaleString('ru-RU', { month: 'long' })}</div>
+          <p className="mt-2 text-xs text-amber-200/80">через {daysToMonthly} {daysToMonthly === 1 ? 'день' : daysToMonthly < 5 ? 'дня' : 'дней'}</p>
+          <p className="mt-3 text-xs text-slate-400">Соцплатежи: ОПВ + ОПВР + ВОСМС + ОСМС + СО за прошлый месяц + ИПН с зарплаты</p>
+          <p className="mt-2 text-sm text-amber-300 font-semibold">
+            ≈ {fmt((SOCIAL_FIXED_MONTHLY + (hasEmployees ? employeeCalc.monthlyTaxFromEmployees : 0)))}
+          </p>
+        </Card>
+
+        <Card className="p-5 border-emerald-500/30 bg-emerald-500/5">
+          <div className="text-xs uppercase tracking-wider text-emerald-300 mb-2">Полугодовой ИПН (форма 910.00)</div>
+          <div className="text-2xl font-bold text-white">{halfYearDue.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          <p className="mt-2 text-xs text-emerald-200/80">через {daysToHalfYear} {daysToHalfYear === 1 ? 'день' : 'дней'}</p>
+          <p className="mt-3 text-xs text-slate-400">ИПН с упрощёнки {iknRate}% от полугодового оборота</p>
+          <p className="mt-2 text-sm text-emerald-300 font-semibold">≈ {fmt(calc.ipn)}</p>
+        </Card>
+      </div>
+
+      {/* Сколько откладывать */}
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+          <Calculator className="w-4 h-4 text-blue-400" />
+          Сколько откладывать ежемесячно
+        </h3>
+        <p className="text-xs text-slate-400 mb-3">
+          Чтобы налог не «съел» оборотные деньги, переводи на отдельный счёт ежемесячно:
+        </p>
+        <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4">
+          <div className="text-3xl font-bold text-blue-300">
+            {fmt(Math.round((calc.total + (hasEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)) / Math.max(1, calc.monthsInPeriod)))}
+          </div>
+          <p className="mt-1 text-xs text-blue-200/80">в месяц на «налоговую кубышку»</p>
+        </div>
+      </Card>
+
+      {/* Реквизиты */}
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Landmark className="w-4 h-4 text-emerald-400" />
+          Реквизиты для оплаты (КБК и КНП)
+        </h3>
+        <p className="text-[11px] text-slate-500 mb-3">Скопируй в Halyk Business / Kaspi Business → Платежи в бюджет</p>
+        <div className="space-y-2">
+          {REQUISITES.map((r) => (
+            <div key={r.name + r.kbk + r.knp} className="rounded-lg border border-white/10 bg-slate-900/40 p-3 flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <div className="text-sm text-white">{r.name}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{r.deadline}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => copy(r.kbk)} className="rounded-lg bg-slate-900/80 border border-white/10 px-2 py-1 text-xs text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
+                  КБК <span className="font-mono text-emerald-300">{r.kbk}</span>
+                </button>
+                <button onClick={() => copy(r.knp)} className="rounded-lg bg-slate-900/80 border border-white/10 px-2 py-1 text-xs text-slate-200 hover:bg-emerald-500/20 hover:border-emerald-500/30">
+                  КНП <span className="font-mono text-emerald-300">{r.knp}</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[10px] text-slate-500">Получатель: УГД по месту регистрации ИП. Уточняйте БИК/ИИК своего РНУ — они меняются в зависимости от региона.</p>
+      </Card>
+
+      {/* Что вообще делать */}
+      <Card className="p-5 bg-blue-500/5 border-blue-500/20">
+        <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
+          <Info className="w-4 h-4" />
+          Что вообще делать (пошагово)
+        </h3>
+        <ol className="space-y-1.5 text-xs text-blue-100/80 list-decimal pl-5">
+          <li><b>До 25-го каждого месяца</b> — оплачивай соцплатежи за прошлый месяц (ОПВ, ОПВР, СО, ВОСМС за себя; за работников — ИПН + ОПВ + ВОСМС + СО + ОСМС + ОПВР).</li>
+          <li><b>До 25 августа</b> — заплати ИПН с упрощёнки за 1-е полугодие.</li>
+          <li><b>До 15 августа</b> — сдай форму 910.00 в ЭФНО (cabinet.salyk.kz).</li>
+          <li><b>До 25 февраля</b> следующего года — то же самое за 2-е полугодие, форма 910.00 до 15 февраля.</li>
+          <li>Платежи делаешь в Kaspi Business / Halyk Business → раздел «Платежи в бюджет», вводишь КБК + КНП из таблицы выше.</li>
+          <li>Все платежи и формы храни в облаке (Google Drive) в отдельной папке «Налоги {new Date().getFullYear()}».</li>
+        </ol>
+      </Card>
+    </>
+  )
+}
+
