@@ -19,8 +19,12 @@ export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
 
-  const body = (await request.json().catch(() => null)) as { typing?: boolean } | null
+  const body = (await request.json().catch(() => null)) as
+    | { typing?: boolean; status?: string; statusEmoji?: string; statusText?: string }
+    | null
   const typing = !!body?.typing
+  const validStatuses = ['online', 'on_shift', 'day_off', 'sick', 'offline']
+  const statusToSet = body?.status && validStatuses.includes(body.status) ? body.status : null
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
@@ -50,15 +54,20 @@ export async function POST(request: Request) {
 
   const orgId = access.activeOrganization?.id || null
 
+  const upsertPayload: any = {
+    user_id: userId,
+    organization_id: orgId,
+    user_name: userName,
+    user_role: userRole,
+    is_typing: typing,
+    last_seen_at: new Date().toISOString(),
+  }
+  if (statusToSet) upsertPayload.status = statusToSet
+  if (body?.statusEmoji !== undefined) upsertPayload.status_emoji = body.statusEmoji || null
+  if (body?.statusText !== undefined) upsertPayload.status_text = body.statusText || null
+
   const { error } = await supabase.from('team_chat_presence').upsert(
-    {
-      user_id: userId,
-      organization_id: orgId,
-      user_name: userName,
-      user_role: userRole,
-      is_typing: typing,
-      last_seen_at: new Date().toISOString(),
-    },
+    upsertPayload,
     { onConflict: 'user_id,organization_id' },
   )
 
@@ -77,7 +86,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('team_chat_presence')
-    .select('user_id, user_name, user_role, is_typing, last_seen_at')
+    .select('user_id, user_name, user_role, is_typing, last_seen_at, status, status_emoji, status_text')
     .gte('last_seen_at', sinceSeen)
 
   if (orgId) {
