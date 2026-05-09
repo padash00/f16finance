@@ -1,21 +1,25 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+/**
+ * Налоговый калькулятор для ИП (Казахстан 2026, упрощёнка форма 910.00).
+ *
+ * Источники: НК РК с 01.01.2026.
+ * — Розничный налог упразднён
+ * — Упрощёнка: 4% базовая (маслихат может 2-6%)
+ * — Соцплатежи "за себя" фикс ~21 675 ₸/мес от 1 МЗП
+ * — НДС 16% при обороте > 10 000 МРП в год
+ * — Лимит упрощёнки: 600 000 МРП в год
+ */
+
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { 
+import {
   Calculator,
   CalendarDays,
-  TrendingDown,
-  TrendingUp,
   Landmark,
-  AlertCircle,
-  Wallet,
-  CreditCard,
-  Store,
-  Gamepad2,
+  AlertTriangle,
   CheckCircle2,
-  XCircle
+  Info,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -25,285 +29,367 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend
 } from 'recharts'
 
-// --- Типы ---
-type IncomeRow = {
-  id: string
-  date: string
-  company_id: string
-  cash_amount: number
-  kaspi_amount: number
-  card_amount: number
+const MRP_2026 = 4_325
+const MZP_2026 = 85_000
+
+// Соцплатежи "за себя" — ежемесячно от 1 МЗП
+const SOCIAL_RATES = { OPV: 0.10, OPVR: 0.035, SO: 0.05, VOSMS: 0.07 }
+const SOCIAL_FIXED_MONTHLY =
+  Math.round(MZP_2026 * SOCIAL_RATES.OPV) +
+  Math.round(MZP_2026 * SOCIAL_RATES.OPVR) +
+  Math.round(MZP_2026 * SOCIAL_RATES.SO) +
+  Math.round(MZP_2026 * SOCIAL_RATES.VOSMS)
+
+const NDS_THRESHOLD = 10_000 * MRP_2026
+const SIMPLIFIED_THRESHOLD = 600_000 * MRP_2026
+
+interface MonthlyTaxData {
+  month: string
+  monthName: string
+  income: number
+  ipn: number
+  social: number
+  total: number
 }
 
-type Company = {
-  id: string
-  name: string
-  code: string
+function fmt(v: number) {
+  return Math.round(v).toLocaleString('ru-RU') + ' ₸'
+}
+function fmtCompact(v: number) {
+  if (Math.abs(v) >= 1_000_000) return (v / 1_000_000).toFixed(1) + ' млн ₸'
+  if (Math.abs(v) >= 1_000) return Math.round(v / 1_000) + 'к ₸'
+  return Math.round(v).toLocaleString('ru-RU') + ' ₸'
 }
 
-type MonthlyTaxData = {
-    month: string; // YYYY-MM
-    monthName: string;
-    taxableIncome: number; // Белая выручка
-    ignoredIncome: number; // Серая выручка (Арена Нал + Extra)
-    taxAmount: number;     // 3%
-}
-
-// --- Хелперы ---
-const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
-
-const getSixMonthsAgo = () => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 6);
-    d.setDate(1); // С первого числа
-    return d.toISOString().slice(0, 10);
-}
-
-const getToday = () => new Date().toISOString().slice(0, 10);
+function todayISO() { return new Date().toISOString().slice(0, 10) }
+function startOfYearISO() { return `${new Date().getFullYear()}-01-01` }
 
 export default function TaxPage() {
-  const [dateFrom, setDateFrom] = useState(getSixMonthsAgo())
-  const [dateTo, setDateTo] = useState(getToday())
-  
-  const [incomes, setIncomes] = useState<IncomeRow[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
+  const [iknRate, setIknRate] = useState(4)
+  const [dateFrom, setDateFrom] = useState(startOfYearISO())
+  const [dateTo, setDateTo] = useState(todayISO())
+  const [revenue, setRevenue] = useState(0)
+  const [yearRevenue, setYearRevenue] = useState(0)
+  const [monthlyIncomes, setMonthlyIncomes] = useState<{ month: string; income: number }[]>([])
   const [loading, setLoading] = useState(true)
 
-  // ЗАГРУЗКА ДАННЫХ
   useEffect(() => {
-    const load = async () => {
-        setLoading(true)
-        const [companiesRes, incomesRes] = await Promise.all([
-          fetch('/api/admin/companies'),
-          fetch(`/api/admin/incomes?from=${dateFrom}&to=${dateTo}&page_size=5000`),
-        ])
-
-        const companiesJson = await companiesRes.json().catch(() => null)
-        const incomesJson = await incomesRes.json().catch(() => null)
-
-        setCompanies(companiesRes.ok ? (companiesJson?.data || []) : [])
-        setIncomes(incomesRes.ok ? (incomesJson?.data || []) : [])
-        setLoading(false);
-    }
-    load();
+    void load()
   }, [dateFrom, dateTo])
 
-  // --- 🧮 ГЛАВНАЯ ЛОГИКА РАСЧЕТА НАЛОГА ---
-  const calculation = useMemo(() => {
-      let totalTaxable = 0; // База для налога
-      let totalIgnored = 0; // То, что не облагаем
-      let totalTax = 0;     // Сам налог (3%)
+  async function load() {
+    setLoading(true)
+    try {
+      // Период оборота
+      const r = await fetch(`/api/admin/reports/bundle?from=${dateFrom}&to=${dateTo}`)
+      if (r.ok) {
+        const data = await r.json()
+        setRevenue(data.totalsCur?.totalIncome || 0)
 
-      const monthlyStats = new Map<string, MonthlyTaxData>();
-
-      // Находим ID компаний
-      const arenaId = companies.find(c => c.code === 'arena')?.id;
-      const ramenId = companies.find(c => c.code === 'ramen')?.id;
-      const extraId = companies.find(c => c.code === 'extra')?.id;
-
-      // Инициализация по месяцам (чтобы график был красивый)
-      const start = new Date(dateFrom);
-      const end = new Date(dateTo);
-      for (let d = new Date(start); d <= end; d.setMonth(d.getMonth() + 1)) {
-          const key = d.toISOString().slice(0, 7); // 2025-11
-          const monthName = d.toLocaleString('ru-RU', { month: 'short', year: '2-digit' });
-          if (!monthlyStats.has(key)) {
-              monthlyStats.set(key, { month: key, monthName, taxableIncome: 0, ignoredIncome: 0, taxAmount: 0 });
+        // Помесячная разбивка по dailyIncome (если приходит)
+        if (data.dailyIncome) {
+          const byMonth = new Map<string, number>()
+          for (const [date, val] of Object.entries(data.dailyIncome as Record<string, number>)) {
+            const m = date.slice(0, 7)
+            byMonth.set(m, (byMonth.get(m) || 0) + Number(val || 0))
           }
+          const monthly = Array.from(byMonth.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([month, income]) => ({ month, income }))
+          setMonthlyIncomes(monthly)
+        } else {
+          setMonthlyIncomes([])
+        }
       }
 
-      incomes.forEach(row => {
-          let rowTaxable = 0;
-          let rowIgnored = 0;
+      // Годовой оборот для проверки порогов
+      const ry = await fetch(`/api/admin/reports/bundle?from=${startOfYearISO()}&to=${todayISO()}`)
+      if (ry.ok) {
+        const data = await ry.json()
+        setYearRevenue(data.totalsCur?.totalIncome || 0)
+      }
+    } catch (e) {
+      console.error('[tax] load error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-          const cash = row.cash_amount || 0;
-          const kaspi = (row.kaspi_amount || 0) + (row.card_amount || 0); // Считаем карту как каспи
+  // Помесячный chart с расчётом налога
+  const chartData = useMemo<MonthlyTaxData[]>(() => {
+    return monthlyIncomes.map(({ month, income }) => {
+      const ipn = Math.round(income * (iknRate / 100))
+      const social = SOCIAL_FIXED_MONTHLY
+      const monthName = new Date(month + '-01').toLocaleString('ru-RU', { month: 'short', year: '2-digit' })
+      return { month, monthName, income, ipn, social, total: ipn + social }
+    })
+  }, [monthlyIncomes, iknRate])
 
-          // ЛОГИКА ПОЛЬЗОВАТЕЛЯ:
-          if (row.company_id === arenaId) {
-              // АРЕНА: Безналичный -> Налог, Нал -> Игнор
-              rowTaxable += kaspi;
-              rowIgnored += cash;
-          } else if (row.company_id === ramenId) {
-              // РАМЕН: Всё -> Налог
-              rowTaxable += (cash + kaspi);
-          } else {
-              // EXTRA и прочие: Всё -> Игнор
-              rowIgnored += (cash + kaspi);
-          }
+  // Расчёт налога за весь период
+  const calc = useMemo(() => {
+    const ipn = Math.round(revenue * (iknRate / 100))
+    const monthsInPeriod = monthlyIncomes.length || 1
+    const social = SOCIAL_FIXED_MONTHLY * monthsInPeriod
+    const total = ipn + social
+    const effectiveRate = revenue > 0 ? (total / revenue) * 100 : 0
+    return { ipn, social, total, effectiveRate, monthsInPeriod }
+  }, [revenue, iknRate, monthlyIncomes.length])
 
-          // Общие итоги
-          totalTaxable += rowTaxable;
-          totalIgnored += rowIgnored;
-
-          // Помесячные итоги
-          const key = row.date.slice(0, 7);
-          const stat = monthlyStats.get(key);
-          if (stat) {
-              stat.taxableIncome += rowTaxable;
-              stat.ignoredIncome += rowIgnored;
-              stat.taxAmount += (rowTaxable * 0.03);
-          }
-      });
-
-      totalTax = totalTaxable * 0.03; // 3%
-
-      // Превращаем Map в массив для графика
-      const chartData = Array.from(monthlyStats.values()).sort((a, b) => a.month.localeCompare(b.month));
-
-      return { totalTaxable, totalIgnored, totalTax, chartData };
-  }, [incomes, companies]); // Пересчитываем при изменении данных
+  // Прогноз на конец года + контроль порогов
+  const yearForecast = useMemo(() => {
+    const today = new Date()
+    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / 86400000) + 1
+    const projectedYear = yearRevenue * (365 / dayOfYear)
+    return {
+      currentYearRevenue: yearRevenue,
+      projectedYear,
+      ndsRisk: projectedYear > NDS_THRESHOLD,
+      ndsRemaining: Math.max(0, NDS_THRESHOLD - yearRevenue),
+      simplifiedRisk: projectedYear > SIMPLIFIED_THRESHOLD,
+    }
+  }, [yearRevenue])
 
   return (
-    <>
-        <div className="app-page-wide space-y-8">
-          
-          {/* Заголовок и Даты */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-                <Landmark className="w-8 h-8 text-yellow-500" /> 
-                Налоговый калькулятор (3%)
-              </h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Расчет обязательств: Арена (только Безналичный) + Рамен (Всё)
-              </p>
-            </div>
-            
-            <Card className="p-1 flex items-center gap-2 bg-card/50 border-border">
-                 <div className="flex items-center px-2">
-                    <CalendarDays className="w-4 h-4 text-muted-foreground mr-2" />
-                    <input 
-                        type="date" 
-                        value={dateFrom} 
-                        onChange={e => setDateFrom(e.target.value)}
-                        className="bg-transparent text-sm w-24 outline-none text-foreground"
-                    />
-                    <span className="text-muted-foreground mx-1">—</span>
-                    <input 
-                        type="date" 
-                        value={dateTo} 
-                        onChange={e => setDateTo(e.target.value)}
-                        className="bg-transparent text-sm w-24 outline-none text-foreground"
-                    />
-                 </div>
-                 <Button 
-                    size="sm" 
-                    variant="secondary" 
-                    className="h-7 text-xs"
-                    onClick={() => { setDateFrom(getSixMonthsAgo()); setDateTo(getToday()); }}
-                 >
-                    6 месяцев
-                 </Button>
-            </Card>
-          </div>
-
-          {/* 💰 КАРТОЧКИ ИТОГОВ */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* 1. К ОПЛАТЕ */}
-              <Card className="p-6 border border-yellow-500/50 bg-yellow-500/10 neon-glow relative overflow-hidden">
-                  <div className="relative z-10">
-                      <div className="flex items-center gap-2 text-yellow-200 mb-2">
-                          <Calculator className="w-5 h-5" />
-                          <span className="font-bold uppercase tracking-wider text-xs">Налог к оплате (3%)</span>
-                      </div>
-                      <div className="text-4xl font-bold text-yellow-400">
-                          {formatMoney(calculation.totalTax)}
-                      </div>
-                      <p className="text-xs text-yellow-200/60 mt-2">
-                          Сумма, которую нужно отложить
-                      </p>
-                  </div>
-                  <div className="absolute -right-4 -bottom-4 opacity-10">
-                      <Landmark className="w-32 h-32" />
-                  </div>
-              </Card>
-
-              {/* 2. НАЛОГОВАЯ БАЗА */}
-              <Card className="p-6 border-border bg-card neon-glow">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                      <Store className="w-4 h-4 text-green-400" />
-                      <span className="font-bold uppercase tracking-wider text-xs">Белая выручка (База)</span>
-                  </div>
-                  <div className="text-2xl font-bold text-foreground">
-                      {formatMoney(calculation.totalTaxable)}
-                  </div>
-                  <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Безналичный Арены</p>
-                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Нал + Безналичный Рамена</p>
-                  </div>
-              </Card>
-
-              {/* 3. НЕОБЛАГАЕМОЕ */}
-              <Card className="p-6 border-border bg-card neon-glow opacity-80">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                      <AlertCircle className="w-4 h-4 text-gray-400" />
-                      <span className="font-bold uppercase tracking-wider text-xs">Не учитывается (Серое)</span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-400">
-                      {formatMoney(calculation.totalIgnored)}
-                  </div>
-                   <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                      <p className="flex items-center gap-1"><XCircle className="w-3 h-3 text-gray-400" /> Нал Арены</p>
-                      <p className="flex items-center gap-1"><XCircle className="w-3 h-3 text-gray-400" /> F16 Extra (всё)</p>
-                  </div>
-              </Card>
-          </div>
-
-          {/* 📊 ГРАФИК ПО МЕСЯЦАМ */}
-          <Card className="p-6 border-border bg-card neon-glow">
-              <h3 className="text-sm font-bold text-foreground mb-6">Динамика налоговой базы и налога</h3>
-              <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={calculation.chartData}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                        <XAxis dataKey="monthName" stroke="#666" fontSize={12} />
-                        <YAxis stroke="#666" fontSize={12} tickFormatter={v => `${v/1000}k`} />
-                        <Tooltip 
-                            cursor={{fill: 'transparent'}}
-                            contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
-                            formatter={(val: number, name: string) => [formatMoney(val), name]}
-                        />
-                        <Legend />
-                        <Bar dataKey="taxableIncome" name="База (Выручка)" fill="#22c55e" stackId="a" radius={[0,0,4,4]} />
-                        <Bar dataKey="taxAmount" name="Налог (3%)" fill="#eab308" radius={[4,4,0,0]} />
-                    </BarChart>
-                </ResponsiveContainer>
-              </div>
-          </Card>
-
-          {/* ТАБЛИЦА ДЕТАЛИЗАЦИИ */}
-          <Card className="p-6 border-border bg-card neon-glow">
-              <h3 className="text-sm font-bold text-foreground mb-4">Детализация по месяцам</h3>
-              <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                      <thead>
-                          <tr className="border-b border-border text-xs text-muted-foreground uppercase">
-                              <th className="px-4 py-3 text-left">Месяц</th>
-                              <th className="px-4 py-3 text-right text-green-500">Облагаемая база</th>
-                              <th className="px-4 py-3 text-right text-yellow-500 font-bold">Налог (3%)</th>
-                              <th className="px-4 py-3 text-right text-gray-500">Не учтено</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {calculation.chartData.map(row => (
-                              <tr key={row.month} className="border-b border-white/5 hover:bg-white/5">
-                                  <td className="px-4 py-3 font-medium">{row.monthName}</td>
-                                  <td className="px-4 py-3 text-right">{formatMoney(row.taxableIncome)}</td>
-                                  <td className="px-4 py-3 text-right font-bold text-yellow-400">{formatMoney(row.taxAmount)}</td>
-                                  <td className="px-4 py-3 text-right text-muted-foreground">{formatMoney(row.ignoredIncome)}</td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
-              </div>
-          </Card>
-
+    <div className="app-page-wide space-y-6 px-3 sm:px-4 py-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+            <Landmark className="w-8 h-8 text-emerald-500" />
+            Налоги ИП (упрощёнка)
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Расчёт по НК РК 2026 — форма 910.00, ИПН + соцплатежи
+          </p>
         </div>
-    </>
+
+        <Card className="p-1 flex items-center gap-2 bg-card/50">
+          <div className="flex items-center px-2">
+            <CalendarDays className="w-4 h-4 text-muted-foreground mr-2" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="bg-transparent text-sm text-foreground outline-none"
+            />
+          </div>
+          <span className="text-muted-foreground">—</span>
+          <div className="flex items-center px-2">
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="bg-transparent text-sm text-foreground outline-none"
+            />
+          </div>
+        </Card>
+      </div>
+
+      {/* Параметры расчёта */}
+      <Card className="p-4 sm:p-6">
+        <div className="flex flex-wrap items-end gap-6">
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Ставка ИПН (упрощёнка)</label>
+            <div className="flex gap-1 rounded-xl border border-white/10 bg-slate-900/40 p-1">
+              {[2, 3, 4, 5, 6].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setIknRate(r)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition ${
+                    iknRate === r
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {r}%{r === 4 ? ' (баз.)' : ''}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] text-slate-500">Маслихат вашего региона может назначить 2-6%</p>
+          </div>
+
+          <div>
+            <div className="text-xs text-slate-400 mb-1">Оборот за период</div>
+            <div className="text-2xl font-bold text-emerald-300">
+              {loading ? '…' : fmtCompact(revenue)}
+            </div>
+            <div className="text-[11px] text-slate-500">{calc.monthsInPeriod} мес</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* KPI карточки */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">ИПН ({iknRate}%)</div>
+          <div className="text-2xl font-bold text-white">{fmtCompact(calc.ipn)}</div>
+          <p className="mt-2 text-xs text-slate-500">Подоходный налог = оборот × {iknRate}%</p>
+        </Card>
+
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Соцплатежи (за себя)</div>
+          <div className="text-2xl font-bold text-white">{fmtCompact(calc.social)}</div>
+          <p className="mt-2 text-xs text-slate-500">{fmt(SOCIAL_FIXED_MONTHLY)}/мес × {calc.monthsInPeriod} мес</p>
+        </Card>
+
+        <Card className="p-5 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent">
+          <div className="text-xs uppercase tracking-wider text-emerald-400 mb-2">Итого к уплате</div>
+          <div className="text-2xl font-bold text-emerald-300">{fmtCompact(calc.total)}</div>
+          <p className="mt-2 text-xs text-emerald-400/80">Эффективная ставка: {calc.effectiveRate.toFixed(2)}%</p>
+        </Card>
+      </div>
+
+      {/* Помесячный график */}
+      {chartData.length > 0 && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-emerald-400" />
+            Налог по месяцам
+          </h3>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="monthName" stroke="#9ca3af" fontSize={11} />
+                <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(v) => fmtCompact(v)} />
+                <Tooltip
+                  contentStyle={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                  formatter={(v: number, name: string) => {
+                    const labels: Record<string, string> = { income: 'Оборот', ipn: 'ИПН', social: 'Соцплатежи', total: 'Итого' }
+                    return [fmt(v), labels[name] || name]
+                  }}
+                />
+                <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
+      {/* Расшифровка соцплатежей */}
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Info className="w-4 h-4 text-blue-400" />
+          Соцплатежи за месяц (от 1 МЗП = {fmt(MZP_2026)})
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div className="rounded-lg bg-slate-900/40 p-3 border border-white/5">
+            <div className="text-xs text-slate-400">ОПВ (10%)</div>
+            <div className="font-semibold text-white">{fmt(MZP_2026 * SOCIAL_RATES.OPV)}</div>
+          </div>
+          <div className="rounded-lg bg-slate-900/40 p-3 border border-white/5">
+            <div className="text-xs text-slate-400">ОПВР (3.5%)</div>
+            <div className="font-semibold text-white">{fmt(MZP_2026 * SOCIAL_RATES.OPVR)}</div>
+          </div>
+          <div className="rounded-lg bg-slate-900/40 p-3 border border-white/5">
+            <div className="text-xs text-slate-400">СО (5%)</div>
+            <div className="font-semibold text-white">{fmt(MZP_2026 * SOCIAL_RATES.SO)}</div>
+          </div>
+          <div className="rounded-lg bg-slate-900/40 p-3 border border-white/5">
+            <div className="text-xs text-slate-400">ВОСМС (7%)</div>
+            <div className="font-semibold text-white">{fmt(MZP_2026 * SOCIAL_RATES.VOSMS)}</div>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Итого: {fmt(SOCIAL_FIXED_MONTHLY)}/мес = {fmt(SOCIAL_FIXED_MONTHLY * 6)}/полугодие
+        </p>
+      </Card>
+
+      {/* Контроль порогов */}
+      <Card className="p-5">
+        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400" />
+          Контроль порогов на 2026 год
+        </h3>
+
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-slate-300">Порог регистрации по НДС (10 000 МРП = {fmtCompact(NDS_THRESHOLD)})</span>
+              <span className={`text-xs font-medium ${yearForecast.ndsRisk ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {fmtCompact(yearForecast.currentYearRevenue)}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full ${
+                  yearForecast.currentYearRevenue / NDS_THRESHOLD > 0.8
+                    ? 'bg-rose-500'
+                    : yearForecast.currentYearRevenue / NDS_THRESHOLD > 0.5
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, (yearForecast.currentYearRevenue / NDS_THRESHOLD) * 100)}%` }}
+              />
+            </div>
+            {yearForecast.ndsRisk ? (
+              <p className="mt-1 text-xs text-rose-400">
+                ⚠️ Прогноз на год превысит порог НДС. Регистрация по НДС обязательна (16%).
+              </p>
+            ) : yearForecast.ndsRemaining > 0 ? (
+              <p className="mt-1 text-xs text-slate-500">До НДС осталось: {fmtCompact(yearForecast.ndsRemaining)}</p>
+            ) : null}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-slate-300">Порог упрощёнки (600 000 МРП = {fmtCompact(SIMPLIFIED_THRESHOLD)})</span>
+              <span className="text-xs font-medium text-emerald-400">
+                {fmtCompact(yearForecast.currentYearRevenue)}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${Math.min(100, (yearForecast.currentYearRevenue / SIMPLIFIED_THRESHOLD) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {!loading && yearForecast.currentYearRevenue > 0 ? (
+            <div className="rounded-lg bg-slate-900/40 p-3 text-xs text-slate-400">
+              Прогноз годового оборота при текущем темпе:{' '}
+              <span className="text-white font-medium">{fmtCompact(yearForecast.projectedYear)}</span>
+            </div>
+          ) : null}
+        </div>
+      </Card>
+
+      {/* Справка */}
+      <Card className="p-5 bg-blue-500/5 border-blue-500/20">
+        <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          Что нового в 2026 году
+        </h3>
+        <ul className="space-y-1.5 text-xs text-blue-100/80 list-disc pl-5">
+          <li>
+            <b>Отменены:</b> патент, розничный налог, режим фиксированного вычета
+          </li>
+          <li>
+            <b>Упрощёнка (форма 910.00):</b> ставка <b>4% базовая</b>, маслихат может 2-6%
+          </li>
+          <li>
+            <b>НДС:</b> повышен с 12% до <b>16%</b>, порог регистрации снижен с 20 000 МРП до 10 000 МРП
+          </li>
+          <li>
+            <b>МРП 2026:</b> {fmt(MRP_2026)} | <b>МЗП 2026:</b> {fmt(MZP_2026)}
+          </li>
+          <li>
+            <b>Период:</b> декларация подаётся раз в полугодие
+          </li>
+          <li>
+            <b>Соцналог</b> на упрощёнке НЕ платится (ст. 722 НК РК)
+          </li>
+        </ul>
+      </Card>
+
+      <p className="text-[10px] text-slate-600 text-center">
+        Расчёт ориентировочный. Точные ставки и обязательства уточняйте у бухгалтера или на kgd.gov.kz
+      </p>
+    </div>
   )
 }
