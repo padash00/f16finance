@@ -25,6 +25,25 @@ import {
 type LoginMode = 'email' | 'operator'
 type HostOrg = { name: string; slug: string } | null
 
+/**
+ * Перевод сообщений об ошибках Supabase Auth на русский.
+ */
+function translateSupabaseError(msg: string | null | undefined): string {
+  if (!msg) return 'Не удалось войти'
+  const m = msg.toLowerCase()
+  if (m.includes('invalid login credentials') || m.includes('invalid_credentials')) return 'Неверный email или пароль'
+  if (m.includes('email not confirmed')) return 'Email не подтверждён — проверьте почту'
+  if (m.includes('user not found')) return 'Пользователь не найден'
+  if (m.includes('email rate limit') || m.includes('rate limit')) return 'Слишком много попыток — подождите минуту'
+  if (m.includes('too many requests')) return 'Слишком много запросов — попробуйте позже'
+  if (m.includes('user already registered')) return 'Этот email уже зарегистрирован'
+  if (m.includes('password should be at least')) return 'Пароль должен быть минимум 6 символов'
+  if (m.includes('signup is disabled')) return 'Регистрация отключена'
+  if (m.includes('email link is invalid') || m.includes('expired')) return 'Ссылка устарела или недействительна'
+  if (m.includes('network') || m.includes('fetch')) return 'Нет соединения с сервером'
+  return msg
+}
+
 function TenantIdentityPanel({ hostOrg }: { hostOrg: NonNullable<HostOrg> }) {
   const initials = hostOrg.name
     .split(/\s+/)
@@ -156,7 +175,7 @@ export default function LoginForm({
       if (mode === 'email') {
         const email = login.trim().toLowerCase()
         const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
+        if (error) throw new Error(translateSupabaseError(error.message))
 
         await fetch('/api/auth/login-attempt', {
           method: 'POST',
@@ -249,7 +268,7 @@ export default function LoginForm({
           reason: err?.message || null,
         }),
       }).catch(() => null)
-      setError(err?.message || (mode === 'email' ? 'Не удалось войти. Проверьте пароль.' : 'Неверный логин или пароль.'))
+      setError(translateSupabaseError(err?.message) || (mode === 'email' ? 'Не удалось войти. Проверьте пароль.' : 'Неверный логин или пароль.'))
     } finally {
       setLoading(false)
     }
