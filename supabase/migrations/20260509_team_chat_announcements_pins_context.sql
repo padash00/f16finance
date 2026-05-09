@@ -12,10 +12,10 @@ create index if not exists idx_team_chat_context
   on public.team_chat_messages(context_type, context_id, created_at desc)
   where context_type is not null;
 
--- Индекс для активных закреплений + объявлений (на главном экране чата)
+-- Индекс для закреплений (фильтр > now() делаем в запросе, не в predicate — иначе нужен immutable)
 create index if not exists idx_team_chat_pinned
   on public.team_chat_messages(pinned_until desc)
-  where pinned_until is not null and pinned_until > now() and deleted_at is null;
+  where pinned_until is not null and deleted_at is null;
 
 create index if not exists idx_team_chat_announcements
   on public.team_chat_messages(created_at desc)
