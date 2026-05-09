@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/chat-moderation",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/expire-pins",
+      "schedule": "0 * * * *"
     }
   ]
 }

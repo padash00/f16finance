@@ -23,13 +23,15 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50))
   const before = url.searchParams.get('before')
+  const contextType = url.searchParams.get('context_type')
+  const contextId = url.searchParams.get('context_id')
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const orgId = access.activeOrganization?.id || null
 
   let query = supabase
     .from('team_chat_messages')
-    .select('id, sender_user_id, sender_operator_id, sender_name, sender_role, sender_avatar_url, message, attachments, reply_to_id, edited_at, deleted_at, created_at')
+    .select('id, sender_user_id, sender_operator_id, sender_name, sender_role, sender_avatar_url, message, attachments, reply_to_id, edited_at, deleted_at, is_announcement, pinned_until, context_type, context_id, context_label, created_at')
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -39,12 +41,34 @@ export async function GET(request: Request) {
   if (before) {
     query = query.lt('created_at', before)
   }
+  if (contextType && contextId) {
+    query = query.eq('context_type', contextType).eq('context_id', contextId)
+  } else if (!contextType) {
+    // По умолчанию — общий чат (без контекста)
+    query = query.is('context_type', null)
+  }
 
   const { data, error } = await query
   if (error) return json({ error: error.message }, 500)
 
+  // Активные закрепления (pinned_until > now())
+  let pins: any[] = []
+  if (!contextType) {
+    const nowIso = new Date().toISOString()
+    let pinQuery = supabase
+      .from('team_chat_messages')
+      .select('id, sender_name, message, attachments, pinned_until, is_announcement, created_at')
+      .gt('pinned_until', nowIso)
+      .is('deleted_at', null)
+      .order('pinned_until', { ascending: false })
+      .limit(5)
+    if (orgId) pinQuery = pinQuery.or(`organization_id.eq.${orgId},organization_id.is.null`)
+    const { data: pinData } = await pinQuery
+    pins = pinData || []
+  }
+
   // Возвращаем в обратном порядке (старые → новые)
-  return json({ messages: (data || []).reverse() })
+  return json({ messages: (data || []).reverse(), pinned: pins })
 }
 
 export async function POST(request: Request) {
@@ -55,6 +79,11 @@ export async function POST(request: Request) {
     message?: string
     attachments?: Array<{ type: string; url: string; name?: string }>
     replyToId?: string
+    isAnnouncement?: boolean
+    pinnedUntil?: string
+    contextType?: string
+    contextId?: string
+    contextLabel?: string
   } | null
 
   const messageText = String(body?.message || '').trim()
@@ -94,6 +123,11 @@ export async function POST(request: Request) {
     senderRole = 'super_admin'
   }
 
+  // Только владелец/super-admin может ставить is_announcement
+  const isOwnerOrSuper =
+    access.isSuperAdmin || (access.staffMember?.role || '').toLowerCase() === 'owner'
+  const isAnnouncement = !!body?.isAnnouncement && isOwnerOrSuper
+
   const { data, error } = await supabase
     .from('team_chat_messages')
     .insert({
@@ -105,8 +139,13 @@ export async function POST(request: Request) {
       message: messageText,
       attachments: body?.attachments || null,
       reply_to_id: body?.replyToId || null,
+      is_announcement: isAnnouncement,
+      pinned_until: body?.pinnedUntil || null,
+      context_type: body?.contextType || null,
+      context_id: body?.contextId || null,
+      context_label: body?.contextLabel || null,
     })
-    .select('id, sender_user_id, sender_operator_id, sender_name, sender_role, message, attachments, reply_to_id, created_at')
+    .select('id, sender_user_id, sender_operator_id, sender_name, sender_role, message, attachments, reply_to_id, edited_at, deleted_at, is_announcement, pinned_until, context_type, context_id, context_label, created_at')
     .single()
 
   if (error) return json({ error: error.message }, 500)
