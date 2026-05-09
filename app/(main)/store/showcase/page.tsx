@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { TableSkeleton } from '@/components/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -418,8 +419,8 @@ export default function ShowcasePage() {
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
         {loading && balances.length === 0 ? (
-          <div className="flex h-60 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="p-4">
+            <TableSkeleton rows={8} cols={5} />
           </div>
         ) : !showcase ? (
           <div className="flex h-60 flex-col items-center justify-center gap-2 text-muted-foreground">
