@@ -149,7 +149,7 @@ export default function TaxPage() {
   const [dateTo, setDateTo] = useState(todayISO())
   // Raw incomes для гибкого расчёта по company × payment_type
   const [incomeRows, setIncomeRows] = useState<Array<{ date: string; company_id: string | null; cash_amount: number; kaspi_amount: number; online_amount: number; card_amount: number }>>([])
-  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([])
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string; show_in_structure?: boolean; code?: string | null }>>([])
 
   // Фильтр: какие источники учитывать в налогооблагаемом обороте
   // Структура: { [companyId]: { cash: bool, kaspi: bool, online: bool, card: bool } }
@@ -263,7 +263,12 @@ export default function TaxPage() {
       if (rc.ok) {
         const cs = await rc.json()
         const list = (cs.companies || cs.data || []) as any[]
-        setCompanies(list.map((c) => ({ id: c.id, name: c.name })))
+        setCompanies(list.map((c) => ({
+          id: c.id,
+          name: c.name,
+          code: c.code || null,
+          show_in_structure: c.show_in_structure !== false,
+        })))
       }
 
       // Годовой оборот для проверки порогов — из тех же raw данных
@@ -661,7 +666,16 @@ export default function TaxPage() {
                   ]
                   return (
                     <tr key={cid || 'no-co'} className="border-t border-white/5">
-                      <td className="px-2 py-2 text-white">{c.name}</td>
+                      <td className="px-2 py-2 text-white">
+                        {c.name}
+                        {(() => {
+                          const co = companies.find((x) => x.id === c.id)
+                          if (co && co.show_in_structure === false) {
+                            return <span className="ml-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] text-amber-300" title="Скрыта в структуре /settings, но учитывается в налогах">скрыта</span>
+                          }
+                          return null
+                        })()}
+                      </td>
                       {types.map(({ k, v }) => (
                         <td key={k} className="px-2 py-2 text-center">
                           <label className="inline-flex flex-col items-center gap-0.5 cursor-pointer">
