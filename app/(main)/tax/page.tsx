@@ -257,11 +257,12 @@ export default function TaxPage() {
         })))
       }
 
-      // Список компаний для UI фильтра — API возвращает { data: [...] }
-      const rc = await fetch('/api/admin/companies')
+      // Список компаний — используем тот же endpoint что и /settings,
+      // чтобы данные совпадали (там пользователь видит все 3 компании)
+      const rc = await fetch('/api/admin/settings', { cache: 'no-store' })
       if (rc.ok) {
         const cs = await rc.json()
-        const list = (cs.data || cs.companies || cs || []) as any[]
+        const list = (cs.companies || cs.data || []) as any[]
         setCompanies(list.map((c) => ({ id: c.id, name: c.name })))
       }
 
@@ -627,7 +628,14 @@ export default function TaxPage() {
           </h3>
           <p className="text-[11px] text-slate-500 mb-3">
             Сними галочку чтобы исключить тип оплаты из расчёта (например, наличные на одной точке не учитывать).
-            Полный оборот: <b className="text-white">{fmt(fullRevenue)}</b> · в налог пойдёт: <b className="text-emerald-300">{fmt(revenue)}</b>
+            <br />Полный оборот: <b className="text-white">{fmt(fullRevenue)}</b> · в налог пойдёт: <b className="text-emerald-300">{fmt(revenue)}</b>
+            <br />Из БД подтянуто компаний: <b className="text-white">{companies.length}</b>
+            {companies.length < 3 ? (
+              <span className="ml-1 text-amber-400">⚠️ Если у тебя больше — проверь /settings или RLS-политику на companies.</span>
+            ) : null}
+            {companyBreakdown.some((c) => !c.id) ? (
+              <span className="block mt-1 text-amber-400">⚠️ Есть доходы без company_id (legacy) — раздел "Без компании" внизу.</span>
+            ) : null}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
