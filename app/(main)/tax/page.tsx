@@ -45,6 +45,58 @@ const SOCIAL_FIXED_MONTHLY =
 const NDS_THRESHOLD = 10_000 * MRP_2026
 const SIMPLIFIED_THRESHOLD = 600_000 * MRP_2026
 
+// === НАЛОГИ ЗА РАБОТНИКА (стандартный режим, 2026) ===
+// Удерживается с работника:
+//   ИПН 10% (с льготой 90% если оклад ≤ 25 МРП)
+//   ОПВ 10% (макс с 50 МЗП)
+//   ВОСМС работника 2%
+// За счёт работодателя:
+//   ОПВР 3.5%
+//   СО 3.5% (макс с 7 МЗП)
+//   ОСМС 3%
+const EMPL_RATES = {
+  IPN: 0.10,
+  OPV_EMP: 0.10,
+  VOSMS_EMP: 0.02,
+  OPVR_ER: 0.035,
+  SO_ER: 0.035,
+  OSMS_ER: 0.03,
+}
+
+const STD_DEDUCTION_MRP = 14 // стандартный налоговый вычет 14 МРП в месяц
+
+function calcEmployeeTax(grossSalary: number) {
+  const opvLimit = 50 * MZP_2026
+  const soLimit = 7 * MZP_2026
+
+  const opv = Math.round(Math.min(grossSalary, opvLimit) * EMPL_RATES.OPV_EMP)
+  const vosmsEmp = Math.round(grossSalary * EMPL_RATES.VOSMS_EMP)
+
+  // ИПН: база = (зп - 14 МРП - ОПВ - ВОСМС работника)
+  const ipnBase = Math.max(0, grossSalary - STD_DEDUCTION_MRP * MRP_2026 - opv - vosmsEmp)
+  let ipn = Math.round(ipnBase * EMPL_RATES.IPN)
+  // Льгота 90% если оклад ≤ 25 МРП = 108 125 ₸
+  if (grossSalary <= 25 * MRP_2026) ipn = Math.round(ipn * 0.10)
+
+  // Работодатель сверху
+  const opvr = Math.round(grossSalary * EMPL_RATES.OPVR_ER)
+  const so = Math.round(Math.min(grossSalary, soLimit) * EMPL_RATES.SO_ER)
+  const osms = Math.round(grossSalary * EMPL_RATES.OSMS_ER)
+
+  const withheld = ipn + opv + vosmsEmp        // удержания (за счёт работника)
+  const employerTop = opvr + so + osms         // за счёт работодателя
+  const netSalary = grossSalary - withheld     // на руки
+  const totalCost = grossSalary + employerTop  // что уходит из бюджета
+
+  return { ipn, opv, vosmsEmp, opvr, so, osms, withheld, employerTop, netSalary, totalCost, grossSalary }
+}
+
+interface Employee {
+  id: string
+  name: string
+  salary: number
+}
+
 interface MonthlyTaxData {
   month: string
   monthName: string
@@ -71,6 +123,11 @@ export default function TaxPage() {
   const [dateFrom, setDateFrom] = useState(startOfYearISO())
   const [dateTo, setDateTo] = useState(todayISO())
   const [revenue, setRevenue] = useState(0)
+  // Сотрудники — храним в localStorage
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem('tax_employees') || '[]') } catch { return [] }
+  })
   const [yearRevenue, setYearRevenue] = useState(0)
   const [monthlyIncomes, setMonthlyIncomes] = useState<{ month: string; income: number }[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,6 +193,45 @@ export default function TaxPage() {
     const effectiveRate = revenue > 0 ? (total / revenue) * 100 : 0
     return { ipn, social, total, effectiveRate, monthsInPeriod }
   }, [revenue, iknRate, monthlyIncomes.length])
+
+  // Налоги за сотрудников — рассчитываем для каждого
+  const employeeCalc = useMemo(() => {
+    const breakdowns = employees.map((e) => ({ ...e, calc: calcEmployeeTax(e.salary) }))
+    const totalIpn = breakdowns.reduce((s, b) => s + b.calc.ipn, 0)
+    const totalOpv = breakdowns.reduce((s, b) => s + b.calc.opv, 0)
+    const totalVosmsEmp = breakdowns.reduce((s, b) => s + b.calc.vosmsEmp, 0)
+    const totalOpvr = breakdowns.reduce((s, b) => s + b.calc.opvr, 0)
+    const totalSo = breakdowns.reduce((s, b) => s + b.calc.so, 0)
+    const totalOsms = breakdowns.reduce((s, b) => s + b.calc.osms, 0)
+    const totalWithheld = breakdowns.reduce((s, b) => s + b.calc.withheld, 0)
+    const totalEmployerTop = breakdowns.reduce((s, b) => s + b.calc.employerTop, 0)
+    const totalGross = breakdowns.reduce((s, b) => s + b.salary, 0)
+    const totalNet = breakdowns.reduce((s, b) => s + b.calc.netSalary, 0)
+    const totalCost = breakdowns.reduce((s, b) => s + b.calc.totalCost, 0)
+    // Все налоги за работников (что переводит ИП в бюджет ежемесячно)
+    const monthlyTaxFromEmployees = totalIpn + totalOpv + totalVosmsEmp + totalOpvr + totalSo + totalOsms
+    return {
+      breakdowns, totalIpn, totalOpv, totalVosmsEmp, totalOpvr, totalSo, totalOsms,
+      totalWithheld, totalEmployerTop, totalGross, totalNet, totalCost, monthlyTaxFromEmployees,
+    }
+  }, [employees])
+
+  function addEmployee() {
+    const e: Employee = { id: Math.random().toString(36).slice(2, 10), name: '', salary: MZP_2026 }
+    const next = [...employees, e]
+    setEmployees(next)
+    localStorage.setItem('tax_employees', JSON.stringify(next))
+  }
+  function updateEmployee(id: string, patch: Partial<Employee>) {
+    const next = employees.map((e) => (e.id === id ? { ...e, ...patch } : e))
+    setEmployees(next)
+    localStorage.setItem('tax_employees', JSON.stringify(next))
+  }
+  function removeEmployee(id: string) {
+    const next = employees.filter((e) => e.id !== id)
+    setEmployees(next)
+    localStorage.setItem('tax_employees', JSON.stringify(next))
+  }
 
   // Прогноз на конец года + контроль порогов
   const yearForecast = useMemo(() => {
@@ -241,6 +337,130 @@ export default function TaxPage() {
           <p className="mt-2 text-xs text-emerald-400/80">Эффективная ставка: {calc.effectiveRate.toFixed(2)}%</p>
         </Card>
       </div>
+
+      {/* === СОТРУДНИКИ === */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-amber-400" />
+            Сотрудники (налоги за работников)
+          </h3>
+          <button
+            type="button"
+            onClick={addEmployee}
+            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"
+          >
+            + Добавить сотрудника
+          </button>
+        </div>
+
+        {employees.length === 0 ? (
+          <p className="text-sm text-slate-500 italic">Сотрудники не добавлены. Нажмите «+ Добавить» чтобы посчитать налоги за работников.</p>
+        ) : (
+          <div className="space-y-2">
+            {employeeCalc.breakdowns.map((b) => (
+              <div key={b.id} className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                <div className="flex flex-wrap items-end gap-3 mb-3">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500">ФИО / должность</label>
+                    <input
+                      value={b.name}
+                      onChange={(e) => updateEmployee(b.id, { name: e.target.value })}
+                      placeholder="Например: Айгерим (повар)"
+                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500">Оклад / мес (брутто)</label>
+                    <input
+                      type="number"
+                      value={b.salary}
+                      onChange={(e) => updateEmployee(b.id, { salary: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-36 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeEmployee(b.id)}
+                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/20"
+                  >
+                    Удалить
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="rounded bg-slate-900/40 p-2"><span className="text-slate-500 block">Удержано (с зп)</span><span className="text-white">{fmt(b.calc.withheld)}</span></div>
+                  <div className="rounded bg-slate-900/40 p-2"><span className="text-slate-500 block">На руки</span><span className="text-emerald-300">{fmt(b.calc.netSalary)}</span></div>
+                  <div className="rounded bg-slate-900/40 p-2"><span className="text-slate-500 block">Сверху работодатель</span><span className="text-amber-300">{fmt(b.calc.employerTop)}</span></div>
+                  <div className="rounded bg-slate-900/40 p-2"><span className="text-slate-500 block">Расход бизнеса</span><span className="text-white font-semibold">{fmt(b.calc.totalCost)}</span></div>
+                </div>
+                <details className="mt-2">
+                  <summary className="text-[10px] text-slate-500 cursor-pointer hover:text-slate-300">Детальная разбивка</summary>
+                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                    <div>ИПН (10%): <span className="text-white">{fmt(b.calc.ipn)}</span></div>
+                    <div>ОПВ (10%): <span className="text-white">{fmt(b.calc.opv)}</span></div>
+                    <div>ВОСМС работника (2%): <span className="text-white">{fmt(b.calc.vosmsEmp)}</span></div>
+                    <div>ОПВР работодателя (3.5%): <span className="text-white">{fmt(b.calc.opvr)}</span></div>
+                    <div>СО (3.5%): <span className="text-white">{fmt(b.calc.so)}</span></div>
+                    <div>ОСМС (3%): <span className="text-white">{fmt(b.calc.osms)}</span></div>
+                  </div>
+                </details>
+              </div>
+            ))}
+
+            {/* Сумма по всем работникам */}
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="text-xs uppercase tracking-wider text-amber-300 mb-2">Итого по работникам в месяц</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <div className="text-[10px] text-amber-100/70">ФОТ (брутто)</div>
+                  <div className="font-semibold text-white">{fmt(employeeCalc.totalGross)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-amber-100/70">На руки сотрудникам</div>
+                  <div className="font-semibold text-emerald-300">{fmt(employeeCalc.totalNet)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-amber-100/70">Налоги за работников</div>
+                  <div className="font-semibold text-amber-300">{fmt(employeeCalc.monthlyTaxFromEmployees)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-amber-100/70">Расход на ФОТ</div>
+                  <div className="font-bold text-white">{fmt(employeeCalc.totalCost)}</div>
+                </div>
+              </div>
+              <p className="mt-3 text-[10px] text-amber-100/60">
+                За {calc.monthsInPeriod} мес периода: <b>{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</b> налогов за работников
+              </p>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* === ИТОГО ВСЕ НАЛОГИ === */}
+      <Card className="p-5 border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent">
+        <h3 className="text-sm font-semibold text-emerald-300 mb-4 flex items-center gap-2">
+          <Landmark className="w-4 h-4" />
+          ИТОГО ВСЕ НАЛОГИ за {calc.monthsInPeriod} мес
+        </h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between"><span className="text-slate-300">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-white">{fmt(calc.ipn)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-white">{fmt(calc.social)}</span></div>
+          {employees.length > 0 ? (
+            <div className="flex justify-between"><span className="text-slate-300">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-white">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
+          ) : null}
+          <div className="border-t border-emerald-500/20 pt-2 mt-2">
+            <div className="flex justify-between text-base">
+              <span className="text-emerald-200 font-semibold">К уплате суммарно</span>
+              <span className="font-bold text-emerald-300 text-xl">
+                {fmt(calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-emerald-200/70">
+              Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod) / revenue) * 100).toFixed(2) : '0'}% от оборота
+            </p>
+          </div>
+        </div>
+      </Card>
 
       {/* Помесячный график */}
       {chartData.length > 0 && (
