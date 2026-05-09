@@ -123,11 +123,44 @@ export default function TaxPage() {
   const [dateFrom, setDateFrom] = useState(startOfYearISO())
   const [dateTo, setDateTo] = useState(todayISO())
   const [revenue, setRevenue] = useState(0)
-  // Сотрудники — храним в localStorage
-  const [employees, setEmployees] = useState<Employee[]>(() => {
+  // Сотрудники: берём из /api/admin/staff-salary (страницы /staff и /salary), но юзер
+  // может добавить вручную; добавленные хранятся в localStorage
+  const [staffFromDB, setStaffFromDB] = useState<Employee[]>([])
+  const [extraEmployees, setExtraEmployees] = useState<Employee[]>(() => {
     if (typeof window === 'undefined') return []
     try { return JSON.parse(localStorage.getItem('tax_employees') || '[]') } catch { return [] }
   })
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try { return new Set(JSON.parse(localStorage.getItem('tax_excluded_ids') || '[]')) } catch { return new Set() }
+  })
+
+  // Авто-загрузка штата из БД
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch('/api/admin/staff-salary')
+        if (!r.ok) return
+        const data = await r.json()
+        const staff = (data.staff || [])
+          .filter((s: any) => s.is_active !== false && Number(s.monthly_salary || 0) > 0)
+          .map((s: any) => ({
+            id: 'db:' + s.id,
+            name: s.short_name || s.full_name || 'Сотрудник',
+            salary: Number(s.monthly_salary || 0),
+          }))
+        setStaffFromDB(staff)
+      } catch (e) {
+        console.error('[tax] staff load:', e)
+      }
+    })()
+  }, [])
+
+  // Объединённый список — БД (с возможностью exclude) + extra пользовательские
+  const employees = useMemo<Employee[]>(() => {
+    const fromDB = staffFromDB.filter((e) => !excludedIds.has(e.id))
+    return [...fromDB, ...extraEmployees]
+  }, [staffFromDB, excludedIds, extraEmployees])
   const [yearRevenue, setYearRevenue] = useState(0)
   const [monthlyIncomes, setMonthlyIncomes] = useState<{ month: string; income: number }[]>([])
   const [loading, setLoading] = useState(true)
@@ -217,20 +250,45 @@ export default function TaxPage() {
   }, [employees])
 
   function addEmployee() {
-    const e: Employee = { id: Math.random().toString(36).slice(2, 10), name: '', salary: MZP_2026 }
-    const next = [...employees, e]
-    setEmployees(next)
+    const e: Employee = { id: 'manual:' + Math.random().toString(36).slice(2, 10), name: '', salary: MZP_2026 }
+    const next = [...extraEmployees, e]
+    setExtraEmployees(next)
     localStorage.setItem('tax_employees', JSON.stringify(next))
   }
   function updateEmployee(id: string, patch: Partial<Employee>) {
-    const next = employees.map((e) => (e.id === id ? { ...e, ...patch } : e))
-    setEmployees(next)
+    if (id.startsWith('db:')) {
+      // Для БД-сотрудников сохраняем override в extras со старым id заменён
+      const dbEmp = staffFromDB.find((e) => e.id === id)
+      if (!dbEmp) return
+      // Override: добавляем в excluded и создаём manual копию
+      const newExc = new Set([...excludedIds, id])
+      setExcludedIds(newExc)
+      localStorage.setItem('tax_excluded_ids', JSON.stringify([...newExc]))
+      const e: Employee = { id: 'override:' + id.slice(3), name: dbEmp.name, salary: dbEmp.salary, ...patch }
+      const next = [...extraEmployees, e]
+      setExtraEmployees(next)
+      localStorage.setItem('tax_employees', JSON.stringify(next))
+      return
+    }
+    const next = extraEmployees.map((e) => (e.id === id ? { ...e, ...patch } : e))
+    setExtraEmployees(next)
     localStorage.setItem('tax_employees', JSON.stringify(next))
   }
   function removeEmployee(id: string) {
-    const next = employees.filter((e) => e.id !== id)
-    setEmployees(next)
+    if (id.startsWith('db:')) {
+      // Для БД-сотрудников помечаем как excluded
+      const newExc = new Set([...excludedIds, id])
+      setExcludedIds(newExc)
+      localStorage.setItem('tax_excluded_ids', JSON.stringify([...newExc]))
+      return
+    }
+    const next = extraEmployees.filter((e) => e.id !== id)
+    setExtraEmployees(next)
     localStorage.setItem('tax_employees', JSON.stringify(next))
+  }
+  function restoreFromDB() {
+    setExcludedIds(new Set())
+    localStorage.setItem('tax_excluded_ids', '[]')
   }
 
   // Прогноз на конец года + контроль порогов
@@ -340,29 +398,54 @@ export default function TaxPage() {
 
       {/* === СОТРУДНИКИ === */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Calculator className="w-4 h-4 text-amber-400" />
-            Сотрудники (налоги за работников)
-          </h3>
-          <button
-            type="button"
-            onClick={addEmployee}
-            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"
-          >
-            + Добавить сотрудника
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Calculator className="w-4 h-4 text-amber-400" />
+              Сотрудники (налоги за работников)
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Автоматически из <a href="/staff" className="text-emerald-400 hover:underline">/staff</a> · <a href="/salary" className="text-emerald-400 hover:underline">/salary</a>
+              {staffFromDB.length > 0 ? <> · подтянуто {staffFromDB.length}</> : null}
+              {excludedIds.size > 0 ? <> · скрыто {excludedIds.size}</> : null}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {excludedIds.size > 0 ? (
+              <button
+                type="button"
+                onClick={restoreFromDB}
+                className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-500/20"
+              >
+                ↻ Восстановить из БД
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={addEmployee}
+              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"
+            >
+              + Добавить вручную
+            </button>
+          </div>
         </div>
 
         {employees.length === 0 ? (
-          <p className="text-sm text-slate-500 italic">Сотрудники не добавлены. Нажмите «+ Добавить» чтобы посчитать налоги за работников.</p>
+          <p className="text-sm text-slate-500 italic">
+            Нет активных сотрудников с окладом в БД. Заведи их на странице <a href="/staff" className="text-emerald-400 hover:underline">/staff</a> или нажми «Добавить вручную».
+          </p>
         ) : (
           <div className="space-y-2">
             {employeeCalc.breakdowns.map((b) => (
               <div key={b.id} className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
                 <div className="flex flex-wrap items-end gap-3 mb-3">
                   <div className="flex-1 min-w-[180px]">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-500">ФИО / должность</label>
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      ФИО / должность
+                      {b.id.startsWith('db:') ? <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[9px] text-blue-300">из БД</span>
+                       : b.id.startsWith('override:') ? <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] text-amber-300">переопределено</span>
+                       : <span className="rounded bg-slate-500/20 px-1.5 py-0.5 text-[9px] text-slate-300">вручную</span>}
+                    </label>
                     <input
                       value={b.name}
                       onChange={(e) => updateEmployee(b.id, { name: e.target.value })}
