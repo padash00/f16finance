@@ -84,7 +84,8 @@ export const navSections: NavSection[] = [
     icon: MessageSquare,
     items: [
       { href: '/news', label: 'Лента', icon: Newspaper, note: 'Объявления и новости компании', isNew: true },
-      { href: '/team-chat', label: 'Командный чат', icon: MessageSquare, note: 'Общий чат + DM + закрепления', isNew: true },
+      { href: '/team-chat', label: 'Командный чат', icon: MessageSquare, note: 'Общий чат + закрепления + опросы', isNew: true },
+      { href: '/messages', label: 'Личные сообщения', icon: MessageSquareText, note: 'DM с коллегами', isNew: true },
       { href: '/calendar', label: 'Календарь', icon: CalendarDays, note: 'Смены, ДР, праздники РК', isNew: true },
       { href: '/moderation', label: 'Модерация ИИ', icon: ShieldAlert, note: 'Флаги нарушений в чате', isNew: true },
     ],

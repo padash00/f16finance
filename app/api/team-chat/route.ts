@@ -25,6 +25,7 @@ export async function GET(request: Request) {
   const before = url.searchParams.get('before')
   const contextType = url.searchParams.get('context_type')
   const contextId = url.searchParams.get('context_id')
+  const q = (url.searchParams.get('q') || '').trim()
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const orgId = access.activeOrganization?.id || null
@@ -46,6 +47,12 @@ export async function GET(request: Request) {
   } else if (!contextType) {
     // По умолчанию — общий чат (без контекста)
     query = query.is('context_type', null)
+  }
+
+  if (q) {
+    // ILIKE по тексту сообщения и имени отправителя
+    const escaped = q.replace(/[%_]/g, (c) => `\\${c}`)
+    query = query.or(`message.ilike.%${escaped}%,sender_name.ilike.%${escaped}%`)
   }
 
   const { data, error } = await query
