@@ -77,20 +77,6 @@ export type NavSection = {
 
 export const navSections: NavSection[] = [
   {
-    id: 'comms',
-    title: 'Команда',
-    subtitle: 'Лента, чат, календарь, модерация',
-    accentColor: 'amber',
-    icon: MessageSquare,
-    items: [
-      { href: '/news', label: 'Лента', icon: Newspaper, note: 'Объявления и новости компании', isNew: true },
-      { href: '/team-chat', label: 'Командный чат', icon: MessageSquare, note: 'Общий чат + закрепления + опросы', isNew: true },
-      { href: '/messages', label: 'Личные сообщения', icon: MessageSquareText, note: 'DM с коллегами', isNew: true },
-      { href: '/calendar', label: 'Календарь', icon: CalendarDays, note: 'Смены, ДР, праздники РК', isNew: true },
-      { href: '/moderation', label: 'Модерация ИИ', icon: ShieldAlert, note: 'Флаги нарушений в чате', isNew: true },
-    ],
-  },
-  {
     id: 'command',
     title: 'Центр управления',
     subtitle: 'Главные экраны и сводка',
@@ -192,14 +178,21 @@ export const navSections: NavSection[] = [
     ],
   },
   {
-    id: 'operator-space',
-    title: 'Операторы',
-    subtitle: 'Аналитика, рейтинг и достижения',
+    id: 'team-space',
+    title: 'Команда',
+    subtitle: 'Чат, лента, календарь, аналитика',
     accentColor: 'fuchsia',
-    icon: Zap,
+    icon: MessageSquare,
     items: [
+      // Коммуникация
+      { href: '/news', label: 'Лента', icon: Newspaper, note: 'Объявления и новости компании', isNew: true },
+      { href: '/team-chat', label: 'Командный чат', icon: MessageSquare, note: 'Общий чат + закрепления + опросы', isNew: true },
+      { href: '/messages', label: 'Личные сообщения', icon: MessageSquareText, note: 'DM с коллегами', isNew: true },
+      { href: '/calendar', label: 'Календарь', icon: CalendarDays, note: 'Смены, ДР, праздники РК', isNew: true },
+      { href: '/moderation', label: 'Модерация ИИ', icon: ShieldAlert, note: 'Флаги нарушений в чате', isNew: true },
+      // Аналитика операторов
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
-      { href: '/performance', label: 'Эффективность (PI)', icon: TrendingUp, note: 'Справедливый рейтинг с поправкой на слот', isNew: true, badge: 'new', badgeColor: 'green' },
+      { href: '/performance', label: 'Эффективность (PI)', icon: TrendingUp, note: 'Справедливый рейтинг с поправкой на слот', badge: 'new', badgeColor: 'green' },
       { href: '/ratings', label: 'Рейтинг операторов', icon: Trophy, note: 'Лидерборд по выручке' },
       { href: '/operator-achievements', label: 'Достижения операторов', icon: Award, note: 'Кто что получил, прогресс' },
     ],
