@@ -39,6 +39,14 @@
     {
       "path": "/api/cron/morning-ai-insight",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/birthday-greetings",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/holiday-greetings",
+      "schedule": "0 4 * * *"
     }
   ]
 }
