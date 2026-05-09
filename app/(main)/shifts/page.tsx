@@ -6,6 +6,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { TableSkeleton } from '@/components/skeleton'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -1552,7 +1553,11 @@ function ScheduleGrid({
   workflowStateByCell,
 }: ScheduleGridProps) {
   if (loading && companies.length === 0) {
-    return <div className="p-12 text-center text-muted-foreground animate-pulse">Загрузка структуры...</div>
+    return (
+      <div className="space-y-4 p-4">
+        <TableSkeleton rows={6} cols={8} />
+      </div>
+    )
   }
 
   if (companies.length === 0) {

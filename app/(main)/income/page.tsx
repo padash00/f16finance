@@ -8,6 +8,7 @@ import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
+import { CardSkeleton, TableSkeleton, StatGridSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import {
   Plus,
@@ -841,15 +842,12 @@ export default function IncomePage() {
   // Полный лоадер только при первой загрузке. При смене фильтра контент остаётся.
   if (loading && serverRows.length === 0) {
     return (
-      <>
-          <div className="text-center">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/30 border-t-purple-500 mx-auto mb-6" />
-              <Wallet className="w-8 h-8 text-purple-400 absolute top-4 left-1/2 transform -translate-x-1/2" />
-            </div>
-            <p className="text-gray-400">Загружаем финансовые данные...</p>
-          </div>
-      </>
+      <div className="app-page-wide space-y-4">
+        <CardSkeleton rows={3} className="border-purple-500/20" />
+        <StatGridSkeleton count={4} />
+        <CardSkeleton rows={2} />
+        <TableSkeleton rows={8} cols={6} />
+      </div>
     )
   }
 
