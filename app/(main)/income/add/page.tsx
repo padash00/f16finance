@@ -253,7 +253,12 @@ export default function AddIncomePage() {
           }),
         })
         const json = await response.json().catch(() => null)
-        if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить доход')
+        if (!response.ok) {
+          if (json?.error === 'forbidden' && json?.capability) {
+            throw new Error(`У тебя нет права «${json.capability}». Попроси владельца включить его на странице /access → Руководитель`)
+          }
+          throw new Error(json?.message || json?.error || 'Не удалось сохранить доход')
+        }
         await logIncomeAudit({
           entityId: `batch:${(json?.data || []).map((item: { id: string }) => item.id).join(',') || `${date}:${companyId}`}`,
           action: 'create-batch',
@@ -317,7 +322,12 @@ export default function AddIncomePage() {
           json = await response.json().catch(() => null)
         }
 
-        if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить доход')
+        if (!response.ok) {
+          if (json?.error === 'forbidden' && json?.capability) {
+            throw new Error(`У тебя нет права «${json.capability}». Попроси владельца включить его на странице /access → Руководитель`)
+          }
+          throw new Error(json?.message || json?.error || 'Не удалось сохранить доход')
+        }
         await logIncomeAudit({
           entityId: String(json?.data?.id || `${date}:${companyId}`),
           action: 'create',
