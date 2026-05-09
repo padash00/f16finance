@@ -325,8 +325,14 @@ export default function TaxPage() {
   }, [incomeRows, taxableFilter])
 
   // Per-company breakdown для UI фильтра
+  // Включаем ВСЕ компании из БД (даже с 0 доходом за период) + Without company если есть строки без company_id
   const companyBreakdown = useMemo(() => {
     const m = new Map<string | null, { cash: number; kaspi: number; online: number; card: number; total: number }>()
+    // Сначала проинициализируем все компании из БД с нулями
+    for (const c of companies) {
+      m.set(c.id, { cash: 0, kaspi: 0, online: 0, card: 0, total: 0 })
+    }
+    // Затем суммируем фактические incomes
     for (const r of incomeRows) {
       const cur = m.get(r.company_id) || { cash: 0, kaspi: 0, online: 0, card: 0, total: 0 }
       cur.cash += r.cash_amount
@@ -336,11 +342,18 @@ export default function TaxPage() {
       cur.total = cur.cash + cur.kaspi + cur.online + cur.card
       m.set(r.company_id, cur)
     }
-    return Array.from(m.entries()).map(([cid, sums]) => ({
-      id: cid,
-      name: companies.find((c) => c.id === cid)?.name || (cid ? 'Без названия' : 'Без компании'),
-      ...sums,
-    })).sort((a, b) => b.total - a.total)
+    return Array.from(m.entries())
+      .map(([cid, sums]) => ({
+        id: cid,
+        name: companies.find((c) => c.id === cid)?.name || (cid ? 'Без названия' : 'Без компании'),
+        ...sums,
+      }))
+      // Сортировка: с доходами впереди, потом по убыванию суммы, "без компании" в конце
+      .sort((a, b) => {
+        if (!a.id && b.id) return 1
+        if (a.id && !b.id) return -1
+        return b.total - a.total
+      })
   }, [incomeRows, companies])
 
   function toggleFilter(companyId: string, type: 'cash' | 'kaspi' | 'online' | 'card') {
