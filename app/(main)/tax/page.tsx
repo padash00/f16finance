@@ -422,7 +422,7 @@ export default function TaxPage() {
   }, [yearRevenue])
 
   return (
-    <div className="app-page-wide space-y-6 px-3 sm:px-4 py-4">
+    <div className="app-page-wide space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
