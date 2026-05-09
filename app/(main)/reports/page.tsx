@@ -18,6 +18,7 @@ import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forec
 import { emptyProcessedReport, processedFromBundleAggregate, type ReportBundleAggregate } from '@/lib/reports/from-api-aggregate'
 import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
 import { ReportsPageSkeleton } from '@/components/reports/reports-page-skeleton'
+import { AIInsightCard } from '@/components/reports/ai-insight-card'
 
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { Button } from '@/components/ui/button'
@@ -2125,6 +2126,27 @@ function ReportsContent() {
               'Где самый слабый участок?',
               'С чем сравнить этот период?',
             ]}
+          />
+
+          {/* AI insight */}
+          <AIInsightCard
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            totals={{
+              incomeTotal: totals.totalIncome,
+              expenseTotal: totals.totalExpense,
+              profit: totals.profit,
+              incomeCash: totals.incomeCash,
+              incomeKaspi: totals.incomeKaspi,
+              incomeOnline: totals.incomeOnline,
+              incomeCard: totals.incomeCard,
+            }}
+            totalsPrev={{
+              incomeTotal: totalsPrev.totalIncome,
+              expenseTotal: totalsPrev.totalExpense,
+              profit: totalsPrev.profit,
+            }}
+            cashlessLabel={cashLabels.providerName}
           />
 
           {/* Filters Bar (sticky) */}
