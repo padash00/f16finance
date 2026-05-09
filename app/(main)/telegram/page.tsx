@@ -567,7 +567,7 @@ create table if not exists telegram_allowed_users (
                               type="text"
                               value={editingTgId}
                               onChange={(e) => setEditingTgId(e.target.value)}
-                              placeholder="Telegram User ID"
+                              placeholder="ID пользователя Telegram"
                               className="w-36 px-2 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-xs text-gray-200 outline-none focus:border-blue-500/50"
                             />
                             <button

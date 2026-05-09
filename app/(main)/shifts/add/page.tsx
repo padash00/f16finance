@@ -217,8 +217,8 @@ export default function AddShiftPage() {
                     }
                     className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
                   >
-                    <option value="day">Day</option>
-                    <option value="night">Night</option>
+                    <option value="day">День</option>
+                    <option value="night">Ночь</option>
                   </select>
                 </div>
               </div>
