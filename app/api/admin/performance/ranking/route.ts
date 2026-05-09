@@ -39,7 +39,6 @@ type Operator = {
   short_name: string | null
 }
 
-const BASELINE_DAYS = 180
 const MIN_BASELINE_OBSERVATIONS = 3 // если в слоте < 3 наблюдений — берём fallback
 const MIN_QUALIFYING_SHIFTS = 3      // меньше — оператор в "Cold start"
 const PI_CLIP_MIN = 0.5
@@ -91,9 +90,29 @@ export async function GET(req: Request) {
 
     if (!from || !to) return json({ error: 'from and to are required' }, 400)
 
-    // Baseline period — 90 дней до from
-    const baselineFrom = addDaysISO(from, -BASELINE_DAYS)
+    // Baseline period — вся доступная история.
+    // Верхняя граница: день перед началом target.
+    // Нижняя граница: дата самого первого дохода в системе (с учётом фильтра по точке).
+    // 180-дневное окно убрано: чтобы оценка по «понедельникам / пятницам / ночам» была
+    // точной, нужно учитывать ВСЕ исторические смены, а не последнее «скользящее» окно.
     const baselineTo = addDaysISO(from, -1)
+
+    let earliestIncomeDate: string | null = null
+    {
+      let earliestQuery = supabase
+        .from('incomes')
+        .select('date')
+        .order('date', { ascending: true })
+        .limit(1)
+      if (companyId) earliestQuery = earliestQuery.eq('company_id', companyId)
+      const { data: earliestRows, error: earliestErr } = await earliestQuery
+      if (earliestErr) throw earliestErr
+      earliestIncomeDate = earliestRows?.[0]?.date ?? null
+    }
+
+    // Если истории нет вообще — берём день перед target как формальную границу
+    // (запрос всё равно вернёт пусто, fallback'и в getExpected отработают).
+    const baselineFrom = earliestIncomeDate ?? baselineTo
 
     // ── 1. Operators (фильтрация по организации) ──────────────────────────
     const allowedOperatorIds = await listOrganizationOperatorIds({
@@ -321,7 +340,8 @@ export async function GET(req: Request) {
         },
         period: { from, to },
         config: {
-          baseline_days: BASELINE_DAYS,
+          baseline_days_actual: Math.max(0, Math.round((Date.parse(baselineTo) - Date.parse(baselineFrom)) / 86400000) + 1),
+          baseline_earliest_income_date: earliestIncomeDate,
           min_baseline_observations: MIN_BASELINE_OBSERVATIONS,
           min_qualifying_shifts: MIN_QUALIFYING_SHIFTS,
           pi_clip: [PI_CLIP_MIN, PI_CLIP_MAX],
