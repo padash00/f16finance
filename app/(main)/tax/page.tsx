@@ -255,7 +255,9 @@ export default function TaxPage() {
     setLoading(true)
     try {
       // Период: тянем raw incomes — для гибкого фильтра по company × payment_type
-      const r = await fetch(`/api/admin/reports/bundle?from=${dateFrom}&to=${dateTo}`)
+      // Передаём include_extra=1 чтобы получить ВСЕ доходы (включая F16 Extra).
+      // Логику включения Extra в налогооблагаемый оборот контролируем сами через toggle.
+      const r = await fetch(`/api/admin/reports/bundle?from=${dateFrom}&to=${dateTo}&include_extra=1`)
       if (r.ok) {
         const json = await r.json()
         const data = json.data || json  // совместимость
@@ -285,7 +287,7 @@ export default function TaxPage() {
       }
 
       // Годовой оборот для проверки порогов — из тех же raw данных
-      const ry = await fetch(`/api/admin/reports/bundle?from=${startOfYearISO()}&to=${todayISO()}`)
+      const ry = await fetch(`/api/admin/reports/bundle?from=${startOfYearISO()}&to=${todayISO()}&include_extra=1`)
       if (ry.ok) {
         const json = await ry.json()
         const data = json.data || json
