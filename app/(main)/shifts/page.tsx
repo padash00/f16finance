@@ -301,21 +301,34 @@ function ShiftsPageContent() {
   )
 
   const fetchScheduleData = useCallback(async () => {
-
     const weekStart = weekDays[0].dateISO
 
+    // Таймаут 15 секунд чтобы не висел вечно
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+
     try {
-      const res = await fetch(`/api/admin/shifts?weekStart=${weekStart}&includeSchedule=1`)
+      const res = await fetch(
+        `/api/admin/shifts?weekStart=${weekStart}&includeSchedule=1`,
+        { signal: controller.signal, cache: 'no-store' },
+      )
+      clearTimeout(timeoutId)
       const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(payload?.error || `Ошибка запроса (${res.status})`)
+      if (!res.ok) throw new Error(payload?.error || `HTTP ${res.status}`)
 
       setCompanies(payload?.schedule?.companies || [])
       setShifts(payload?.schedule?.shifts || [])
       setOperators(payload?.schedule?.operators || [])
       setError(null)
     } catch (err: any) {
-      console.error('❌ Ошибка загрузки:', err)
-      setError('Ошибка загрузки: ' + err.message)
+      clearTimeout(timeoutId)
+      console.error('❌ Ошибка загрузки смен:', err)
+      const isAbort = err?.name === 'AbortError'
+      setError(
+        isAbort
+          ? 'Сервер не ответил за 15 секунд. Проверь интернет и попробуй обновить.'
+          : 'Ошибка загрузки: ' + (err?.message || 'Неизвестная ошибка'),
+      )
     } finally {
       setLoading(false)
     }
