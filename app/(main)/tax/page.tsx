@@ -145,6 +145,12 @@ export default function TaxPage() {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('tax_include_employees') === '1'
   })
+
+  // Учитывать соцплатежи "за себя" в итоге
+  const [includeSelfSocial, setIncludeSelfSocial] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('tax_include_self_social') === '1'
+  })
   const [dateFrom, setDateFrom] = useState(startOfYearISO())
   const [dateTo, setDateTo] = useState(todayISO())
   // Raw incomes для гибкого расчёта по company × payment_type
@@ -512,20 +518,34 @@ export default function TaxPage() {
       </div>
 
       {/* Хлебная цифра — сразу под header, на calc */}
-      {activeTab === 'calc' && (
+      {activeTab === 'calc' && (() => {
+        const grandTotal = calc.ipn
+          + (includeSelfSocial ? calc.social : 0)
+          + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)
+        return (
         <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent p-6 sm:p-8">
-          <div className="text-xs uppercase tracking-[0.2em] text-emerald-300/80 mb-2">К уплате за период</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-emerald-300/80 mb-2">ИПН с дохода ({iknRate}%)</div>
           <div className="text-5xl sm:text-6xl font-bold bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent leading-none">
-            {fmtCompact(calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0))}
+            {fmtCompact(grandTotal)}
           </div>
           <div className="mt-3 text-sm text-slate-300">
-            ИПН ({iknRate}% × {fmtCompact(revenue)}) = {fmt(calc.ipn)} + соц «за себя» {fmt(calc.social)}
+            ИПН ({iknRate}% × {fmtCompact(revenue)}) = <b className="text-white">{fmt(calc.ipn)}</b>
+            {includeSelfSocial ? <> + соц «за себя» {fmt(calc.social)}</> : null}
             {includeEmployees && employees.length > 0 ? <> + за работников {fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</> : null}
           </div>
           <div className="mt-1 text-xs text-emerald-200/60">
-            Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)) / revenue) * 100).toFixed(2) : '0'}% от оборота
+            Эффективная нагрузка: {revenue > 0 ? ((grandTotal / revenue) * 100).toFixed(2) : '0'}% от оборота
           </div>
-          <div className="mt-3 flex items-center gap-2 text-xs">
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+            <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+              <input
+                type="checkbox"
+                checked={includeSelfSocial}
+                onChange={(e) => { setIncludeSelfSocial(e.target.checked); localStorage.setItem('tax_include_self_social', e.target.checked ? '1' : '0') }}
+                className="h-4 w-4 accent-emerald-500"
+              />
+              Учитывать соцплатежи «за себя» ({fmt(SOCIAL_FIXED_MONTHLY)}/мес)
+            </label>
             <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
               <input
                 type="checkbox"
@@ -535,10 +555,10 @@ export default function TaxPage() {
               />
               Учитывать налоги за работников
             </label>
-            {!includeEmployees ? <span className="text-[10px] text-slate-500">(посчитаешь вручную)</span> : null}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Tabs */}
       <div className="sticky top-2 z-30 flex flex-wrap gap-1 rounded-2xl bg-gray-900/85 backdrop-blur-xl border border-white/10 p-1.5 shadow-2xl shadow-black/40">
@@ -617,9 +637,11 @@ export default function TaxPage() {
         </Card>
 
         <Card className="p-5 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent">
-          <div className="text-xs uppercase tracking-wider text-emerald-400 mb-2">Итого к уплате</div>
-          <div className="text-2xl font-bold text-emerald-300">{fmtCompact(calc.total)}</div>
-          <p className="mt-2 text-xs text-emerald-400/80">Эффективная ставка: {calc.effectiveRate.toFixed(2)}%</p>
+          <div className="text-xs uppercase tracking-wider text-emerald-400 mb-2">{includeSelfSocial ? 'Итого к уплате' : 'Только ИПН'}</div>
+          <div className="text-2xl font-bold text-emerald-300">{fmtCompact(includeSelfSocial ? calc.total : calc.ipn)}</div>
+          <p className="mt-2 text-xs text-emerald-400/80">
+            {includeSelfSocial ? `Эффективная ставка: ${calc.effectiveRate.toFixed(2)}%` : `Соц «за себя» считаешь сам: ${fmt(calc.social)}`}
+          </p>
         </Card>
       </div>
       )}
@@ -860,7 +882,9 @@ export default function TaxPage() {
         </h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between"><span className="text-slate-300">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-white">{fmt(calc.ipn)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-white">{fmt(calc.social)}</span></div>
+          {includeSelfSocial ? (
+            <div className="flex justify-between"><span className="text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-white">{fmt(calc.social)}</span></div>
+          ) : null}
           {includeEmployees && employees.length > 0 ? (
             <div className="flex justify-between"><span className="text-slate-300">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-white">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
           ) : null}
@@ -868,11 +892,12 @@ export default function TaxPage() {
             <div className="flex justify-between text-base">
               <span className="text-emerald-200 font-semibold">К уплате суммарно</span>
               <span className="font-bold text-emerald-300 text-xl">
-                {fmt(calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0))}
+                {fmt(calc.ipn + (includeSelfSocial ? calc.social : 0) + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0))}
               </span>
             </div>
             <p className="mt-2 text-xs text-emerald-200/70">
-              Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)) / revenue) * 100).toFixed(2) : '0'}% от оборота
+              Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + (includeSelfSocial ? calc.social : 0) + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)) / revenue) * 100).toFixed(2) : '0'}% от оборота
+              {!includeSelfSocial ? ' · соц «за себя» не учтены' : ''}
               {!includeEmployees ? ' · работники не учтены' : ''}
             </p>
             <button
