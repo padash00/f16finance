@@ -91,6 +91,21 @@ function calcEmployeeTax(grossSalary: number) {
   return { ipn, opv, vosmsEmp, opvr, so, osms, withheld, employerTop, netSalary, totalCost, grossSalary }
 }
 
+/**
+ * Реверс: net (на руки) → gross (брутто).
+ * Уравнение для льготного режима (G ≤ 25 МРП = 108 125 ₸):
+ *   Net = 0.8712 * G + 605.5
+ * Для нельготного:
+ *   Net = 0.792 * G + 6055
+ */
+function netToGross(net: number): number {
+  // Сначала пробуем льготный режим
+  const gLgota = (net - 605.5) / 0.8712
+  if (gLgota <= 25 * MRP_2026) return Math.round(gLgota)
+  // Иначе нельготный
+  return Math.round((net - 6055) / 0.792)
+}
+
 interface Employee {
   id: string
   name: string
@@ -122,7 +137,29 @@ export default function TaxPage() {
   const [iknRate, setIknRate] = useState(4)
   const [dateFrom, setDateFrom] = useState(startOfYearISO())
   const [dateTo, setDateTo] = useState(todayISO())
-  const [revenue, setRevenue] = useState(0)
+  // Raw incomes для гибкого расчёта по company × payment_type
+  const [incomeRows, setIncomeRows] = useState<Array<{ date: string; company_id: string | null; cash_amount: number; kaspi_amount: number; online_amount: number; card_amount: number }>>([])
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([])
+
+  // Фильтр: какие источники учитывать в налогооблагаемом обороте
+  // Структура: { [companyId]: { cash: bool, kaspi: bool, online: bool, card: bool } }
+  // По умолчанию — всё учитывается
+  const [taxableFilter, setTaxableFilter] = useState<Record<string, { cash: boolean; kaspi: boolean; online: boolean; card: boolean }>>(() => {
+    if (typeof window === 'undefined') return {}
+    try { return JSON.parse(localStorage.getItem('tax_filter') || '{}') } catch { return {} }
+  })
+
+  // Режим ввода окладов — "брутто" (как в договоре) или "net" (на руки)
+  const [salaryMode, setSalaryMode] = useState<'gross' | 'net'>(() => {
+    if (typeof window === 'undefined') return 'gross'
+    return (localStorage.getItem('tax_salary_mode') as 'gross' | 'net') || 'gross'
+  })
+
+  function changeSalaryMode(m: 'gross' | 'net') {
+    setSalaryMode(m)
+    localStorage.setItem('tax_salary_mode', m)
+  }
+
   // Сотрудники: берём из /api/admin/staff-salary (страницы /staff и /salary), но юзер
   // может добавить вручную; добавленные хранятся в localStorage
   const [staffFromDB, setStaffFromDB] = useState<Employee[]>([])
@@ -172,39 +209,114 @@ export default function TaxPage() {
   async function load() {
     setLoading(true)
     try {
-      // Период оборота
+      // Период: тянем raw incomes — для гибкого фильтра по company × payment_type
       const r = await fetch(`/api/admin/reports/bundle?from=${dateFrom}&to=${dateTo}`)
       if (r.ok) {
-        const data = await r.json()
-        setRevenue(data.totalsCur?.totalIncome || 0)
-
-        // Помесячная разбивка по dailyIncome (если приходит)
-        if (data.dailyIncome) {
-          const byMonth = new Map<string, number>()
-          for (const [date, val] of Object.entries(data.dailyIncome as Record<string, number>)) {
-            const m = date.slice(0, 7)
-            byMonth.set(m, (byMonth.get(m) || 0) + Number(val || 0))
-          }
-          const monthly = Array.from(byMonth.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([month, income]) => ({ month, income }))
-          setMonthlyIncomes(monthly)
-        } else {
-          setMonthlyIncomes([])
-        }
+        const json = await r.json()
+        const data = json.data || json  // совместимость
+        const incomes = (data.incomes || []) as any[]
+        setIncomeRows(incomes.map((row) => ({
+          date: row.date,
+          company_id: row.company_id || null,
+          cash_amount: Number(row.cash_amount || 0),
+          kaspi_amount: Number(row.kaspi_amount || 0),
+          online_amount: Number(row.online_amount || 0),
+          card_amount: Number(row.card_amount || 0),
+        })))
       }
 
-      // Годовой оборот для проверки порогов
+      // Список компаний для UI фильтра
+      const rc = await fetch('/api/admin/companies')
+      if (rc.ok) {
+        const cs = await rc.json()
+        setCompanies((cs.companies || cs || []).map((c: any) => ({ id: c.id, name: c.name })))
+      }
+
+      // Годовой оборот для проверки порогов — из тех же raw данных
       const ry = await fetch(`/api/admin/reports/bundle?from=${startOfYearISO()}&to=${todayISO()}`)
       if (ry.ok) {
-        const data = await ry.json()
-        setYearRevenue(data.totalsCur?.totalIncome || 0)
+        const json = await ry.json()
+        const data = json.data || json
+        const yearIncomes = (data.incomes || []) as any[]
+        const yearTotal = yearIncomes.reduce((s, r) => s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.online_amount || 0) + Number(r.card_amount || 0), 0)
+        setYearRevenue(yearTotal)
       }
     } catch (e) {
       console.error('[tax] load error:', e)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper: учитывается ли тип оплаты для компании в налогооблагаемом обороте
+  function isTaxable(companyId: string | null, paymentType: 'cash' | 'kaspi' | 'online' | 'card') {
+    if (!companyId) return true // если company_id null — учитываем по умолчанию
+    const cfg = taxableFilter[companyId]
+    if (!cfg) return true // дефолт: учитываем всё
+    return cfg[paymentType] !== false
+  }
+
+  // Налогооблагаемая выручка с учётом фильтра
+  const revenue = useMemo(() => {
+    return incomeRows.reduce((sum, r) => {
+      let taxable = 0
+      if (isTaxable(r.company_id, 'cash')) taxable += r.cash_amount
+      if (isTaxable(r.company_id, 'kaspi')) taxable += r.kaspi_amount
+      if (isTaxable(r.company_id, 'online')) taxable += r.online_amount
+      if (isTaxable(r.company_id, 'card')) taxable += r.card_amount
+      return sum + taxable
+    }, 0)
+  }, [incomeRows, taxableFilter])
+
+  // Полный оборот (без фильтра) — для информации
+  const fullRevenue = useMemo(() => {
+    return incomeRows.reduce((s, r) => s + r.cash_amount + r.kaspi_amount + r.online_amount + r.card_amount, 0)
+  }, [incomeRows])
+
+  // Помесячные данные с применением фильтра
+  useEffect(() => {
+    const byMonth = new Map<string, number>()
+    for (const r of incomeRows) {
+      let taxable = 0
+      if (isTaxable(r.company_id, 'cash')) taxable += r.cash_amount
+      if (isTaxable(r.company_id, 'kaspi')) taxable += r.kaspi_amount
+      if (isTaxable(r.company_id, 'online')) taxable += r.online_amount
+      if (isTaxable(r.company_id, 'card')) taxable += r.card_amount
+      const m = r.date.slice(0, 7)
+      byMonth.set(m, (byMonth.get(m) || 0) + taxable)
+    }
+    const monthly = Array.from(byMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, income]) => ({ month, income }))
+    setMonthlyIncomes(monthly)
+  }, [incomeRows, taxableFilter])
+
+  // Per-company breakdown для UI фильтра
+  const companyBreakdown = useMemo(() => {
+    const m = new Map<string | null, { cash: number; kaspi: number; online: number; card: number; total: number }>()
+    for (const r of incomeRows) {
+      const cur = m.get(r.company_id) || { cash: 0, kaspi: 0, online: 0, card: 0, total: 0 }
+      cur.cash += r.cash_amount
+      cur.kaspi += r.kaspi_amount
+      cur.online += r.online_amount
+      cur.card += r.card_amount
+      cur.total = cur.cash + cur.kaspi + cur.online + cur.card
+      m.set(r.company_id, cur)
+    }
+    return Array.from(m.entries()).map(([cid, sums]) => ({
+      id: cid,
+      name: companies.find((c) => c.id === cid)?.name || (cid ? 'Без названия' : 'Без компании'),
+      ...sums,
+    })).sort((a, b) => b.total - a.total)
+  }, [incomeRows, companies])
+
+  function toggleFilter(companyId: string, type: 'cash' | 'kaspi' | 'online' | 'card') {
+    const next = { ...taxableFilter }
+    const cfg = next[companyId] || { cash: true, kaspi: true, online: true, card: true }
+    cfg[type] = !cfg[type]
+    next[companyId] = cfg
+    setTaxableFilter(next)
+    localStorage.setItem('tax_filter', JSON.stringify(next))
   }
 
   // Помесячный chart с расчётом налога
@@ -228,8 +340,12 @@ export default function TaxPage() {
   }, [revenue, iknRate, monthlyIncomes.length])
 
   // Налоги за сотрудников — рассчитываем для каждого
+  // В режиме 'net' введённое значение — это сумма на руки, нужно реверсировать в брутто
   const employeeCalc = useMemo(() => {
-    const breakdowns = employees.map((e) => ({ ...e, calc: calcEmployeeTax(e.salary) }))
+    const breakdowns = employees.map((e) => {
+      const grossSalary = salaryMode === 'net' ? netToGross(e.salary) : e.salary
+      return { ...e, displayInput: e.salary, grossSalary, calc: calcEmployeeTax(grossSalary) }
+    })
     const totalIpn = breakdowns.reduce((s, b) => s + b.calc.ipn, 0)
     const totalOpv = breakdowns.reduce((s, b) => s + b.calc.opv, 0)
     const totalVosmsEmp = breakdowns.reduce((s, b) => s + b.calc.vosmsEmp, 0)
@@ -247,7 +363,7 @@ export default function TaxPage() {
       breakdowns, totalIpn, totalOpv, totalVosmsEmp, totalOpvr, totalSo, totalOsms,
       totalWithheld, totalEmployerTop, totalGross, totalNet, totalCost, monthlyTaxFromEmployees,
     }
-  }, [employees])
+  }, [employees, salaryMode])
 
   function addEmployee() {
     const e: Employee = { id: 'manual:' + Math.random().toString(36).slice(2, 10), name: '', salary: MZP_2026 }
@@ -396,6 +512,66 @@ export default function TaxPage() {
         </Card>
       </div>
 
+      {/* === ФИЛЬТР: что включать в налогооблагаемый оборот === */}
+      {companyBreakdown.length > 0 && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+            <Info className="w-4 h-4 text-blue-400" />
+            Что включать в налогооблагаемый оборот
+          </h3>
+          <p className="text-[11px] text-slate-500 mb-3">
+            Сними галочку чтобы исключить тип оплаты из расчёта (например, наличные на одной точке не учитывать).
+            Полный оборот: <b className="text-white">{fmt(fullRevenue)}</b> · в налог пойдёт: <b className="text-emerald-300">{fmt(revenue)}</b>
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-400">
+                  <th className="px-2 py-2">Компания</th>
+                  <th className="px-2 py-2 text-center">Нал</th>
+                  <th className="px-2 py-2 text-center">Безнал</th>
+                  <th className="px-2 py-2 text-center">Online</th>
+                  <th className="px-2 py-2 text-center">Карта</th>
+                  <th className="px-2 py-2 text-right">Итого</th>
+                </tr>
+              </thead>
+              <tbody>
+                {companyBreakdown.map((c) => {
+                  const cid = c.id || ''
+                  const cfg = taxableFilter[cid] || { cash: true, kaspi: true, online: true, card: true }
+                  const types: Array<{ k: 'cash' | 'kaspi' | 'online' | 'card'; v: number }> = [
+                    { k: 'cash', v: c.cash },
+                    { k: 'kaspi', v: c.kaspi },
+                    { k: 'online', v: c.online },
+                    { k: 'card', v: c.card },
+                  ]
+                  return (
+                    <tr key={cid || 'no-co'} className="border-t border-white/5">
+                      <td className="px-2 py-2 text-white">{c.name}</td>
+                      {types.map(({ k, v }) => (
+                        <td key={k} className="px-2 py-2 text-center">
+                          <label className="inline-flex flex-col items-center gap-0.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={cfg[k] !== false}
+                              disabled={!cid}
+                              onChange={() => cid && toggleFilter(cid, k)}
+                              className="h-4 w-4 accent-emerald-500"
+                            />
+                            <span className="text-[9px] text-slate-500">{fmtCompact(v)}</span>
+                          </label>
+                        </td>
+                      ))}
+                      <td className="px-2 py-2 text-right text-slate-300">{fmt(c.total)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {/* === СОТРУДНИКИ === */}
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -409,6 +585,26 @@ export default function TaxPage() {
               {staffFromDB.length > 0 ? <> · подтянуто {staffFromDB.length}</> : null}
               {excludedIds.size > 0 ? <> · скрыто {excludedIds.size}</> : null}
             </p>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">Оклады заданы как:</span>
+              <div className="flex rounded-lg border border-white/10 bg-slate-900/40 p-0.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => changeSalaryMode('gross')}
+                  className={`px-2 py-0.5 rounded ${salaryMode === 'gross' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Брутто (договор)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeSalaryMode('net')}
+                  className={`px-2 py-0.5 rounded ${salaryMode === 'net' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-400 hover:text-white'}`}
+                >
+                  На руки (нетто)
+                </button>
+              </div>
+              <span className="text-[10px] text-slate-500">{salaryMode === 'net' ? 'пересчитываем в брутто автоматически' : 'удержим налоги изнутри'}</span>
+            </div>
           </div>
           <div className="flex gap-2">
             {excludedIds.size > 0 ? (
@@ -454,13 +650,20 @@ export default function TaxPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase tracking-wider text-slate-500">Оклад / мес (брутто)</label>
+                    <label className="text-[10px] uppercase tracking-wider text-slate-500">
+                      Оклад / мес ({salaryMode === 'net' ? 'на руки' : 'брутто'})
+                    </label>
                     <input
                       type="number"
-                      value={b.salary}
+                      value={b.displayInput}
                       onChange={(e) => updateEmployee(b.id, { salary: Math.max(0, Number(e.target.value) || 0) })}
                       className="w-36 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
                     />
+                    {salaryMode === 'net' ? (
+                      <span className="block mt-1 text-[10px] text-blue-300">
+                        ↑ брутто: {fmt(b.grossSalary)}
+                      </span>
+                    ) : null}
                   </div>
                   <button
                     type="button"
