@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { checkProfanity } from '@/lib/ai/profanity-filter'
 
 export const runtime = 'nodejs'
 
@@ -82,6 +83,13 @@ export async function POST(request: Request) {
     return json({ error: 'Сообщение пустое' }, 400)
   }
   if (messageText.length > 2000) return json({ error: 'Слишком длинное (макс 2000)' }, 400)
+
+  if (messageText) {
+    const profanity = await checkProfanity(messageText)
+    if (profanity.blocked) {
+      return json({ error: profanity.reason || 'Сообщение содержит запрещённую лексику', code: 'profanity' }, 422)
+    }
+  }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const { senderName, senderRole } = await resolveSender(access, supabase)
