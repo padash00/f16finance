@@ -149,6 +149,18 @@ export default function TaxPage() {
     try { return JSON.parse(localStorage.getItem('tax_filter') || '{}') } catch { return {} }
   })
 
+  // Настройки бизнеса (ИИН/БИН, ОКЭД, флаг плательщика НДС)
+  const [bizSettings, setBizSettings] = useState<{ bin: string; oked: string; ipnRate: number; vatPayer: boolean; companyFullName: string }>(() => {
+    if (typeof window === 'undefined') return { bin: '', oked: '93290', ipnRate: 4, vatPayer: false, companyFullName: '' }
+    try { return { bin: '', oked: '93290', ipnRate: 4, vatPayer: false, companyFullName: '', ...JSON.parse(localStorage.getItem('tax_business_settings') || '{}') } }
+    catch { return { bin: '', oked: '93290', ipnRate: 4, vatPayer: false, companyFullName: '' } }
+  })
+  function updateBizSettings(patch: Partial<typeof bizSettings>) {
+    const next = { ...bizSettings, ...patch }
+    setBizSettings(next)
+    localStorage.setItem('tax_business_settings', JSON.stringify(next))
+  }
+
   // Активная вкладка
   const [activeTab, setActiveTab] = useState<'calc' | 'employees' | 'sources' | 'calendar' | 'thresholds' | 'help'>(() => {
     if (typeof window === 'undefined') return 'calc'
@@ -442,7 +454,9 @@ export default function TaxPage() {
             Налоги ИП (упрощёнка)
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Расчёт по НК РК 2026 — форма 910.00, ИПН + соцплатежи
+            {bizSettings.companyFullName ? <><b className="text-foreground">{bizSettings.companyFullName}</b>, </> : null}
+            ОКЭД {bizSettings.oked || '—'}{bizSettings.bin ? <>, БИН/ИИН {bizSettings.bin}</> : null} · форма 910.00
+            {!bizSettings.vatPayer ? <span className="ml-2 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-300">не плательщик НДС</span> : <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">плательщик НДС 16%</span>}
           </p>
         </div>
 
@@ -467,6 +481,23 @@ export default function TaxPage() {
           </div>
         </Card>
       </div>
+
+      {/* Хлебная цифра — сразу под header, на calc */}
+      {activeTab === 'calc' && (
+        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent p-6 sm:p-8">
+          <div className="text-xs uppercase tracking-[0.2em] text-emerald-300/80 mb-2">К уплате за период</div>
+          <div className="text-5xl sm:text-6xl font-bold bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent leading-none">
+            {fmtCompact(calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}
+          </div>
+          <div className="mt-3 text-sm text-slate-300">
+            ИПН {fmt(calc.ipn)} + соц «за себя» {fmt(calc.social)}
+            {employees.length > 0 ? <> + за работников {fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</> : null}
+          </div>
+          <div className="mt-1 text-xs text-emerald-200/60">
+            Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod) / revenue) * 100).toFixed(2) : '0'}% от оборота
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="sticky top-2 z-30 flex flex-wrap gap-1 rounded-2xl bg-gray-900/85 backdrop-blur-xl border border-white/10 p-1.5 shadow-2xl shadow-black/40">
@@ -858,6 +889,13 @@ export default function TaxPage() {
           Контроль порогов на 2026 год
         </h3>
 
+        {!bizSettings.vatPayer ? (
+          <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200">
+            Ты <b>не плательщик НДС</b> (упрощёнка). Этот порог информационный — отслеживай чтобы не превысить лимит упрощёнки.
+            Налог НДС не выставляется в чеках/ценах. Если хочешь учитывать как плательщик — измени в настройках вверху.
+          </div>
+        ) : null}
+
         <div className="space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -915,6 +953,72 @@ export default function TaxPage() {
       {/* Календарь и реквизиты — на calendar */}
       {activeTab === 'calendar' && (
         <CalendarSection iknRate={iknRate} calc={calc} employeeCalc={employeeCalc} hasEmployees={employees.length > 0} />
+      )}
+
+      {/* Настройки бизнеса — на help */}
+      {activeTab === 'help' && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Info className="w-4 h-4 text-emerald-400" />
+            Настройки моего бизнеса
+          </h3>
+          <p className="text-[11px] text-slate-500 mb-4">Используется в шапке страницы и (в будущем) для автозаполнения формы 910.00. Сохраняется локально.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="space-y-1">
+              <span className="text-xs text-slate-400">ФИО ИП / название</span>
+              <input
+                type="text"
+                value={bizSettings.companyFullName}
+                onChange={(e) => updateBizSettings({ companyFullName: e.target.value })}
+                placeholder="ИП Кенескан А.К."
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-400">ИИН / БИН</span>
+              <input
+                type="text"
+                value={bizSettings.bin}
+                onChange={(e) => updateBizSettings({ bin: e.target.value.replace(/\D/g, '').slice(0, 12) })}
+                placeholder="123456789012"
+                maxLength={12}
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50 font-mono"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-400">ОКЭД</span>
+              <input
+                type="text"
+                value={bizSettings.oked}
+                onChange={(e) => updateBizSettings({ oked: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+                placeholder="93290"
+                maxLength={5}
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50 font-mono"
+              />
+              <p className="text-[10px] text-slate-500">93290 = «Прочая деятельность по организации отдыха и развлечений»</p>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-400">Плательщик НДС</span>
+              <div className="flex rounded-lg border border-white/10 bg-slate-900/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => updateBizSettings({ vatPayer: false })}
+                  className={`flex-1 px-3 py-1.5 rounded text-sm ${!bizSettings.vatPayer ? 'bg-blue-500/20 text-blue-300' : 'text-slate-400'}`}
+                >
+                  Нет (упрощёнка)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateBizSettings({ vatPayer: true })}
+                  className={`flex-1 px-3 py-1.5 rounded text-sm ${bizSettings.vatPayer ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400'}`}
+                >
+                  Да (16%)
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500">На упрощёнке НДС не платится — НДС не указывается в чеках и ценах.</p>
+            </label>
+          </div>
+        </Card>
       )}
 
       {/* Справка — на help */}
