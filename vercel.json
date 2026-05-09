@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/holiday-greetings",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/chat-moderation",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
