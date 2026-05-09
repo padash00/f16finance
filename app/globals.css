@@ -358,3 +358,52 @@
     width: 100%;
   }
 }
+
+/* ─────────────────────────────────────────────
+   Print styles — оптимизация для печати/PDF
+   ───────────────────────────────────────────── */
+@media print {
+  /* Скрываем интерфейс который не нужен на бумаге */
+  aside,
+  nav,
+  .no-print,
+  [role="navigation"],
+  button,
+  .group:hover .invisible {
+    display: none !important;
+  }
+
+  /* Светлый фон для экономии чернил */
+  body, html {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Карточки/таблицы — чёрный текст на белом */
+  * {
+    background: transparent !important;
+    color: black !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+  }
+
+  /* Убираем backdrop-blur — не работает в печати */
+  .backdrop-blur-xl, .backdrop-blur-sm {
+    backdrop-filter: none !important;
+  }
+
+  /* Sticky фильтры → static при печати */
+  .sticky {
+    position: static !important;
+  }
+
+  /* Не разрывать таблицы и карточки между страницами */
+  table, .rounded-2xl {
+    page-break-inside: avoid;
+  }
+
+  /* Каждая большая секция — с новой страницы */
+  h1, h2 {
+    page-break-after: avoid;
+  }
+}
