@@ -225,11 +225,12 @@ export default function TaxPage() {
         })))
       }
 
-      // Список компаний для UI фильтра
+      // Список компаний для UI фильтра — API возвращает { data: [...] }
       const rc = await fetch('/api/admin/companies')
       if (rc.ok) {
         const cs = await rc.json()
-        setCompanies((cs.companies || cs || []).map((c: any) => ({ id: c.id, name: c.name })))
+        const list = (cs.data || cs.companies || cs || []) as any[]
+        setCompanies(list.map((c) => ({ id: c.id, name: c.name })))
       }
 
       // Годовой оборот для проверки порогов — из тех же raw данных
