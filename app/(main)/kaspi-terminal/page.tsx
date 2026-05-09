@@ -51,6 +51,7 @@ export default function KaspiTerminalPage() {
   // Данные
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Сверка
@@ -91,8 +92,8 @@ export default function KaspiTerminalPage() {
     if (c && companies.some((co) => co.id === c)) setFilterCompany(c)
   }, [companies])
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true); else setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({ from, to })
@@ -104,7 +105,7 @@ export default function KaspiTerminalPage() {
     } catch (e: any) {
       setError(e.message)
     } finally {
-      setLoading(false)
+      if (silent) setRefreshing(false); else setLoading(false)
     }
   }, [from, to, filterCompany])
 
@@ -148,10 +149,16 @@ export default function KaspiTerminalPage() {
     if (!newDate || !newCompany || !newAmount) return
     setSaving(true)
     try {
-      await mutate({ action: 'create', payload: { date: newDate, company_id: newCompany, amount: Number(newAmount), note: newNote || null } })
+      const resp = await mutate({ action: 'create', payload: { date: newDate, company_id: newCompany, amount: Number(newAmount), note: newNote || null } })
+      const created = resp?.data as Row | undefined
+      if (created) {
+        // Оптимистично добавляем в state — без перезагрузки таблицы
+        setRows(prev => [created, ...prev].sort((a, b) => b.date.localeCompare(a.date)))
+      } else {
+        load(true)
+      }
       setNewAmount('')
       setNewNote('')
-      load()
     } catch (e: any) { alert(e.message) }
     setSaving(false)
   }
@@ -160,19 +167,29 @@ export default function KaspiTerminalPage() {
     if (!editId) return
     setSaving(true)
     try {
-      await mutate({ action: 'update', id: editId, payload: { date: editDate, company_id: editCompany, amount: Number(editAmount), note: editNote || null } })
+      const resp = await mutate({ action: 'update', id: editId, payload: { date: editDate, company_id: editCompany, amount: Number(editAmount), note: editNote || null } })
+      const updated = resp?.data as Row | undefined
+      if (updated) {
+        setRows(prev => prev.map(r => r.id === updated.id ? updated : r).sort((a, b) => b.date.localeCompare(a.date)))
+      } else {
+        load(true)
+      }
       setEditId(null)
-      load()
     } catch (e: any) { alert(e.message) }
     setSaving(false)
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Удалить запись?')) return
+    // Оптимистичное удаление — мгновенный UX
+    const prev = rows
+    setRows(rows.filter(r => r.id !== id))
     try {
       await mutate({ action: 'delete', id })
-      load()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) {
+      setRows(prev)
+      alert(e.message)
+    }
   }
 
   const companyName = (id: string) => companies.find(c => c.id === id)?.name || id
@@ -248,10 +265,10 @@ export default function KaspiTerminalPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={tab === 'reconciliation' ? loadRecon : load}
-            disabled={tab === 'reconciliation' ? reconLoading : loading}
+            onClick={() => tab === 'reconciliation' ? loadRecon() : load(true)}
+            disabled={tab === 'reconciliation' ? reconLoading : (loading || refreshing)}
           >
-            <RefreshCw className={`w-4 h-4 mr-1 ${(tab === 'reconciliation' ? reconLoading : loading) ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 mr-1 ${(tab === 'reconciliation' ? reconLoading : (loading || refreshing)) ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
           {tab === 'entries' && totalAmount > 0 && (

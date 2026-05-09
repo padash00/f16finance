@@ -65,6 +65,8 @@ export async function POST(request: Request) {
     return json({ error: 'Сообщение слишком длинное (макс 2000)' }, 400)
   }
 
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
   // Определяем кто пишет
   let senderUserId: string | null = null
   let senderOperatorId: string | null = null
@@ -77,16 +79,20 @@ export async function POST(request: Request) {
   if (access.staffMember) {
     senderName = access.staffMember.full_name || access.user?.email || 'Сотрудник'
     senderRole = access.staffMember.role || 'staff'
-  } else if (access.operator) {
-    senderOperatorId = access.operator.id
-    senderName = access.operator.short_name || access.operator.name || 'Оператор'
+  } else if (access.operatorAuth) {
+    senderOperatorId = access.operatorAuth.operator_id
     senderRole = 'operator'
+    // Подтягиваем имя оператора из таблицы operators
+    const { data: op } = await supabase
+      .from('operators')
+      .select('short_name, name')
+      .eq('id', access.operatorAuth.operator_id)
+      .maybeSingle()
+    senderName = (op as any)?.short_name || (op as any)?.name || access.operatorAuth.username || 'Оператор'
   } else if (access.isSuperAdmin) {
     senderName = access.user?.email || 'Супер-админ'
     senderRole = 'super_admin'
   }
-
-  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
   const { data, error } = await supabase
     .from('team_chat_messages')
