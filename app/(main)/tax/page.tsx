@@ -151,6 +151,13 @@ export default function TaxPage() {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('tax_include_self_social') === '1'
   })
+
+  // Включать F16 Extra (компании с code='extra') в налогооблагаемый оборот.
+  // По дефолту OFF — те же правила что в /weekly-report, /reports.
+  const [includeExtra, setIncludeExtra] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('tax_include_extra') === '1'
+  })
   const [dateFrom, setDateFrom] = useState(startOfYearISO())
   const [dateTo, setDateTo] = useState(todayISO())
   // Raw incomes для гибкого расчёта по company × payment_type
@@ -293,8 +300,18 @@ export default function TaxPage() {
     }
   }
 
+  // Detect F16 Extra компании (по code='extra' или name='F16 Extra')
+  const extraCompanyId = useMemo(() => {
+    const c = companies.find(
+      (x) => (x.code || '').toLowerCase() === 'extra' || x.name === 'F16 Extra',
+    )
+    return c?.id ?? null
+  }, [companies])
+
   // Helper: учитывается ли тип оплаты для компании в налогооблагаемом обороте
   function isTaxable(companyId: string | null, paymentType: 'cash' | 'kaspi' | 'online' | 'card') {
+    // Глобальный exclude F16 Extra (как в weekly-report / reports)
+    if (companyId && companyId === extraCompanyId && !includeExtra) return false
     if (!companyId) return true // если company_id null — учитываем по умолчанию
     const cfg = taxableFilter[companyId]
     if (!cfg) return true // дефолт: учитываем всё
@@ -311,7 +328,7 @@ export default function TaxPage() {
       if (isTaxable(r.company_id, 'card')) taxable += r.card_amount
       return sum + taxable
     }, 0)
-  }, [incomeRows, taxableFilter])
+  }, [incomeRows, taxableFilter, includeExtra, extraCompanyId])
 
   // Полный оборот (без фильтра) — для информации
   const fullRevenue = useMemo(() => {
@@ -334,7 +351,7 @@ export default function TaxPage() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, income]) => ({ month, income }))
     setMonthlyIncomes(monthly)
-  }, [incomeRows, taxableFilter])
+  }, [incomeRows, taxableFilter, includeExtra, extraCompanyId])
 
   // Per-company breakdown для UI фильтра
   // Включаем ВСЕ компании из БД (даже с 0 доходом за период) + Without company если есть строки без company_id
@@ -555,6 +572,17 @@ export default function TaxPage() {
               />
               Учитывать налоги за работников
             </label>
+            {extraCompanyId ? (
+              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={includeExtra}
+                  onChange={(e) => { setIncludeExtra(e.target.checked); localStorage.setItem('tax_include_extra', e.target.checked ? '1' : '0') }}
+                  className="h-4 w-4 accent-emerald-500"
+                />
+                Включать F16 Extra в налог
+              </label>
+            ) : null}
           </div>
         </div>
         )
