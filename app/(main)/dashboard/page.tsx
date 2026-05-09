@@ -5,6 +5,7 @@ import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
+import { CardSkeleton, StatGridSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -847,12 +848,15 @@ export default function SmartDashboardPage() {
   // ---------- UI states ----------
   if (!authResolved) {
     return (
-      <>
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl">
-          <Sparkles className="h-5 w-5 text-amber-300" />
-          <span className="text-sm text-slate-300">Загрузка Orda Control...</span>
+      <div className="space-y-4">
+        <StatGridSkeleton count={4} />
+        <CardSkeleton rows={4} />
+        <div className="grid grid-cols-2 gap-4">
+          <CardSkeleton rows={3} />
+          <CardSkeleton rows={3} />
         </div>
-      </>
+        <CardSkeleton rows={5} />
+      </div>
     )
   }
 

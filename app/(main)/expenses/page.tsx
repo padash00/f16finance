@@ -15,6 +15,7 @@ import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { CardSkeleton, TableSkeleton, StatGridSkeleton } from '@/components/skeleton'
 import type { PageSnapshot } from '@/lib/ai/types'
 import {
   Plus,
@@ -955,15 +956,12 @@ export default function ExpensesPage() {
 
   if (loading && rows.length === 0) {
     return (
-      <>
-          <div className="text-center">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-red-500/30 border-t-red-500 mx-auto mb-6" />
-              <Wallet className="w-8 h-8 text-red-400 absolute top-4 left-1/2 transform -translate-x-1/2" />
-            </div>
-            <p className="text-gray-400">Загружаем данные о расходах...</p>
-          </div>
-      </>
+      <div className="app-page-wide space-y-4">
+        <CardSkeleton rows={3} className="border-red-500/20" />
+        <StatGridSkeleton count={4} />
+        <CardSkeleton rows={2} />
+        <TableSkeleton rows={8} cols={5} />
+      </div>
     )
   }
 
