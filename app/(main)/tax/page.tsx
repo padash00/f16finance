@@ -134,7 +134,17 @@ function todayISO() { return new Date().toISOString().slice(0, 10) }
 function startOfYearISO() { return `${new Date().getFullYear()}-01-01` }
 
 export default function TaxPage() {
-  const [iknRate, setIknRate] = useState(4)
+  const [iknRate, setIknRate] = useState(() => {
+    if (typeof window === 'undefined') return 3
+    const saved = localStorage.getItem('tax_ikn_rate')
+    return saved ? Number(saved) : 3
+  })
+
+  // Учитывать сотрудников в итоговом расчёте
+  const [includeEmployees, setIncludeEmployees] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('tax_include_employees') === '1'
+  })
   const [dateFrom, setDateFrom] = useState(startOfYearISO())
   const [dateTo, setDateTo] = useState(todayISO())
   // Raw incomes для гибкого расчёта по company × payment_type
@@ -487,14 +497,26 @@ export default function TaxPage() {
         <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent p-6 sm:p-8">
           <div className="text-xs uppercase tracking-[0.2em] text-emerald-300/80 mb-2">К уплате за период</div>
           <div className="text-5xl sm:text-6xl font-bold bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent leading-none">
-            {fmtCompact(calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}
+            {fmtCompact(calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0))}
           </div>
           <div className="mt-3 text-sm text-slate-300">
-            ИПН {fmt(calc.ipn)} + соц «за себя» {fmt(calc.social)}
-            {employees.length > 0 ? <> + за работников {fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</> : null}
+            ИПН ({iknRate}% × {fmtCompact(revenue)}) = {fmt(calc.ipn)} + соц «за себя» {fmt(calc.social)}
+            {includeEmployees && employees.length > 0 ? <> + за работников {fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</> : null}
           </div>
           <div className="mt-1 text-xs text-emerald-200/60">
-            Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod) / revenue) * 100).toFixed(2) : '0'}% от оборота
+            Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)) / revenue) * 100).toFixed(2) : '0'}% от оборота
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+              <input
+                type="checkbox"
+                checked={includeEmployees}
+                onChange={(e) => { setIncludeEmployees(e.target.checked); localStorage.setItem('tax_include_employees', e.target.checked ? '1' : '0') }}
+                className="h-4 w-4 accent-emerald-500"
+              />
+              Учитывать налоги за работников
+            </label>
+            {!includeEmployees ? <span className="text-[10px] text-slate-500">(посчитаешь вручную)</span> : null}
           </div>
         </div>
       )}
@@ -535,7 +557,7 @@ export default function TaxPage() {
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setIknRate(r)}
+                  onClick={() => { setIknRate(r); localStorage.setItem('tax_ikn_rate', String(r)) }}
                   className={`px-3 py-1.5 text-sm rounded-lg transition ${
                     iknRate === r
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -804,18 +826,19 @@ export default function TaxPage() {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between"><span className="text-slate-300">ИПН ({iknRate}% от оборота)</span><span className="font-semibold text-white">{fmt(calc.ipn)}</span></div>
           <div className="flex justify-between"><span className="text-slate-300">Соцплатежи ИП "за себя"</span><span className="font-semibold text-white">{fmt(calc.social)}</span></div>
-          {employees.length > 0 ? (
+          {includeEmployees && employees.length > 0 ? (
             <div className="flex justify-between"><span className="text-slate-300">Налоги за работников ({employees.length} чел)</span><span className="font-semibold text-white">{fmt(employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}</span></div>
           ) : null}
           <div className="border-t border-emerald-500/20 pt-2 mt-2">
             <div className="flex justify-between text-base">
               <span className="text-emerald-200 font-semibold">К уплате суммарно</span>
               <span className="font-bold text-emerald-300 text-xl">
-                {fmt(calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod)}
+                {fmt(calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0))}
               </span>
             </div>
             <p className="mt-2 text-xs text-emerald-200/70">
-              Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod) / revenue) * 100).toFixed(2) : '0'}% от оборота
+              Эффективная нагрузка: {revenue > 0 ? (((calc.ipn + calc.social + (includeEmployees ? employeeCalc.monthlyTaxFromEmployees * calc.monthsInPeriod : 0)) / revenue) * 100).toFixed(2) : '0'}% от оборота
+              {!includeEmployees ? ' · работники не учтены' : ''}
             </p>
           </div>
         </div>
@@ -890,12 +913,12 @@ export default function TaxPage() {
 
         {!bizSettings.vatPayer ? (
           <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200">
-            Ты <b>не плательщик НДС</b> (упрощёнка). Этот порог информационный — отслеживай чтобы не превысить лимит упрощёнки.
-            Налог НДС не выставляется в чеках/ценах. Если хочешь учитывать как плательщик — измени в настройках вверху.
+            Ты <b>не плательщик НДС</b> (упрощёнка). НДС-порог скрыт. Отслеживается только лимит упрощёнки (600 000 МРП).
           </div>
         ) : null}
 
         <div className="space-y-4">
+          {bizSettings.vatPayer ? (
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm text-slate-300">Порог регистрации по НДС (10 000 МРП = {fmtCompact(NDS_THRESHOLD)})</span>
@@ -923,6 +946,7 @@ export default function TaxPage() {
               <p className="mt-1 text-xs text-slate-500">До НДС осталось: {fmtCompact(yearForecast.ndsRemaining)}</p>
             ) : null}
           </div>
+          ) : null}
 
           <div>
             <div className="flex items-center justify-between mb-1">
