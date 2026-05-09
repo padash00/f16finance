@@ -93,6 +93,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
+      userId: user.id,
+      operatorId: operatorAuth ? String((operatorAuth as any).operator_id || '') : null,
       email: user.email || null,
       displayName,
       isSuperAdmin,
