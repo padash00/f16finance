@@ -275,25 +275,35 @@ export async function sendShiftReport(
   const fact = cash + coins + kaspiPos + debts - start
   const itog = fact - wipon
 
+  // На сайт идут только 2 агрегата: нал и безнал.
+  // Нал    = купюры + мелочь
+  // Безнал = Каспи POS + Каспи Онлайн
+  // Детали (coins, online, wipon) сохраняются в meta для отчётности на точке.
+  const totalCash = cash + coins
+  const totalCashless = kaspiPos + kaspiOnline
+
   return request(config, 'POST', '/api/point/shift-report', {
     action: 'createShiftReport',
     payload: {
       date: form.date,
       operator_id: form.operator_id,
       shift: form.shift,
-      cash_amount: cash,
-      kaspi_amount: kaspiPos,
+      cash_amount: totalCash,
+      kaspi_amount: totalCashless,
       kaspi_before_midnight:
         form.shift === 'night' && form.kaspi_before_midnight.trim().length > 0
           ? kaspiBeforeMidnight
           : null,
-      online_amount: kaspiOnline,
+      online_amount: 0,
       card_amount: 0,
       comment: form.comment || null,
       source: 'electron-point-client',
       local_ref: localRef,
       meta: {
+        cash_only: cash,
         coins,
+        kaspi_pos: kaspiPos,
+        kaspi_online: kaspiOnline,
         debts,
         start_cash: start,
         wipon,
