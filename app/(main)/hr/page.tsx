@@ -549,8 +549,14 @@ export default function HrPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{emp.full_name || '—'}</span>
-                    <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${emp.kind === 'operator' ? 'border-blue-500/40 text-blue-400 bg-blue-500/10' : 'border-amber-500/40 text-amber-400 bg-amber-500/10'}`}>
-                      {emp.kind === 'operator' ? 'Оператор' : 'Админ'}
+                    <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${
+                      (emp as any).is_hybrid
+                        ? 'border-purple-500/40 text-purple-400 bg-purple-500/10'
+                        : emp.kind === 'operator'
+                          ? 'border-blue-500/40 text-blue-400 bg-blue-500/10'
+                          : 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                    }`}>
+                      {(emp as any).is_hybrid ? 'Hybrid' : emp.kind === 'operator' ? 'Оператор' : 'Админ'}
                     </span>
                     {emp.role && (
                       <span className="text-[10px] uppercase text-muted-foreground">· {emp.role}</span>

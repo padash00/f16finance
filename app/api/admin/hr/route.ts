@@ -19,13 +19,20 @@ type HrEmployee = {
   role: string | null
   phone: string | null
   email: string | null
+  telegram_chat_id?: string | null
   is_active: boolean
+  is_admin_staff?: boolean
+  is_hybrid?: boolean   // оператор с привязанным staff-двойником
   dismissed_at: string | null
   dismissal_date: string | null
   dismissal_type: string | null
   dismissal_reason: string | null
   dismissed_by: string | null
   monthly_salary: number | null
+}
+
+function normalizePersonName(value: string | null | undefined) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
 export async function GET(req: Request) {
@@ -59,7 +66,7 @@ export async function GET(req: Request) {
 
     let staffQuery = supabase
       .from('staff')
-      .select('id, full_name, short_name, role, monthly_salary, phone, email, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by')
+      .select('id, full_name, short_name, role, monthly_salary, phone, email, telegram_chat_id, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by')
       .order('full_name')
 
     if (allowedStaffIds) {
@@ -72,7 +79,7 @@ export async function GET(req: Request) {
 
     let operatorsQuery = supabase
       .from('operators')
-      .select('id, name, short_name, role, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, operator_profiles(full_name, position, phone, email)')
+      .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, operator_profiles(full_name, position, phone, email)')
       .order('name')
 
     if (allowedOperatorIds) {
@@ -96,6 +103,7 @@ export async function GET(req: Request) {
       role: row.role || null,
       phone: row.phone || null,
       email: row.email || null,
+      telegram_chat_id: row.telegram_chat_id || null,
       is_active: row.is_active !== false,
       dismissed_at: row.dismissed_at || null,
       dismissal_date: row.dismissal_date || null,
@@ -116,7 +124,9 @@ export async function GET(req: Request) {
         role: row.role || 'operator',
         phone: profile?.phone || null,
         email: profile?.email || null,
+        telegram_chat_id: row.telegram_chat_id || null,
         is_active: row.is_active !== false,
+        is_admin_staff: row.is_admin_staff === true,
         dismissed_at: row.dismissed_at || null,
         dismissal_date: row.dismissal_date || null,
         dismissal_type: row.dismissal_type || null,
@@ -126,7 +136,39 @@ export async function GET(req: Request) {
       }
     })
 
-    const dismisserIds = Array.from(new Set([...staffEmployees, ...operatorEmployees]
+    // ─── Дедупликация: один человек = одна запись ──────────────────
+    // Если у оператора есть запись в staff (по telegram или имени) —
+    // оставляем оператора (с пометкой is_hybrid + monthly_salary из staff),
+    // а staff-двойника убираем из списка.
+    const staffByTelegram = new Map<string, HrEmployee>()
+    const staffByName = new Map<string, HrEmployee>()
+    for (const s of staffEmployees) {
+      const tg = String(s.telegram_chat_id || '').trim()
+      if (tg) staffByTelegram.set(tg, s)
+      const nameKey = normalizePersonName(s.full_name)
+      if (nameKey) staffByName.set(nameKey, s)
+    }
+
+    const removedStaffIds = new Set<string>()
+    for (const op of operatorEmployees) {
+      const tg = String(op.telegram_chat_id || '').trim()
+      const nameKey = normalizePersonName(op.full_name)
+      const matchedStaff =
+        (tg && staffByTelegram.get(tg)) ||
+        (nameKey && staffByName.get(nameKey)) ||
+        null
+      if (matchedStaff) {
+        op.is_hybrid = true
+        op.monthly_salary = matchedStaff.monthly_salary
+        // Если у оператора нет роли — берём со staff
+        if (!op.role || op.role === 'operator') op.role = matchedStaff.role || op.role
+        removedStaffIds.add(matchedStaff.id)
+      }
+    }
+
+    const dedupedStaff = staffEmployees.filter((s) => !removedStaffIds.has(s.id))
+
+    const dismisserIds = Array.from(new Set([...dedupedStaff, ...operatorEmployees]
       .map((e) => e.dismissed_by)
       .filter((v): v is string => !!v)))
     const dismissers: Record<string, string> = {}
@@ -140,7 +182,7 @@ export async function GET(req: Request) {
       }
     }
 
-    const items = [...staffEmployees, ...operatorEmployees].map((e) => ({
+    const items = [...dedupedStaff, ...operatorEmployees].map((e) => ({
       ...e,
       dismissed_by_name: e.dismissed_by ? dismissers[e.dismissed_by] || null : null,
     }))
