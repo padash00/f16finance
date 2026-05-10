@@ -181,6 +181,10 @@ const DateUtils = {
   todayISO() {
     return DateUtils.toISODateLocal(new Date())
   },
+  monthStartISO() {
+    const d = new Date()
+    return DateUtils.toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1))
+  },
   addDaysISO(iso: string, diff: number) {
     const d = DateUtils.fromISO(iso)
     d.setDate(d.getDate() + diff)
@@ -344,7 +348,7 @@ export default function SmartDashboardPage() {
   const cashLabels = useCashlessLabels()
   const [authResolved, setAuthResolved] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [dateFrom, setDateFrom] = useState(() => DateUtils.addDaysISO(DateUtils.todayISO(), -29))
+  const [dateFrom, setDateFrom] = useState(() => DateUtils.monthStartISO())
   const [dateTo, setDateTo] = useState(() => DateUtils.todayISO())
   const [rangeType, setRangeType] = useState<RangeType>('month')
 
@@ -575,7 +579,7 @@ export default function SmartDashboardPage() {
       setDateFrom(DateUtils.addDaysISO(today, -6))
       setDateTo(today)
     } else if (type === 'month') {
-      setDateFrom(DateUtils.addDaysISO(today, -29))
+      setDateFrom(DateUtils.monthStartISO())
       setDateTo(today)
     } else if (type === 'quarter') {
       const { start, end } = DateUtils.getQuarterBounds()
@@ -1107,7 +1111,7 @@ function HeaderBlock(props: {
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <QuickRangeBtn active={props.rangeType === 'today'} onClick={() => props.onQuickRange('today')} label="Сегодня" />
             <QuickRangeBtn active={props.rangeType === 'week'} onClick={() => props.onQuickRange('week')} label="Неделя" />
-            <QuickRangeBtn active={props.rangeType === 'month'} onClick={() => props.onQuickRange('month')} label="30 дней" />
+            <QuickRangeBtn active={props.rangeType === 'month'} onClick={() => props.onQuickRange('month')} label="Месяц" />
             <QuickRangeBtn active={props.rangeType === 'quarter'} onClick={() => props.onQuickRange('quarter')} label="Квартал" />
             <QuickRangeBtn active={props.rangeType === 'year'} onClick={() => props.onQuickRange('year')} label="Год" />
 

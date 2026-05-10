@@ -14,6 +14,10 @@ const toISODateLocal = (d: Date) => {
   return new Date(t).toISOString().slice(0, 10)
 }
 const todayISO = () => toISODateLocal(new Date())
+const monthStartISO = () => {
+  const d = new Date()
+  return toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1))
+}
 const addDaysISO = (iso: string, diff: number) => {
   const [y, m, d] = iso.split('-').map(Number)
   const dt = new Date(y, (m || 1) - 1, d || 1)
@@ -37,7 +41,7 @@ function RankBadge({ rank }: { rank: number }) {
 
 // ================== PAGE ==================
 export default function RatingsPage() {
-  const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
+  const [dateFrom, setDateFrom] = useState(() => monthStartISO())
   const [dateTo, setDateTo] = useState(() => todayISO())
   const [companyId, setCompanyId] = useState('')
   const [activePreset, setActivePreset] = useState<'today' | 'week' | 'month' | 'custom'>('month')
@@ -150,13 +154,13 @@ export default function RatingsPage() {
                     setActivePreset(p)
                     if (p === 'today') { setDateFrom(t); setDateTo(t) }
                     else if (p === 'week') { setDateFrom(addDaysISO(t, -6)); setDateTo(t) }
-                    else { setDateFrom(addDaysISO(t, -29)); setDateTo(t) }
+                    else { setDateFrom(monthStartISO()); setDateTo(t) }
                   }} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activePreset === p
                       ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
                       : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}>
-                    {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : '30 дней'}
+                    {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
                 ))}
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">

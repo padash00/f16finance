@@ -131,6 +131,11 @@ const DateUtils = {
 
   todayISO: (): string => DateUtils.toISODateLocal(new Date()),
 
+  monthStartISO: (): string => {
+    const d = new Date()
+    return DateUtils.toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1))
+  },
+
   addDaysISO: (iso: string, diff: number): string => {
     const d = DateUtils.fromISO(iso)
     d.setDate(d.getDate() + diff)
@@ -294,7 +299,7 @@ async function logIncomeEvent(event: {
 export default function IncomePage() {
   const cashLabels = useCashlessLabels()
   // Фильтры (объявляем до хуков — они передаются в useIncome)
-  const [dateFrom, setDateFrom] = useState(DateUtils.addDaysISO(DateUtils.todayISO(), -29))
+  const [dateFrom, setDateFrom] = useState(DateUtils.monthStartISO())
   const [dateTo, setDateTo] = useState(DateUtils.todayISO())
   const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
@@ -755,7 +760,7 @@ export default function IncomePage() {
         setDateTo(today)
         break
       case 'month':
-        setDateFrom(DateUtils.addDaysISO(today, -29))
+        setDateFrom(DateUtils.monthStartISO())
         setDateTo(today)
         break
       case 'all':
@@ -768,7 +773,7 @@ export default function IncomePage() {
 
   // Сброс всех фильтров
   const resetFilters = () => {
-    setDateFrom(DateUtils.addDaysISO(DateUtils.todayISO(), -29))
+    setDateFrom(DateUtils.monthStartISO())
     setDateTo(DateUtils.todayISO())
     setActivePreset('month')
     setCompanyFilter('all')
@@ -1171,7 +1176,7 @@ export default function IncomePage() {
                     : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
                 }`}
               >
-                {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? '30 дней' : 'Все время'}
+                {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
               </button>
             ))}
             {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (

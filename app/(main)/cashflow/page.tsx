@@ -30,6 +30,10 @@ const toISODateLocal = (d: Date) => {
   return new Date(t).toISOString().slice(0, 10)
 }
 const todayISO = () => toISODateLocal(new Date())
+const monthStartISO = () => {
+  const d = new Date()
+  return toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1))
+}
 const addDaysISO = (iso: string, diff: number) => {
   const [y, m, d] = iso.split('-').map(Number)
   const dt = new Date(y, (m || 1) - 1, d || 1)
@@ -82,7 +86,7 @@ function CashTooltip({ active, payload, label }: any) {
 
 // ================== PAGE ==================
 export default function CashFlowPage() {
-  const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
+  const [dateFrom, setDateFrom] = useState(() => monthStartISO())
   const [dateTo, setDateTo] = useState(() => todayISO())
   const [companyId, setCompanyId] = useState('')
 
@@ -254,9 +258,9 @@ export default function CashFlowPage() {
                   {([
                     { label: 'Сегодня', days: 0 },
                     { label: '7 дней', days: 6 },
-                    { label: '30 дней', days: 29 },
+                    { label: 'Месяц', days: -1 },  // -1 = текущий календарный месяц с 1 числа
                   ] as const).map(({ label, days }) => {
-                    const from = addDaysISO(todayISO(), -days)
+                    const from = days === -1 ? monthStartISO() : addDaysISO(todayISO(), -days)
                     const active = dateFrom === from && dateTo === todayISO()
                     return (
                       <button
