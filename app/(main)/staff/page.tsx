@@ -556,30 +556,6 @@ export default function StaffPageSmart() {
             }
           />
 
-          {canCreate && (
-            <Card className="p-5 bg-gradient-to-r from-indigo-900/30 via-gray-900 to-gray-900 border-indigo-500/30">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 ring-1 ring-indigo-500/30 flex items-center justify-center shrink-0">
-                    <Plus className="w-5 h-5 text-indigo-300" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-white">Найм перенесён на «Кадры»</h2>
-                    <p className="text-sm text-gray-400 mt-0.5">
-                      Создавай сотрудников в одном экране на <span className="font-mono text-indigo-300">/hr</span> — там профиль, должность, оклад одной формой.
-                    </p>
-                  </div>
-                </div>
-                <Link href="/hr">
-                  <Button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-lg shadow-indigo-500/20 shrink-0">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Нанять на /hr
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-          )}
-
           {pageNotice && (
             <Card className={cn('p-3 border text-sm', pageNotice.tone === 'success' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10')}>
               <div className={cn('flex items-center gap-2', pageNotice.tone === 'success' ? 'text-emerald-300' : 'text-red-300')}>
