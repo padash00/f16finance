@@ -700,6 +700,22 @@ export default function StructurePage() {
     () => companies.filter((company) => companyFilter === 'all' || company.id === companyFilter),
     [companies, companyFilter],
   )
+
+  // Операторы у которых нет ни одного назначения на точку (потеряшки)
+  const unassignedOperators = useMemo(() => {
+    if (companyFilter !== 'all') return [] as Operator[]
+    const assignedIds = new Set(assignments.map((a) => a.operator_id))
+    const q = searchQuery.trim().toLowerCase()
+    return operators.filter((op) => {
+      if (assignedIds.has(op.id)) return false
+      if (q) {
+        const profile = op.operator_profiles?.[0]
+        const hay = `${op.name || ''} ${op.short_name || ''} ${profile?.full_name || ''} ${profile?.phone || ''} ${profile?.email || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [operators, assignments, companyFilter, searchQuery])
   const leadRoster = useMemo(() => {
     return assignments
       .filter((assignment) => assignment.role_in_company !== 'operator')
@@ -1014,6 +1030,29 @@ export default function StructurePage() {
                     />
                   ))}
                 </div>
+
+                {unassignedOperators.length > 0 && (
+                  <Card className="border-orange-500/30 bg-orange-500/5 p-5 text-white mt-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-orange-400">⚠</span>
+                      <h3 className="text-base font-semibold">Без назначения на точку — {unassignedOperators.length}</h3>
+                    </div>
+                    <p className="text-sm text-slate-400 mb-4">
+                      Эти операторы созданы, но не привязаны ни к одной точке. Открой профиль и выбери точки.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {unassignedOperators.map((op) => (
+                        <OperatorChip
+                          key={op.id}
+                          operator={op}
+                          role="operator"
+                          isPrimary={false}
+                          onEdit={canSaveAssignments ? () => openOperatorEditor(op) : undefined}
+                        />
+                      ))}
+                    </div>
+                  </Card>
+                )}
               </section>
 
                 </>

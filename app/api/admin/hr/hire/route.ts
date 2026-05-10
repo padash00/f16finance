@@ -226,10 +226,17 @@ export async function POST(request: Request) {
       const assignments = body.company_ids.map((companyId, idx) => ({
         operator_id: operatorId,
         company_id: companyId,
-        role: 'operator',
+        role_in_company: 'operator',
         is_primary: idx === 0,
+        is_active: true,
       }))
-      await supabase.from('operator_company_assignments').insert(assignments)
+      const { error: assignErr } = await supabase
+        .from('operator_company_assignments')
+        .insert(assignments)
+      if (assignErr) {
+        // Не падаем — оператор создан, просто логируем для диагностики
+        console.warn('hr/hire: failed to insert operator_company_assignments', assignErr)
+      }
     }
 
     // 5. AuditLog

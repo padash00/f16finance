@@ -259,10 +259,16 @@ export async function POST(request: Request) {
           const rows = payload.company_ids.map((companyId, idx) => ({
             operator_id: id,
             company_id: companyId,
-            role: 'operator',
+            role_in_company: 'operator',
             is_primary: idx === 0,
+            is_active: true,
           }))
-          await supabase.from('operator_company_assignments').insert(rows)
+          const { error: assignErr } = await supabase
+            .from('operator_company_assignments')
+            .insert(rows)
+          if (assignErr) {
+            console.warn('hr/update: failed to insert operator_company_assignments', assignErr)
+          }
         }
       }
     }
