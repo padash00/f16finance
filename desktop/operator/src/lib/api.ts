@@ -259,6 +259,7 @@ export async function sendShiftReport(
   form: ShiftForm,
   localRef: string,
   companyId?: string | null,
+  shiftId?: string | null,
 ): Promise<{ ok: boolean; data: { id: string } }> {
   const cash = parseMoney(form.cash)
   const coins = parseMoney(form.coins)
@@ -288,6 +289,7 @@ export async function sendShiftReport(
       date: form.date,
       operator_id: form.operator_id,
       shift: form.shift,
+      shift_id: shiftId || null,
       cash_amount: cash,
       kaspi_amount: totalCashless,
       kaspi_before_midnight:

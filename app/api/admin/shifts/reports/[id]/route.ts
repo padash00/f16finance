@@ -57,7 +57,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return json({ error: 'forbidden' }, 403)
     }
 
-    const [salesRes, returnsRes, runsRes, incidentsRes] = await Promise.all([
+    const [salesRes, returnsRes, runsRes, incidentsRes, incomeRes, debtsRes] = await Promise.all([
       supabase
         .from('point_sales')
         .select(
@@ -95,6 +95,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         )
         .eq('shift_id', id)
         .order('occurred_at', { ascending: false }),
+      // Связанная запись в incomes (с meta: coins, wipon, debts, start_cash, diff)
+      supabase
+        .from('incomes')
+        .select('id, date, cash_amount, kaspi_amount, kaspi_before_midnight, total_amount, comment, meta')
+        .eq('shift_id', id)
+        .maybeSingle(),
+      // Долги клиентов созданные на этой смене — через company_id + временной интервал
+      supabase
+        .from('point_debt_items')
+        .select('id, client_name, item_name, quantity, unit_price, total_amount, comment, status, created_at')
+        .eq('company_id', (shift as any).company_id)
+        .gte('created_at', (shift as any).opened_at || new Date(0).toISOString())
+        .lte('created_at', (shift as any).closed_at || new Date().toISOString())
+        .order('created_at', { ascending: false }),
     ])
 
     const incidents = (incidentsRes.data || []) as any[]
@@ -144,6 +158,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           bonuses_total: bonusesTotal,
           count: incidents.length,
         },
+        income: incomeRes.data || null,
+        client_debts: debtsRes.data || [],
       },
     })
   } catch (error) {

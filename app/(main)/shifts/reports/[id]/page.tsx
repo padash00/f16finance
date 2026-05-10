@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -100,6 +100,37 @@ type IncidentsSummary = {
   count: number
 }
 
+type IncomeMeta = {
+  coins?: number | null
+  debts?: number | null
+  start_cash?: number | null
+  wipon?: number | null
+  diff?: number | null
+} | null
+
+type IncomeRecord = {
+  id: string
+  date: string
+  cash_amount: number | null
+  kaspi_amount: number | null
+  kaspi_before_midnight: number | null
+  total_amount: number | null
+  comment: string | null
+  meta: IncomeMeta
+} | null
+
+type ClientDebt = {
+  id: string
+  client_name: string | null
+  item_name: string | null
+  quantity: number
+  unit_price: number
+  total_amount: number
+  comment: string | null
+  status: string
+  created_at: string
+}
+
 type ChecklistRun = {
   id: string
   template_id: string
@@ -166,6 +197,8 @@ export default function ShiftReportDetailPage({
   const [runs, setRuns] = useState<ChecklistRun[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [incidentsSummary, setIncidentsSummary] = useState<IncidentsSummary | null>(null)
+  const [income, setIncome] = useState<IncomeRecord>(null)
+  const [clientDebts, setClientDebts] = useState<ClientDebt[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showZReport, setShowZReport] = useState(false)
@@ -188,6 +221,8 @@ export default function ShiftReportDetailPage({
       setRuns((data?.data?.checklist_runs || []) as ChecklistRun[])
       setIncidents((data?.data?.incidents || []) as Incident[])
       setIncidentsSummary((data?.data?.incidents_summary || null) as IncidentsSummary | null)
+      setIncome((data?.data?.income || null) as IncomeRecord)
+      setClientDebts((data?.data?.client_debts || []) as ClientDebt[])
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {
@@ -274,6 +309,9 @@ export default function ShiftReportDetailPage({
         </Card>
       ) : (
         <>
+          {/* ─── Z-ОТЧЁТ ─────────────────────────────────────────── */}
+          <ZReport shift={shift} sales={sales} returns={returns} income={income} clientDebts={clientDebts} incidentsSummary={incidentsSummary} />
+
           <div className="grid gap-3 md:grid-cols-3">
             <Card className="border-white/10 p-4">
               <div className="text-xs uppercase tracking-wide text-slate-400">Статус</div>
@@ -895,6 +933,268 @@ function ZReportModal({
           }
         }
       `}</style>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Z-REPORT — полноценный отчёт смены
+// ════════════════════════════════════════════════════════════════════
+
+function ZReport({
+  shift,
+  sales,
+  returns,
+  income,
+  clientDebts,
+  incidentsSummary,
+}: {
+  shift: ShiftDetail
+  sales: Sale[]
+  returns: Return[]
+  income: IncomeRecord
+  clientDebts: ClientDebt[]
+  incidentsSummary: IncidentsSummary | null
+}) {
+  const totals = (shift.totals_json || {}) as Record<string, any>
+  const meta = (income?.meta || {}) as IncomeMeta
+  const coins = Number(meta?.coins ?? 0)
+  const wipon = Number(meta?.wipon ?? 0)
+  const debtsCash = Number(meta?.debts ?? 0)
+  const startCashFromMeta = Number(meta?.start_cash ?? shift.opening_cash ?? 0)
+  const salesCash = Number(totals?.sales_cash || 0)
+  const returnsCash = Number(totals?.returns_cash || 0)
+  const closingCash = Number(shift.closing_cash || 0)
+
+  // Ожидаемая касса = старт + продажи нал − возвраты нал − wipon (выплаты) + долги (полученные нал)
+  const expectedCash = startCashFromMeta + salesCash - returnsCash - wipon + debtsCash
+  const cashDiff = closingCash - expectedCash
+
+  const salesKaspi = Number(totals?.sales_kaspi || 0)
+  const returnsKaspi = Number(totals?.returns_kaspi || 0)
+  const closingKaspi = Number(shift.closing_kaspi || 0)
+  const expectedKaspi = salesKaspi - returnsKaspi
+  const kaspiDiff = closingKaspi - expectedKaspi
+
+  const totalRevenue = (income?.cash_amount || 0) + (income?.kaspi_amount || 0)
+  const checkCount = sales.length || Number(totals?.sales_count || 0)
+  const avgCheck = checkCount > 0 ? Math.round(totalRevenue / checkCount) : 0
+
+  // Топ товаров
+  const topItems = useMemo(() => {
+    const map = new Map<string, { name: string; qty: number; amount: number }>()
+    for (const s of sales) {
+      const key = String(s.id) // нет breakdown по позициям в этом select; пропустим если нет items
+      // sales не содержит item-level details, используем total_amount
+      const existing = map.get(s.comment || 'Прочее') || { name: s.comment || 'Прочее', qty: 0, amount: 0 }
+      existing.qty += 1
+      existing.amount += Number(s.total_amount || 0)
+      map.set(existing.name, existing)
+    }
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount).slice(0, 5)
+  }, [sales])
+
+  return (
+    <Card className="border-emerald-500/20 bg-gradient-to-br from-slate-950 via-slate-950 to-emerald-950/10 p-6 print:bg-white print:text-black">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-5 pb-4 border-b border-white/10">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.2em] text-emerald-300/70">Z-отчёт смены</div>
+          <h2 className="text-2xl font-semibold text-white mt-1">
+            {shift.company?.name || '—'} · {SHIFT_TYPE_LABEL[shift.shift_type]}
+          </h2>
+          <div className="text-xs text-slate-400 mt-1">
+            {fmtDateTime(shift.opened_at)} → {fmtDateTime(shift.closed_at)}
+            {shift.operator && <> · 👤 {shift.operator.short_name || shift.operator.full_name}</>}
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-white/10 bg-white/5"
+          onClick={() => window.print()}
+        >
+          🖨 Печать
+        </Button>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Касса */}
+        <div className="space-y-3">
+          <div className="text-xs uppercase tracking-wider text-emerald-300/80 font-semibold">📦 Касса (купюры)</div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 space-y-1.5 text-sm">
+            <ZRow label="Старт смены" value={startCashFromMeta} />
+            <ZRow label="Продаж за смену (нал)" value={salesCash} positive />
+            <ZRow label="Возвратов (нал)" value={-returnsCash} negative={returnsCash > 0} />
+            {debtsCash > 0 && <ZRow label="Долги получены (нал)" value={debtsCash} positive />}
+            {wipon > 0 && <ZRow label="Выплаты wipon / прочее" value={-wipon} negative />}
+            <div className="border-t border-white/10 my-2" />
+            <ZRow label="Должно быть в кассе" value={expectedCash} bold />
+            <ZRow label="Фактически в кассе" value={closingCash} bold />
+            <div className="border-t border-white/10 my-2" />
+            <div
+              className={`flex justify-between items-center py-1 px-2 rounded ${
+                Math.abs(cashDiff) < 1
+                  ? 'bg-emerald-500/10 text-emerald-300'
+                  : cashDiff < 0
+                    ? 'bg-rose-500/10 text-rose-300'
+                    : 'bg-amber-500/10 text-amber-300'
+              }`}
+            >
+              <span className="font-semibold">
+                {Math.abs(cashDiff) < 1 ? '✓ Сходится' : cashDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}
+              </span>
+              <span className="font-bold">{cashDiff >= 0 ? '+' : ''}{fmtMoney(cashDiff)}</span>
+            </div>
+            {coins > 0 && (
+              <div className="text-xs text-slate-500 pt-2">в т.ч. мелочью: {fmtMoney(coins)}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Безнал */}
+        <div className="space-y-3">
+          <div className="text-xs uppercase tracking-wider text-blue-300/80 font-semibold">💳 Безнал</div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 space-y-1.5 text-sm">
+            <ZRow label="Продажи безнал (всего)" value={salesKaspi} positive />
+            {Number(shift.closing_kaspi_before_midnight || 0) > 0 && (
+              <ZRow label="  до 00:00" value={Number(shift.closing_kaspi_before_midnight || 0)} muted />
+            )}
+            {Number(shift.closing_kaspi_after_midnight || 0) > 0 && (
+              <ZRow label="  после 00:00" value={Number(shift.closing_kaspi_after_midnight || 0)} muted />
+            )}
+            <ZRow label="Возвраты безнал" value={-returnsKaspi} negative={returnsKaspi > 0} />
+            <div className="border-t border-white/10 my-2" />
+            <ZRow label="Должно быть" value={expectedKaspi} bold />
+            <ZRow label="Фактически закрыто" value={closingKaspi} bold />
+            {Math.abs(kaspiDiff) >= 1 && (
+              <div
+                className={`flex justify-between items-center py-1 px-2 mt-2 rounded ${
+                  kaspiDiff < 0 ? 'bg-rose-500/10 text-rose-300' : 'bg-amber-500/10 text-amber-300'
+                }`}
+              >
+                <span className="font-semibold">{kaspiDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}</span>
+                <span className="font-bold">{kaspiDiff >= 0 ? '+' : ''}{fmtMoney(kaspiDiff)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Итого */}
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-1.5 text-sm">
+            <div className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">💰 Итого выручка</div>
+            <ZRow label="Нал (купюры)" value={income?.cash_amount || 0} />
+            <ZRow label="Безнал" value={income?.kaspi_amount || 0} />
+            <div className="border-t border-emerald-500/20 my-2" />
+            <div className="flex justify-between items-center py-1 px-2 rounded bg-emerald-500/15 text-emerald-200">
+              <span className="font-semibold">ВСЕГО за смену</span>
+              <span className="font-bold text-lg">{fmtMoney(totalRevenue)}</span>
+            </div>
+            <div className="text-xs text-slate-400 mt-2 flex justify-between">
+              <span>Чеков: <span className="text-white font-semibold">{checkCount}</span></span>
+              <span>Средний: <span className="text-white font-semibold">{fmtMoney(avgCheck)}</span></span>
+            </div>
+            {income && (
+              <Link
+                href={`/income`}
+                className="block mt-2 text-xs text-emerald-300 hover:text-emerald-200"
+              >
+                📎 Открыть запись /income →
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Долги клиентов */}
+      {clientDebts.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs uppercase tracking-wider text-rose-300/80 font-semibold mb-2">📋 Долги клиентов на смене ({clientDebts.length})</div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 space-y-1 text-sm">
+            {clientDebts.slice(0, 10).map((d) => (
+              <div key={d.id} className="flex justify-between items-center text-slate-300 text-xs">
+                <span className="truncate">
+                  • {d.client_name || '—'} · {d.item_name || '—'}
+                  {d.quantity > 1 && <span className="text-slate-500"> ×{d.quantity}</span>}
+                </span>
+                <span className="font-mono text-rose-300 shrink-0 ml-2">{fmtMoney(d.total_amount)}</span>
+              </div>
+            ))}
+            {clientDebts.length > 10 && (
+              <div className="text-xs text-slate-500 pt-1">…и ещё {clientDebts.length - 10}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Инциденты */}
+      {incidentsSummary && incidentsSummary.count > 0 && (
+        <div className="mt-4">
+          <div className="text-xs uppercase tracking-wider text-amber-300/80 font-semibold mb-2">⚠ Инциденты</div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm grid grid-cols-3 gap-3">
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase">Всего</div>
+              <div className="text-white font-semibold">{incidentsSummary.count}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase">Штрафы</div>
+              <div className="text-rose-300 font-semibold">{fmtMoney(incidentsSummary.fines_total)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase">Бонусы</div>
+              <div className="text-emerald-300 font-semibold">{fmtMoney(incidentsSummary.bonuses_total)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Заметки */}
+      {(shift.opening_notes || shift.closing_notes) && (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {shift.opening_notes && (
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+              <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При открытии</div>
+              <div className="text-slate-300 italic">«{shift.opening_notes}»</div>
+            </div>
+          )}
+          {shift.closing_notes && (
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+              <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При закрытии</div>
+              <div className="text-slate-300 italic">«{shift.closing_notes}»</div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ZRow({
+  label,
+  value,
+  bold,
+  positive,
+  negative,
+  muted,
+}: {
+  label: string
+  value: number
+  bold?: boolean
+  positive?: boolean
+  negative?: boolean
+  muted?: boolean
+}) {
+  const color = muted
+    ? 'text-slate-500'
+    : positive
+      ? 'text-emerald-300'
+      : negative
+        ? 'text-rose-300'
+        : 'text-slate-200'
+  return (
+    <div className="flex justify-between items-center">
+      <span className={`text-slate-400 ${muted ? 'text-xs' : ''}`}>{label}</span>
+      <span className={`${color} ${bold ? 'font-bold text-white' : ''} font-mono tabular-nums`}>
+        {fmtMoney(value)}
+      </span>
     </div>
   )
 }

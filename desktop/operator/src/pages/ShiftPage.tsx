@@ -487,7 +487,7 @@ export default function ShiftPage({
   async function sendOne(formToSend: ShiftForm): Promise<'success' | 'queued'> {
     const ref = localRef()
     try {
-      await api.sendShiftReport(config, formToSend, ref, session.company.id)
+      await api.sendShiftReport(config, formToSend, ref, session.company.id, activeOpenShift?.id || null)
       return 'success'
     } catch (sendError) {
       const status = (sendError as Error & { status?: number }).status

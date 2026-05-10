@@ -11,6 +11,7 @@ type ShiftReportBody = {
     date: string
     operator_id: string
     shift: 'day' | 'night'
+    shift_id?: string | null
     zone?: string | null
     cash_amount?: number | null
     kaspi_amount?: number | null
@@ -190,6 +191,7 @@ export async function POST(request: Request) {
       company_id: device.company_id,
       operator_id: payload.operator_id,
       shift: payload.shift,
+      shift_id: payload.shift_id || null,
       zone: resolveIncomeZone({
         requestedZone: payload.zone,
         companyCode: device.company?.code || null,
