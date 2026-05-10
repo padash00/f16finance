@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Tailwind 4: dark: variant активируется по классу .dark на <html>, а не по prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ─── Design tokens (идентично веб-проекту) ─────────────────────────────── */
 
 :root {
