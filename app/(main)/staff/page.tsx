@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
+import Link from 'next/link'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
@@ -546,10 +547,12 @@ export default function StaffPageSmart() {
                   </Button>
                 )}
                 {canCreate && (
-                  <Button onClick={() => setIsAddStaffOpen(true)} className="h-9 gap-1.5 rounded-xl bg-emerald-600 text-sm text-white hover:bg-emerald-500">
-                    <Plus className="h-4 w-4" />
-                    Добавить
-                  </Button>
+                  <Link href="/hr">
+                    <Button className="h-9 gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-sm text-white">
+                      <Plus className="h-4 w-4" />
+                      Нанять (на /hr)
+                    </Button>
+                  </Link>
                 )}
               </>
             }
