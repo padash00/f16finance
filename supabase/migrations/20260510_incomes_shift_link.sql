@@ -10,5 +10,4 @@ alter table public.incomes
 create index if not exists idx_incomes_shift_id on public.incomes(shift_id);
 
 comment on column public.incomes.shift_id is
-  'Связь с конкретной сменой POS. Заполняется автоматически при создании ' ||
-  'income через /api/point/shift-report. NULL для исторических записей.';
+  'Связь с конкретной сменой POS. Заполняется автоматически при создании income через /api/point/shift-report. NULL для исторических записей.';
