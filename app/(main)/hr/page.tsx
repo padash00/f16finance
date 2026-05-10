@@ -10,6 +10,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import HireModal from './HireModal'
 import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel'
+import CareerTimeline from './CareerTimeline'
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -48,7 +49,7 @@ type HistoryEntry = {
   actor_name: string | null
 }
 
-type Tab = 'active' | 'dismissed'
+type Tab = 'active' | 'dismissed' | 'career'
 type KindFilter = 'all' | 'staff' | 'operator'
 const shortDate = (value: string) =>
   new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -290,6 +291,16 @@ export default function HrPage() {
             >
               Уволенные · <span className="font-bold">{counts.dismissed}</span>
             </button>
+            <button
+              onClick={() => setTab('career')}
+              className={`px-4 py-2 rounded-lg text-sm border transition ${
+                tab === 'career'
+                  ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40'
+                  : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+              }`}
+            >
+              Карьера
+            </button>
           </div>
 
           <div className="xl:ml-auto flex flex-col sm:flex-row gap-2 w-full xl:w-auto">
@@ -315,6 +326,10 @@ export default function HrPage() {
         </div>
       </Card>
 
+      {tab === 'career' ? (
+        <CareerTimeline />
+      ) : (
+        <>
       <div className="flex items-center justify-between px-1">
         <div className="text-sm text-gray-400">
           {tab === 'active' ? 'Список активных сотрудников' : 'Список уволенных сотрудников'}
@@ -450,6 +465,8 @@ export default function HrPage() {
             )
           })}
         </div>
+      )}
+        </>
       )}
 
       {dismissTarget && (
