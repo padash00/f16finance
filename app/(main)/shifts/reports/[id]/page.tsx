@@ -1,6 +1,7 @@
 'use client'
 
 import { use, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -659,8 +660,8 @@ export default function ShiftReportDetailPage({
       )}
 
       {/* Принудительное закрытие смены */}
-      {adminAction === 'closeForce' && shift && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
+      {adminAction === 'closeForce' && shift && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
           <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-amber-500/30 p-5">
             <h3 className="text-base font-semibold">Закрыть смену принудительно</h3>
             <p className="mt-1 text-xs text-slate-400">
@@ -695,12 +696,13 @@ export default function ShiftReportDetailPage({
               </Button>
             </div>
           </Card>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Полное удаление смены (только super-admin) */}
-      {adminAction === 'purge' && shift && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
+      {adminAction === 'purge' && shift && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-black/70 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
           <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-rose-500/40 bg-rose-950/30 p-5">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-6 w-6 shrink-0 text-rose-300" />
@@ -753,7 +755,8 @@ export default function ShiftReportDetailPage({
               </Button>
             </div>
           </Card>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Z-отчёт смены — модалка в стиле кассового чека */}
@@ -806,9 +809,11 @@ function ZReportModal({
     window.print()
   }
 
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 print:relative print:bg-transparent print:p-0">
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none dark:bg-slate-50">
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4 print:relative print:bg-transparent print:p-0" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none dark:bg-slate-50" onClick={(e) => e.stopPropagation()}>
         {/* Шапка диалога — скрыта при печати */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 print:hidden">
           <h3 className="text-sm font-semibold text-slate-900">Z-отчёт смены</h3>
@@ -933,7 +938,8 @@ function ZReportModal({
           }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
