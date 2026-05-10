@@ -75,29 +75,48 @@ export async function POST(req: Request) {
 
       if (error) throw error
 
-      // Засеять capabilities в зависимости от выбранного режима
+      // Засеять capabilities + position_paths в зависимости от режима
       try {
         if (seedMode === 'open') {
           const allCaps = getAllCapabilityIds()
           const rows = allCaps.map((c) => ({ role: name, capability: c, granted: true }))
           await supabase.from('role_capabilities').upsert(rows, { onConflict: 'role,capability' })
+          // Все paths owner-роли (наибольший набор) — даём полный доступ.
+          const { data: ownerPaths } = await supabase
+            .from('position_paths')
+            .select('path')
+            .eq('position_name', 'owner')
+          const pathRows = (ownerPaths || []).map((p: any) => ({ position_name: name, path: p.path }))
+          if (pathRows.length > 0) {
+            await supabase.from('position_paths').upsert(pathRows, { onConflict: 'position_name,path' })
+          }
         } else if (seedMode === 'copy_from' && copyFromRole) {
+          // Копируем capabilities
           const { data: source } = await supabase
             .from('role_capabilities')
             .select('capability, granted')
             .eq('role', copyFromRole)
-          const rows = (source || []).map((r: any) => ({
+          const capRows = (source || []).map((r: any) => ({
             role: name,
             capability: r.capability,
             granted: r.granted,
           }))
-          if (rows.length > 0) {
-            await supabase.from('role_capabilities').upsert(rows, { onConflict: 'role,capability' })
+          if (capRows.length > 0) {
+            await supabase.from('role_capabilities').upsert(capRows, { onConflict: 'role,capability' })
+          }
+          // Копируем position_paths
+          const { data: sourcePaths } = await supabase
+            .from('position_paths')
+            .select('path')
+            .eq('position_name', copyFromRole)
+          const pathRows = (sourcePaths || []).map((p: any) => ({ position_name: name, path: p.path }))
+          if (pathRows.length > 0) {
+            await supabase.from('position_paths').upsert(pathRows, { onConflict: 'position_name,path' })
           }
         }
-        // 'closed' — ничего не вставляем, capabilities останутся пустыми
+        // 'closed' — ничего не вставляем, всё пустое
       } catch (e) {
-        console.warn('Не удалось засеять capabilities для новой роли', e)
+        console.warn('Не удалось засеять capabilities/paths для новой роли', e)
       }
 
       invalidateCapabilitiesCache()
