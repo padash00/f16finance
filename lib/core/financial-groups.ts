@@ -8,23 +8,29 @@ export type FinancialGroup =
   | 'financial_expenses'
   | 'income_tax'
   | 'capex'
+  | 'profit_distribution'
   | 'non_operating'
+
+/** Положение группы относительно P&L: либо узел цепочки, либо вне (CAPEX, распределение прибыли) */
+export type FinancialGroupKind = 'pl_chain' | 'off_chain'
 
 export const FINANCIAL_GROUP_OPTIONS: Array<{
   value: FinancialGroup
   label: string
   description: string
+  kind: FinancialGroupKind
 }> = [
-  { value: 'cogs',                label: 'COGS (Себестоимость)',  description: 'Прямые затраты на производство/закупку товаров и услуг. Вычитаются из выручки до Валовой прибыли.' },
-  { value: 'operating',           label: 'Операционные',         description: 'Аренда, электроэнергия, интернет, реклама, ремонт, упаковка, списание.' },
-  { value: 'payroll',             label: 'ФОТ',                  description: 'Основная зарплата персонала за месяц.' },
-  { value: 'payroll_advance',     label: 'Аванс по зарплате',    description: 'Авансовые выплаты в счёт зарплаты, входят в общий ФОТ.' },
-  { value: 'payroll_tax',         label: 'Налоги на зарплату',   description: 'ОПВ, ОСМС, социальные отчисления — всё что связано с ФОТ.' },
-  { value: 'depreciation',        label: 'Амортизация',          description: 'Ежемесячный износ ПК и оборудования. Вычитается после EBITDA.' },
-  { value: 'financial_expenses',  label: 'Финансовые расходы',   description: 'Проценты по кредиту и займам. Вычитается после EBIT.' },
-  { value: 'income_tax',          label: 'Налог на прибыль',     description: 'Налог 3%, ИПН, КПН — финальный вычет перед чистой прибылью.' },
-  { value: 'capex',               label: 'CAPEX',                description: 'Покупка оборудования. Не входит в P&L цепочку, учитывается отдельно.' },
-  { value: 'non_operating',       label: 'Неоперационные',       description: 'Разовые или внеоперационные статьи вне основной деятельности.' },
+  { value: 'cogs',                kind: 'pl_chain',  label: 'COGS (Себестоимость)',  description: 'Прямые затраты на производство/закупку товаров и услуг. Вычитаются из выручки до Валовой прибыли.' },
+  { value: 'operating',           kind: 'pl_chain',  label: 'Операционные',         description: 'Аренда, электроэнергия, интернет, реклама, ремонт, упаковка, списание.' },
+  { value: 'payroll',             kind: 'pl_chain',  label: 'ФОТ',                  description: 'Основная зарплата персонала за месяц.' },
+  { value: 'payroll_advance',     kind: 'pl_chain',  label: 'Аванс по зарплате',    description: 'Авансовые выплаты в счёт зарплаты, входят в общий ФОТ.' },
+  { value: 'payroll_tax',         kind: 'pl_chain',  label: 'Налоги на зарплату',   description: 'ОПВ, ОСМС, социальные отчисления — всё что связано с ФОТ.' },
+  { value: 'depreciation',        kind: 'pl_chain',  label: 'Амортизация',          description: 'Ежемесячный износ ПК и оборудования. Вычитается после EBITDA.' },
+  { value: 'financial_expenses',  kind: 'pl_chain',  label: 'Финансовые расходы',   description: 'Проценты по кредиту и займам. Вычитается после EBIT.' },
+  { value: 'income_tax',          kind: 'pl_chain',  label: 'Налог на прибыль',     description: 'Налог 3%, ИПН, КПН — финальный вычет перед чистой прибылью.' },
+  { value: 'non_operating',       kind: 'pl_chain',  label: 'Неоперационные',       description: 'Разовые или внеоперационные статьи вне основной деятельности.' },
+  { value: 'capex',               kind: 'off_chain', label: 'CAPEX',                description: 'Покупка оборудования. Не входит в P&L цепочку, учитывается отдельным блоком.' },
+  { value: 'profit_distribution', kind: 'off_chain', label: 'Распределение прибыли',description: 'Выплаты партнёрам, дивиденды, доля учредителей. Это не расход бизнеса, а распределение УЖЕ полученной чистой прибыли. Вне P&L.' },
 ]
 
 /** Цепочка P&L: группы в порядке вычитания и промежуточные итоги */
@@ -106,6 +112,15 @@ export function inferFinancialGroup(categoryName: string | null | undefined): Fi
     normalized.includes('оборудован') ||
     normalized.includes('покупка тех')
   ) return 'capex'
+  if (
+    normalized.includes('доля партн') ||
+    normalized.includes('доля учред') ||
+    normalized.includes('дивиденд') ||
+    normalized.includes('распределен прибыл') ||
+    normalized.includes('распределение прибыл') ||
+    normalized.includes('выплата партн') ||
+    normalized.includes('выплаты партн')
+  ) return 'profit_distribution'
   if (
     normalized.includes('штраф') ||
     normalized.includes('курсов') ||

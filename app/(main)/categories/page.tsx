@@ -23,6 +23,10 @@ import {
   Banknote,
   TrendingDown,
   BarChart3,
+  Info,
+  Lock,
+  PieChart,
+  Wallet,
 } from 'lucide-react'
 
 type Category = {
@@ -393,6 +397,27 @@ export default function CategoriesPage() {
 
       {/* ═══ ВКЛАДКА 2: ФИНАНСОВЫЕ ГРУППЫ ═══ */}
       {tab === 'groups' && (
+        <div className="space-y-6">
+
+        {/* Info-баннер: почему группы фиксированные */}
+        <div className="rounded-xl border border-blue-500/25 bg-blue-500/5 px-4 py-3 flex items-start gap-3">
+          <div className="shrink-0 p-1.5 rounded-lg bg-blue-500/15 text-blue-300">
+            <Info className="w-4 h-4" />
+          </div>
+          <div className="text-xs text-muted-foreground leading-relaxed flex-1">
+            <p className="font-semibold text-foreground mb-1 flex items-center gap-1.5">
+              <Lock className="w-3 h-3" />
+              Финансовые группы стандартизированы и не редактируются
+            </p>
+            <p>
+              Это узлы цепочки P&L (ОПИУ): <span className="text-foreground">Выручка → COGS → Валовая → Операционные/ФОТ → EBITDA → Амортизация → EBIT → Финансовые → EBT → Налог → Чистая прибыль</span>. Дашборд, /profitability и cashflow считают показатели на основе этого порядка. Любая ваша категория относится к одной из 11 групп — выберите подходящую при создании.
+            </p>
+            <p className="mt-1.5">
+              <span className="text-purple-300 font-medium">Доля партнёра / дивиденды</span> → группа <span className="text-foreground font-medium">«Распределение прибыли»</span> (вне P&L, как CAPEX).
+            </p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
           {/* P&L Цепочка */}
@@ -447,20 +472,44 @@ export default function CategoriesPage() {
               )
             })}
 
-            {/* CAPEX отдельно */}
-            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-amber-300">CAPEX (отдельно)</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Покупка оборудования — не входит в P&L цепочку, учитывается отдельным блоком.
-                  </p>
+            {/* Off-chain группы (CAPEX, Распределение прибыли) — отдельно от P&L цепочки */}
+            <div className="mt-6 space-y-2">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground/70 px-1 flex items-center gap-1.5">
+                <Wallet className="w-3 h-3" />
+                Вне P&L (после чистой прибыли)
+              </p>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-300">CAPEX</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Покупка оборудования — капитализируется, не идёт в расход периода.
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    (countByGroup['capex'] || 0) > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-muted-foreground'
+                  }`}>
+                    {countByGroup['capex'] || 0} кат.
+                  </span>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                  (countByGroup['capex'] || 0) > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-muted-foreground'
-                }`}>
-                  {countByGroup['capex'] || 0} кат.
-                </span>
+              </div>
+              <div className="rounded-xl border border-purple-500/25 bg-purple-500/5 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-purple-300 flex items-center gap-1.5">
+                      <PieChart className="w-3.5 h-3.5" />
+                      Распределение прибыли
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Доля партнёра, дивиденды учредителям — выплата УЖЕ полученной чистой прибыли.
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    (countByGroup['profit_distribution'] || 0) > 0 ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-muted-foreground'
+                  }`}>
+                    {countByGroup['profit_distribution'] || 0} кат.
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -478,10 +527,22 @@ export default function CategoriesPage() {
                 <Card key={group.value} className="p-4 border-border bg-card/60 hover:bg-white/5 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-accent/15 text-accent border border-accent/20">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${
+                          group.kind === 'off_chain'
+                            ? (group.value === 'profit_distribution'
+                              ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30')
+                            : 'bg-accent/15 text-accent border-accent/20'
+                        }`}>
                           {group.label}
                         </span>
+                        {group.kind === 'off_chain' && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] text-muted-foreground border border-white/10">
+                            <Wallet className="w-2.5 h-2.5" />
+                            Вне P&L
+                          </span>
+                        )}
                         <span className="text-xs text-muted-foreground">{count} категор.</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1.5">{group.description}</p>
@@ -513,6 +574,7 @@ export default function CategoriesPage() {
               )
             })}
           </div>
+        </div>
         </div>
       )}
 
