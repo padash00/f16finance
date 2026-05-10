@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
@@ -328,7 +329,25 @@ const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { lab
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}><div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-white">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto"
+      onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}
+    >
+      <div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#10182b] p-6 shadow-2xl shadow-black/40">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-semibold text-white">{props.title}</h3>
+            {props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}
+          </div>
+          <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" onClick={props.onClose}>Закрыть</Button>
+        </div>
+        {props.children}
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 export default function SalaryPage() {
