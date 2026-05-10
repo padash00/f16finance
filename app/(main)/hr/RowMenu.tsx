@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { MoreVertical, Pencil, RefreshCw, UserCheck, UserMinus, type LucideIcon } from 'lucide-react'
 
 export type MenuAction = {
@@ -14,31 +15,51 @@ export type MenuAction = {
 
 export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boolean }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (menuRef.current?.contains(e.target as Node)) return
+      if (btnRef.current?.contains(e.target as Node)) return
+      setOpen(false)
     }
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false)
     }
+    const onScroll = () => setOpen(false)
     document.addEventListener('mousedown', onClick)
     document.addEventListener('keydown', onEsc)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('mousedown', onClick)
       document.removeEventListener('keydown', onEsc)
+      window.removeEventListener('scroll', onScroll, true)
     }
   }, [open])
+
+  const handleToggle = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setOpen(true)
+  }
 
   const visible = actions.filter((a) => !a.hidden)
   if (visible.length === 0) return null
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={btnRef}
+        onClick={handleToggle}
         disabled={busy}
         className={`p-1.5 rounded-lg border border-gray-700 bg-gray-800/50 hover:bg-gray-700 hover:border-gray-600 text-gray-400 hover:text-white transition disabled:opacity-50 ${open ? 'bg-gray-700 text-white border-gray-600' : ''}`}
         title="Действия"
@@ -49,8 +70,12 @@ export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boole
           <MoreVertical className="w-3.5 h-3.5" />
         )}
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-30 min-w-[180px] py-1 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+      {open && pos && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 200 }}
+          className="min-w-[180px] py-1 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl"
+        >
           {visible.map((a, i) => {
             const Icon = a.icon
             const toneCls =
@@ -72,9 +97,10 @@ export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boole
               </button>
             )
           })}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }
 
@@ -90,31 +116,63 @@ export function InlineRoleDropdown({
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (menuRef.current?.contains(e.target as Node)) return
+      if (btnRef.current?.contains(e.target as Node)) return
+      setOpen(false)
     }
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    const onScroll = () => setOpen(false)
     document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onEsc)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onEsc)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [open])
+
+  const handleToggle = () => {
+    if (disabled) return
+    if (open) {
+      setOpen(false)
+      return
+    }
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: rect.left })
+    }
+    setOpen(true)
+  }
 
   const currentLabel = positions.find((p) => p.name === current)?.label || current || '—'
 
   return (
-    <div className="relative inline-block" ref={ref}>
+    <>
       <button
-        onClick={() => !disabled && setOpen((v) => !v)}
+        ref={btnRef}
+        onClick={handleToggle}
         disabled={disabled}
         className={`text-[10px] uppercase px-1.5 py-0.5 rounded border border-gray-700 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-muted-foreground hover:text-indigo-300 transition cursor-pointer disabled:cursor-default disabled:hover:border-gray-700 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
         title={disabled ? '' : 'Кликни для смены'}
       >
         {currentLabel} ▾
       </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-40 min-w-[160px] max-h-[280px] overflow-y-auto py-1 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+      {open && pos && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 200 }}
+          className="min-w-[160px] max-h-[280px] overflow-y-auto py-1 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl"
+        >
           {positions.length === 0 && (
             <div className="px-3 py-2 text-xs text-gray-500">Нет должностей</div>
           )}
@@ -132,8 +190,9 @@ export function InlineRoleDropdown({
               {p.label || p.name}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }
