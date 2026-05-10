@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, AlertCircle, CheckSquare, ChevronDown, ChevronRight, Download, Loader2, Pencil, Search, Square, UserMinus, UserCheck, UserPlus, Users, X as XIcon } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight, Download, ExternalLink, LayoutGrid, List, Loader2, MoreVertical, Pencil, Search, Square, TrendingUp, UserMinus, UserCheck, UserPlus, Users, WifiOff, X as XIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -13,6 +13,7 @@ import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel
 import CareerTimeline from './CareerTimeline'
 import PositionsOverview from './PositionsOverview'
 import HrAnalytics from './HrAnalytics'
+import Avatar from './Avatar'
 
 function csvCell(v: string | null | undefined): string {
   if (v == null) return ''
@@ -42,7 +43,13 @@ type HrEmployee = {
   role: string | null
   phone: string | null
   email: string | null
+  telegram_chat_id?: string | null
+  photo_url?: string | null
+  hire_date?: string | null
+  has_login?: boolean
   is_active: boolean
+  is_admin_staff?: boolean
+  is_hybrid?: boolean
   dismissed_at: string | null
   dismissal_date: string | null
   dismissal_type: string | null
@@ -51,6 +58,10 @@ type HrEmployee = {
   dismissed_by_name: string | null
   monthly_salary: number | null
 }
+
+type SortKey = 'name' | 'role' | 'hire_date' | 'salary'
+type ViewMode = 'cards' | 'table'
+type ChipFilter = 'all' | 'no_login' | 'hybrid' | 'today_birthday'
 
 type HistoryEntry = {
   id: string
@@ -86,6 +97,13 @@ export default function HrPage() {
   const [selectedEmp, setSelectedEmp] = useState<PanelEmployee | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [chipFilter, setChipFilter] = useState<ChipFilter>('all')
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
+  const [positions, setPositions] = useState<Array<{ name: string; label: string | null }>>([])
+  const [editingRoleKey, setEditingRoleKey] = useState<string | null>(null)
   const [items, setItems] = useState<HrEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -119,6 +137,13 @@ export default function HrPage() {
 
   useEffect(() => { load() }, [])
 
+  // Загрузка справочника должностей для inline-смены роли
+  useEffect(() => {
+    fetch('/api/admin/positions').then((r) => r.json()).then((d) => {
+      setPositions((d.data || []).map((p: any) => ({ name: p.name, label: p.label || p.name })))
+    }).catch(() => {})
+  }, [])
+
   const counts = useMemo(() => {
     let active = 0, dismissed = 0
     for (const it of items) {
@@ -132,18 +157,96 @@ export default function HrPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return items.filter((it) => {
+    const list = items.filter((it) => {
       const inactive = !it.is_active || !!it.dismissed_at
       if (tab === 'active' && inactive) return false
       if (tab === 'dismissed' && !inactive) return false
       if (kindFilter !== 'all' && it.kind !== kindFilter) return false
+      // Smart-чипы
+      if (chipFilter === 'no_login' && it.has_login !== false) return false
+      if (chipFilter === 'hybrid' && !it.is_hybrid) return false
       if (q) {
         const hay = `${it.full_name} ${it.short_name || ''} ${it.position || ''} ${it.role || ''} ${it.phone || ''} ${it.email || ''}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
     })
-  }, [items, tab, kindFilter, search])
+    // Сортировка
+    const sorted = [...list].sort((a, b) => {
+      let av: string | number = ''
+      let bv: string | number = ''
+      switch (sortKey) {
+        case 'name': av = a.full_name || ''; bv = b.full_name || ''; break
+        case 'role': av = a.role || ''; bv = b.role || ''; break
+        case 'hire_date': av = a.hire_date || ''; bv = b.hire_date || ''; break
+        case 'salary': av = a.monthly_salary || 0; bv = b.monthly_salary || 0; break
+      }
+      if (av < bv) return sortAsc ? -1 : 1
+      if (av > bv) return sortAsc ? 1 : -1
+      return 0
+    })
+    return sorted
+  }, [items, tab, kindFilter, search, chipFilter, sortKey, sortAsc])
+
+  // Кол-во noLogin / hybrid для чипов (по текущей видимой вкладке)
+  const chipCounts = useMemo(() => {
+    let noLogin = 0
+    let hybrid = 0
+    const inActiveTab = items.filter((it) => {
+      const inactive = !it.is_active || !!it.dismissed_at
+      if (tab === 'active' && inactive) return false
+      if (tab === 'dismissed' && !inactive) return false
+      return true
+    })
+    for (const it of inActiveTab) {
+      if (it.has_login === false) noLogin++
+      if (it.is_hybrid) hybrid++
+    }
+    return { noLogin, hybrid, total: inActiveTab.length }
+  }, [items, tab])
+
+  // Inline-смена роли
+  const changeRoleInline = async (emp: HrEmployee, newRole: string) => {
+    setEditingRoleKey(null)
+    try {
+      const res = await fetch('/api/admin/hr/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: emp.kind, id: emp.id, action: 'changeRole', payload: { role: newRole } }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Ошибка')
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка смены роли')
+    }
+  }
+
+  // Bulk-смена роли
+  const bulkChangeRole = async (newRole: string) => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Сменить должность на "${newRole}" для ${selectedIds.size} сотрудников?`)) return
+    setBulkBusy(true)
+    setError(null)
+    try {
+      for (const key of selectedIds) {
+        const idx = key.indexOf('-')
+        const kind = key.slice(0, idx)
+        const id = key.slice(idx + 1)
+        await fetch('/api/admin/hr/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, id, action: 'changeRole', payload: { role: newRole } }),
+        })
+      }
+      clearSelection()
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка bulk-смены роли')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
 
   function openDismiss(emp: HrEmployee) {
     setDismissTarget(emp)
@@ -454,6 +557,57 @@ export default function HrPage() {
         <HrAnalytics />
       ) : (
         <>
+        {/* Smart-чипы + view + sort */}
+        {(tab === 'active' || tab === 'dismissed') && (
+          <Card className="p-3 bg-gray-900/60 border-gray-800 flex flex-wrap items-center gap-2">
+            <Chip active={chipFilter === 'all'} onClick={() => setChipFilter('all')} count={chipCounts.total}>Все</Chip>
+            {chipCounts.noLogin > 0 && (
+              <Chip active={chipFilter === 'no_login'} onClick={() => setChipFilter('no_login')} count={chipCounts.noLogin} tone="orange">Без логина</Chip>
+            )}
+            {chipCounts.hybrid > 0 && (
+              <Chip active={chipFilter === 'hybrid'} onClick={() => setChipFilter('hybrid')} count={chipCounts.hybrid} tone="purple">Hybrid</Chip>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {/* Sort */}
+              <select
+                value={`${sortKey}|${sortAsc ? 'a' : 'd'}`}
+                onChange={(e) => {
+                  const [k, dir] = e.target.value.split('|') as [SortKey, 'a' | 'd']
+                  setSortKey(k)
+                  setSortAsc(dir === 'a')
+                }}
+                className="h-8 px-2 rounded-md border border-gray-700 bg-gray-800 text-xs text-gray-300"
+              >
+                <option value="name|a">ФИО ↑</option>
+                <option value="name|d">ФИО ↓</option>
+                <option value="role|a">Должность ↑</option>
+                <option value="role|d">Должность ↓</option>
+                <option value="hire_date|d">Новые сначала</option>
+                <option value="hire_date|a">Старые сначала</option>
+                <option value="salary|d">Оклад ↓</option>
+                <option value="salary|a">Оклад ↑</option>
+              </select>
+              {/* View toggle */}
+              <div className="flex border border-gray-700 rounded-md overflow-hidden">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`p-1.5 ${viewMode === 'cards' ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-white'}`}
+                  title="Карточки"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 ${viewMode === 'table' ? 'bg-indigo-500/20 text-indigo-300' : 'text-gray-500 hover:text-white'}`}
+                  title="Таблица"
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Bulk-action bar и экспорт */}
         {(tab === 'active' || tab === 'dismissed') && filtered.length > 0 && (
           <Card className="p-3 bg-gray-900/60 border-gray-800 flex flex-wrap items-center gap-2">
@@ -476,24 +630,25 @@ export default function HrPage() {
                 <XIcon className="w-3 h-3" /> Снять
               </button>
             )}
-            <div className="ml-auto flex items-center gap-2">
-              {selectedIds.size > 0 && tab === 'active' && canDismiss && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={bulkDismiss}
+            <div className="ml-auto flex items-center gap-2 flex-wrap">
+              {selectedIds.size > 0 && tab === 'active' && canEdit && positions.length > 0 && (
+                <select
+                  onChange={(e) => { if (e.target.value) bulkChangeRole(e.target.value); e.target.value = '' }}
                   disabled={bulkBusy}
+                  defaultValue=""
+                  className="h-8 px-2 rounded-md border border-gray-700 bg-gray-800 text-xs text-gray-300"
                 >
+                  <option value="" disabled>Сменить должность…</option>
+                  {positions.map((p) => <option key={p.name} value={p.name}>{p.label || p.name}</option>)}
+                </select>
+              )}
+              {selectedIds.size > 0 && tab === 'active' && canDismiss && (
+                <Button size="sm" variant="destructive" onClick={bulkDismiss} disabled={bulkBusy}>
                   {bulkBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserMinus className="w-3 h-3 mr-1" />}
                   Уволить {selectedIds.size}
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={exportCSV}
-                className="border-gray-700"
-              >
+              <Button size="sm" variant="outline" onClick={exportCSV} className="border-gray-700">
                 <Download className="w-3 h-3 mr-1" />
                 Экспорт CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </Button>
@@ -519,6 +674,105 @@ export default function HrPage() {
       ) : filtered.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground bg-gray-900/60 border-gray-800">
           {tab === 'active' ? 'Активных сотрудников не найдено' : 'Уволенных сотрудников нет'}
+        </Card>
+      ) : viewMode === 'table' ? (
+        <Card className="bg-gray-900/60 border-gray-800 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-800/40 text-[11px] uppercase tracking-wider text-gray-500 sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 w-8"></th>
+                  <th className="text-left px-3 py-2">Сотрудник</th>
+                  <th className="text-left px-3 py-2">Тип</th>
+                  <th className="text-left px-3 py-2">Должность</th>
+                  <th className="text-left px-3 py-2">Контакты</th>
+                  <th className="text-right px-3 py-2">Оклад</th>
+                  <th className="text-center px-3 py-2 w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((emp) => {
+                  const empKey = `${emp.kind}-${emp.id}`
+                  const isSelected = selectedIds.has(empKey)
+                  const dismissed = !!emp.dismissed_at || !emp.is_active
+                  return (
+                    <tr
+                      key={empKey}
+                      className={`border-t border-gray-800 hover:bg-gray-800/30 transition ${isSelected ? 'bg-indigo-500/5' : ''}`}
+                    >
+                      <td className="px-3 py-2">
+                        <button onClick={() => toggleSelected(empKey)}>
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-400" /> : <Square className="w-4 h-4 text-gray-600" />}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar
+                            name={emp.full_name || '?'}
+                            photoUrl={emp.photo_url}
+                            size="sm"
+                            status={emp.kind === 'operator' ? (emp.has_login === false ? 'no-login' : null) : null}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-medium text-white truncate max-w-[200px]">{emp.full_name || '—'}</div>
+                            {emp.short_name && <div className="text-[10px] text-gray-500 truncate">{emp.short_name}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${
+                          emp.is_hybrid ? 'border-purple-500/40 text-purple-400 bg-purple-500/10'
+                          : emp.kind === 'operator' ? 'border-blue-500/40 text-blue-400 bg-blue-500/10'
+                          : 'border-amber-500/40 text-amber-400 bg-amber-500/10'
+                        }`}>
+                          {emp.is_hybrid ? 'Hybrid' : emp.kind === 'operator' ? 'Operator' : 'Admin'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-300 text-xs">{emp.role || '—'}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {emp.phone && <div className="text-gray-300">{emp.phone}</div>}
+                        {emp.email && <div className="text-gray-500 truncate max-w-[200px]">{emp.email}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs text-gray-300 font-mono">
+                        {emp.monthly_salary != null ? emp.monthly_salary.toLocaleString('ru-RU') : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <div className="flex items-center justify-end gap-1">
+                          {!dismissed && canEdit && (
+                            <button
+                              onClick={() => setSelectedEmp(emp as unknown as PanelEmployee)}
+                              className="p-1.5 rounded hover:bg-indigo-500/10 text-indigo-300"
+                              title="Профиль"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {dismissed && canRestore && (
+                            <button
+                              onClick={() => restore(emp)}
+                              className="p-1.5 rounded hover:bg-emerald-500/10 text-emerald-300"
+                              title="Восстановить"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!dismissed && canDismiss && (
+                            <button
+                              onClick={() => openDismiss(emp)}
+                              className="p-1.5 rounded hover:bg-red-500/10 text-red-400"
+                              title="Уволить"
+                            >
+                              <UserMinus className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -546,6 +800,11 @@ export default function HrPage() {
                 >
                   {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-400" /> : <Square className="w-4 h-4" />}
                 </button>
+                <Avatar
+                  name={emp.full_name || '?'}
+                  photoUrl={emp.photo_url}
+                  status={emp.kind === 'operator' ? (emp.has_login === false ? 'no-login' : null) : null}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{emp.full_name || '—'}</span>
@@ -712,5 +971,40 @@ export default function HrPage() {
         onUpdated={() => load()}
       />
     </div>
+  )
+}
+
+function Chip({
+  active,
+  onClick,
+  count,
+  tone = 'indigo',
+  children,
+}: {
+  active?: boolean
+  onClick?: () => void
+  count?: number
+  tone?: 'indigo' | 'orange' | 'purple'
+  children: React.ReactNode
+}) {
+  const toneMap = {
+    indigo: 'border-indigo-500/40 text-indigo-300 bg-indigo-500/10',
+    orange: 'border-orange-500/40 text-orange-300 bg-orange-500/10',
+    purple: 'border-purple-500/40 text-purple-300 bg-purple-500/10',
+  }
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition flex items-center gap-1.5 ${
+        active ? toneMap[tone] + ' ring-1 ring-current/20' : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+      }`}
+    >
+      <span>{children}</span>
+      {count != null && (
+        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${active ? 'bg-white/10' : 'bg-gray-800'}`}>
+          {count}
+        </span>
+      )}
+    </button>
   )
 }

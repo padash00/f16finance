@@ -20,9 +20,12 @@ type HrEmployee = {
   phone: string | null
   email: string | null
   telegram_chat_id?: string | null
+  photo_url?: string | null
+  hire_date?: string | null
   is_active: boolean
   is_admin_staff?: boolean
-  is_hybrid?: boolean   // оператор с привязанным staff-двойником
+  is_hybrid?: boolean
+  has_login?: boolean
   dismissed_at: string | null
   dismissal_date: string | null
   dismissal_type: string | null
@@ -66,7 +69,7 @@ export async function GET(req: Request) {
 
     let staffQuery = supabase
       .from('staff')
-      .select('id, full_name, short_name, role, monthly_salary, phone, email, telegram_chat_id, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by')
+      .select('id, full_name, short_name, role, monthly_salary, phone, email, telegram_chat_id, photo_url, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, created_at')
       .order('full_name')
 
     if (allowedStaffIds) {
@@ -79,7 +82,7 @@ export async function GET(req: Request) {
 
     let operatorsQuery = supabase
       .from('operators')
-      .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, operator_profiles(full_name, position, phone, email)')
+      .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, operator_profiles(full_name, position, phone, email, photo_url, hire_date)')
       .order('name')
 
     if (allowedOperatorIds) {
@@ -90,9 +93,19 @@ export async function GET(req: Request) {
       }
     }
 
-    const [staffRes, operatorsRes] = await Promise.all([staffQuery, operatorsQuery])
+    const [staffRes, operatorsRes, authRes] = await Promise.all([
+      staffQuery,
+      operatorsQuery,
+      supabase.from('operator_auth').select('operator_id, is_active'),
+    ])
     if (staffRes.error) throw staffRes.error
     if (operatorsRes.error) throw operatorsRes.error
+
+    const opIdsWithLogin = new Set(
+      (authRes.data || [])
+        .filter((a: any) => a.is_active !== false)
+        .map((a: any) => String(a.operator_id)),
+    )
 
     const staffEmployees: HrEmployee[] = (staffRes.data || []).map((row: any) => ({
       kind: 'staff',
@@ -104,6 +117,9 @@ export async function GET(req: Request) {
       phone: row.phone || null,
       email: row.email || null,
       telegram_chat_id: row.telegram_chat_id || null,
+      photo_url: row.photo_url || null,
+      hire_date: row.created_at ? String(row.created_at).slice(0, 10) : null,
+      has_login: true, // staff авторизуется через Supabase Auth — всегда есть
       is_active: row.is_active !== false,
       dismissed_at: row.dismissed_at || null,
       dismissal_date: row.dismissal_date || null,
@@ -125,6 +141,9 @@ export async function GET(req: Request) {
         phone: profile?.phone || null,
         email: profile?.email || null,
         telegram_chat_id: row.telegram_chat_id || null,
+        photo_url: profile?.photo_url || null,
+        hire_date: profile?.hire_date || null,
+        has_login: opIdsWithLogin.has(String(row.id)),
         is_active: row.is_active !== false,
         is_admin_staff: row.is_admin_staff === true,
         dismissed_at: row.dismissed_at || null,
