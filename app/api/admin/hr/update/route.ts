@@ -134,7 +134,6 @@ export async function POST(request: Request) {
           email: profile.email || null,
           telegram_chat_id: tg,
           photo_url: profile.photo_url || null,
-          hire_date: profile.hire_date || new Date().toISOString().slice(0, 10),
           is_active: true,
         })
       }
@@ -221,7 +220,7 @@ export async function POST(request: Request) {
       if (typeof payload.monthly_salary === 'number') {
         mainUpdate.monthly_salary = Math.round(payload.monthly_salary)
       }
-      if (typeof payload.hire_date === 'string') mainUpdate.hire_date = payload.hire_date
+      // staff.hire_date в БД отсутствует — игнорируем поле для staff
     }
 
     if (Object.keys(mainUpdate).length > 0) {

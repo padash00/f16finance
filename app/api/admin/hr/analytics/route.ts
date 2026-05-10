@@ -74,7 +74,7 @@ export async function GET(req: Request) {
         .select('id, name, short_name, role, is_active, dismissed_at, is_admin_staff'),
       supabase
         .from('staff')
-        .select('id, full_name, short_name, role, is_active, dismissed_at, hire_date'),
+        .select('id, full_name, short_name, role, is_active, dismissed_at, created_at'),
       supabase
         .from('operator_profiles')
         .select('operator_id, full_name, birth_date, hire_date'),
@@ -170,7 +170,8 @@ export async function GET(req: Request) {
     let staffTenureSum = 0
     let staffTenureCnt = 0
     for (const s of activeStaff) {
-      const months = monthsBetween(s.hire_date || null, today)
+      // hire_date в staff отсутствует — используем created_at как fallback
+      const months = monthsBetween(s.created_at || null, today)
       if (months > 0) {
         staffTenureSum += months
         staffTenureCnt++
@@ -207,12 +208,13 @@ export async function GET(req: Request) {
     }
     for (const s of activeStaff) {
       const name = s.full_name || s.short_name || ''
-      if (s.hire_date) {
-        const { days, next } = daysUntilNextOccurrence(s.hire_date, today)
+      if (s.created_at) {
+        const hireProxy = String(s.created_at).slice(0, 10)
+        const { days, next } = daysUntilNextOccurrence(hireProxy, today)
         if (days >= 0 && days <= HORIZON && days > 0) {
-          const years = next.getFullYear() - new Date(s.hire_date).getFullYear()
+          const years = next.getFullYear() - new Date(hireProxy).getFullYear()
           if (years > 0) {
-            anniversaries.push({ name, hire_date: s.hire_date, years, days_until: days })
+            anniversaries.push({ name, hire_date: hireProxy, years, days_until: days })
           }
         }
       }
