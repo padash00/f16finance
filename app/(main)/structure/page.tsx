@@ -21,6 +21,8 @@ import { Card } from '@/components/ui/card'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import Avatar from '../hr/Avatar'
+import { Search } from 'lucide-react'
 
 type StaffRole = string
 type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
@@ -172,12 +174,15 @@ function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'man
   return (
     <Card className={`border bg-gradient-to-br ${toneClass} p-5 text-white shadow-[0_18px_44px_rgba(0,0,0,0.18)]`}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">{STAFF_ROLE_LABEL[member.role]}</p>
-          <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em]">{getPersonName(member)}</h3>
-          <p className="mt-1 text-sm text-slate-400">{member.short_name || 'Сотрудник админ-команды'}</p>
+        <div className="flex items-start gap-3 min-w-0">
+          <Avatar name={getPersonName(member)} size="lg" />
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">{STAFF_ROLE_LABEL[member.role] || member.role}</p>
+            <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em] truncate">{getPersonName(member)}</h3>
+            <p className="mt-1 text-sm text-slate-400">{member.short_name || 'Сотрудник админ-команды'}</p>
+          </div>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3 shrink-0">
           {member.role === 'owner' ? <Crown className="h-5 w-5 text-amber-300" /> : <ShieldCheck className="h-5 w-5 text-cyan-300" />}
         </div>
       </div>
@@ -216,20 +221,22 @@ function OperatorChip({
   onEdit?: () => void
 }) {
   const profile = operator.operator_profiles?.[0]
+  const displayName = getOperatorDisplayName({
+    ...operator,
+    full_name: profile?.full_name || null,
+  })
   return (
     <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-white">
-            {getOperatorDisplayName({
-              ...operator,
-              full_name: profile?.full_name || null,
-            })}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">{COMPANY_ROLE_LABEL[role]}</p>
+        <div className="flex items-start gap-2.5 min-w-0">
+          <Avatar name={displayName} photoUrl={profile?.photo_url || null} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-white">{displayName}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{COMPANY_ROLE_LABEL[role]}</p>
+          </div>
         </div>
         {isPrimary ? (
-          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
+          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300 shrink-0">
             main
           </span>
         ) : null}
@@ -627,6 +634,7 @@ export default function StructurePage() {
   const [savingAssignments, setSavingAssignments] = useState(false)
   const [companyFilter, setCompanyFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState<'all' | CompanyOperatorRole>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'tree' | 'career' | 'schema'>('tree')
 
   useEffect(() => {
@@ -670,16 +678,24 @@ export default function StructurePage() {
   const operatorsById = useMemo(() => new Map(operators.map((operator) => [operator.id, operator])), [operators])
   const companiesById = useMemo(() => new Map(companies.map((company) => [company.id, company])), [companies])
   const assignmentsByCompany = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
     const map = new Map<string, Assignment[]>()
     for (const assignment of assignments) {
       if (companyFilter !== 'all' && assignment.company_id !== companyFilter) continue
       if (roleFilter !== 'all' && assignment.role_in_company !== roleFilter) continue
+      if (q) {
+        const op = operatorsById.get(assignment.operator_id)
+        if (!op) continue
+        const profile = op.operator_profiles?.[0]
+        const hay = `${op.name || ''} ${op.short_name || ''} ${profile?.full_name || ''} ${profile?.phone || ''} ${profile?.email || ''}`.toLowerCase()
+        if (!hay.includes(q)) continue
+      }
       const bucket = map.get(assignment.company_id) || []
       bucket.push(assignment)
       map.set(assignment.company_id, bucket)
     }
     return map
-  }, [assignments, companyFilter, roleFilter])
+  }, [assignments, companyFilter, roleFilter, searchQuery, operatorsById])
   const visibleCompanies = useMemo(
     () => companies.filter((company) => companyFilter === 'all' || company.id === companyFilter),
     [companies, companyFilter],
@@ -784,14 +800,30 @@ export default function StructurePage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Компаний</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Команда</div>
+                  <div className="mt-1 text-2xl font-semibold text-white">{operators.length + staff.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Точек</div>
                   <div className="mt-1 text-2xl font-semibold text-white">{companies.length}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Операторов</div>
-                  <div className="mt-1 text-2xl font-semibold text-white">{operators.length}</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Владельцы</div>
+                  <div className="mt-1 text-2xl font-semibold text-amber-300">{owners.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Руководители</div>
+                  <div className="mt-1 text-2xl font-semibold text-cyan-300">{managers.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Маркетинг</div>
+                  <div className="mt-1 text-2xl font-semibold text-pink-300">{marketers.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Операторы</div>
+                  <div className="mt-1 text-2xl font-semibold text-emerald-300">{operators.length}</div>
                 </div>
               </div>
             </div>
@@ -836,7 +868,19 @@ export default function StructurePage() {
               ) : viewMode === 'tree' ? (
                 <>
               <Card className="border-white/10 bg-slate-950/60 p-4 text-white">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Поиск</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="ФИО, телефон, email..."
+                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 pl-9 pr-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                      />
+                    </div>
+                  </div>
                   <div>
                     <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Точка</label>
                     <select
@@ -865,19 +909,38 @@ export default function StructurePage() {
                       <option value="senior_cashier">Старший кассир</option>
                     </select>
                   </div>
-                  <div className="flex items-end">
+                </div>
+                {(searchQuery || companyFilter !== 'all' || roleFilter !== 'all') && (
+                  <div className="mt-3 flex items-center gap-2">
                     <Button
                       variant="outline"
-                      className="w-full"
+                      size="sm"
                       onClick={() => {
                         setCompanyFilter('all')
                         setRoleFilter('all')
+                        setSearchQuery('')
                       }}
                     >
                       Сбросить фильтры
                     </Button>
+                    {/* Чипы — компактно показывают что выбрано */}
+                    {searchQuery && (
+                      <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs">
+                        🔍 «{searchQuery}»
+                      </span>
+                    )}
+                    {companyFilter !== 'all' && (
+                      <span className="px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs">
+                        🏢 {companies.find((c) => c.id === companyFilter)?.name}
+                      </span>
+                    )}
+                    {roleFilter !== 'all' && (
+                      <span className="px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs">
+                        👔 {COMPANY_ROLE_LABEL[roleFilter as CompanyOperatorRole]}
+                      </span>
+                    )}
                   </div>
-                </div>
+                )}
               </Card>
 
               <section className="space-y-4">
