@@ -559,7 +559,7 @@ export default function HrPage() {
         <>
         {/* Smart-чипы + view + sort */}
         {(tab === 'active' || tab === 'dismissed') && (
-          <Card className="p-3 bg-gray-900/60 border-gray-800 flex flex-wrap items-center gap-2">
+          <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800 flex flex-row flex-wrap items-center gap-2">
             <Chip active={chipFilter === 'all'} onClick={() => setChipFilter('all')} count={chipCounts.total}>Все</Chip>
             {chipCounts.noLogin > 0 && (
               <Chip active={chipFilter === 'no_login'} onClick={() => setChipFilter('no_login')} count={chipCounts.noLogin} tone="orange">Без логина</Chip>
@@ -605,12 +605,12 @@ export default function HrPage() {
                 </button>
               </div>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Bulk-action bar и экспорт */}
         {(tab === 'active' || tab === 'dismissed') && filtered.length > 0 && (
-          <Card className="p-3 bg-gray-900/60 border-gray-800 flex flex-wrap items-center gap-2">
+          <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800 flex flex-row flex-wrap items-center gap-2">
             <button
               onClick={selectedIds.size === filtered.length ? clearSelection : selectAllVisible}
               className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-gray-400 hover:text-white"
@@ -653,7 +653,7 @@ export default function HrPage() {
                 Экспорт CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </Button>
             </div>
-          </Card>
+          </div>
         )}
       <div className="flex items-center justify-between px-1">
         <div className="text-sm text-gray-400">
