@@ -26,6 +26,7 @@ type HrEmployee = {
   is_admin_staff?: boolean
   is_hybrid?: boolean
   has_login?: boolean
+  last_login?: string | null
   dismissed_at: string | null
   dismissal_date: string | null
   dismissal_type: string | null
@@ -96,7 +97,7 @@ export async function GET(req: Request) {
     const [staffRes, operatorsRes, authRes] = await Promise.all([
       staffQuery,
       operatorsQuery,
-      supabase.from('operator_auth').select('operator_id, is_active'),
+      supabase.from('operator_auth').select('operator_id, is_active, last_login'),
     ])
     if (staffRes.error) throw staffRes.error
     if (operatorsRes.error) throw operatorsRes.error
@@ -106,6 +107,10 @@ export async function GET(req: Request) {
         .filter((a: any) => a.is_active !== false)
         .map((a: any) => String(a.operator_id)),
     )
+    const lastLoginByOperator = new Map<string, string>()
+    for (const a of (authRes.data || []) as any[]) {
+      if (a.last_login) lastLoginByOperator.set(String(a.operator_id), String(a.last_login))
+    }
 
     const staffEmployees: HrEmployee[] = (staffRes.data || []).map((row: any) => ({
       kind: 'staff',
@@ -144,6 +149,7 @@ export async function GET(req: Request) {
         photo_url: profile?.photo_url || null,
         hire_date: profile?.hire_date || null,
         has_login: opIdsWithLogin.has(String(row.id)),
+        last_login: lastLoginByOperator.get(String(row.id)) || null,
         is_active: row.is_active !== false,
         is_admin_staff: row.is_admin_staff === true,
         dismissed_at: row.dismissed_at || null,

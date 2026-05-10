@@ -15,6 +15,21 @@ import PositionsOverview from './PositionsOverview'
 import HrAnalytics from './HrAnalytics'
 import Avatar from './Avatar'
 
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const ms = Date.now() - d.getTime()
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'только что'
+  if (min < 60) return `${min} мин назад`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} ч назад`
+  const days = Math.floor(h / 24)
+  if (days < 7) return `${days} дн назад`
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
+
 function csvCell(v: string | null | undefined): string {
   if (v == null) return ''
   const s = String(v)
@@ -47,6 +62,7 @@ type HrEmployee = {
   photo_url?: string | null
   hire_date?: string | null
   has_login?: boolean
+  last_login?: string | null
   is_active: boolean
   is_admin_staff?: boolean
   is_hybrid?: boolean
@@ -655,6 +671,26 @@ export default function HrPage() {
             </div>
           </div>
         )}
+      {/* Quick stats для табов active/dismissed */}
+      {tab === 'active' && filtered.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-1">
+          {(() => {
+            const totalSalary = filtered.reduce((s, e) => s + (e.monthly_salary || 0), 0)
+            const withSalary = filtered.filter((e) => (e.monthly_salary || 0) > 0).length
+            const avgSalary = withSalary > 0 ? Math.round(totalSalary / withSalary) : 0
+            const noLoginCount = filtered.filter((e) => e.has_login === false).length
+            const hybridCount = filtered.filter((e) => e.is_hybrid).length
+            return (
+              <>
+                <MiniStat label="Всего" value={filtered.length} tone="indigo" />
+                <MiniStat label="ФОТ" value={`${totalSalary.toLocaleString('ru-RU')} ₸`} tone="emerald" />
+                <MiniStat label="Средний оклад" value={`${avgSalary.toLocaleString('ru-RU')} ₸`} tone="blue" />
+                <MiniStat label="Без логина" value={noLoginCount} tone={noLoginCount > 0 ? 'orange' : 'gray'} />
+              </>
+            )
+          })()}
+        </div>
+      )}
       <div className="flex items-center justify-between px-1">
         <div className="text-sm text-gray-400">
           {tab === 'active' ? 'Список активных сотрудников' : 'Список уволенных сотрудников'}
@@ -825,9 +861,23 @@ export default function HrPage() {
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                    {emp.phone && <span>📞 {emp.phone}</span>}
-                    {emp.email && <span>✉ {emp.email}</span>}
-                    {emp.monthly_salary != null && <span>💰 {emp.monthly_salary.toLocaleString('ru-RU')} ₸/мес</span>}
+                    {emp.phone && (
+                      <a href={`tel:${emp.phone}`} className="hover:text-indigo-300 transition-colors">📞 {emp.phone}</a>
+                    )}
+                    {emp.email && (
+                      <a href={`mailto:${emp.email}`} className="hover:text-indigo-300 transition-colors truncate">✉ {emp.email}</a>
+                    )}
+                    {emp.telegram_chat_id && (
+                      <a href={`tg://user?id=${emp.telegram_chat_id}`} className="hover:text-indigo-300 transition-colors">📨 Telegram</a>
+                    )}
+                    {emp.monthly_salary != null && emp.monthly_salary > 0 && (
+                      <span>💰 {emp.monthly_salary.toLocaleString('ru-RU')} ₸/мес</span>
+                    )}
+                    {emp.last_login && (
+                      <span className="text-gray-500" title={emp.last_login}>
+                        🕒 {formatRelative(emp.last_login)}
+                      </span>
+                    )}
                   </div>
                   {dismissed && (
                     <div className="mt-2 p-2 rounded-md bg-red-500/10 border border-red-500/30 text-xs">
@@ -970,6 +1020,30 @@ export default function HrPage() {
         onClose={() => setSelectedEmp(null)}
         onUpdated={() => load()}
       />
+    </div>
+  )
+}
+
+function MiniStat({
+  label,
+  value,
+  tone = 'indigo',
+}: {
+  label: string
+  value: number | string
+  tone?: 'indigo' | 'emerald' | 'blue' | 'orange' | 'gray'
+}) {
+  const toneMap = {
+    indigo: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300',
+    emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    blue: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+    orange: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+    gray: 'border-gray-700 bg-gray-900/40 text-gray-400',
+  }
+  return (
+    <div className={`px-3 py-2 rounded-lg border ${toneMap[tone]}`}>
+      <div className="text-[10px] uppercase tracking-wider opacity-90">{label}</div>
+      <div className="text-base font-bold text-white mt-0.5 truncate">{value}</div>
     </div>
   )
 }
