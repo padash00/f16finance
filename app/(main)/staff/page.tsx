@@ -95,12 +95,6 @@ type StaffPayment = {
   created_at?: string
 }
 
-type AddStaffDialogProps = {
-  isOpen: boolean
-  onClose: () => void
-  onSuccess: (newStaff: Staff) => void
-}
-
 type AddPaymentDialogProps = {
   isOpen: boolean
   onClose: () => void
@@ -232,7 +226,6 @@ export default function StaffPageSmart() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [monthYM, setMonthYM] = useState(initialYM)
-  const [isAddStaffOpen, setIsAddStaffOpen] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [accountActionBusyKey, setAccountActionBusyKey] = useState<string | null>(null)
   const [accountInfoByStaffId, setAccountInfoByStaffId] = useState<Record<string, StaffAccountInfo>>({})
@@ -546,14 +539,6 @@ export default function StaffPageSmart() {
                     <Download className="h-4 w-4" />
                   </Button>
                 )}
-                {canCreate && (
-                  <Link href="/hr">
-                    <Button className="h-9 gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-sm text-white">
-                      <Plus className="h-4 w-4" />
-                      Нанять (на /hr)
-                    </Button>
-                  </Link>
-                )}
               </>
             }
             toolbar={
@@ -570,6 +555,30 @@ export default function StaffPageSmart() {
               </div>
             }
           />
+
+          {canCreate && (
+            <Card className="p-5 bg-gradient-to-r from-indigo-900/30 via-gray-900 to-gray-900 border-indigo-500/30">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 ring-1 ring-indigo-500/30 flex items-center justify-center shrink-0">
+                    <Plus className="w-5 h-5 text-indigo-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-white">Найм перенесён на «Кадры»</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">
+                      Создавай сотрудников в одном экране на <span className="font-mono text-indigo-300">/hr</span> — там профиль, должность, оклад одной формой.
+                    </p>
+                  </div>
+                </div>
+                <Link href="/hr">
+                  <Button className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-lg shadow-indigo-500/20 shrink-0">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Нанять на /hr
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          )}
 
           {pageNotice && (
             <Card className={cn('p-3 border text-sm', pageNotice.tone === 'success' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10')}>
@@ -656,16 +665,6 @@ export default function StaffPageSmart() {
 
           <div className="text-xs text-slate-500">Показано {filteredStaff.length} из {staff.length} сотрудников</div>
         </div>
-
-        {/* Modals */}
-        <AddStaffDialog 
-          isOpen={isAddStaffOpen} 
-          onClose={() => setIsAddStaffOpen(false)} 
-          onSuccess={(newStaff) => {
-            setStaff(prev => [...prev, newStaff])
-            loadData(true)
-          }} 
-        />
 
     </>
   )
@@ -814,172 +813,6 @@ function StaffRow({
   )
 }
 
-// --- Add Staff Dialog ---
-function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
-  const [form, setForm] = useState({ 
-    full_name: '', 
-    short_name: '',
-    role: 'manager' as StaffRole, 
-    monthly_salary: '',
-    phone: '',
-    email: '',
-  })
-  const [loading, setLoading] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setSubmitError(null)
-
-    const response = await fetch('/api/admin/staff', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'createStaff',
-        payload: {
-          ...form,
-          monthly_salary: Number(form.monthly_salary),
-        },
-      }),
-    })
-    const json = await response.json().catch(() => null)
-
-    setLoading(false)
-    if (response.ok) {
-      onSuccess(json.data as Staff)
-      setForm({ 
-        full_name: '', 
-        short_name: '',
-        role: 'manager', 
-        monthly_salary: '',
-        phone: '',
-        email: '',
-          })
-      onClose()
-      return
-    }
-
-    setSubmitError(json?.error || 'Не удалось создать сотрудника')
-  }
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Новый сотрудник</DialogTitle>
-          <DialogDescription className="text-gray-400">
-            Добавьте сотрудника в зарплатную ведомость
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {submitError && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-              {submitError}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-xs text-gray-400 font-medium">ФИО *</label>
-            <Input
-              value={form.full_name}
-              onChange={e => setForm({...form, full_name: e.target.value})}
-              className="bg-gray-800/50 border-white/10 text-white"
-              placeholder="Иванов Иван Иванович"
-              autoComplete="name"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Короткое имя</label>
-              <Input 
-                value={form.short_name} 
-                onChange={e => setForm({...form, short_name: e.target.value})}
-                className="bg-gray-800/50 border-white/10 text-white"
-                placeholder="Иван"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Роль *</label>
-              <select 
-                value={form.role} 
-                onChange={e => setForm({...form, role: e.target.value as StaffRole})}
-                className="w-full h-9 rounded-md border border-white/10 bg-gray-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                required
-              >
-                {Object.entries(ROLE_LABEL).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Оклад (₸) *</label>
-              <Input
-                type="number"
-                step="0.01"
-                inputMode="decimal"
-                value={form.monthly_salary}
-                onChange={e => setForm({...form, monthly_salary: e.target.value})}
-                className="bg-gray-800/50 border-white/10 text-white"
-                placeholder="200000"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Телефон</label>
-              <Input
-                type="tel"
-                autoComplete="tel"
-                value={form.phone}
-                onChange={e => setForm({...form, phone: e.target.value})}
-                className="bg-gray-800/50 border-white/10 text-white"
-                placeholder="+7 (777) 123-45-67"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Email</label>
-              <Input
-                type="email"
-                autoComplete="email"
-                value={form.email}
-                onChange={e => setForm({...form, email: e.target.value})}
-                className="bg-gray-800/50 border-white/10 text-white"
-                placeholder="ivan@example.com"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="pt-4">
-            <Button 
-              type="button" 
-              variant="ghost" 
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              Отмена
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={loading}
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
-            >
-              {loading ? 'Создание...' : 'Создать сотрудника'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 // --- Add Payment Dialog ---
 function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSuccess }: AddPaymentDialogProps) {
