@@ -812,8 +812,8 @@ function ZReportModal({
   if (typeof document === 'undefined') return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4 print:relative print:bg-transparent print:p-0" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none dark:bg-slate-50" onClick={(e) => e.stopPropagation()}>
+    <div id="z-print-root" className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4 print:static print:bg-transparent print:p-0 print:block" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none print:overflow-visible dark:bg-slate-50" onClick={(e) => e.stopPropagation()}>
         {/* Шапка диалога — скрыта при печати */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 print:hidden">
           <h3 className="text-sm font-semibold text-slate-900">Z-отчёт смены</h3>
@@ -925,16 +925,39 @@ function ZReportModal({
 
       <style jsx global>{`
         @media print {
-          body * {
-            visibility: hidden;
+          @page {
+            size: 80mm auto;
+            margin: 5mm;
           }
-          .fixed.inset-0 {
-            position: absolute !important;
-            inset: 0 !important;
+          html, body {
             background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
-          .fixed.inset-0 * {
-            visibility: visible;
+          /* Скрываем всю страницу */
+          body > * {
+            display: none !important;
+          }
+          /* Кроме принт-контейнера — он живёт в body через Portal */
+          body > #z-print-root {
+            display: block !important;
+            position: static !important;
+            background: white !important;
+            padding: 0 !important;
+          }
+          #z-print-root > div {
+            box-shadow: none !important;
+            max-height: none !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            border-radius: 0 !important;
+            overflow: visible !important;
+          }
+          /* Запрещаем разрывы внутри секций */
+          #z-print-root .border-dashed,
+          #z-print-root .text-center {
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
         }
       `}</style>
