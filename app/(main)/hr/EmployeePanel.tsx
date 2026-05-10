@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -227,20 +228,19 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
 
   const profileLink = isOperator ? `/operators/${employee.id}/profile` : `/staff?staffId=${employee.id}`
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      {/* Panel */}
-      <div
-        className="fixed inset-y-0 right-0 z-[100] w-full sm:max-w-md bg-gray-900/95 border-l border-gray-800 shadow-2xl overflow-y-auto"
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <Card
+        className="w-full max-w-2xl my-8 bg-gray-900/95 border-gray-800 backdrop-blur shadow-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 px-5 py-4 border-b border-gray-800 bg-gradient-to-r from-gray-900 to-gray-900/95 backdrop-blur">
+        <div className="px-5 py-4 border-b border-gray-800 bg-gradient-to-r from-gray-900 to-gray-900/95 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-blue-500/10 ring-1 ring-indigo-500/20 flex items-center justify-center shrink-0">
@@ -267,7 +267,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
           </div>
         </div>
 
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-5 overflow-y-auto flex-1">
           {okMsg && (
             <div className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center gap-2">
               <Check className="w-4 h-4" /> {okMsg}
@@ -455,7 +455,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
         </div>
 
         {/* Footer with Save */}
-        <div className="sticky bottom-0 px-5 py-4 border-t border-gray-800 bg-gray-900/95 backdrop-blur">
+        <div className="px-5 py-4 border-t border-gray-800 bg-gray-900/95 shrink-0">
           <Button
             onClick={save}
             disabled={saving}
@@ -474,8 +474,9 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
             )}
           </Button>
         </div>
-      </div>
-    </>
+      </Card>
+    </div>,
+    document.body,
   )
 }
 

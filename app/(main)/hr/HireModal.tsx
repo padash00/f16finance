@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   AlertCircle,
   Briefcase,
@@ -206,11 +207,13 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
     }
   }
 
+  if (typeof document === 'undefined') return null
+
   // Success view
   if (success) {
-    return (
+    return createPortal(
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
         onClick={() => {
           setSuccess(null)
           onClose()
@@ -249,13 +252,14 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
             </Button>
           </div>
         </Card>
-      </div>
+      </div>,
+      document.body,
     )
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
       onClick={onClose}
     >
       <Card
@@ -535,7 +539,8 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
           </Button>
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
