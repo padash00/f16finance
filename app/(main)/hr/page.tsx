@@ -14,6 +14,7 @@ import CareerTimeline from './CareerTimeline'
 import PositionsOverview from './PositionsOverview'
 import HrAnalytics from './HrAnalytics'
 import Avatar from './Avatar'
+import { RowMenu, InlineRoleDropdown } from './RowMenu'
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -120,6 +121,7 @@ export default function HrPage() {
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
   const [positions, setPositions] = useState<Array<{ name: string; label: string | null }>>([])
   const [editingRoleKey, setEditingRoleKey] = useState<string | null>(null)
+  const [groupBy, setGroupBy] = useState<'none' | 'role' | 'kind'>('none')
   const [items, setItems] = useState<HrEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -203,6 +205,26 @@ export default function HrPage() {
     })
     return sorted
   }, [items, tab, kindFilter, search, chipFilter, sortKey, sortAsc])
+
+  // Группировка списка
+  const groups = useMemo(() => {
+    if (groupBy === 'none') return [{ key: 'all', label: '', items: filtered }]
+    const map = new Map<string, HrEmployee[]>()
+    for (const e of filtered) {
+      const key =
+        groupBy === 'role'
+          ? (e.role || 'Без должности')
+          : groupBy === 'kind'
+            ? (e.is_hybrid ? 'Hybrid' : e.kind === 'operator' ? 'Операторы' : 'Админ-сотрудники')
+            : 'all'
+      const arr = map.get(key) || []
+      arr.push(e)
+      map.set(key, arr)
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([k, items]) => ({ key: k, label: k, items }))
+  }, [filtered, groupBy])
 
   // Кол-во noLogin / hybrid для чипов (по текущей видимой вкладке)
   const chipCounts = useMemo(() => {
@@ -583,7 +605,17 @@ export default function HrPage() {
             {chipCounts.hybrid > 0 && (
               <Chip active={chipFilter === 'hybrid'} onClick={() => setChipFilter('hybrid')} count={chipCounts.hybrid} tone="purple">Hybrid</Chip>
             )}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2 flex-wrap">
+              {/* Группировка */}
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as 'none' | 'role' | 'kind')}
+                className="h-8 px-2 rounded-md border border-gray-700 bg-gray-800 text-xs text-gray-300"
+              >
+                <option value="none">Без группировки</option>
+                <option value="role">По должности</option>
+                <option value="kind">По типу</option>
+              </select>
               {/* Sort */}
               <select
                 value={`${sortKey}|${sortAsc ? 'a' : 'd'}`}
@@ -811,8 +843,19 @@ export default function HrPage() {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {filtered.map((emp) => {
+        <div className="space-y-5">
+          {groups.map((group) => (
+            <div key={group.key}>
+              {group.label && (
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <h3 className="text-xs uppercase tracking-wider text-gray-400 font-semibold">{group.label}</h3>
+                  <span className="text-xs text-gray-600">·</span>
+                  <span className="text-xs text-gray-500">{group.items.length}</span>
+                  <div className="flex-1 h-px bg-gray-800 ml-2" />
+                </div>
+              )}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {group.items.map((emp) => {
             const busy = busyId === emp.id
             // dismissed = либо явно уволен, либо просто архивный (is_active=false)
             const dismissed = !!emp.dismissed_at || !emp.is_active
@@ -853,9 +896,18 @@ export default function HrPage() {
                     }`}>
                       {(emp as any).is_hybrid ? 'Hybrid' : emp.kind === 'operator' ? 'Оператор' : 'Админ'}
                     </span>
-                    {emp.role && (
+                    {emp.role && !dismissed && canEdit ? (
+                      <>
+                        <span className="text-gray-600">·</span>
+                        <InlineRoleDropdown
+                          current={emp.role}
+                          positions={positions}
+                          onChange={(newRole) => changeRoleInline(emp, newRole)}
+                        />
+                      </>
+                    ) : emp.role ? (
                       <span className="text-[10px] uppercase text-muted-foreground">· {emp.role}</span>
-                    )}
+                    ) : null}
                     {emp.position && (
                       <span className="text-[10px] uppercase text-muted-foreground">· {emp.position}</span>
                     )}
@@ -935,32 +987,39 @@ export default function HrPage() {
                     </div>
                   )}
                 </div>
-                <div className="shrink-0 flex flex-col gap-2">
-                  {!dismissed && canEdit && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10"
-                      onClick={() => setSelectedEmp(emp as unknown as PanelEmployee)}
-                    >
-                      <Pencil className="w-3 h-3 mr-1" /> Профиль
-                    </Button>
-                  )}
-                  {dismissed && canRestore && (
-                    <Button size="sm" variant="outline" onClick={() => restore(emp)} disabled={busy}>
-                      {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserCheck className="w-3 h-3 mr-1" />}
-                      Восстановить
-                    </Button>
-                  )}
-                  {!dismissed && canDismiss && (
-                    <Button size="sm" variant="destructive" onClick={() => openDismiss(emp)} disabled={busy}>
-                      <UserMinus className="w-3 h-3 mr-1" /> Уволить
-                    </Button>
-                  )}
+                <div className="shrink-0">
+                  <RowMenu
+                    busy={busy}
+                    actions={[
+                      {
+                        label: 'Открыть профиль',
+                        icon: Pencil,
+                        onClick: () => setSelectedEmp(emp as unknown as PanelEmployee),
+                        hidden: dismissed || !canEdit,
+                      },
+                      {
+                        label: 'Восстановить',
+                        icon: UserCheck,
+                        tone: 'success',
+                        onClick: () => restore(emp),
+                        hidden: !dismissed || !canRestore,
+                      },
+                      {
+                        label: 'Уволить',
+                        icon: UserMinus,
+                        tone: 'danger',
+                        onClick: () => openDismiss(emp),
+                        hidden: dismissed || !canDismiss,
+                      },
+                    ]}
+                  />
                 </div>
               </Card>
             )
-          })}
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
         </>
