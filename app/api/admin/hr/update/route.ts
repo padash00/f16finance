@@ -133,7 +133,6 @@ export async function POST(request: Request) {
           phone: profile.phone || null,
           email: profile.email || null,
           telegram_chat_id: tg,
-          photo_url: profile.photo_url || null,
           is_active: true,
         })
       }

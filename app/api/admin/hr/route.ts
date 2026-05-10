@@ -69,7 +69,7 @@ export async function GET(req: Request) {
 
     let staffQuery = supabase
       .from('staff')
-      .select('id, full_name, short_name, role, monthly_salary, phone, email, telegram_chat_id, photo_url, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, created_at')
+      .select('id, full_name, short_name, role, monthly_salary, phone, email, telegram_chat_id, is_active, dismissed_at, dismissal_date, dismissal_type, dismissal_reason, dismissed_by, created_at')
       .order('full_name')
 
     if (allowedStaffIds) {
@@ -117,7 +117,7 @@ export async function GET(req: Request) {
       phone: row.phone || null,
       email: row.email || null,
       telegram_chat_id: row.telegram_chat_id || null,
-      photo_url: row.photo_url || null,
+      photo_url: null,  // staff.photo_url нет в схеме
       hire_date: row.created_at ? String(row.created_at).slice(0, 10) : null,
       has_login: true, // staff авторизуется через Supabase Auth — всегда есть
       is_active: row.is_active !== false,

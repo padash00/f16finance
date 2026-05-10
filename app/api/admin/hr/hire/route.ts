@@ -146,7 +146,6 @@ export async function POST(request: Request) {
           phone: body.phone?.trim() || null,
           email: body.email?.trim() || null,
           telegram_chat_id: body.telegram_chat_id?.trim() || null,
-          photo_url: body.photo_url?.trim() || null,
           is_active: true,
         })
         .select('id')
