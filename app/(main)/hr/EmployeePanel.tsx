@@ -82,6 +82,16 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
 
   const [showPromote, setShowPromote] = useState(false)
 
+  // Lock body scroll when open
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
   useEffect(() => {
     if (!employee) return
     setFullName(employee.full_name || '')
@@ -221,11 +231,14 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
       {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full sm:max-w-md bg-gray-900/95 border-l border-gray-800 shadow-2xl overflow-y-auto">
+      <div
+        className="fixed inset-y-0 right-0 z-[100] w-full sm:max-w-md bg-gray-900/95 border-l border-gray-800 shadow-2xl overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="sticky top-0 z-10 px-5 py-4 border-b border-gray-800 bg-gradient-to-r from-gray-900 to-gray-900/95 backdrop-blur">
           <div className="flex items-start justify-between gap-3">

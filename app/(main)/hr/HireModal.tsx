@@ -89,6 +89,16 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
   // staff-only
   const [monthlySalary, setMonthlySalary] = useState('')
 
+  // Lock body scroll when open
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
   // Reset на открытии
   useEffect(() => {
     if (!open) return
@@ -199,8 +209,17 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
   // Success view
   if (success) {
     return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <Card className="w-full max-w-md p-6 bg-gradient-to-br from-emerald-950/80 via-gray-900 to-gray-900 border-emerald-500/30">
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        onClick={() => {
+          setSuccess(null)
+          onClose()
+        }}
+      >
+        <Card
+          className="w-full max-w-md p-6 bg-gradient-to-br from-emerald-950/80 via-gray-900 to-gray-900 border-emerald-500/30"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex flex-col items-center text-center">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4 ring-4 ring-emerald-500/10">
               <CheckCircle2 className="w-9 h-9 text-emerald-400" />
@@ -235,8 +254,14 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-      <Card className="w-full max-w-2xl my-8 bg-gray-900/95 border-gray-800 backdrop-blur shadow-2xl">
+    <div
+      className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <Card
+        className="w-full max-w-2xl my-8 bg-gray-900/95 border-gray-800 backdrop-blur shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="relative px-6 py-5 border-b border-gray-800 bg-gradient-to-r from-indigo-900/30 via-gray-900 to-gray-900">
           <div className="absolute -top-12 -right-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
