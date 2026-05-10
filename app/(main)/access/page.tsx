@@ -255,6 +255,8 @@ export default function AccessPage() {
         setPositions(prev => prev.filter(p => p.id !== pos.id))
         setPermissions(prev => prev.filter(p => p.role !== pos.name))
         if (selectedRole === pos.name) setSelectedRole(positions.find(p => p.id !== pos.id)?.name ?? '')
+      } else if (data.error === 'in-use') {
+        alert(data.message || `Роль используется ${data.count} сотрудниками — переназначьте их сначала через вкладку Аккаунты.`)
       } else {
         alert(data.error || 'Ошибка')
       }
@@ -568,15 +570,12 @@ export default function AccessPage() {
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${pos.is_builtin ? 'bg-violet-500/20' : 'bg-blue-500/20'}`}>
-                          <Briefcase className={`w-4 h-4 ${pos.is_builtin ? 'text-violet-400' : 'text-blue-400'}`} />
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-500/20">
+                          <Briefcase className="w-4 h-4 text-blue-400" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-white">{posLabel(pos)}</p>
-                            {pos.is_builtin && (
-                              <span className="text-xs px-1.5 py-0.5 bg-violet-500/15 border border-violet-500/20 rounded text-violet-400">встроенная</span>
-                            )}
                             <span className="text-xs text-gray-600 font-mono">{pos.name}</span>
                           </div>
                           {pos.description && <p className="text-xs text-gray-500 truncate">{pos.description}</p>}
@@ -590,26 +589,22 @@ export default function AccessPage() {
                           <Lock className="w-3.5 h-3.5" />
                           Настроить права
                         </button>
-                        {!pos.is_builtin && (
-                          <>
-                            {can('access.edit_role') && (
-                              <button
-                                onClick={() => startEdit(pos)}
-                                className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            {can('access.delete_role') && (
-                              <button
-                                onClick={() => handleDeletePosition(pos)}
-                                disabled={deletingId === pos.id}
-                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400 transition-colors disabled:opacity-50"
-                              >
-                                {deletingId === pos.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                              </button>
-                            )}
-                          </>
+                        {can('access.edit_role') && (
+                          <button
+                            onClick={() => startEdit(pos)}
+                            className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {can('access.delete_role') && (
+                          <button
+                            onClick={() => handleDeletePosition(pos)}
+                            disabled={deletingId === pos.id}
+                            className="p-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400 transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === pos.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
                         )}
                       </div>
                     </div>

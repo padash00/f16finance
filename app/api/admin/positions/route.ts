@@ -135,11 +135,11 @@ export async function POST(req: Request) {
         .from('positions')
         .update({ name, description })
         .eq('id', id)
-        .eq('is_builtin', false) // can't rename built-ins
         .select('id, name, description, is_builtin, created_at')
         .single()
 
       if (error) throw error
+      invalidateRoleMatrixCache()
       return json({ ok: true, data })
     }
 
@@ -147,14 +147,32 @@ export async function POST(req: Request) {
       const id = String(body?.id || '').trim()
       if (!id) return json({ error: 'id required' }, 400)
 
-      // Remove associated permissions first
-      const { data: pos } = await supabase.from('positions').select('name, is_builtin').eq('id', id).single()
+      const { data: pos } = await supabase.from('positions').select('name').eq('id', id).single()
       if (!pos) return json({ error: 'Должность не найдена' }, 404)
-      if (pos.is_builtin) return json({ error: 'Нельзя удалить встроенную должность' }, 400)
+
+      // Безопасность: нельзя удалить роль у которой активные носители.
+      // Сначала надо переназначить их на другую роль через /access → Аккаунты.
+      const { count: staffCount } = await supabase
+        .from('staff')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', (pos as any).name)
+        .eq('is_active', true)
+
+      if (staffCount && staffCount > 0) {
+        return json(
+          {
+            error: 'in-use',
+            message: `Эта роль назначена ${staffCount} активному сотруднику. Сначала переназначьте их на другую роль через вкладку «Аккаунты».`,
+            count: staffCount,
+          },
+          409,
+        )
+      }
 
       // Чистим обе системы: старую (page-level) и новую (capabilities)
-      await supabase.from('role_permissions').delete().eq('role', pos.name)
-      await supabase.from('role_capabilities').delete().eq('role', pos.name)
+      await supabase.from('role_permissions').delete().eq('role', (pos as any).name)
+      await supabase.from('role_capabilities').delete().eq('role', (pos as any).name)
+      // position_paths каскадно зачистится через FK on delete cascade
 
       const { error } = await supabase.from('positions').delete().eq('id', id)
       if (error) throw error
