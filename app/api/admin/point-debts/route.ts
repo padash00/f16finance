@@ -113,7 +113,7 @@ export async function GET(req: Request) {
           .limit(3000),
         supabase
           .from('debts')
-          .select('id, company_id, operator_id, client_name, amount, comment, week_start, status, source, created_at')
+          .select('id, company_id, operator_id, client_name, amount, comment, week_start, status, source, created_at, rolled_over_from_id, rolled_over_to_id, rolled_over_at')
           .eq('week_start', weekStart)
           .eq('status', 'active')
           .in('company_id', companyIds),
@@ -207,6 +207,22 @@ export async function GET(req: Request) {
       { count: 0, amount: 0 },
     )
 
+    // Подтягиваем цепочку переносов: для долгов которые пришли через rollover
+    // получаем оригинал чтобы UI показал badge.
+    const rolloverOriginIds = legacyDebtRows
+      .map((d: any) => d.rolled_over_from_id)
+      .filter(Boolean)
+    const originMap = new Map<string, any>()
+    if (rolloverOriginIds.length > 0) {
+      const { data: origins } = await supabase
+        .from('debts')
+        .select('id, week_start, amount, rolled_over_from_id')
+        .in('id', rolloverOriginIds)
+      for (const o of (origins || []) as any[]) {
+        originMap.set(String(o.id), o)
+      }
+    }
+
     const legacyAggregates = legacyDebtRows.map((d: any) => {
       const debtorOp = d.operator_id ? opMap.get(String(d.operator_id)) : null
       const debtorName =
@@ -215,6 +231,15 @@ export async function GET(req: Request) {
         (d.client_name || '').trim() ||
         'Должник'
       const co = d.company_id ? companyMap.get(String(d.company_id)) : null
+
+      // Цепочка переносов — идём вверх пока не упрёмся в оригинал
+      const chain: Array<{ week_start: string; amount: number }> = []
+      let cur = d.rolled_over_from_id ? originMap.get(String(d.rolled_over_from_id)) : null
+      while (cur) {
+        chain.push({ week_start: cur.week_start, amount: Number(cur.amount || 0) })
+        cur = cur.rolled_over_from_id ? originMap.get(String(cur.rolled_over_from_id)) : null
+      }
+
       return {
         id: d.id,
         company_id: d.company_id || null,
@@ -228,6 +253,8 @@ export async function GET(req: Request) {
         source: d.source || null,
         week_start: d.week_start,
         created_at: d.created_at || null,
+        rolled_over_from_id: d.rolled_over_from_id || null,
+        rolled_over_chain: chain,
       }
     })
 

@@ -61,6 +61,8 @@ type LegacyDebtRow = {
   source: string | null
   week_start: string
   created_at: string | null
+  rolled_over_from_id?: string | null
+  rolled_over_chain?: Array<{ week_start: string; amount: number }>
 }
 
 type LoadData = {
@@ -574,20 +576,36 @@ export default function PointDebtsPage() {
                 </tr>
               </thead>
               <tbody>
-                {legacyRows.map((r) => (
-                  <tr key={r.id} className="border-t border-white/5 text-slate-200">
-                    <td className="px-4 py-3 font-medium text-white">{r.debtor_name}</td>
-                    <td className="px-4 py-3 text-slate-300">{r.company_name}</td>
-                    <td className="px-4 py-3 text-right font-medium text-violet-200 tabular-nums">{money(r.amount)}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{r.source || '—'}</td>
-                    <td className="max-w-[240px] truncate px-4 py-3 text-xs text-slate-400" title={r.comment || ''}>
-                      {r.comment || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">
-                      {r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—'}
-                    </td>
-                  </tr>
-                ))}
+                {legacyRows.map((r) => {
+                  const chain = r.rolled_over_chain || []
+                  const origin = chain.length > 0 ? chain[chain.length - 1] : null
+                  return (
+                    <tr key={r.id} className="border-t border-white/5 text-slate-200">
+                      <td className="px-4 py-3 font-medium text-white">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{r.debtor_name}</span>
+                          {origin && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider border border-amber-500/40 bg-amber-500/10 text-amber-300"
+                              title={`Оригинал: ${origin.week_start} (${chain.length} переноса)`}
+                            >
+                              🔄 перенесён с {origin.week_start.slice(5)}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-300">{r.company_name}</td>
+                      <td className="px-4 py-3 text-right font-medium text-violet-200 tabular-nums">{money(r.amount)}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{r.source || '—'}</td>
+                      <td className="max-w-[240px] truncate px-4 py-3 text-xs text-slate-400" title={r.comment || ''}>
+                        {r.comment || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </AdminTableViewport>

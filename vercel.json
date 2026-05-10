@@ -59,6 +59,10 @@
     {
       "path": "/api/cron/hr-daily-digest",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/debts-rollover",
+      "schedule": "0 21 * * 0"
     }
   ]
 }
