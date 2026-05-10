@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import {
   Calculator,
@@ -762,7 +763,7 @@ export default function TaxPage() {
               Сотрудники (налоги за работников)
             </h3>
             <p className="text-[11px] text-slate-500 mt-1">
-              Автоматически из <a href="/staff" className="text-emerald-400 hover:underline">/staff</a> · <a href="/salary" className="text-emerald-400 hover:underline">/salary</a>
+              Автоматически из <Link href="/staff" className="text-emerald-400 hover:underline">/staff</Link> · <Link href="/salary" className="text-emerald-400 hover:underline">/salary</Link>
               {staffFromDB.length > 0 ? <> · подтянуто {staffFromDB.length}</> : null}
               {excludedIds.size > 0 ? <> · скрыто {excludedIds.size}</> : null}
             </p>
