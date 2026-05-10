@@ -39,6 +39,52 @@ export async function POST(request: Request) {
     )
   }
 
+  // Проверяем что оператор есть в графике на сегодня для этой компании.
+  // Если нет — блокируем открытие смены.
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: scheduledShifts } = await supabase
+    .from('shifts')
+    .select('id, operator_name, shift_type')
+    .eq('company_id', companyId)
+    .eq('date', today)
+  const operatorOnSchedule = (scheduledShifts || []).some((row: any) => {
+    // Сравниваем по operator_name (свободный текст) — нечувствительно к регистру.
+    // Если хочешь строже — можно матчить по точному имени.
+    return true  // достаточно проверить что есть запись для оператора
+  })
+
+  // Получаем имя оператора чтобы сравнить
+  const { data: opRow } = await supabase
+    .from('operators')
+    .select('name, short_name')
+    .eq('id', operatorId)
+    .maybeSingle()
+  const opName = ((opRow as any)?.name || '').toLowerCase().trim()
+  const opShort = ((opRow as any)?.short_name || '').toLowerCase().trim()
+  const isScheduled = (scheduledShifts || []).some((row: any) => {
+    const n = String((row as any).operator_name || '').toLowerCase().trim()
+    return n && (n === opName || n === opShort || (opName && n.includes(opName.split(' ')[0])) || (opShort && n.includes(opShort)))
+  })
+
+  if (!isScheduled && (scheduledShifts || []).length > 0) {
+    return json(
+      {
+        error: 'not-on-schedule',
+        message: 'Сегодня по графику работаешь не ты. Открывать смену может только тот кто в расписании.',
+      },
+      403,
+    )
+  }
+  if ((scheduledShifts || []).length === 0) {
+    return json(
+      {
+        error: 'no-schedule-today',
+        message: 'На сегодня нет опубликованного расписания. Обратись к менеджеру.',
+      },
+      403,
+    )
+  }
+
   const { data, error } = await supabase.rpc('point_shift_open', {
     p_company_id: companyId,
     p_operator_id: staffId,   // RPC принимает staff.id, не operators.id
