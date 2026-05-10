@@ -6,7 +6,7 @@ import { requireCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
-type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
+type StaffRole = string
 type PaySlot = 'first' | 'second' | 'other'
 
 type Body =

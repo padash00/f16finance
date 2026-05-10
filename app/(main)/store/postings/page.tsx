@@ -48,7 +48,7 @@ type RecentPosting = {
 
 type SessionRole = {
   isSuperAdmin?: boolean
-  staffRole?: 'owner' | 'manager' | 'marketer' | 'other' | null
+  staffRole?: string | null
   roleLabel?: string
 }
 

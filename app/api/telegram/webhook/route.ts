@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { runCopilotForTelegram } from '@/lib/ai/copilot'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { getStaffRoleLabel } from '@/lib/core/access'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import {
@@ -1355,11 +1356,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   })
   const operatorCount = operatorsList.length
 
-  // Стафф по ролям
-  const roleLabel: Record<string, string> = { owner: 'Владелец', manager: 'Руководитель', marketer: 'Маркетолог', super_admin: 'Супер-админ' }
+  // Стафф по ролям. super_admin спецкейс (нет в матрице), остальные — через getStaffRoleLabel.
+  const formatRole = (code: string) => code === 'super_admin' ? 'Супер-админ' : getStaffRoleLabel(code)
   const staffByRole = new Map<string, string[]>()
   for (const s of (staffRes.data || []) as Array<{ full_name: string; role: string }>) {
-    const role = roleLabel[s.role] || s.role
+    const role = formatRole(s.role) || s.role
     if (!staffByRole.has(role)) staffByRole.set(role, [])
     staffByRole.get(role)!.push(s.full_name)
   }

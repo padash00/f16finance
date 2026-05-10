@@ -179,7 +179,7 @@ type OperatorAccount = {
   is_active: boolean
 }
 
-type CareerRole = 'manager' | 'marketer' | 'owner' | 'other'
+type CareerRole = string
 type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
 
 type SessionRoleInfo = {

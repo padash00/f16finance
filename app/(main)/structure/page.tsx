@@ -22,7 +22,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
-type StaffRole = 'owner' | 'manager' | 'marketer'
+type StaffRole = string
 type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
 
 type StaffMember = {

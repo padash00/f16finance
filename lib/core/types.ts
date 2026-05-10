@@ -62,8 +62,8 @@ export type SessionRoleInfo = {
   } | null
 }
 
-/** Staff role union — matches DB enum */
-export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
+/** Staff role — динамический справочник (table roles). Любая строка валидна на TS-уровне. */
+export type StaffRole = string
 
 /** Base operator entity. Extended fields are optional because
  *  different queries select different columns. */

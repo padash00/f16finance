@@ -17,8 +17,13 @@
   '/auth/complete',
 ] as const
 
-/** См. docs/roles.md — матрица staff/оператор/платформа и гостевой контур (`CLIENT_PATHS`, `customers.auth_user_id`). */
-export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
+/** См. docs/roles.md — матрица staff/оператор/платформа и гостевой контур (`CLIENT_PATHS`, `customers.auth_user_id`).
+ *
+ * StaffRole = string (после Коммита 2 динамических ролей).
+ * Раньше было union 4-х литералов — теперь любая строка валидна на TS-уровне.
+ * Runtime-валидация в normalizeStaffRole() и STAFF_ROLE_MATRIX.
+ */
+export type StaffRole = string
 export type SubscriptionFeature =
   | 'ai_reports'
   | 'inventory'
@@ -231,7 +236,7 @@ const OWNER_PATHS = [
   '/knowledge-admin',
 ] as const
 
-export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
+export const STAFF_ROLE_MATRIX: Record<string, RoleMatrixEntry> = {
   manager: {
     label: 'Руководитель',
     home: '/welcome',
@@ -498,11 +503,22 @@ export function getConfigurablePagePaths(): string[] {
 }
 
 export function normalizeStaffRole(role: string | null | undefined): StaffRole {
-  if (role === 'manager' || role === 'marketer' || role === 'owner') {
+  // Любая роль которая есть в STAFF_ROLE_MATRIX (включая будущие кастомные,
+  // когда матрица будет гидрироваться из БД) — валидна. Иначе 'other'.
+  if (role && Object.prototype.hasOwnProperty.call(STAFF_ROLE_MATRIX, role)) {
     return role
   }
-
   return 'other'
+}
+
+/**
+ * Лейбл роли для UI. Заменяет 5 копий объекта { owner: 'Владелец', ... }.
+ * Если роль не найдена в матрице — вернёт сам code (defensive).
+ */
+export function getStaffRoleLabel(role: string | null | undefined): string {
+  if (!role) return ''
+  const entry = STAFF_ROLE_MATRIX[role]
+  return entry?.label ?? role
 }
 
 export function matchesPath(pathname: string, rule: string): boolean {
@@ -530,7 +546,7 @@ export function isPublicPath(pathname: string): boolean {
 }
 
 export function getAllowedStaffPaths(role: StaffRole): readonly string[] {
-  return STAFF_ROLE_MATRIX[role].paths
+  return STAFF_ROLE_MATRIX[role]?.paths ?? STAFF_ROLE_MATRIX.other.paths
 }
 
 function matchesConfiguredPath(pathname: string, configuredPath: string): boolean {
@@ -634,7 +650,7 @@ export function getDefaultPathForStaffRole(
   role: StaffRole,
   rolePermissionOverrides?: readonly RolePermissionOverride[] | null,
 ) {
-  const home = STAFF_ROLE_MATRIX[role].home
+  const home = STAFF_ROLE_MATRIX[role]?.home ?? STAFF_ROLE_MATRIX.other.home
   if (canStaffRoleAccessPath(role, home, rolePermissionOverrides)) {
     return home
   }
@@ -661,7 +677,7 @@ export function getDefaultAppPath(params: {
 }
 
 export function staffRoleHasCapability(role: StaffRole, capability: StaffCapability) {
-  return STAFF_ROLE_MATRIX[role].capabilities.includes(capability)
+  return STAFF_ROLE_MATRIX[role]?.capabilities.includes(capability) ?? false
 }
 
 export const SUBSCRIPTION_FEATURE_BUNDLES: readonly SubscriptionFeatureBundle[] = [

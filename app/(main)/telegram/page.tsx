@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { getStaffRoleLabel } from '@/lib/core/access'
 import {
   AlertTriangle,
   Bot,
@@ -552,13 +553,12 @@ create table if not exists telegram_allowed_users (
             ) : (
               <div className="space-y-2">
                 {staffMembers.map((member) => {
-                  const roleLabel: Record<string, string> = { owner: 'Владелец', manager: 'Руководитель', marketer: 'Маркетолог', other: 'Другой' }
                   const isEditing = editingStaffId === member.id
                   return (
                     <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-800/40 border border-gray-700/50">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white font-medium truncate">{member.full_name}</p>
-                        <p className="text-xs text-gray-500">{roleLabel[member.role] || member.role}</p>
+                        <p className="text-xs text-gray-500">{getStaffRoleLabel(member.role)}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {isEditing ? (

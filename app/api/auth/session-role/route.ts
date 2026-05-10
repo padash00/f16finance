@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
+import { getDefaultAppPath, getStaffRoleLabel, normalizeStaffRole } from '@/lib/core/access'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import {
   createRequestSupabaseClient,
@@ -25,9 +25,11 @@ function getRoleLabel(params: {
   const { isSuperAdmin, staffRole, isOperator, isCustomer, leadAssignmentsCount, leadRoleLabel } = params
 
   if (isSuperAdmin) return 'Супер-администратор'
-  if (staffRole === 'manager') return 'Руководитель'
-  if (staffRole === 'marketer') return 'Маркетолог'
-  if (staffRole === 'owner') return 'Владелец'
+  // Все staff-роли (включая будущие кастомные) — берём лейбл из STAFF_ROLE_MATRIX.
+  if (staffRole && staffRole !== 'other') {
+    const label = getStaffRoleLabel(staffRole)
+    if (label) return label
+  }
   if (leadAssignmentsCount > 0 && leadRoleLabel) return leadRoleLabel
   if (isOperator) return 'Оператор'
   if (isCustomer) return 'Гость клуба'

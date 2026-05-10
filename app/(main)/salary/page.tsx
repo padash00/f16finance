@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { getStaffRoleLabel } from '@/lib/core/access'
 
 type CompanyOption = { id: string; code: string | null; name: string | null }
 type Allocation = { companyId: string; companyCode: string | null; companyName: string | null; accruedAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; shareRatio: number }
@@ -308,7 +309,8 @@ function buildStaffTimelineEvents(params: {
     .slice(0, 12)
 }
 
-const roleLabel: Record<string, string> = { owner: 'Владелец', manager: 'Руководитель', marketer: 'Маркетолог', super_admin: 'Супер-админ', other: 'Сотрудник' }
+// Лейблы ролей идут из STAFF_ROLE_MATRIX. super_admin спецкейс (нет в матрице).
+const formatRoleLabel = (code: string): string => code === 'super_admin' ? 'Супер-админ' : getStaffRoleLabel(code)
 type WeeklyOperator = {
   operator: { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; telegram_chat_id: string | null; photo_url: string | null; position: string | null; documents_count: number; expiring_documents: number }
   week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; seniorityBonusTotal?: number; shifts: ShiftBreakdown[] }
@@ -1527,7 +1529,7 @@ export default function SalaryPage() {
                           <div>
                             <div className="font-semibold text-white">{s.full_name}</div>
                             <div className="text-xs text-slate-400">
-                              {roleLabel[s.role] || s.role}
+                              {formatRoleLabel(s.role)}
                               {isOperatorBased ? ' · из operators' : ` · Оклад: ${money(s.monthly_salary)}/мес`}
                             </div>
                           </div>

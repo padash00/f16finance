@@ -110,7 +110,7 @@ type OrganizationMember = {
   staffId: string | null
   userId: string | null
   email: string | null
-  role: 'owner' | 'manager' | 'marketer' | 'other'
+  role: string
   status: string
   isDefault: boolean
   fullName: string

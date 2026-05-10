@@ -56,7 +56,7 @@ import {
 import { cn } from '@/lib/utils'
 
 // --- Types ---
-type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
+type StaffRole = string
 type PaySlot = 'first' | 'second' | 'other'
 
 type Staff = {
