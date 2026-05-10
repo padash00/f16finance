@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Search, UserMinus, UserCheck, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Pencil, Search, UserMinus, UserCheck, UserPlus, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import HireModal from './HireModal'
+import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel'
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -68,7 +69,9 @@ export default function HrPage() {
   const canRestore = can('hr.restore')
   const canViewHistory = can('hr.view_history')
   const canHire = can('staff.create') || can('operators.create')
+  const canEdit = can('staff.edit') || can('operators.edit')
   const [hireOpen, setHireOpen] = useState(false)
+  const [selectedEmp, setSelectedEmp] = useState<PanelEmployee | null>(null)
   const [items, setItems] = useState<HrEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -420,24 +423,29 @@ export default function HrPage() {
                     </div>
                   )}
                 </div>
-                {((dismissed && canRestore) || (!dismissed && canDismiss)) && (
-                  <div className="shrink-0">
-                    {dismissed ? (
-                      canRestore && (
-                        <Button size="sm" variant="outline" onClick={() => restore(emp)} disabled={busy}>
-                          {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserCheck className="w-3 h-3 mr-1" />}
-                          Восстановить
-                        </Button>
-                      )
-                    ) : (
-                      canDismiss && (
-                        <Button size="sm" variant="destructive" onClick={() => openDismiss(emp)} disabled={busy}>
-                          <UserMinus className="w-3 h-3 mr-1" /> Уволить
-                        </Button>
-                      )
-                    )}
-                  </div>
-                )}
+                <div className="shrink-0 flex flex-col gap-2">
+                  {!dismissed && canEdit && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10"
+                      onClick={() => setSelectedEmp(emp as unknown as PanelEmployee)}
+                    >
+                      <Pencil className="w-3 h-3 mr-1" /> Профиль
+                    </Button>
+                  )}
+                  {dismissed && canRestore && (
+                    <Button size="sm" variant="outline" onClick={() => restore(emp)} disabled={busy}>
+                      {busy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserCheck className="w-3 h-3 mr-1" />}
+                      Восстановить
+                    </Button>
+                  )}
+                  {!dismissed && canDismiss && (
+                    <Button size="sm" variant="destructive" onClick={() => openDismiss(emp)} disabled={busy}>
+                      <UserMinus className="w-3 h-3 mr-1" /> Уволить
+                    </Button>
+                  )}
+                </div>
               </Card>
             )
           })}
@@ -492,6 +500,12 @@ export default function HrPage() {
           </div>
         </div>
       )}
+
+      <EmployeePanel
+        employee={selectedEmp}
+        onClose={() => setSelectedEmp(null)}
+        onUpdated={() => load()}
+      />
     </div>
   )
 }
