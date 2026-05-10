@@ -11,7 +11,7 @@ function json(data: unknown, status = 200) {
 
 function canManageStore(access: {
   isSuperAdmin: boolean
-  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+  staffRole: string
 }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole

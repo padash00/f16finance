@@ -235,7 +235,7 @@ function normalizeUnitCost(value: unknown) {
 
 function canManageInventory(access: {
   isSuperAdmin: boolean
-  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+  staffRole: string
 }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole

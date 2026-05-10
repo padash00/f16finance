@@ -111,7 +111,7 @@ function normalizePayload(payload: ProfitabilityPayload) {
 
 function canManageProfitability(access: {
   isSuperAdmin: boolean
-  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+  staffRole: string
 }) {
   // Capability checks выше уже отсеивают; здесь — любой staff
   return access.isSuperAdmin || !!access.staffRole
@@ -120,7 +120,7 @@ function canManageProfitability(access: {
 /** Capability checks выше уже отсеивают; здесь — любой staff */
 function canViewProfitability(access: {
   isSuperAdmin: boolean
-  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+  staffRole: string
 }) {
   return access.isSuperAdmin || !!access.staffRole
 }

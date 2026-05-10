@@ -28,7 +28,7 @@ export type SessionRoleInfo = {
   isCustomer?: boolean
   persona?: 'super_admin' | 'staff' | 'operator' | 'customer'
   linkedCustomerIds?: string[]
-  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
+  staffRole?: string
   organizationHubRequired?: boolean
   organizationSelectionRequired?: boolean
   organizations?: Array<{

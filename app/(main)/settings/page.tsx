@@ -36,7 +36,7 @@ type Staff = {
   full_name: string
   phone: string | null
   email: string | null
-  role: 'manager' | 'marketer' | 'owner' | 'other' | null
+  role: string | null
   created_at?: string
 }
 

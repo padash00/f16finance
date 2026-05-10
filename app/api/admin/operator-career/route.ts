@@ -7,7 +7,7 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 
 type PromotePayload = {
   operatorId: string
-  role: 'manager' | 'marketer' | 'owner' | 'other'
+  role: string
   monthly_salary?: number | null
 }
 
