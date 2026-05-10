@@ -53,6 +53,7 @@ export async function GET(req: Request) {
       listOrganizationOperatorIds({
         activeOrganizationId: access.activeOrganization?.id || null,
         isSuperAdmin: access.isSuperAdmin,
+        includeInactive: true,  // HR должна видеть архивных, чтобы их можно было восстановить или уволить
       }),
     ])
 

@@ -554,8 +554,11 @@ export async function listOrganizationStaffIds(params: {
 export async function listOrganizationOperatorIds(params: {
   activeOrganizationId?: string | null
   isSuperAdmin?: boolean
+  /** По-умолчанию false — возвращаем только активных. Передай true чтобы
+   *  включить и архивных (is_active=false) — нужно для HR где надо увольнять/восстанавливать. */
+  includeInactive?: boolean
 }) {
-  const { activeOrganizationId, isSuperAdmin } = params
+  const { activeOrganizationId, isSuperAdmin, includeInactive } = params
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
   if (!supabase) {
@@ -563,15 +566,19 @@ export async function listOrganizationOperatorIds(params: {
   }
 
   if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin || !activeOrganizationId) {
-    const { data, error } = await supabase.from('operators').select('id').eq('is_active', true)
+    let q = supabase.from('operators').select('id')
+    if (!includeInactive) q = q.eq('is_active', true)
+    const { data, error } = await q
     if (error) throw error
     return (data || []).map((row: any) => String(row.id))
   }
 
-  const { data, error } = await supabase
+  let assignQuery = supabase
     .from('operator_company_assignments')
     .select('operator_id, company:company_id(organization_id)')
-    .eq('is_active', true)
+  if (!includeInactive) assignQuery = assignQuery.eq('is_active', true)
+
+  const { data, error } = await assignQuery
 
   if (error) throw error
 
