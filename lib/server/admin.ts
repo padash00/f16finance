@@ -31,7 +31,7 @@ export async function resolveStaffByUser(
       .eq('id', metadataStaffId)
       .maybeSingle()
 
-    if (!error && data) return data
+    if (!error && data && data.is_active !== false) return data
   }
 
   if (user.email) {
@@ -41,7 +41,7 @@ export async function resolveStaffByUser(
       .ilike('email', user.email)
       .maybeSingle()
 
-    if (!error && data) return data
+    if (!error && data && data.is_active !== false) return data
   }
 
   const { data: authRow, error: authError } = await supabase
@@ -59,5 +59,8 @@ export async function resolveStaffByUser(
     .maybeSingle()
 
   if (linkError || !linkRow?.staff) return null
+  // Уволенные/архивные staff (is_active=false) не должны получать staff-доступ
+  const staff = linkRow.staff as any
+  if (staff?.is_active === false) return null
   return linkRow.staff
 }
