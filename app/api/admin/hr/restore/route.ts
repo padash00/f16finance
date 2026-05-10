@@ -96,6 +96,12 @@ export async function POST(req: Request) {
         .from('operator_auth')
         .update({ is_active: true })
         .eq('operator_id', id)
+
+      // Возвращаем назначения активными при восстановлении
+      await supabase
+        .from('operator_company_assignments')
+        .update({ is_active: true })
+        .eq('operator_id', id)
     }
 
     await writeAuditLog(supabase, {

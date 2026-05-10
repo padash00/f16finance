@@ -97,7 +97,7 @@ export async function POST(req: Request) {
           dismissed_by: dismissedBy,
         })
         .eq('id', id)
-        .select('id, full_name, short_name')
+        .select('id, full_name, short_name, user_id')
         .single()
 
       if (error) throw error
@@ -109,6 +109,16 @@ export async function POST(req: Request) {
           .update({ status: 'inactive' })
           .eq('organization_id', activeOrganizationId)
           .eq('staff_id', id)
+      }
+
+      // Принудительно завершаем активные сессии Supabase Auth
+      const staffUserId = (staffRow as any)?.user_id
+      if (staffUserId) {
+        try {
+          await (supabase as any).auth.admin.signOut(staffUserId, 'global')
+        } catch {
+          // не падаем если signOut не сработал
+        }
       }
     } else {
       await ensureOrganizationOperatorAccess({
@@ -137,10 +147,30 @@ export async function POST(req: Request) {
         : (opRow as any)?.operator_profiles
       employeeName = String(profile?.full_name?.trim() || (opRow as any)?.name || '')
 
-      await supabase
+      // Деактивируем operator_auth + получаем user_id для signOut
+      const { data: opAuthRow } = await supabase
         .from('operator_auth')
         .update({ is_active: false })
         .eq('operator_id', id)
+        .select('user_id')
+        .maybeSingle()
+
+      // Деактивируем все назначения на компании/точки чтобы оператор
+      // не висел в графиках и /shifts
+      await supabase
+        .from('operator_company_assignments')
+        .update({ is_active: false })
+        .eq('operator_id', id)
+
+      // Принудительно завершаем сессию Supabase Auth
+      const opUserId = (opAuthRow as any)?.user_id
+      if (opUserId) {
+        try {
+          await (supabase as any).auth.admin.signOut(opUserId, 'global')
+        } catch {
+          // не падаем
+        }
+      }
     }
 
     if (activeOrganizationId) {
