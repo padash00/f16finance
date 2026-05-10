@@ -275,11 +275,11 @@ export async function sendShiftReport(
   const fact = cash + coins + kaspiPos + debts - start
   const itog = fact - wipon
 
-  // На сайт идут только 2 агрегата: нал и безнал.
-  // Нал    = купюры + мелочь
-  // Безнал = Каспи POS + Каспи Онлайн
-  // Детали (coins, online, wipon) сохраняются в meta для отчётности на точке.
-  const totalCash = cash + coins
+  // /income получает ТОЛЬКО:
+  //   нал    = купюры (cash) — БЕЗ мелочи
+  //   безнал = Каспи POS + Каспи Онлайн
+  // Мелочь, wipon и прочие детали идут только в meta и отображаются
+  // на /shifts/reports/[id] как полноценный Z-отчёт смены.
   const totalCashless = kaspiPos + kaspiOnline
 
   return request(config, 'POST', '/api/point/shift-report', {
@@ -288,7 +288,7 @@ export async function sendShiftReport(
       date: form.date,
       operator_id: form.operator_id,
       shift: form.shift,
-      cash_amount: totalCash,
+      cash_amount: cash,
       kaspi_amount: totalCashless,
       kaspi_before_midnight:
         form.shift === 'night' && form.kaspi_before_midnight.trim().length > 0
