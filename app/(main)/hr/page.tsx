@@ -11,6 +11,7 @@ import { useModalEscape } from '@/lib/client/use-modal-escape'
 import HireModal from './HireModal'
 import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel'
 import CareerTimeline from './CareerTimeline'
+import PositionsOverview from './PositionsOverview'
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -49,7 +50,7 @@ type HistoryEntry = {
   actor_name: string | null
 }
 
-type Tab = 'active' | 'dismissed' | 'career'
+type Tab = 'active' | 'dismissed' | 'career' | 'positions'
 type KindFilter = 'all' | 'staff' | 'operator'
 const shortDate = (value: string) =>
   new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -301,6 +302,16 @@ export default function HrPage() {
             >
               Карьера
             </button>
+            <button
+              onClick={() => setTab('positions')}
+              className={`px-4 py-2 rounded-lg text-sm border transition ${
+                tab === 'positions'
+                  ? 'bg-blue-500/15 text-blue-300 border-blue-500/40'
+                  : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+              }`}
+            >
+              Должности
+            </button>
           </div>
 
           <div className="xl:ml-auto flex flex-col sm:flex-row gap-2 w-full xl:w-auto">
@@ -328,6 +339,8 @@ export default function HrPage() {
 
       {tab === 'career' ? (
         <CareerTimeline />
+      ) : tab === 'positions' ? (
+        <PositionsOverview />
       ) : (
         <>
       <div className="flex items-center justify-between px-1">
