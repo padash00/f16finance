@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Search, UserMinus, UserCheck, Users } from 'lucide-react'
+import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Search, UserMinus, UserCheck, UserPlus, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import HireModal from './HireModal'
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -66,6 +67,8 @@ export default function HrPage() {
   const canDismiss = can('hr.dismiss')
   const canRestore = can('hr.restore')
   const canViewHistory = can('hr.view_history')
+  const canHire = can('staff.create') || can('operators.create')
+  const [hireOpen, setHireOpen] = useState(false)
   const [items, setItems] = useState<HrEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -228,18 +231,31 @@ export default function HrPage() {
               <p className="text-sm text-gray-300">Активные и уволенные сотрудники: операторы и администрация</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full lg:w-auto">
-            <Card className="px-3 py-2 border-emerald-500/25 bg-emerald-500/10">
-              <div className="text-[11px] uppercase tracking-wide text-emerald-300/90">Активные</div>
-              <div className="text-lg font-bold text-emerald-200">{counts.active}</div>
-            </Card>
-            <Card className="px-3 py-2 border-red-500/25 bg-red-500/10">
-              <div className="text-[11px] uppercase tracking-wide text-red-300/90">Уволенные</div>
-              <div className="text-lg font-bold text-red-200">{counts.dismissed}</div>
-            </Card>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <Card className="px-3 py-2 border-emerald-500/25 bg-emerald-500/10">
+                <div className="text-[11px] uppercase tracking-wide text-emerald-300/90">Активные</div>
+                <div className="text-lg font-bold text-emerald-200">{counts.active}</div>
+              </Card>
+              <Card className="px-3 py-2 border-red-500/25 bg-red-500/10">
+                <div className="text-[11px] uppercase tracking-wide text-red-300/90">Уволенные</div>
+                <div className="text-lg font-bold text-red-200">{counts.dismissed}</div>
+              </Card>
+            </div>
+            {canHire && (
+              <Button
+                onClick={() => setHireOpen(true)}
+                className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-lg shadow-indigo-500/20 h-10 sm:h-auto sm:px-5"
+              >
+                <UserPlus className="w-4 h-4 mr-1.5" />
+                Нанять
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      <HireModal open={hireOpen} onClose={() => setHireOpen(false)} onCreated={() => load()} />
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start gap-2">
