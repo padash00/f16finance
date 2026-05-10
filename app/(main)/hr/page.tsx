@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, Loader2, Pencil, Search, UserMinus, UserCheck, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, AlertCircle, CheckSquare, ChevronDown, ChevronRight, Download, Loader2, Pencil, Search, Square, UserMinus, UserCheck, UserPlus, Users, X as XIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -13,6 +13,15 @@ import EmployeePanel, { type HrEmployee as PanelEmployee } from './EmployeePanel
 import CareerTimeline from './CareerTimeline'
 import PositionsOverview from './PositionsOverview'
 import HrAnalytics from './HrAnalytics'
+
+function csvCell(v: string | null | undefined): string {
+  if (v == null) return ''
+  const s = String(v)
+  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  return s
+}
 
 type DismissalType = 'voluntary' | 'mutual_agreement' | 'cause' | 'contract_end' | 'other'
 
@@ -75,6 +84,8 @@ export default function HrPage() {
   const canEdit = can('staff.edit') || can('operators.edit')
   const [hireOpen, setHireOpen] = useState(false)
   const [selectedEmp, setSelectedEmp] = useState<PanelEmployee | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [items, setItems] = useState<HrEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -218,6 +229,91 @@ export default function HrPage() {
     }
   }
 
+  // ─── Bulk selection ─────────────────────────────────────────
+  const toggleSelected = (key: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  const clearSelection = () => setSelectedIds(new Set())
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filtered.map((e) => `${e.kind}-${e.id}`)))
+  }
+
+  // Сбрасываем выделение при смене таба/фильтра
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [tab, kindFilter])
+
+  const bulkDismiss = async () => {
+    const reason = window.prompt('Причина увольнения (≥ 5 символов):')
+    if (!reason || reason.trim().length < 5) return
+    if (!confirm(`Уволить ${selectedIds.size} ${selectedIds.size === 1 ? 'сотрудника' : 'сотрудников'}?`)) return
+    setBulkBusy(true)
+    setError(null)
+    try {
+      for (const key of selectedIds) {
+        const [kind, id] = key.split('-', 2)
+        // безопасный split: id может содержать дефисы
+        const realId = key.slice(kind.length + 1)
+        await fetch('/api/admin/hr/dismiss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind,
+            id: realId,
+            reason: reason.trim(),
+            dismissal_date: new Date().toISOString().slice(0, 10),
+            dismissal_type: 'voluntary',
+          }),
+        })
+      }
+      clearSelection()
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка bulk-увольнения')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const exportCSV = () => {
+    const rows = (selectedIds.size > 0
+      ? filtered.filter((e) => selectedIds.has(`${e.kind}-${e.id}`))
+      : filtered) as HrEmployee[]
+    const header = ['Тип', 'ФИО', 'Краткое имя', 'Должность', 'Телефон', 'Email', 'Оклад', 'Активен', 'Уволен_дата', 'Причина']
+    const csv = [
+      header.join(';'),
+      ...rows.map((e) =>
+        [
+          e.kind === 'operator' ? 'Оператор' : 'Админ',
+          csvCell(e.full_name),
+          csvCell(e.short_name),
+          csvCell(e.role || e.position),
+          csvCell(e.phone),
+          csvCell(e.email),
+          e.monthly_salary != null ? String(e.monthly_salary) : '',
+          e.is_active ? 'да' : 'нет',
+          e.dismissal_date || e.dismissed_at?.slice(0, 10) || '',
+          csvCell(e.dismissal_reason),
+        ].join(';'),
+      ),
+    ].join('\n')
+    // BOM для Excel'а на Windows
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hr-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="app-page-wide space-y-6">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-900/30 via-gray-900 to-slate-900/40 p-6 border border-indigo-500/20">
@@ -356,6 +452,52 @@ export default function HrPage() {
         <HrAnalytics />
       ) : (
         <>
+        {/* Bulk-action bar и экспорт */}
+        {(tab === 'active' || tab === 'dismissed') && filtered.length > 0 && (
+          <Card className="p-3 bg-gray-900/60 border-gray-800 flex flex-wrap items-center gap-2">
+            <button
+              onClick={selectedIds.size === filtered.length ? clearSelection : selectAllVisible}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-gray-400 hover:text-white"
+            >
+              {selectedIds.size === filtered.length && filtered.length > 0 ? (
+                <CheckSquare className="w-3.5 h-3.5" />
+              ) : (
+                <Square className="w-3.5 h-3.5" />
+              )}
+              {selectedIds.size > 0 ? `Выделено: ${selectedIds.size}` : 'Выделить всех'}
+            </button>
+            {selectedIds.size > 0 && (
+              <button
+                onClick={clearSelection}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-gray-500 hover:text-white"
+              >
+                <XIcon className="w-3 h-3" /> Снять
+              </button>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {selectedIds.size > 0 && tab === 'active' && canDismiss && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={bulkDismiss}
+                  disabled={bulkBusy}
+                >
+                  {bulkBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <UserMinus className="w-3 h-3 mr-1" />}
+                  Уволить {selectedIds.size}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportCSV}
+                className="border-gray-700"
+              >
+                <Download className="w-3 h-3 mr-1" />
+                Экспорт CSV{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </Button>
+            </div>
+          </Card>
+        )}
       <div className="flex items-center justify-between px-1">
         <div className="text-sm text-gray-400">
           {tab === 'active' ? 'Список активных сотрудников' : 'Список уволенных сотрудников'}
@@ -381,15 +523,26 @@ export default function HrPage() {
           {filtered.map((emp) => {
             const busy = busyId === emp.id
             const dismissed = !!emp.dismissed_at
+            const empKey = `${emp.kind}-${emp.id}`
+            const isSelected = selectedIds.has(empKey)
             return (
               <Card
-                key={`${emp.kind}-${emp.id}`}
+                key={empKey}
                 className={`p-5 flex items-start justify-between gap-4 border shadow-sm transition ${
-                  dismissed
-                    ? 'bg-red-500/5 border-red-500/25'
-                    : 'bg-gray-900/60 border-gray-800 hover:border-indigo-500/40 hover:bg-gray-900/80'
+                  isSelected
+                    ? 'bg-indigo-500/10 border-indigo-500/50'
+                    : dismissed
+                      ? 'bg-red-500/5 border-red-500/25'
+                      : 'bg-gray-900/60 border-gray-800 hover:border-indigo-500/40 hover:bg-gray-900/80'
                 }`}
               >
+                <button
+                  onClick={() => toggleSelected(empKey)}
+                  className="mt-0.5 shrink-0 text-gray-500 hover:text-white transition-colors"
+                  title={isSelected ? 'Снять выделение' : 'Выделить'}
+                >
+                  {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-400" /> : <Square className="w-4 h-4" />}
+                </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{emp.full_name || '—'}</span>
