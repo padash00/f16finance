@@ -122,8 +122,10 @@ export default function HrPage() {
   const counts = useMemo(() => {
     let active = 0, dismissed = 0
     for (const it of items) {
-      if (it.dismissed_at) dismissed++
-      else if (it.is_active) active++
+      // «Уволенные» = либо явно уволены, либо просто is_active=false
+      // (старые архивные записи без dismissed_at)
+      if (it.dismissed_at || !it.is_active) dismissed++
+      else active++
     }
     return { active, dismissed }
   }, [items])
@@ -131,9 +133,9 @@ export default function HrPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return items.filter((it) => {
-      const isDismissed = !!it.dismissed_at
-      if (tab === 'active' && (isDismissed || !it.is_active)) return false
-      if (tab === 'dismissed' && !isDismissed) return false
+      const inactive = !it.is_active || !!it.dismissed_at
+      if (tab === 'active' && inactive) return false
+      if (tab === 'dismissed' && !inactive) return false
       if (kindFilter !== 'all' && it.kind !== kindFilter) return false
       if (q) {
         const hay = `${it.full_name} ${it.short_name || ''} ${it.position || ''} ${it.role || ''} ${it.phone || ''} ${it.email || ''}`.toLowerCase()
@@ -522,7 +524,8 @@ export default function HrPage() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {filtered.map((emp) => {
             const busy = busyId === emp.id
-            const dismissed = !!emp.dismissed_at
+            // dismissed = либо явно уволен, либо просто архивный (is_active=false)
+            const dismissed = !!emp.dismissed_at || !emp.is_active
             const empKey = `${emp.kind}-${emp.id}`
             const isSelected = selectedIds.has(empKey)
             return (
