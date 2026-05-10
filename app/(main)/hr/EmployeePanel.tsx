@@ -83,16 +83,6 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
 
   const [showPromote, setShowPromote] = useState(false)
 
-  // Lock body scroll when open
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
-
   useEffect(() => {
     if (!employee) return
     setFullName(employee.full_name || '')

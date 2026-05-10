@@ -90,16 +90,6 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
   // staff-only
   const [monthlySalary, setMonthlySalary] = useState('')
 
-  // Lock body scroll when open
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
-
   // Reset на открытии
   useEffect(() => {
     if (!open) return
