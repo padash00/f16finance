@@ -956,27 +956,38 @@ function ZReport({
   clientDebts: ClientDebt[]
   incidentsSummary: IncidentsSummary | null
 }) {
+  const isOpen = shift.status === 'open'
+  // Для X-отчёта (смена открыта) totals_json может быть пустым — считаем «на лету»
   const totals = (shift.totals_json || {}) as Record<string, any>
   const meta = (income?.meta || {}) as IncomeMeta
   const coins = Number(meta?.coins ?? 0)
   const wipon = Number(meta?.wipon ?? 0)
   const debtsCash = Number(meta?.debts ?? 0)
   const startCashFromMeta = Number(meta?.start_cash ?? shift.opening_cash ?? 0)
-  const salesCash = Number(totals?.sales_cash || 0)
-  const returnsCash = Number(totals?.returns_cash || 0)
+
+  // Если смена открыта — считаем продажи/возвраты на лету из массивов sales/returns
+  const computedSalesCash = isOpen ? sales.reduce((s, x) => s + Number(x.cash_amount || 0), 0) : Number(totals?.sales_cash || 0)
+  const computedSalesKaspi = isOpen ? sales.reduce((s, x) => s + Number(x.kaspi_amount || 0), 0) : Number(totals?.sales_kaspi || 0)
+  const computedReturnsCash = isOpen ? returns.reduce((s, x) => s + Number(x.cash_amount || 0), 0) : Number(totals?.returns_cash || 0)
+  const computedReturnsKaspi = isOpen ? returns.reduce((s, x) => s + Number(x.kaspi_amount || 0), 0) : Number(totals?.returns_kaspi || 0)
+
+  const salesCash = computedSalesCash
+  const returnsCash = computedReturnsCash
   const closingCash = Number(shift.closing_cash || 0)
 
   // Ожидаемая касса = старт + продажи нал − возвраты нал − wipon (выплаты) + долги (полученные нал)
   const expectedCash = startCashFromMeta + salesCash - returnsCash - wipon + debtsCash
-  const cashDiff = closingCash - expectedCash
+  const cashDiff = isOpen ? 0 : closingCash - expectedCash
 
-  const salesKaspi = Number(totals?.sales_kaspi || 0)
-  const returnsKaspi = Number(totals?.returns_kaspi || 0)
+  const salesKaspi = computedSalesKaspi
+  const returnsKaspi = computedReturnsKaspi
   const closingKaspi = Number(shift.closing_kaspi || 0)
   const expectedKaspi = salesKaspi - returnsKaspi
-  const kaspiDiff = closingKaspi - expectedKaspi
+  const kaspiDiff = isOpen ? 0 : closingKaspi - expectedKaspi
 
-  const totalRevenue = (income?.cash_amount || 0) + (income?.kaspi_amount || 0)
+  const totalRevenue = isOpen
+    ? salesCash - returnsCash + salesKaspi - returnsKaspi
+    : (income?.cash_amount || 0) + (income?.kaspi_amount || 0)
   const checkCount = sales.length || Number(totals?.sales_count || 0)
   const avgCheck = checkCount > 0 ? Math.round(totalRevenue / checkCount) : 0
 
@@ -995,17 +1006,32 @@ function ZReport({
   }, [sales])
 
   return (
-    <Card className="border-emerald-500/20 bg-gradient-to-br from-slate-950 via-slate-950 to-emerald-950/10 p-6 print:bg-white print:text-black">
+    <Card className={`p-6 print:bg-white print:text-black ${
+      isOpen
+        ? 'border-amber-500/30 bg-gradient-to-br from-slate-950 via-slate-950 to-amber-950/10'
+        : 'border-emerald-500/20 bg-gradient-to-br from-slate-950 via-slate-950 to-emerald-950/10'
+    }`}>
       <div className="flex items-start justify-between flex-wrap gap-4 mb-5 pb-4 border-b border-white/10">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-emerald-300/70">Z-отчёт смены</div>
+          <div className={`text-[11px] uppercase tracking-[0.2em] ${
+            isOpen ? 'text-amber-300/80' : 'text-emerald-300/70'
+          }`}>
+            {isOpen ? '📊 X-отчёт · СМЕНА ОТКРЫТА' : '✓ Z-отчёт смены'}
+          </div>
           <h2 className="text-2xl font-semibold text-white mt-1">
             {shift.company?.name || '—'} · {SHIFT_TYPE_LABEL[shift.shift_type]}
           </h2>
           <div className="text-xs text-slate-400 mt-1">
-            {fmtDateTime(shift.opened_at)} → {fmtDateTime(shift.closed_at)}
+            {fmtDateTime(shift.opened_at)}
+            {' → '}
+            {isOpen ? <span className="text-amber-300">сейчас (в работе)</span> : fmtDateTime(shift.closed_at)}
             {shift.operator && <> · 👤 {shift.operator.short_name || shift.operator.full_name}</>}
           </div>
+          {isOpen && (
+            <div className="mt-2 text-xs text-amber-300/80">
+              Отчёт промежуточный — данные обновляются по мере продаж. Z-отчёт сформируется при закрытии смены.
+            </div>
+          )}
         </div>
         <Button
           variant="outline"
@@ -1028,23 +1054,27 @@ function ZReport({
             {debtsCash > 0 && <ZRow label="Долги получены (нал)" value={debtsCash} positive />}
             {wipon > 0 && <ZRow label="Выплаты wipon / прочее" value={-wipon} negative />}
             <div className="border-t border-white/10 my-2" />
-            <ZRow label="Должно быть в кассе" value={expectedCash} bold />
-            <ZRow label="Фактически в кассе" value={closingCash} bold />
-            <div className="border-t border-white/10 my-2" />
-            <div
-              className={`flex justify-between items-center py-1 px-2 rounded ${
-                Math.abs(cashDiff) < 1
-                  ? 'bg-emerald-500/10 text-emerald-300'
-                  : cashDiff < 0
-                    ? 'bg-rose-500/10 text-rose-300'
-                    : 'bg-amber-500/10 text-amber-300'
-              }`}
-            >
-              <span className="font-semibold">
-                {Math.abs(cashDiff) < 1 ? '✓ Сходится' : cashDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}
-              </span>
-              <span className="font-bold">{cashDiff >= 0 ? '+' : ''}{fmtMoney(cashDiff)}</span>
-            </div>
+            <ZRow label={isOpen ? 'Должно быть в кассе сейчас' : 'Должно быть в кассе'} value={expectedCash} bold />
+            {!isOpen && (
+              <>
+                <ZRow label="Фактически в кассе" value={closingCash} bold />
+                <div className="border-t border-white/10 my-2" />
+                <div
+                  className={`flex justify-between items-center py-1 px-2 rounded ${
+                    Math.abs(cashDiff) < 1
+                      ? 'bg-emerald-500/10 text-emerald-300'
+                      : cashDiff < 0
+                        ? 'bg-rose-500/10 text-rose-300'
+                        : 'bg-amber-500/10 text-amber-300'
+                  }`}
+                >
+                  <span className="font-semibold">
+                    {Math.abs(cashDiff) < 1 ? '✓ Сходится' : cashDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}
+                  </span>
+                  <span className="font-bold">{cashDiff >= 0 ? '+' : ''}{fmtMoney(cashDiff)}</span>
+                </div>
+              </>
+            )}
             {coins > 0 && (
               <div className="text-xs text-slate-500 pt-2">в т.ч. мелочью: {fmtMoney(coins)}</div>
             )}
@@ -1064,35 +1094,41 @@ function ZReport({
             )}
             <ZRow label="Возвраты безнал" value={-returnsKaspi} negative={returnsKaspi > 0} />
             <div className="border-t border-white/10 my-2" />
-            <ZRow label="Должно быть" value={expectedKaspi} bold />
-            <ZRow label="Фактически закрыто" value={closingKaspi} bold />
-            {Math.abs(kaspiDiff) >= 1 && (
-              <div
-                className={`flex justify-between items-center py-1 px-2 mt-2 rounded ${
-                  kaspiDiff < 0 ? 'bg-rose-500/10 text-rose-300' : 'bg-amber-500/10 text-amber-300'
-                }`}
-              >
-                <span className="font-semibold">{kaspiDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}</span>
-                <span className="font-bold">{kaspiDiff >= 0 ? '+' : ''}{fmtMoney(kaspiDiff)}</span>
-              </div>
+            <ZRow label={isOpen ? 'Сейчас на безнале' : 'Должно быть'} value={expectedKaspi} bold />
+            {!isOpen && (
+              <>
+                <ZRow label="Фактически закрыто" value={closingKaspi} bold />
+                {Math.abs(kaspiDiff) >= 1 && (
+                  <div
+                    className={`flex justify-between items-center py-1 px-2 mt-2 rounded ${
+                      kaspiDiff < 0 ? 'bg-rose-500/10 text-rose-300' : 'bg-amber-500/10 text-amber-300'
+                    }`}
+                  >
+                    <span className="font-semibold">{kaspiDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}</span>
+                    <span className="font-bold">{kaspiDiff >= 0 ? '+' : ''}{fmtMoney(kaspiDiff)}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Итого */}
           <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-1.5 text-sm">
-            <div className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">💰 Итого выручка</div>
-            <ZRow label="Нал (купюры)" value={income?.cash_amount || 0} />
-            <ZRow label="Безнал" value={income?.kaspi_amount || 0} />
+            <div className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">
+              💰 {isOpen ? 'Выручка на сейчас' : 'Итого выручка'}
+            </div>
+            <ZRow label="Нал (купюры)" value={isOpen ? salesCash - returnsCash : income?.cash_amount || 0} />
+            <ZRow label="Безнал" value={isOpen ? salesKaspi - returnsKaspi : income?.kaspi_amount || 0} />
             <div className="border-t border-emerald-500/20 my-2" />
             <div className="flex justify-between items-center py-1 px-2 rounded bg-emerald-500/15 text-emerald-200">
-              <span className="font-semibold">ВСЕГО за смену</span>
+              <span className="font-semibold">{isOpen ? 'СЕЙЧАС' : 'ВСЕГО за смену'}</span>
               <span className="font-bold text-lg">{fmtMoney(totalRevenue)}</span>
             </div>
             <div className="text-xs text-slate-400 mt-2 flex justify-between">
               <span>Чеков: <span className="text-white font-semibold">{checkCount}</span></span>
               <span>Средний: <span className="text-white font-semibold">{fmtMoney(avgCheck)}</span></span>
             </div>
-            {income && (
+            {!isOpen && income && (
               <Link
                 href={`/income`}
                 className="block mt-2 text-xs text-emerald-300 hover:text-emerald-200"
