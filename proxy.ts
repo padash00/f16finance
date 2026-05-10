@@ -7,6 +7,7 @@ import { SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { loadUserCapabilities } from '@/lib/server/capabilities'
 import { fetchLinkedCustomersForUser } from '@/lib/server/linked-customers'
+import { ensureRoleMatrixHydrated } from '@/lib/server/role-hydration'
 
 const AUTH_SELF_SERVICE_PATHS = [
   '/forgot-password',
@@ -143,6 +144,10 @@ export async function proxy(request: NextRequest) {
   const isCustomer = !isSuperAdmin && !staffMember && !isOperator && linkedCustomers.length > 0
 
   const rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
+
+  // Гидрируем динамическую матрицу ролей из БД (positions + position_paths).
+  // Кастомные роли получают свои paths/home/label на этом шаге.
+  await ensureRoleMatrixHydrated()
 
   // Загружаем capabilities пользователя из новой системы RBAC.
   // Если capabilities не настроены (или это оператор/клиент) — будет пустой Set,

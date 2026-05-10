@@ -10,6 +10,7 @@ import { resolveRequestAuthPersona, type RequestAuthPersonaKind } from '@/lib/se
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { fetchLinkedCustomersForUser, type LinkedCustomerRow } from '@/lib/server/linked-customers'
 import { requiredEnv } from '@/lib/server/env'
+import { ensureRoleMatrixHydrated } from '@/lib/server/role-hydration'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import {
   ACTIVE_ORGANIZATION_COOKIE,
@@ -130,6 +131,10 @@ export async function getRequestAccessContext(
       activeSubscription: OrganizationSubscription
     }
 > {
+  // Гидрируем динамическую матрицу ролей из БД (positions + position_paths).
+  // Покрывает все API routes которые используют getRequestAccessContext.
+  await ensureRoleMatrixHydrated()
+
   const supabase = createRequestSupabaseClient(request)
   const cookieMap = parseCookies(request.headers.get('cookie'))
   const {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAllCapabilityIds } from '@/lib/core/capabilities'
 import { invalidateCapabilitiesCache } from '@/lib/server/capabilities'
+import { invalidateRoleMatrixCache } from '@/lib/server/role-hydration'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -100,6 +101,7 @@ export async function POST(req: Request) {
       }
 
       invalidateCapabilitiesCache()
+      invalidateRoleMatrixCache()
       return json({ ok: true, data })
     }
 
@@ -138,6 +140,7 @@ export async function POST(req: Request) {
       const { error } = await supabase.from('positions').delete().eq('id', id)
       if (error) throw error
       invalidateCapabilitiesCache()
+      invalidateRoleMatrixCache()
       return json({ ok: true })
     }
 

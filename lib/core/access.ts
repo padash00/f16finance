@@ -236,7 +236,15 @@ const OWNER_PATHS = [
   '/knowledge-admin',
 ] as const
 
-export const STAFF_ROLE_MATRIX: Record<string, RoleMatrixEntry> = {
+/**
+ * FALLBACK-данные системных ролей. Используются:
+ *   1) на клиенте (т.к. БД-гидрация работает только на сервере)
+ *   2) на сервере если БД недоступна
+ *
+ * Источник правды для рантайма — таблицы `positions` и `position_paths`.
+ * См. lib/server/role-hydration.ts → ensureRoleMatrixHydrated().
+ */
+const STAFF_ROLE_MATRIX_FALLBACK: Record<string, RoleMatrixEntry> = {
   manager: {
     label: 'Руководитель',
     home: '/welcome',
@@ -299,6 +307,55 @@ export const STAFF_ROLE_MATRIX: Record<string, RoleMatrixEntry> = {
     summary: 'Техническая роль без доступа к staff-контуру.',
     actions: ['Нет доступа к staff-разделам'],
   },
+}
+
+// Динамический оверлей. Заполняется hydrateStaffRoleMatrix() из БД на сервере.
+// Если роль есть в _DYNAMIC — она перекрывает FALLBACK.
+let _DYNAMIC_MATRIX: Record<string, RoleMatrixEntry> = {}
+
+/**
+ * STAFF_ROLE_MATRIX — единая точка чтения данных о ролях.
+ *
+ * Прокси: при чтении STAFF_ROLE_MATRIX[role] сначала ищет в динамической
+ * (БД-гидрированной) карте, затем в FALLBACK. На клиенте динамическая
+ * карта пуста — работает только FALLBACK для системных ролей.
+ */
+export const STAFF_ROLE_MATRIX: Record<string, RoleMatrixEntry> = new Proxy(
+  {} as Record<string, RoleMatrixEntry>,
+  {
+    get(_target, prop: string): RoleMatrixEntry | undefined {
+      if (typeof prop !== 'string') return undefined
+      return _DYNAMIC_MATRIX[prop] ?? STAFF_ROLE_MATRIX_FALLBACK[prop]
+    },
+    has(_target, prop: string): boolean {
+      if (typeof prop !== 'string') return false
+      return prop in _DYNAMIC_MATRIX || prop in STAFF_ROLE_MATRIX_FALLBACK
+    },
+    ownKeys() {
+      const keys = new Set<string>([
+        ...Object.keys(STAFF_ROLE_MATRIX_FALLBACK),
+        ...Object.keys(_DYNAMIC_MATRIX),
+      ])
+      return Array.from(keys)
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (typeof prop !== 'string') return undefined
+      const value = _DYNAMIC_MATRIX[prop] ?? STAFF_ROLE_MATRIX_FALLBACK[prop]
+      if (value === undefined) return undefined
+      return { configurable: true, enumerable: true, writable: false, value }
+    },
+  },
+)
+
+/**
+ * Серверный мутатор: заполнить динамическую карту ролей данными из БД.
+ * Вызывается из lib/server/role-hydration.ts.
+ *
+ * НЕ ВЫЗЫВАТЬ С КЛИЕНТА — на клиенте динамическая карта остаётся пустой,
+ * fallback покрывает системные роли.
+ */
+export function _setDynamicRoleMatrix(matrix: Record<string, RoleMatrixEntry>): void {
+  _DYNAMIC_MATRIX = matrix
 }
 
 export const SUPER_ADMIN_MATRIX_ENTRY = {
