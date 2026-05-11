@@ -160,8 +160,14 @@ export async function GET(req: Request) {
       }),
     })
   } catch (error: any) {
-    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expenses GET', message: error?.message || 'error' })
-    return json({ error: humanizeDbError(error, 'Ошибка сервера') }, 500)
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expenses GET', message: error?.message || error?.details || error?.hint || error?.code || 'error' })
+    return json({
+      error: humanizeDbError(error, error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера'),
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+      raw_message: error?.message || null,
+    }, 500)
   }
 }
 
