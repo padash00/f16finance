@@ -114,11 +114,23 @@ export default function ProfitabilityPage() {
         ])
         const checkFail = async (name: keyof typeof endpoints, res: Response) => {
           if (res.ok) return
-          const body = await res.json().catch(() => null)
-          const apiMsg = body?.error || body?.detail || body?.hint || ''
-          const full = `[${name} → ${res.status}] ${apiMsg || res.statusText || 'без деталей'}`
+          // Сначала пробуем JSON, потом text — ответ может быть не JSON (Vercel 500/timeout, middleware reject)
+          const rawText = await res.clone().text().catch(() => '')
+          let body: any = null
+          try { body = JSON.parse(rawText) } catch { /* not JSON */ }
+          const apiMsg = body?.error || body?.detail || body?.hint || body?.message || ''
+          // Если ответ — не JSON, показываем первые 200 символов тела (обычно текст ошибки от Vercel/прокси)
+          const textPreview = !body && rawText ? rawText.slice(0, 200) : ''
+          const full = `[${name} → ${res.status} ${res.statusText}] ${apiMsg || textPreview || 'без деталей в ответе'}`
           // eslint-disable-next-line no-console
-          console.error('Profitability API fail:', { name, url: endpoints[name], status: res.status, body })
+          console.error('Profitability API fail:', {
+            name,
+            url: endpoints[name],
+            status: res.status,
+            statusText: res.statusText,
+            contentType: res.headers.get('content-type'),
+            body: body || rawText.slice(0, 1000),
+          })
           throw new Error(full)
         }
         await checkFail('incomes', incomeRes)
