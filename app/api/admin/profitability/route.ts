@@ -260,7 +260,12 @@ export async function GET(req: Request) {
       area: 'api/admin/profitability.GET',
       message: error?.message || 'Admin profitability GET error',
     })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }
 
@@ -312,6 +317,11 @@ export async function POST(req: Request) {
       area: 'api/admin/profitability.POST',
       message: error?.message || 'Admin profitability POST error',
     })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }

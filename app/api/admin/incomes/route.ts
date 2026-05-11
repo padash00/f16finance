@@ -149,7 +149,12 @@ export async function GET(req: Request) {
     return json({ data: data ?? [] })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/incomes GET', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }
 
@@ -430,6 +435,11 @@ export async function POST(req: Request) {
       area: 'api/admin/incomes',
       message: error?.message || 'Admin incomes route error',
     })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }

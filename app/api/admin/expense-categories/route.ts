@@ -84,7 +84,12 @@ export async function GET(req: Request) {
     return json({ data: enriched, period: { from, to } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expense-categories GET', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }
 
@@ -124,7 +129,12 @@ export async function POST(req: Request) {
     return json({ ok: true, data })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expense-categories POST', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }
 
@@ -168,7 +178,12 @@ export async function PATCH(req: Request) {
     return json({ ok: true, data })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expense-categories PATCH', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }
 
@@ -194,6 +209,11 @@ export async function DELETE(req: Request) {
     return json({ ok: true })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expense-categories DELETE', message: error?.message || 'error' })
-    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+    return json({
+      error: error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера',
+      detail: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+    }, 500)
   }
 }

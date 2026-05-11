@@ -100,16 +100,31 @@ export default function ProfitabilityPage() {
     const load = async () => {
       setLoading(true); setError(null)
       try {
+        const endpoints = {
+          incomes: `/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=5000`,
+          expenses: `/api/admin/expenses?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=2000`,
+          categories: '/api/admin/expense-categories',
+          inputs: `/api/admin/profitability?from=${monthFrom}&to=${monthTo}&includeKaspiDaily=1`,
+        }
         const [incomeRes, expenseRes, categoriesRes, inputsRes] = await Promise.all([
-          fetch(`/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=5000`),
-          fetch(`/api/admin/expenses?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=2000`),
-          fetch('/api/admin/expense-categories'),
-          fetch(`/api/admin/profitability?from=${monthFrom}&to=${monthTo}&includeKaspiDaily=1`),
+          fetch(endpoints.incomes),
+          fetch(endpoints.expenses),
+          fetch(endpoints.categories),
+          fetch(endpoints.inputs),
         ])
-        if (!incomeRes.ok) throw new Error((await incomeRes.json().catch(() => null))?.error || 'Не удалось загрузить доходы')
-        if (!expenseRes.ok) throw new Error((await expenseRes.json().catch(() => null))?.error || 'Не удалось загрузить расходы')
-        if (!categoriesRes.ok) throw new Error((await categoriesRes.json().catch(() => null))?.error || 'Не удалось загрузить категории')
-        if (!inputsRes.ok) throw new Error((await inputsRes.json().catch(() => null))?.error || 'Не удалось загрузить месячные вводы')
+        const checkFail = async (name: keyof typeof endpoints, res: Response) => {
+          if (res.ok) return
+          const body = await res.json().catch(() => null)
+          const apiMsg = body?.error || body?.detail || body?.hint || ''
+          const full = `[${name} → ${res.status}] ${apiMsg || res.statusText || 'без деталей'}`
+          // eslint-disable-next-line no-console
+          console.error('Profitability API fail:', { name, url: endpoints[name], status: res.status, body })
+          throw new Error(full)
+        }
+        await checkFail('incomes', incomeRes)
+        await checkFail('expenses', expenseRes)
+        await checkFail('categories', categoriesRes)
+        await checkFail('inputs', inputsRes)
         const incomePayload = (await incomeRes.json()) as { data?: IncomeRow[] }
         const expensePayload = (await expenseRes.json()) as { data?: ExpenseRow[] }
         const categoriesPayload = (await categoriesRes.json()) as { data?: ExpenseCategoryRow[] }
