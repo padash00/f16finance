@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
-import { ArrowDown, ArrowUp, BarChart2, Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDown, ArrowUp, BarChart2, Calculator, CalendarDays, ChevronDown, ChevronUp, Info, Landmark, Lightbulb, Save, Settings2, Sparkles, Target, TrendingUp, Wallet } from 'lucide-react'
 
 type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }
 type ExpenseRow = { date: string; category: string | null; cash_amount: number | null; kaspi_amount: number | null }
@@ -426,417 +426,587 @@ export default function ProfitabilityPage() {
   const netMargin = selected?.revenue ? (selected.netProfit / selected.revenue) * 100 : 0
   const ebitdaMargin = selected?.revenue ? (selected.ebitda / selected.revenue) * 100 : 0
 
-  return (
-    <>
-        <div className="app-page-wide space-y-6">
-          <Card className="border border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 via-slate-950/90 to-gray-950 p-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3"><Landmark className="h-7 w-7 text-emerald-300" /></div>
-                <div>
-                  <h1 className="text-3xl font-semibold text-white">ОПиУ и EBITDA</h1>
-                  <p className="text-sm text-slate-300">По умолчанию выручка берётся из журнала доходов. При необходимости вы можете вручную задать общую выручку по POS и общую наличку за месяц, а ниже внести комиссии и корректировки прибыли.</p>
-                  <p className="mt-1 text-xs text-slate-400">По умолчанию показываем 4 закрытых полных месяца без текущего незакрытого месяца.</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-300">
-                  <CalendarDays className="h-4 w-4 text-emerald-300" />
-                  <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="bg-transparent outline-none" />
-                  <span className="text-slate-500">—</span>
-                  <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="bg-transparent outline-none" />
-                </div>
-                <Button variant="outline" size="sm" onClick={() => { const closed = closedMonthDefaults(); setMonthFrom(closed.from); setMonthTo(closed.to) }} className="border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08]">4 закрытых месяца</Button>
-              </div>
-            </div>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-              Период расчёта: <span className="font-medium text-white">{periodLabel}</span>
-            </div>
-            {error ? <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
-            {success ? <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div> : null}
-          </Card>
+  // Сравнение с прошлым месяцем (для дельт ↑↓)
+  const prevSelected = useMemo(() => {
+    if (!selected) return null
+    const prevKey = shiftMonth(selected.month, -1)
+    return rows.find((r) => r.month === prevKey) || null
+  }, [selected, rows])
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Выручка за период</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.revenue)}</p><p className="mt-1 text-xs text-slate-500">С учётом ручных верхних вводов, если они заполнены</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div></Card>
-            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">EBITDA за период</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.ebitda)}</p></div><Calculator className="h-5 w-5 text-cyan-300" /></div></Card>
-            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Опер. прибыль</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.operatingProfit)}</p></div><Wallet className="h-5 w-5 text-amber-300" /></div></Card>
-            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Чистая прибыль</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.netProfit)}</p></div><TrendingDown className="h-5 w-5 text-rose-300" /></div></Card>
+  const delta = (curr: number, prev: number) => {
+    if (!prev) return null
+    return ((curr - prev) / Math.abs(prev)) * 100
+  }
+
+  // Топ-5 категорий расходов выбранного месяца
+  const topCategoriesSelected = useMemo(() => {
+    if (!selected) return []
+    const byCategory = new Map<string, { total: number; group: FinancialGroup }>()
+    for (const row of expenses) {
+      if (!row.date.startsWith(selected.month)) continue
+      const cat = (row.category || '—').trim()
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0)
+      const normalized = cat.toLowerCase()
+      const group = resolveFinancialGroup(cat, expenseCategories[normalized] || null)
+      const prev = byCategory.get(cat) || { total: 0, group }
+      byCategory.set(cat, { total: prev.total + amount, group: prev.group })
+    }
+    return Array.from(byCategory.entries())
+      .map(([name, info]) => ({ name, total: info.total, group: info.group }))
+      .filter((r) => r.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6)
+  }, [selected, expenses, expenseCategories])
+
+  // Авто-инсайт: что больше всего повлияло на изменение прибыли vs прошлый месяц
+  const insightText = useMemo(() => {
+    if (!selected || !prevSelected) return null
+    const deltaNet = selected.netProfit - prevSelected.netProfit
+    if (Math.abs(deltaNet) < 1000) return `Чистая прибыль практически без изменений vs ${prevSelected.label}.`
+    const factors: Array<{ label: string; diff: number }> = [
+      { label: 'выручка', diff: selected.revenue - prevSelected.revenue },
+      { label: 'COGS', diff: -(selected.cogs - prevSelected.cogs) },
+      { label: 'операционные', diff: -(selected.journalOperatingExpenses - prevSelected.journalOperatingExpenses) },
+      { label: 'ФОТ', diff: -(selected.payroll - prevSelected.payroll) },
+      { label: 'комиссия POS', diff: -(selected.posCommission - prevSelected.posCommission) },
+    ]
+    const top = factors.filter((f) => Math.abs(f.diff) >= 50000).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 2)
+    if (!top.length) return null
+    const dir = deltaNet >= 0 ? 'выросла' : 'упала'
+    const parts = top.map((f) => `${f.label} ${f.diff >= 0 ? '+' : ''}${money(f.diff)}`).join(', ')
+    return `Чистая прибыль ${dir} на ${money(Math.abs(deltaNet))} (${parts}).`
+  }, [selected, prevSelected])
+
+  const [showManualInputs, setShowManualInputs] = useState(false)
+
+
+  return (
+    <div className="app-page-wide space-y-6">
+      {/* ═══ HEADER ═══ */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+            <Landmark className="h-7 w-7 text-emerald-400" />
+            ОПиУ и прибыльность
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Период: <span className="text-foreground font-medium">{periodLabel}</span>
+            <span className="ml-2 text-xs">· выручка и расходы автоматически из журнала, при необходимости — ручные корректировки</span>
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+            <CalendarDays className="h-4 w-4 text-emerald-400" />
+            <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="bg-transparent outline-none" />
+            <span className="text-muted-foreground">—</span>
+            <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="bg-transparent outline-none" />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { const closed = closedMonthDefaults(); setMonthFrom(closed.from); setMonthTo(closed.to) }}>
+            4 закрытых
+          </Button>
+        </div>
+      </div>
+
+      {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div> : null}
+
+      {/* ═══ MONTH PILLS ═══ */}
+      {months.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {months.map((month) => {
+            const row = rows.find((r) => r.month === month)
+            const isActive = month === selectedMonth
+            const margin = row?.revenue ? (row.netProfit / row.revenue) * 100 : 0
+            return (
+              <button
+                key={month}
+                onClick={() => setSelectedMonth(month)}
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all ${
+                  isActive
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
+                    : 'border-border bg-card text-muted-foreground hover:border-emerald-500/30 hover:text-foreground'
+                }`}
+              >
+                <span className="font-medium capitalize">{monthLabel(month)}</span>
+                {row && row.revenue > 0 ? (
+                  <span className={`text-xs ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {margin >= 0 ? '+' : ''}{margin.toFixed(0)}%
+                  </span>
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {loading && !selected ? (
+        <Card className="border-border bg-card p-12 text-center text-muted-foreground animate-pulse">Загружаем данные ОПиУ…</Card>
+      ) : selected ? (
+        <>
+          {/* ═══ HERO KPI cards — выручка, EBITDA, опер.прибыль, чистая ═══ */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {(() => {
+              const cards: Array<{ label: string; value: number; prev: number; icon: any; accent: string; sub?: string }> = [
+                { label: 'Выручка', value: selected.revenue, prev: prevSelected?.revenue || 0, icon: TrendingUp, accent: 'text-blue-300', sub: selected.hasRevenueOverride ? 'ручной ввод' : 'из журнала' },
+                { label: 'EBITDA', value: selected.ebitda, prev: prevSelected?.ebitda || 0, icon: Calculator, accent: 'text-cyan-300', sub: `маржа ${ebitdaMargin.toFixed(1)}%` },
+                { label: 'Опер. прибыль (EBIT)', value: selected.operatingProfit, prev: prevSelected?.operatingProfit || 0, icon: Wallet, accent: 'text-amber-300' },
+                { label: 'Чистая прибыль', value: selected.netProfit, prev: prevSelected?.netProfit || 0, icon: Target, accent: selected.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300', sub: `маржа ${netMargin.toFixed(1)}%` },
+              ]
+              return cards.map(({ label, value, prev, icon: Icon, accent, sub }) => {
+                const d = delta(value, prev)
+                return (
+                  <Card key={label} className="border-border bg-card p-4">
+                    <div className="flex items-start justify-between">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                      <Icon className={`h-4 w-4 ${accent}`} />
+                    </div>
+                    <p className={`mt-2 text-2xl font-semibold ${value < 0 ? 'text-rose-300' : 'text-foreground'}`}>{money(value)}</p>
+                    <div className="mt-1 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{sub || ' '}</span>
+                      {d !== null ? (
+                        <span className={`flex items-center gap-0.5 font-medium ${d >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {d >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                          {Math.abs(d).toFixed(1)}%
+                        </span>
+                      ) : null}
+                    </div>
+                  </Card>
+                )
+              })
+            })()}
           </div>
 
-          <Card className="border border-white/10 bg-white/[0.03] p-6">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-white">Справка по терминам</h2>
-              <p className="text-sm text-slate-400">Короткие объяснения, что именно считается в этой странице и как читать итоговые показатели.</p>
+          {/* ═══ INSIGHT (если есть прошлый месяц) ═══ */}
+          {insightText ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
+              <div className="shrink-0 rounded-lg bg-amber-500/15 p-1.5 text-amber-300"><Lightbulb className="h-4 w-4" /></div>
+              <p className="text-sm text-amber-100/90">{insightText}</p>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Что такое выручка</div>
-                <p className="mt-2 text-sm text-slate-300">По умолчанию это доходы из журнала: наличные, {cashLabels.pos}, online и карта. Если вы сверху заполнили общую выручку по POS и общую наличку, страница возьмёт именно их как базу месяца.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Что теперь идёт из журнала автоматически</div>
-                <p className="mt-2 text-sm text-slate-300">Если у категории расхода задана финансовая группа, страница сама разносит журнал на операционные расходы, ФОТ, налоги на зарплату и налог 3%. Ручные поля ниже нужны только если надо переопределить или дополнить журнал.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Оборот POS</div>
-                <p className="mt-2 text-sm text-slate-300">Это объём оплат, прошедших через терминал или сервис {cashLabels.providerName} по конкретному типу оплаты. Он нужен только для расчёта комиссии банка.</p>
-              </div>
-              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-                <div className="text-sm font-medium text-white">Комиссия POS — без двойного счёта</div>
-                <p className="mt-2 text-sm text-slate-300">Если ты ведёшь категорию с группой <span className="text-cyan-300 font-medium">«Комиссия POS / эквайринг»</span> в журнале — она автоматически попадает в EBITDA. Если ещё заполнить «Оборот POS × Ставка %» ниже — ручной расчёт ПЕРЕКРЫВАЕТ журнальный (не складывается). Используй один из двух способов, не оба сразу.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Что такое EBITDA</div>
-                <p className="mt-2 text-sm text-slate-300">EBITDA = выручка минус расходы из журнала, комиссия POS, фонд оплаты труда, налоги на зарплату и прочие операционные расходы. Без износа, амортизации и налога на прибыль.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Операционная прибыль</div>
-                <p className="mt-2 text-sm text-slate-300">Это EBITDA после вычета износа и амортизации. Показывает, сколько бизнес зарабатывает после основных операционных затрат и учёта износа активов.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Чистая прибыль</div>
-                <p className="mt-2 text-sm text-slate-300">Это итог после всех расходов, комиссий, зарплат, амортизации и налога на прибыль или условного 3%. Именно этот показатель ближе всего к реальному результату месяца.</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">ФОТ, налоги и амортизация</div>
-                <p className="mt-2 text-sm text-slate-300">ФОТ — зарплаты за месяц. Налоги на зарплату — обязательные начисления на ФОТ. Износ и амортизация — постепенное списание стоимости оборудования и других активов.</p>
-              </div>
-            </div>
-          </Card>
+          ) : null}
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr]">
-            <Card className="border border-white/10 bg-white/[0.03] p-6">
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div><h2 className="text-xl font-semibold text-white">Разбор месяца</h2><p className="text-sm text-slate-400">ОПиУ-структура по выбранному месяцу.</p></div>
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white outline-none">{months.map((month) => <option key={month} value={month}>{monthLabel(month)}</option>)}</select>
+          {/* ═══ WATERFALL + TOP CATEGORIES ═══ */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
+            {/* WATERFALL */}
+            <Card className="border-border bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Куда уходят деньги</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">ОПиУ цепочка по стандарту: выручка → ... → чистая прибыль</p>
+                </div>
+                <Sparkles className="h-4 w-4 text-emerald-400" />
               </div>
-              {loading && !selected ? <div className="text-sm text-slate-400">Загружаем расчёт прибыли...</div> : selected ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                    <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">EBITDA</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.ebitda)}</div><div className="mt-1 text-xs text-slate-400">{pct(ebitdaMargin)}</div></Card>
-                    <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">Опер. прибыль</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.operatingProfit)}</div><div className="mt-1 text-xs text-slate-400">{selected.label}</div></Card>
-                    <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">Чистая прибыль</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.netProfit)}</div><div className="mt-1 text-xs text-slate-400">{pct(netMargin)}</div></Card>
-                    {selected.journalCapex > 0 && <Card className="border border-amber-500/20 bg-amber-500/5 p-4"><div className="text-xs uppercase tracking-wide text-amber-500">FCF (после CAPEX)</div><div className={`mt-2 text-xl font-semibold ${(selected.netProfit - selected.journalCapex) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex)}</div><div className="mt-1 text-xs text-amber-600">CAPEX {money(selected.journalCapex)}</div></Card>}
-                  </div>
-                  <div className="overflow-hidden rounded-2xl border border-white/10">
-                    <table className="w-full text-sm"><tbody>
-                      {[
-                        ['Выручка', selected.revenue],
-                        ...(selected.cogs > 0 ? [['COGS (Себестоимость)', -selected.cogs], ['Валовая прибыль', selected.grossProfit]] : []),
-                        ['Операционные расходы из журнала', -selected.journalOperatingExpenses],
-                        [`Комиссия ${cashLabels.pos} / эквайринг`, -selected.posCommission],
-                        ['Фонд оплаты труда', -selected.payroll],
-                        ['Налоги на зарплату', -selected.payrollTaxes],
-                        ['Прочие операционные', -selected.otherOperating],
-                        ['EBITDA', selected.ebitda],
-                        ['Износ', -selected.depreciation],
-                        ['Амортизация', -selected.amortization],
-                        ['Операционная прибыль (EBIT)', selected.operatingProfit],
-                        ['Финансовые расходы (% по кредитам)', -selected.financialExpensesJournal],
-                        ['EBT (прибыль до налога)', selected.ebt],
-                        ['Налог на прибыль / 3%', -selected.incomeTax],
-                        ['Неоперационные / разовые', -selected.nonOperatingJournalExpenses],
-                        ['Чистая прибыль', selected.netProfit],
-                      ].map(([label, value]) => <tr key={String(label)} className="border-b border-white/5 last:border-b-0"><td className="px-4 py-3 text-slate-300">{label}</td><td className={`px-4 py-3 text-right font-medium ${(Number(value) >= 0) ? 'text-emerald-300' : 'text-rose-300'}`}>{money(Number(value))}</td></tr>)}
-                      {(selected.journalCapex > 0 || selected.profitDistributionJournal > 0) && <>
-                        <tr className="border-t-2 border-amber-500/20"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wide text-amber-500/70">Справочно — вне P&L (после чистой прибыли)</td></tr>
-                        {selected.journalCapex > 0 && <tr className="border-b border-white/5"><td className="px-4 py-3 text-slate-400">CAPEX (покупка активов)</td><td className="px-4 py-3 text-right font-medium text-amber-400">−{money(selected.journalCapex)}</td></tr>}
-                        {selected.profitDistributionJournal > 0 && <tr className="border-b border-white/5"><td className="px-4 py-3 text-slate-400">Распределение прибыли (доля партнёра / дивиденды)</td><td className="px-4 py-3 text-right font-medium text-purple-300">−{money(selected.profitDistributionJournal)}</td></tr>}
-                        <tr><td className="px-4 py-3 text-slate-300">Остаток после CAPEX + распределения (FCF)</td><td className={`px-4 py-3 text-right font-semibold ${(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal)}</td></tr>
-                      </>}
-                    </tbody></table>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Card className="border border-white/10 bg-slate-950/60 p-4">
-                      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-white"><CreditCard className="h-4 w-4 text-emerald-300" />POS и безнал</div>
-                      <div className="space-y-2 text-sm text-slate-300">
-                        <div className="flex justify-between"><span>Общая наличка</span><span>{money(selected.cashRevenue)}</span></div>
-                        <div className="flex justify-between"><span>Безналичная выручка</span><span>{money(selected.cashlessRevenue)}</span></div>
-                        <div className="flex justify-between"><span>{cashLabels.qr}</span><span>{money(selected.kaspiQrTurnover)} / {money(selected.kaspiQrCommission)}</span></div>
-                        <div className="flex justify-between"><span>{cashLabels.gold}</span><span>{money(selected.kaspiGoldTurnover)} / {money(selected.kaspiGoldCommission)}</span></div>
-                        <div className="flex justify-between"><span>Другие карты</span><span>{money(selected.otherCardsTurnover)} / {money(selected.otherCardsCommission)}</span></div>
-                        <div className="flex justify-between"><span>{cashLabels.red}</span><span>{money(selected.kaspiRedTurnover)} / {money(selected.kaspiRedCommission)}</span></div>
-                        <div className="flex justify-between"><span>{cashLabels.kredit}</span><span>{money(selected.kaspiKreditTurnover)} / {money(selected.kaspiKreditCommission)}</span></div>
-                        {selected.legacyQrGoldTurnover > 0 ? <div className="flex justify-between text-amber-300"><span>Старый общий QR/Gold</span><span>{money(selected.legacyQrGoldTurnover)} / {money(selected.legacyQrGoldCommission)}</span></div> : null}
-                        <div className="flex justify-between border-t border-white/10 pt-2 font-medium text-white"><span>Итого комиссия POS</span><span>{money(selected.posCommission)}</span></div>
-                      </div>
-                    </Card>
-                    <Card className="border border-white/10 bg-slate-950/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-white">Автоматическая раскладка журнала</div>
-                      <div className="space-y-2 text-sm text-slate-300">
-                        <div className="flex justify-between"><span>Операционные</span><span>{money(selected.journalOperatingExpenses)}</span></div>
-                        <div className="flex justify-between"><span>Комиссия POS / эквайринг (журнал){selected.manualPosCommission > 0 && selected.journalPosCommission > 0 ? <span className="ml-1 text-xs text-amber-300">перекрыто ручным расчётом</span> : null}</span><span>{money(selected.journalPosCommission)}</span></div>
-                        <div className="flex justify-between"><span>ФОТ</span><span>{money(selected.journalPayrollExpenses)}</span></div>
-                        <div className="flex justify-between"><span>Налоги на зарплату</span><span>{money(selected.journalPayrollTaxes)}</span></div>
-                        <div className="flex justify-between"><span>Налог 3% / прибыль</span><span>{money(selected.journalIncomeTax)}</span></div>
-                        <div className="flex justify-between"><span>Финансовые расходы (% по кредитам)</span><span>{money(selected.financialExpensesJournal)}</span></div>
-                        <div className="flex justify-between"><span>Неоперационные / разовые</span><span>{money(selected.nonOperatingJournalExpenses)}</span></div>
-                        {selected.journalDepreciation > 0 ? <div className="flex justify-between"><span>Амортизация (авто){selected.depreciationManual > 0 ? <span className="ml-1 text-xs text-amber-300">перекрыто вручную</span> : null}</span><span>{money(selected.journalDepreciation)}</span></div> : null}
-                        {selected.journalCapex > 0 ? <div className="flex justify-between text-amber-400/80"><span>CAPEX (вне P&L)</span><span>{money(selected.journalCapex)}</span></div> : null}
-                        {selected.profitDistributionJournal > 0 ? <div className="flex justify-between text-purple-300/80"><span>Распределение прибыли (вне P&L)</span><span>{money(selected.profitDistributionJournal)}</span></div> : null}
-                        <div className="border-t border-white/10 pt-2 text-xs text-slate-400">
-                          Общая сумма журнала: {money(selected.journalExpenses)}
-                        </div>
-                        <div className="border-t border-white/10 pt-2">
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Комментарий месяца</div>
-                          <div className="mt-1 text-sm text-slate-300">
-                            {selected.notes || `Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам ${cashLabels.providerName} и ручные допущения месяца.`}
+              <Waterfall selected={selected} cashLabels={cashLabels} />
+            </Card>
+
+            {/* TOP CATEGORIES */}
+            <Card className="border-border bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Топ-6 расходов месяца</h2>
+                <span className="text-xs text-muted-foreground">{selected.label}</span>
+              </div>
+              {topCategoriesSelected.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Нет расходов за месяц</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {(() => {
+                    const maxTotal = topCategoriesSelected[0]?.total || 1
+                    return topCategoriesSelected.map((cat, i) => {
+                      const pct = (cat.total / maxTotal) * 100
+                      const groupLabel = ({
+                        cogs: 'COGS', operating: 'Опер.', payroll: 'ФОТ', payroll_advance: 'Аванс',
+                        payroll_tax: 'Налог ФОТ', pos_commission: 'Эквайр.', income_tax: 'Налог 3%',
+                        depreciation: 'Износ', financial_expenses: 'Фин.', non_operating: 'Разов.',
+                        capex: 'CAPEX', profit_distribution: 'Распред.',
+                      } as Record<string, string>)[cat.group] || 'Опер.'
+                      const groupColor = ({
+                        cogs: 'bg-orange-500/80', operating: 'bg-blue-500/80', payroll: 'bg-purple-500/80',
+                        payroll_advance: 'bg-purple-400/80', payroll_tax: 'bg-pink-500/80', pos_commission: 'bg-cyan-500/80',
+                        income_tax: 'bg-yellow-500/80', depreciation: 'bg-slate-500/80', financial_expenses: 'bg-rose-500/80',
+                        non_operating: 'bg-gray-500/80', capex: 'bg-amber-500/80', profit_distribution: 'bg-violet-500/80',
+                      } as Record<string, string>)[cat.group] || 'bg-blue-500/80'
+                      return (
+                        <div key={cat.name}>
+                          <div className="mb-1 flex items-baseline justify-between gap-2">
+                            <div className="flex min-w-0 items-baseline gap-2">
+                              <span className="shrink-0 text-xs text-muted-foreground">#{i + 1}</span>
+                              <span className="truncate text-sm text-foreground">{cat.name}</span>
+                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-white/10 bg-white/[0.03] text-muted-foreground">{groupLabel}</span>
+                            </div>
+                            <span className="shrink-0 text-sm font-medium text-foreground">{money(cat.total)}</span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                            <div className={`h-full ${groupColor} transition-all`} style={{ width: `${pct}%` }} />
                           </div>
                         </div>
-                      </div>
-                    </Card>
-                  </div>
-                  {selected.hasRevenueOverride ? <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">Для этого месяца выручка считается от ручных верхних вводов: наличка {money(selected.cashRevenueOverride)} и POS {money(selected.posRevenueOverride)}. Если очистить эти поля и сохранить, страница снова возьмёт выручку из журнала доходов.</div> : null}
-                  {selected.hasKaspiDailyAdjustment && !selected.hasRevenueOverride ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">Безналичный за этот месяц взят по календарным суткам. Коррекция относительно обычной сменной суммы: {selected.kaspiDailyAdjustment > 0 ? '+' : ''}{money(selected.kaspiDailyAdjustment)}. В журнале по сменам было {money(selected.rawKaspiRevenue)}, после суточной сверки в ОПиУ попало {money(selected.correctedKaspiRevenue)}.</div> : null}
-                  {selected.hasKaspiDailyWarnings && !selected.hasRevenueOverride ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для части ночных смен в этом месяце нет разделения {cashLabels.providerName} до и после полуночи, поэтому суточная сверка может быть неполной.</div> : null}
-                  {selected.legacyQrGoldTurnover > 0 ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для этого месяца найдены старые объединённые данные QR/Gold. Лучше переписать их отдельно в полях {cashLabels.qr} и {cashLabels.gold}, чтобы комиссия считалась точнее.</div> : null}
+                      )
+                    })
+                  })()}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* ═══ DETAILED P&L TABLE (collapsed by default) ═══ */}
+          <details className="group">
+            <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-white/5">
+              <span className="flex items-center gap-2">
+                <BarChart2 className="h-4 w-4 text-emerald-400" />
+                Детальная ОПиУ цепочка
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <Card className="mt-3 border-border bg-card p-0 overflow-hidden">
+              <table className="w-full text-sm">
+                <tbody>
+                  {[
+                    { label: 'Выручка', value: selected.revenue, kind: 'pos', big: true },
+                    ...(selected.cogs > 0 ? [
+                      { label: 'COGS (Себестоимость)', value: -selected.cogs, kind: 'neg' as const },
+                      { label: 'Валовая прибыль', value: selected.grossProfit, kind: 'subtotal' as const },
+                    ] : []),
+                    { label: 'Операционные расходы', value: -selected.journalOperatingExpenses, kind: 'neg' as const },
+                    { label: `Комиссия ${cashLabels.pos} / эквайринг`, value: -selected.posCommission, kind: 'neg' as const },
+                    { label: 'Фонд оплаты труда', value: -selected.payroll, kind: 'neg' as const },
+                    { label: 'Налоги на зарплату', value: -selected.payrollTaxes, kind: 'neg' as const },
+                    { label: 'Прочие операционные', value: -selected.otherOperating, kind: 'neg' as const },
+                    { label: 'EBITDA', value: selected.ebitda, kind: 'subtotal' as const },
+                    { label: 'Износ', value: -selected.depreciation, kind: 'neg' as const },
+                    { label: 'Амортизация', value: -selected.amortization, kind: 'neg' as const },
+                    { label: 'Опер. прибыль (EBIT)', value: selected.operatingProfit, kind: 'subtotal' as const },
+                    { label: 'Финансовые расходы (% по кредитам)', value: -selected.financialExpensesJournal, kind: 'neg' as const },
+                    { label: 'EBT', value: selected.ebt, kind: 'subtotal' as const },
+                    { label: 'Налог на прибыль / 3%', value: -selected.incomeTax, kind: 'neg' as const },
+                    { label: 'Неоперационные / разовые', value: -selected.nonOperatingJournalExpenses, kind: 'neg' as const },
+                    { label: 'Чистая прибыль', value: selected.netProfit, kind: 'final' as const },
+                  ].map(({ label, value, kind, big }) => (
+                    <tr key={label} className={`border-b border-border last:border-b-0 ${kind === 'subtotal' ? 'bg-white/[0.02]' : ''} ${kind === 'final' ? 'bg-emerald-500/5 border-t-2 border-emerald-500/20' : ''}`}>
+                      <td className={`px-4 py-2.5 ${kind === 'subtotal' ? 'font-medium text-foreground' : kind === 'final' ? 'font-semibold text-emerald-200' : big ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{label}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums ${kind === 'final' ? 'font-bold text-emerald-200' : kind === 'subtotal' ? 'font-semibold text-foreground' : value >= 0 ? 'text-foreground' : 'text-rose-300'}`}>{money(value)}</td>
+                    </tr>
+                  ))}
+                  {(selected.journalCapex > 0 || selected.profitDistributionJournal > 0) && (
+                    <>
+                      <tr className="border-t-2 border-amber-500/20 bg-amber-500/[0.04]"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wider text-amber-400/70">Справочно — вне P&L</td></tr>
+                      {selected.journalCapex > 0 && (
+                        <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">CAPEX (покупка активов)</td><td className="px-4 py-2.5 text-right text-amber-300 tabular-nums">−{money(selected.journalCapex)}</td></tr>
+                      )}
+                      {selected.profitDistributionJournal > 0 && (
+                        <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">Распределение прибыли</td><td className="px-4 py-2.5 text-right text-violet-300 tabular-nums">−{money(selected.profitDistributionJournal)}</td></tr>
+                      )}
+                      <tr className="bg-amber-500/[0.04]">
+                        <td className="px-4 py-2.5 font-medium text-foreground">FCF (после CAPEX + распределения)</td>
+                        <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal) >= 0 ? 'text-amber-200' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal)}</td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+              {selected.notes ? (
+                <div className="border-t border-border bg-white/[0.02] px-4 py-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Комментарий: </span>{selected.notes}
                 </div>
               ) : null}
             </Card>
+          </details>
 
-            <Card className="border border-white/10 bg-white/[0.03] p-6">
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold text-white">Ручные месячные вводы</h2>
-                <p className="text-sm text-slate-400">Сначала при необходимости задайте общую выручку по POS и общую наличку за месяц. Ниже внесите комиссии и только те суммы, которые должны переопределить или дополнить автоматическую раскладку журнала.</p>
+          {/* ═══ MONTHLY HISTORY TABLE ═══ */}
+          {rows.length > 1 && (
+            <Card className="border-border bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Помесячная динамика</h2>
+                <span className="text-xs text-muted-foreground">клик по строке → выбрать месяц</span>
               </div>
-              <div className="mt-6 space-y-4">
-                {/* Input Tabs */}
-                <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-                  {INPUT_TABS.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setInputTab(tab.id)}
-                      className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${inputTab === tab.id ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="px-3 py-2.5">Месяц</th>
+                      <th className="px-3 py-2.5 text-right">Выручка</th>
+                      <th className="px-3 py-2.5 text-right">Опер. журнал</th>
+                      <th className="px-3 py-2.5 text-right">Эквайр.</th>
+                      <th className="px-3 py-2.5 text-right">EBITDA</th>
+                      <th className="px-3 py-2.5 text-right">Чистая</th>
+                      <th className="px-3 py-2.5 text-right">Маржа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const margin = row.revenue ? (row.netProfit / row.revenue) * 100 : 0
+                      return (
+                        <tr key={row.month} onClick={() => setSelectedMonth(row.month)} className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-white/[0.03] ${row.month === selectedMonth ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20' : ''}`}>
+                          <td className="px-3 py-2.5 font-medium text-foreground capitalize">{row.label}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{money(row.revenue)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(row.journalOperatingExpenses)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(row.posCommission)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${row.ebitda >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${row.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.netProfit)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
+                        </tr>
+                      )
+                    })}
+                    <tr className="border-t-2 border-emerald-500/20 bg-emerald-500/5 font-medium">
+                      <td className="px-3 py-2.5 text-foreground">Итого за период</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-foreground">{money(totals.revenue)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">—</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">—</td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${totals.ebitda >= 0 ? 'text-cyan-200' : 'text-rose-300'}`}>{money(totals.ebitda)}</td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${totals.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-300'}`}>{money(totals.netProfit)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{totals.revenue ? `${((totals.netProfit / totals.revenue) * 100).toFixed(1)}%` : '—'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
-                {/* Tab: Выручка и платежи */}
-                {inputTab === 'revenue' && (
-                  <>
-                    <div className="grid grid-cols-1 gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-white">Общая наличная выручка за месяц</label>
-                        <Input type="number" min="0" step="100" value={draft.cash_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, cash_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
-                        <div className="text-xs text-cyan-100/80">Это вся наличка месяца. Поле необязательно.</div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-white">Общая выручка по POS за месяц</label>
-                        <Input type="number" min="0" step="100" value={draft.pos_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, pos_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём безнал из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
-                        <div className="text-xs text-cyan-100/80">Это общая сумма по терминалу и {cashLabels.providerName}-сервисам за месяц. Поле необязательно.</div>
-                      </div>
-                      <div className="text-xs text-cyan-100/80 md:col-span-2">
-                        Если заполнили хотя бы одно из этих двух полей, страница возьмёт выручку месяца из них: <span className="font-medium text-white">наличка + POS</span>. Если оба поля пустые, база останется из журнала доходов.
-                      </div>
-                    </div>
-                    {[
-                      ['kaspi_qr_turnover', 'kaspi_qr_rate', cashLabels.qr],
-                      ['kaspi_gold_turnover', 'kaspi_gold_rate', cashLabels.gold],
-                      ['other_cards_turnover', 'other_cards_rate', 'Другие карты'],
-                      ['kaspi_red_turnover', 'kaspi_red_rate', cashLabels.red],
-                      ['kaspi_kredit_turnover', 'kaspi_kredit_rate', cashLabels.kredit],
-                    ].map(([turnoverKey, rateKey, label]) => (
-                      <div key={String(label)} className="grid grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 md:grid-cols-[1fr_180px_120px] md:items-center">
-                        <div className="text-sm font-medium text-white">{label}</div>
-                        <Input type="number" min="0" step="100" value={draft[turnoverKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [turnoverKey]: e.target.value }))} placeholder="Оборот, ₸" className="border-white/10 bg-black/20 text-white" />
-                        <Input type="number" min="0" step="0.01" value={draft[rateKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [rateKey]: e.target.value }))} placeholder="%" className="border-white/10 bg-black/20 text-white" />
-                      </div>
-                    ))}
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
-                      <div className="font-medium text-white">Как заполнять комиссии POS</div>
-                      <ul className="mt-2 space-y-1">
-                        <li>{cashLabels.qr}: оборот оплат по QR и ставка комиссии именно для QR.</li>
-                        <li>{cashLabels.gold}: оборот оплат картой Gold и ставка комиссии именно для Gold.</li>
-                        <li>Другие карты: все остальные банковские карты.</li>
-                        <li>{cashLabels.red} и {cashLabels.kredit}: указывайте отдельно, если по ним другая ставка банка.</li>
-                      </ul>
-                    </div>
-                  </>
-                )}
+          {/* ═══ ALERTS (kaspi daily corrections) ═══ */}
+          {selected.hasRevenueOverride ? (
+            <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-100">
+              <Info className="inline h-4 w-4 mr-1" /> Выручка взята из ручных верхних вводов (наличка {money(selected.cashRevenueOverride)} + POS {money(selected.posRevenueOverride)}). Очисти эти поля чтобы вернуть данные из журнала.
+            </div>
+          ) : null}
+          {selected.hasKaspiDailyAdjustment && !selected.hasRevenueOverride ? (
+            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100">
+              <Info className="inline h-4 w-4 mr-1" /> Безналичный за месяц пересчитан по календарным суткам ({selected.kaspiDailyAdjustment > 0 ? '+' : ''}{money(selected.kaspiDailyAdjustment)}).
+            </div>
+          ) : null}
+          {selected.hasKaspiDailyWarnings && !selected.hasRevenueOverride ? (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
+              <Info className="inline h-4 w-4 mr-1" /> Для части ночных смен нет разделения {cashLabels.providerName} до и после полуночи — суточная сверка неполная.
+            </div>
+          ) : null}
 
-                {/* Tab: ФОТ и налоги */}
-                {inputTab === 'payroll' && (
-                  <>
-                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-                      <div className="font-medium text-white">Как теперь работают ФОТ и налоги</div>
-                      <div className="mt-2 space-y-1">
-                        <div>Если категория расхода привязана к финансовой группе, страница сама подтянет ФОТ и налоги из журнала.</div>
-                        <div>Ручные поля ниже нужны только если вы хотите переопределить сумму из журнала для конкретного месяца.</div>
-                      </div>
-                    </div>
-                    {[
-                      ['payroll_amount', 'ФОТ вручную (если нужно переопределить журнал)'],
-                      ['payroll_taxes_amount', 'Налоги на зарплату вручную'],
-                      ['income_tax_amount', 'Налог на прибыль / 3% вручную'],
-                    ].map(([key, label]) => (
-                      <div key={String(key)} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px] md:items-center">
-                        <label className="text-sm text-white">{label}</label>
-                        <Input type="number" min="0" step="100" value={draft[key]} onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="border-white/10 bg-slate-950/70 text-white" />
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {/* Tab: Прочее */}
-                {inputTab === 'other' && (
-                  <>
-                    {[
-                      ['depreciation_amount', 'Износ'],
-                      ['amortization_amount', 'Амортизация'],
-                      ['other_operating_amount', 'Прочие операционные'],
-                    ].map(([key, label]) => (
-                      <div key={String(key)} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px] md:items-center">
-                        <label className="text-sm text-white">{label}</label>
-                        <Input type="number" min="0" step="100" value={draft[key]} onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="border-white/10 bg-slate-950/70 text-white" />
-                      </div>
-                    ))}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-white">Комментарий по месяцу</label>
-                      <Textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} placeholder={`Например: изменился договор с ${cashLabels.providerName} или была разовая корректировка прибыли.`} className="min-h-28 border-white/10 bg-slate-950/70 text-white" />
-                    </div>
-                  </>
-                )}
+          {/* ═══ MANUAL INPUTS (свёрнутый блок) ═══ */}
+          <Card className="border-border bg-card overflow-hidden">
+            <button
+              onClick={() => setShowManualInputs((v) => !v)}
+              className="flex w-full items-center justify-between px-5 py-4 text-sm font-medium text-foreground hover:bg-white/[0.03]"
+            >
+              <span className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4 text-amber-400" />
+                Ручные корректировки и комиссии POS
+                <span className="ml-2 text-xs font-normal text-muted-foreground">(точные ставки банка, override ФОТ/налогов, what-if)</span>
+              </span>
+              {showManualInputs ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {showManualInputs && (
+              <div className="border-t border-border p-5 space-y-5">
+                <ManualInputTabs
+                  cashLabels={cashLabels}
+                  draft={draft}
+                  setDraft={setDraft}
+                  inputTab={inputTab}
+                  setInputTab={setInputTab}
+                />
                 {selected && draftPreview ? (
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
-                      <Calculator className="h-4 w-4 text-emerald-300" />
-                      Предварительный расчёт для {monthLabel(selectedMonth)}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <div className="text-sm">
+                      <div className="text-xs uppercase tracking-wider text-emerald-300 mb-2">После сохранения:</div>
+                      <div className="flex justify-between text-muted-foreground"><span>EBITDA</span><span className={`tabular-nums ${draftPreview.ebitda >= selected.ebitda ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.ebitda)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>Опер. прибыль</span><span className={`tabular-nums ${draftPreview.operatingProfit >= selected.operatingProfit ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.operatingProfit)}</span></div>
+                      <div className="flex justify-between text-foreground font-medium"><span>Чистая</span><span className={`tabular-nums ${draftPreview.netProfit >= selected.netProfit ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.netProfit)}</span></div>
                     </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                        <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Сейчас сохранено</div>
-                        <div className="space-y-2 text-sm text-slate-300">
-                          <div className="flex justify-between"><span>Выручка</span><span>{money(selected.revenue)}</span></div>
-                          <div className="flex justify-between"><span>Наличка</span><span>{money(selected.cashRevenue)}</span></div>
-                          <div className="flex justify-between"><span>POS / безнал</span><span>{money(selected.cashlessRevenue)}</span></div>
-                          <div className="flex justify-between"><span>Опер. журнал</span><span>{money(selected.journalOperatingExpenses)}</span></div>
-                          <div className="flex justify-between"><span>ФОТ</span><span>{money(selected.payroll)}</span></div>
-                          <div className="flex justify-between"><span>Комиссия POS</span><span>{money(selected.posCommission)}</span></div>
-                          <div className="flex justify-between"><span>EBITDA</span><span>{money(selected.ebitda)}</span></div>
-                          <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(selected.operatingProfit)}</span></div>
-                          <div className="flex justify-between font-medium text-white"><span>Чистая прибыль</span><span>{money(selected.netProfit)}</span></div>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-emerald-500/20 bg-slate-950/60 p-4">
-                        <div className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Будет после сохранения</div>
-                        <div className="space-y-2 text-sm text-slate-200">
-                          <div className="flex justify-between"><span>Выручка</span><span>{money(draftPreview.revenue)}</span></div>
-                          <div className="flex justify-between"><span>Наличка</span><span>{money(draftPreview.cashRevenue)}</span></div>
-                          <div className="flex justify-between"><span>POS / безнал</span><span>{money(draftPreview.posRevenue)}</span></div>
-                          <div className="flex justify-between"><span>Опер. журнал</span><span>{money(selected.journalOperatingExpenses)}</span></div>
-                          <div className="flex justify-between"><span>ФОТ</span><span>{money(draftPreview.payroll)}</span></div>
-                          <div className="flex justify-between"><span>Комиссия POS</span><span>{money(draftPreview.posCommission)}</span></div>
-                          <div className="flex justify-between"><span>EBITDA</span><span>{money(draftPreview.ebitda)}</span></div>
-                          <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(draftPreview.operatingProfit)}</span></div>
-                          <div className="flex justify-between font-medium text-white"><span>Чистая прибыль</span><span>{money(draftPreview.netProfit)}</span></div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-3 text-xs text-emerald-100/80">
-                      Калькулятор работает сразу по введённым полям. Пока вы не нажмёте сохранить, это только предварительный расчёт.
+                    <div className="text-sm md:col-span-2 self-end">
+                      {canEdit && (
+                        <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500">
+                          <Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем…' : `Сохранить ${monthLabel(selectedMonth)}`}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : null}
-                {canEdit && (
-                  <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500"><Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем...' : `Сохранить ${monthLabel(selectedMonth)}`}</Button>
-                )}
 
-                {/* What-if section */}
-                <div className="rounded-2xl border border-white/10 bg-slate-950/60">
-                  <button
-                    onClick={() => setShowWhatIf((v) => !v)}
-                    className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-white"
-                  >
-                    <span className="flex items-center gap-2"><BarChart2 className="w-4 h-4" />What-if моделирование</span>
-                    <span className="text-slate-400">{showWhatIf ? '▲' : '▼'}</span>
-                  </button>
-                  {showWhatIf && selected && (
-                    <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <label className="text-slate-300">Изменение выручки ±%</label>
-                          <span className={`font-medium tabular-nums ${whatIf.revenueAdj > 0 ? 'text-emerald-300' : whatIf.revenueAdj < 0 ? 'text-rose-300' : 'text-slate-400'}`}>{whatIf.revenueAdj > 0 ? '+' : ''}{whatIf.revenueAdj}%</span>
-                        </div>
-                        <input type="range" min={-50} max={50} step={1} value={whatIf.revenueAdj} onChange={(e) => setWhatIf((prev) => ({ ...prev, revenueAdj: Number(e.target.value) }))} className="w-full accent-emerald-500" />
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <label className="text-slate-300">Изменение расходов ±%</label>
-                          <span className={`font-medium tabular-nums ${whatIf.expenseAdj > 0 ? 'text-rose-300' : whatIf.expenseAdj < 0 ? 'text-emerald-300' : 'text-slate-400'}`}>{whatIf.expenseAdj > 0 ? '+' : ''}{whatIf.expenseAdj}%</span>
-                        </div>
-                        <input type="range" min={-50} max={50} step={1} value={whatIf.expenseAdj} onChange={(e) => setWhatIf((prev) => ({ ...prev, expenseAdj: Number(e.target.value) }))} className="w-full accent-rose-500" />
-                      </div>
-                      {(() => {
-                        const base = selected
-                        const adjRevenue = base.revenue * (1 + whatIf.revenueAdj / 100)
-                        const expMultiplier = 1 + whatIf.expenseAdj / 100
-                        const adjOperating = base.journalOperatingExpenses * expMultiplier
-                        const adjPayroll = base.payroll * expMultiplier
-                        const adjPayrollTaxes = base.payrollTaxes * expMultiplier
-                        const adjOtherOp = base.otherOperating * expMultiplier
-                        const adjEbitda = adjRevenue - adjOperating - base.posCommission - adjPayroll - adjPayrollTaxes - adjOtherOp
-                        const adjOperatingProfit = adjEbitda - base.depreciation - base.amortization
-                        const adjNetProfit = adjOperatingProfit - base.nonOperatingJournalExpenses - base.incomeTax
-                        return (
-                          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 space-y-2 text-sm">
-                            <div className="text-xs uppercase tracking-wide text-emerald-300 font-medium">Прогнозные результаты</div>
-                            <div className="flex justify-between"><span className="text-slate-300">Выручка</span><span className="font-medium text-white">{money(adjRevenue)}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-300">EBITDA</span><span className={`font-medium ${adjEbitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(adjEbitda)}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-300">Чистая прибыль</span><span className={`font-semibold ${adjNetProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(adjNetProfit)}</span></div>
-                            <div className="border-t border-white/10 pt-2 text-xs text-slate-400">
-                              vs факт: EBITDA {adjEbitda - base.ebitda >= 0 ? '+' : ''}{money(adjEbitda - base.ebitda)}, чистая {adjNetProfit - base.netProfit >= 0 ? '+' : ''}{money(adjNetProfit - base.netProfit)}
-                            </div>
-                          </div>
-                        )
-                      })()}
-                      <button onClick={() => setWhatIf({ revenueAdj: 0, expenseAdj: 0 })} className="text-xs text-slate-400 hover:text-white">Сбросить</button>
-                    </div>
-                  )}
-                </div>
+                <WhatIfPanel selected={selected} whatIf={whatIf} setWhatIf={setWhatIf} />
               </div>
-            </Card>
-          </div>
-
-          <Card className="border border-white/10 bg-white/[0.03] p-6">
-            <div className="mb-4"><h2 className="text-xl font-semibold text-white">Помесячная таблица прибыли</h2><p className="text-sm text-slate-400">Факт из системы объединён с ручными месячными вводами по комиссиям и корректировкам.</p></div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1050px] text-sm">
-                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th>{rows.some(r => r.cogs > 0) && <><th className="px-3 py-3 text-right text-orange-400">COGS</th><th className="px-3 py-3 text-right text-orange-300">Вал. прибыль</th></>}<th className="px-3 py-3 text-right">Опер. журнал</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th><th className="px-3 py-3 text-right text-slate-500">vs пред. месяц</th></tr></thead>
-                <tbody>{rows.map((row) => {
-                  const prevMonth = shiftMonth(row.month, -1)
-                  const prevRow = rows.find((r) => r.month === prevMonth)
-                  const deltaNetProfit = prevRow ? row.netProfit - prevRow.netProfit : null
-                  const deltaEbitda = prevRow ? row.ebitda - prevRow.ebitda : null
-                  const deltaPct = (prevRow && prevRow.netProfit !== 0) ? ((row.netProfit - prevRow.netProfit) / Math.abs(prevRow.netProfit)) * 100 : null
-                  const hasCogs = rows.some(r => r.cogs > 0)
-                  return (
-                    <tr key={row.month} onClick={() => setSelectedMonth(row.month)} className={`cursor-pointer border-b border-white/5 text-slate-200 transition hover:bg-white/[0.05] ${row.month === selectedMonth ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20' : ''}`}>
-                      <td className="px-3 py-3 font-medium">{row.label}{row.month === selectedMonth ? <span className="ml-2 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300">выбран</span> : null}</td>
-                      <td className="px-3 py-3 text-right">{money(row.revenue)}</td>
-                      {hasCogs && <><td className="px-3 py-3 text-right text-orange-300">{row.cogs > 0 ? money(row.cogs) : '—'}</td><td className={`px-3 py-3 text-right font-medium ${row.grossProfit >= 0 ? 'text-orange-200' : 'text-rose-300'}`}>{money(row.grossProfit)}</td></>}
-                      <td className="px-3 py-3 text-right">{money(row.journalOperatingExpenses)}</td>
-                      <td className="px-3 py-3 text-right">{money(row.posCommission)}</td>
-                      <td className={`px-3 py-3 text-right font-medium ${row.ebitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td>
-                      <td className={`px-3 py-3 text-right font-medium ${row.operatingProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.operatingProfit)}</td>
-                      <td className={`px-3 py-3 text-right font-semibold ${row.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(row.netProfit)}</td>
-                      <td className="px-3 py-3 text-right">
-                        {deltaNetProfit !== null ? (
-                          <div className={`flex items-center justify-end gap-0.5 text-xs font-medium ${deltaNetProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                            {deltaNetProfit >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                            {deltaNetProfit >= 0 ? '+' : ''}{money(deltaNetProfit)}
-                            {deltaPct !== null ? <span className="ml-1 text-slate-400">({deltaPct >= 0 ? '↑' : '↓'}{Math.abs(deltaPct).toFixed(1)}%)</span> : null}
-                          </div>
-                        ) : <span className="text-slate-600 text-xs">—</span>}
-                      </td>
-                    </tr>
-                  )
-                })}</tbody>
-              </table>
-            </div>
+            )}
           </Card>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Внутренние компоненты страницы
+// ═══════════════════════════════════════════════════════════════════════
+
+type SelectedRow = any  // тип сложный, упрощаем тут
+
+function Waterfall({ selected, cashLabels }: { selected: SelectedRow; cashLabels: any }) {
+  const revenue = Math.max(1, selected.revenue)
+  const fmt = (v: number) => `${(Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
+  const items = [
+    { label: 'Выручка', value: selected.revenue, kind: 'positive' as const, sub: 'нал + безнал' },
+    ...(selected.cogs > 0 ? [{ label: 'COGS', value: -selected.cogs, kind: 'negative' as const, sub: 'себестоимость' }] : []),
+    ...(selected.cogs > 0 ? [{ label: 'Валовая прибыль', value: selected.grossProfit, kind: 'subtotal' as const, sub: `${selected.revenue ? ((selected.grossProfit / selected.revenue) * 100).toFixed(0) : 0}% от выручки` }] : []),
+    { label: 'Операционные', value: -selected.journalOperatingExpenses, kind: 'negative' as const, sub: 'аренда, реклама, ремонт' },
+    { label: `Комиссия ${cashLabels.pos}`, value: -selected.posCommission, kind: 'negative' as const, sub: 'эквайринг' },
+    { label: 'ФОТ + налоги', value: -(selected.payroll + selected.payrollTaxes), kind: 'negative' as const, sub: 'зарплаты + ОПВ/ОСМС' },
+    { label: 'EBITDA', value: selected.ebitda, kind: 'subtotal' as const, sub: `${selected.revenue ? ((selected.ebitda / selected.revenue) * 100).toFixed(0) : 0}% маржа` },
+    ...(selected.depreciation > 0 || selected.amortization > 0 ? [{ label: 'Износ + амортизация', value: -(selected.depreciation + selected.amortization), kind: 'negative' as const, sub: '' }] : []),
+    ...(selected.financialExpensesJournal > 0 ? [{ label: 'Финансовые расходы', value: -selected.financialExpensesJournal, kind: 'negative' as const, sub: '% по кредитам' }] : []),
+    { label: 'Налог + разовые', value: -(selected.incomeTax + selected.nonOperatingJournalExpenses), kind: 'negative' as const, sub: '3% / ИПН / штрафы' },
+    { label: 'Чистая прибыль', value: selected.netProfit, kind: 'final' as const, sub: `${selected.revenue ? ((selected.netProfit / selected.revenue) * 100).toFixed(1) : 0}% маржа` },
+  ].filter((i) => i.kind === 'subtotal' || i.kind === 'final' || i.kind === 'positive' || Math.abs(i.value) > 0)
+
+  return (
+    <div className="space-y-1.5">
+      {items.map((item) => {
+        const abs = Math.abs(item.value)
+        const pct = Math.max(0.5, Math.min(100, (abs / revenue) * 100))
+        const isPos = item.value >= 0
+        const barColor =
+          item.kind === 'final' ? (isPos ? 'bg-emerald-500/80' : 'bg-rose-500/80')
+            : item.kind === 'subtotal' ? 'bg-cyan-500/60'
+              : item.kind === 'positive' ? 'bg-blue-500/70'
+                : 'bg-rose-500/50'
+        const textColor =
+          item.kind === 'final' ? (isPos ? 'text-emerald-200' : 'text-rose-200')
+            : item.kind === 'subtotal' ? 'text-cyan-200'
+              : 'text-foreground'
+        const rowBg =
+          item.kind === 'final' ? 'bg-emerald-500/[0.06] border border-emerald-500/20 rounded-lg px-3 py-2'
+            : item.kind === 'subtotal' ? 'bg-white/[0.03] rounded-lg px-3 py-2'
+              : 'px-3 py-1.5'
+        return (
+          <div key={item.label} className={rowBg}>
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className={`text-sm ${item.kind === 'subtotal' || item.kind === 'final' ? 'font-semibold' : 'font-medium'} ${textColor}`}>{item.label}</span>
+                {item.sub ? <span className="text-[10px] text-muted-foreground truncate">{item.sub}</span> : null}
+              </div>
+              <span className={`shrink-0 text-sm tabular-nums ${item.kind === 'final' ? 'font-bold' : 'font-medium'} ${textColor}`}>{isPos ? '' : '−'}{fmt(abs)}</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+              <div className={`h-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ManualInputTabs({ cashLabels, draft, setDraft, inputTab, setInputTab }: any) {
+  return (
+    <>
+      <div className="flex gap-1 rounded-xl border border-border bg-white/[0.02] p-1">
+        {INPUT_TABS.map((tab) => (
+          <button key={tab.id} onClick={() => setInputTab(tab.id)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${inputTab === tab.id ? 'bg-emerald-600 text-white shadow' : 'text-muted-foreground hover:text-foreground'}`}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {inputTab === 'revenue' && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Общая наличная выручка за месяц (необязательно)</label>
+              <Input type="number" min="0" step="100" value={draft.cash_revenue_override} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, cash_revenue_override: e.target.value }))} placeholder="из журнала если пусто" className="border-border bg-input text-foreground" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Общая выручка по POS за месяц (необязательно)</label>
+              <Input type="number" min="0" step="100" value={draft.pos_revenue_override} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, pos_revenue_override: e.target.value }))} placeholder="из журнала если пусто" className="border-border bg-input text-foreground" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Точные ставки эквайринга по типам оплаты</p>
+            {[
+              ['kaspi_qr_turnover', 'kaspi_qr_rate', cashLabels.qr],
+              ['kaspi_gold_turnover', 'kaspi_gold_rate', cashLabels.gold],
+              ['other_cards_turnover', 'other_cards_rate', 'Другие карты'],
+              ['kaspi_red_turnover', 'kaspi_red_rate', cashLabels.red],
+              ['kaspi_kredit_turnover', 'kaspi_kredit_rate', cashLabels.kredit],
+            ].map(([turnoverKey, rateKey, label]) => (
+              <div key={String(label)} className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-white/[0.02] p-3 md:grid-cols-[1fr_140px_100px] md:items-center">
+                <div className="text-xs font-medium text-foreground">{label}</div>
+                <Input type="number" min="0" step="100" value={draft[turnoverKey]} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, [turnoverKey]: e.target.value }))} placeholder="Оборот, ₸" className="h-8 border-border bg-input text-xs text-foreground" />
+                <Input type="number" min="0" step="0.01" value={draft[rateKey]} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, [rateKey]: e.target.value }))} placeholder="%" className="h-8 border-border bg-input text-xs text-foreground" />
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {inputTab === 'payroll' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Заполняй только если хочешь перекрыть автоматическую раскладку из журнала.</p>
+          {[
+            ['payroll_amount', 'ФОТ вручную'],
+            ['payroll_taxes_amount', 'Налоги на зарплату вручную'],
+            ['income_tax_amount', 'Налог на прибыль / 3% вручную'],
+          ].map(([key, label]) => (
+            <div key={String(key)} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_180px] md:items-center">
+              <label className="text-xs text-foreground">{label}</label>
+              <Input type="number" min="0" step="100" value={draft[key]} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="h-9 border-border bg-input text-sm text-foreground" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {inputTab === 'other' && (
+        <div className="space-y-3">
+          {[
+            ['depreciation_amount', 'Износ'],
+            ['amortization_amount', 'Амортизация'],
+            ['other_operating_amount', 'Прочие операционные'],
+          ].map(([key, label]) => (
+            <div key={String(key)} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_180px] md:items-center">
+              <label className="text-xs text-foreground">{label}</label>
+              <Input type="number" min="0" step="100" value={draft[key]} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="h-9 border-border bg-input text-sm text-foreground" />
+            </div>
+          ))}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Комментарий по месяцу</label>
+            <Textarea value={draft.notes} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, notes: e.target.value }))} placeholder="например: разовая выплата партнёру, изменение договора с банком..." className="min-h-20 border-border bg-input text-sm text-foreground" />
+          </div>
+        </div>
+      )}
     </>
+  )
+}
+
+function WhatIfPanel({ selected, whatIf, setWhatIf }: any) {
+  if (!selected) return null
+  const base = selected
+  const adjRevenue = base.revenue * (1 + whatIf.revenueAdj / 100)
+  const expMultiplier = 1 + whatIf.expenseAdj / 100
+  const adjOperating = base.journalOperatingExpenses * expMultiplier
+  const adjPayroll = base.payroll * expMultiplier
+  const adjPayrollTaxes = base.payrollTaxes * expMultiplier
+  const adjOtherOp = base.otherOperating * expMultiplier
+  const adjEbitda = adjRevenue - adjOperating - base.posCommission - adjPayroll - adjPayrollTaxes - adjOtherOp
+  const adjOperatingProfit = adjEbitda - base.depreciation - base.amortization
+  const adjNetProfit = adjOperatingProfit - base.nonOperatingJournalExpenses - base.incomeTax
+  const fmt = (v: number) => `${(Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
+  return (
+    <div className="rounded-xl border border-border bg-white/[0.02] p-4 space-y-3">
+      <h3 className="text-sm font-medium text-foreground flex items-center gap-2"><BarChart2 className="w-4 h-4 text-emerald-400" />What-if моделирование</h3>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <label className="text-muted-foreground">Выручка ±%</label>
+            <span className={`font-medium tabular-nums ${whatIf.revenueAdj > 0 ? 'text-emerald-400' : whatIf.revenueAdj < 0 ? 'text-rose-400' : 'text-muted-foreground'}`}>{whatIf.revenueAdj > 0 ? '+' : ''}{whatIf.revenueAdj}%</span>
+          </div>
+          <input type="range" min={-50} max={50} step={1} value={whatIf.revenueAdj} onChange={(e) => setWhatIf((prev: any) => ({ ...prev, revenueAdj: Number(e.target.value) }))} className="w-full accent-emerald-500" />
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <label className="text-muted-foreground">Расходы ±%</label>
+            <span className={`font-medium tabular-nums ${whatIf.expenseAdj > 0 ? 'text-rose-400' : whatIf.expenseAdj < 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{whatIf.expenseAdj > 0 ? '+' : ''}{whatIf.expenseAdj}%</span>
+          </div>
+          <input type="range" min={-50} max={50} step={1} value={whatIf.expenseAdj} onChange={(e) => setWhatIf((prev: any) => ({ ...prev, expenseAdj: Number(e.target.value) }))} className="w-full accent-rose-500" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs md:grid-cols-3">
+        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">Выручка</span><span className="font-medium text-foreground tabular-nums">{fmt(adjRevenue)}</span></div>
+        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">EBITDA</span><span className={`font-medium tabular-nums ${adjEbitda >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{fmt(adjEbitda)} <span className="text-[10px] text-muted-foreground">({adjEbitda - base.ebitda >= 0 ? '+' : ''}{fmt(adjEbitda - base.ebitda)})</span></span></div>
+        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">Чистая</span><span className={`font-semibold tabular-nums ${adjNetProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{fmt(adjNetProfit)} <span className="text-[10px] text-muted-foreground">({adjNetProfit - base.netProfit >= 0 ? '+' : ''}{fmt(adjNetProfit - base.netProfit)})</span></span></div>
+      </div>
+      {(whatIf.revenueAdj !== 0 || whatIf.expenseAdj !== 0) && (
+        <button onClick={() => setWhatIf({ revenueAdj: 0, expenseAdj: 0 })} className="text-xs text-muted-foreground hover:text-foreground">Сбросить</button>
+      )}
+    </div>
   )
 }
