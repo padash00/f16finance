@@ -10,7 +10,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 type CacheEntry<T> = {
   data: T | null
@@ -89,8 +89,6 @@ export function useApi<T = any>(
   } = options
 
   const [, forceRender] = useState(0)
-  const keyRef = useRef(key)
-  keyRef.current = key
 
   // Подписываемся на изменения кеша по этому ключу
   useEffect(() => {
