@@ -160,13 +160,25 @@ export async function GET(req: Request) {
       }),
     })
   } catch (error: any) {
-    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expenses GET', message: error?.message || error?.details || error?.hint || error?.code || 'error' })
+    // Дамп всех свойств ошибки — Supabase иногда отдаёт «Bad Request» без detail/hint/code,
+    // и реальные данные сидят в нестандартных полях. Сериализуем всё что есть.
+    let fullDump: string | null = null
+    try {
+      fullDump = JSON.stringify(error, Object.getOwnPropertyNames(error || {}))
+    } catch { fullDump = null }
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/expenses GET',
+      message: `${error?.message || 'error'} | dump=${fullDump || 'n/a'}`,
+    })
     return json({
       error: humanizeDbError(error, error?.message || error?.details || error?.hint || error?.code || 'Ошибка сервера'),
       detail: error?.details || null,
       hint: error?.hint || null,
       code: error?.code || null,
       raw_message: error?.message || null,
+      raw_dump: fullDump,
+      raw_status: error?.status || error?.statusCode || null,
     }, 500)
   }
 }
