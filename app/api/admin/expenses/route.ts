@@ -82,7 +82,10 @@ export async function GET(req: Request) {
     const search = url.searchParams.get('search')
     const sort = (url.searchParams.get('sort') || 'date_desc') as 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
     const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
-    const pageSize = Math.min(5000, Math.max(1, parseInt(url.searchParams.get('page_size') || '2000', 10)))
+    // Supabase / PostgREST имеет лимит `db-max-rows` (часто 1000). Запросы выше
+    // упираются в 400 «Bad Request» без подробностей. Поэтому хочешь >1000 —
+    // дробим на чанки по 1000 и склеиваем (ниже в while-цикле).
+    const pageSize = Math.min(50000, Math.max(1, parseInt(url.searchParams.get('page_size') || '1000', 10)))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -93,42 +96,54 @@ export async function GET(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    let query = supabase
-      .from('expenses')
-      .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url, status, document_kind, one_off_payee, created_at')
-      .range(page * pageSize, page * pageSize + pageSize - 1)
-
-    if (from) query = query.gte('date', from)
-    if (to) query = query.lte('date', to)
-    if (companyScope.allowedCompanyIds !== null) {
-      if (companyScope.allowedCompanyIds.length === 0) {
-        return json({ data: [] })
+    // Билдер с одинаковыми фильтрами — переиспользуем для пагинации >1000
+    const buildBaseQuery = () => {
+      let q = supabase
+        .from('expenses')
+        .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url, status, document_kind, one_off_payee, created_at')
+      if (from) q = q.gte('date', from)
+      if (to) q = q.lte('date', to)
+      if (companyScope.allowedCompanyIds !== null) {
+        q = q.in('company_id', companyScope.allowedCompanyIds!)
       }
-      query = query.in('company_id', companyScope.allowedCompanyIds)
+      if (category) q = q.eq('category', category)
+      if (status) q = q.eq('status', status)
+      if (documentKind) q = q.eq('document_kind', documentKind)
+      if (payFilter === 'cash') q = q.gt('cash_amount', 0)
+      else if (payFilter === 'kaspi') q = q.gt('kaspi_amount', 0)
+      if (search && search.length >= 2) {
+        const safeSearch = search
+          .slice(0, 100)
+          .replace(/[%_\\]/g, '\\$&')
+          .replace(/[,().]/g, ' ')
+        q = q.or(`comment.ilike.%${safeSearch}%,category.ilike.%${safeSearch}%`)
+      }
+      if (sort === 'date_asc') q = q.order('date', { ascending: true })
+      else if (sort === 'amount_desc') q = q.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
+      else if (sort === 'amount_asc') q = q.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
+      else q = q.order('date', { ascending: false })
+      return q
     }
-    if (category) query = query.eq('category', category)
-    if (status) query = query.eq('status', status)
-    if (documentKind) query = query.eq('document_kind', documentKind)
-    if (payFilter === 'cash') query = query.gt('cash_amount', 0)
-    else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
-    if (search && search.length >= 2) {
-      // Экранируем спецсимволы LIKE-паттерна и PostgREST-синтаксиса
-      const safeSearch = search
-        .slice(0, 100)
-        .replace(/[%_\\]/g, '\\$&')   // escape LIKE wildcards
-        .replace(/[,().]/g, ' ')       // strip PostgREST .or() syntax delimiters
-      query = query.or(`comment.ilike.%${safeSearch}%,category.ilike.%${safeSearch}%`)
+
+    if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length === 0) {
+      return json({ data: [] })
     }
 
-    if (sort === 'date_asc') query = query.order('date', { ascending: true })
-    else if (sort === 'amount_desc') query = query.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
-    else if (sort === 'amount_asc') query = query.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
-    else query = query.order('date', { ascending: false })
-
-    const { data, error } = await query
-    if (error) throw error
-
-    const rows = data ?? []
+    // Подтягиваем чанками по 1000 чтобы не упереться в PostgREST max-rows.
+    const CHUNK = 1000
+    const startIdx = page * pageSize
+    const rows: any[] = []
+    let cursor = startIdx
+    while (rows.length < pageSize) {
+      const remaining = pageSize - rows.length
+      const upper = cursor + Math.min(CHUNK, remaining) - 1
+      const { data, error } = await buildBaseQuery().range(cursor, upper)
+      if (error) throw error
+      const batch = data ?? []
+      rows.push(...batch)
+      if (batch.length < CHUNK) break
+      cursor += CHUNK
+    }
     const expenseIds = rows.map((row: any) => String(row.id)).filter(Boolean)
     if (expenseIds.length === 0) return json({ data: rows })
 
