@@ -1,6 +1,7 @@
 export type FinancialGroup =
   | 'cogs'
   | 'operating'
+  | 'pos_commission'
   | 'payroll'
   | 'payroll_advance'
   | 'payroll_tax'
@@ -22,6 +23,7 @@ export const FINANCIAL_GROUP_OPTIONS: Array<{
 }> = [
   { value: 'cogs',                kind: 'pl_chain',  label: 'COGS (Себестоимость)',  description: 'Прямые затраты на производство/закупку товаров и услуг. Вычитаются из выручки до Валовой прибыли.' },
   { value: 'operating',           kind: 'pl_chain',  label: 'Операционные',         description: 'Аренда, электроэнергия, интернет, реклама, ремонт, упаковка, списание.' },
+  { value: 'pos_commission',      kind: 'pl_chain',  label: 'Комиссия POS / эквайринг', description: 'Комиссия банка за приём карт (Kaspi POS, Halyk acquiring, инкассация). Выделена отдельно от операционных, чтобы /profitability не считал её дважды при ручном вводе оборота POS.' },
   { value: 'payroll',             kind: 'pl_chain',  label: 'ФОТ',                  description: 'Основная зарплата персонала за месяц.' },
   { value: 'payroll_advance',     kind: 'pl_chain',  label: 'Аванс по зарплате',    description: 'Авансовые выплаты в счёт зарплаты, входят в общий ФОТ.' },
   { value: 'payroll_tax',         kind: 'pl_chain',  label: 'Налоги на зарплату',   description: 'ОПВ, ОСМС, социальные отчисления — всё что связано с ФОТ.' },
@@ -43,6 +45,7 @@ export const PL_CHAIN: PLChainNode[] = [
   { kind: 'group',    group: 'cogs' },
   { kind: 'subtotal', label: 'Валовая прибыль',  key: 'gross_profit' },
   { kind: 'group',    group: 'operating' },
+  { kind: 'group',    group: 'pos_commission' },
   { kind: 'group',    group: 'payroll' },
   { kind: 'group',    group: 'payroll_advance' },
   { kind: 'group',    group: 'payroll_tax' },
@@ -75,6 +78,15 @@ export function inferFinancialGroup(categoryName: string | null | undefined): Fi
     normalized.includes('стоимость товар') ||
     normalized.includes('прямые затрат')
   ) return 'cogs'
+  if (
+    normalized.includes('эквайринг') ||
+    normalized.includes('acquiring') ||
+    normalized.includes('инкассац') ||
+    normalized.includes('комиссия pos') ||
+    normalized.includes('комиссия банк') ||
+    normalized.includes('pos комисс') ||
+    normalized.includes('pos-комисс')
+  ) return 'pos_commission'
   if (normalized.includes('аванс')) return 'payroll_advance'
   if (
     normalized.includes('осмс') ||

@@ -168,16 +168,19 @@ export default function ProfitabilityPage() {
 
       acc.total += amount
       if (group === 'cogs') acc.cogs += amount
+      else if (group === 'pos_commission') acc.posCommissionJournal += amount
       else if (group === 'payroll' || group === 'payroll_advance') acc.payroll += amount
       else if (group === 'payroll_tax') acc.payrollTaxes += amount
       else if (group === 'income_tax') acc.incomeTax += amount
-      else if (group === 'non_operating' || group === 'financial_expenses') acc.nonOperating += amount
+      else if (group === 'financial_expenses') acc.financial += amount
+      else if (group === 'non_operating') acc.nonOperating += amount
       else if (group === 'depreciation') acc.depreciation += amount
       else if (group === 'capex') acc.capex += amount  // не входит в P&L, только справочно
+      else if (group === 'profit_distribution') acc.profitDistribution += amount  // вне P&L, после чистой прибыли
       else acc.operating += amount
 
       return acc
-    }, { total: 0, cogs: 0, operating: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, nonOperating: 0, depreciation: 0, capex: 0 })
+    }, { total: 0, cogs: 0, operating: 0, posCommissionJournal: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, financial: 0, nonOperating: 0, depreciation: 0, capex: 0, profitDistribution: 0 })
     const manual = inputs[month]
     const correctedKaspi = Number(kaspiDailyMonthly[month] ?? income.rawKaspi)
     const journalRevenue = income.cash + correctedKaspi + income.card + income.online
@@ -224,10 +227,17 @@ export default function ProfitabilityPage() {
     const cogs = journalSplit.cogs
     const grossProfit = revenue - cogs
     const journalOperatingExpenses = journalSplit.operating
+    const journalPosCommission = journalSplit.posCommissionJournal
+    // Антидвойной-счёт: если заполнили оборот POS вручную — берём ручную комиссию, иначе из журнала
+    const effectivePosCommission = posCommission > 0 ? posCommission : journalPosCommission
+    const financialExpensesJournal = journalSplit.financial
     const nonOperatingJournalExpenses = journalSplit.nonOperating
-    const ebitda = grossProfit - journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const profitDistributionJournal = journalSplit.profitDistribution
+    const ebitda = grossProfit - journalOperatingExpenses - effectivePosCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
-    const netProfit = operatingProfit - nonOperatingJournalExpenses - incomeTax
+    // EBIT - финансовые расходы = EBT, EBT - налог = чистая. Неоперационные после неё.
+    const ebt = operatingProfit - financialExpensesJournal
+    const netProfit = ebt - incomeTax - nonOperatingJournalExpenses
     return {
       month,
       label: monthLabel(month),
@@ -261,7 +271,12 @@ export default function ProfitabilityPage() {
       depreciationManual,
       nonOperatingJournalExpenses,
       posTurnover,
-      posCommission,
+      posCommission: effectivePosCommission,
+      manualPosCommission: posCommission,
+      journalPosCommission,
+      financialExpensesJournal,
+      profitDistributionJournal,
+      ebt,
       kaspiQrTurnover,
       kaspiQrRate,
       kaspiQrCommission,
@@ -336,9 +351,12 @@ export default function ProfitabilityPage() {
     const incomeTax = incomeTaxManual > 0 ? incomeTaxManual : selected.journalIncomeTax
     const cogs = selected.cogs
     const grossProfit = revenue - cogs
-    const ebitda = grossProfit - selected.journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    // Та же антидвойной-счёт логика: ручная комиссия из POS-блока перекрывает журнальную
+    const effectivePosCommission = posCommission > 0 ? posCommission : selected.journalPosCommission
+    const ebitda = grossProfit - selected.journalOperatingExpenses - effectivePosCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
-    const netProfit = operatingProfit - selected.nonOperatingJournalExpenses - incomeTax
+    const ebt = operatingProfit - selected.financialExpensesJournal
+    const netProfit = ebt - incomeTax - selected.nonOperatingJournalExpenses
 
     return {
       revenue,
@@ -347,13 +365,14 @@ export default function ProfitabilityPage() {
       cashRevenue: hasRevenueOverride ? cashRevenueOverride : selected.journalCashRevenue,
       posRevenue: hasRevenueOverride ? posRevenueOverride : selected.journalCashlessRevenue,
       hasRevenueOverride,
-      posCommission,
+      posCommission: effectivePosCommission,
       payroll,
       payrollTaxes,
       incomeTax,
       otherOperating,
       ebitda,
       operatingProfit,
+      ebt,
       netProfit,
     }
   }, [draft, selected])
@@ -435,9 +454,9 @@ export default function ProfitabilityPage() {
                 <div className="text-sm font-medium text-white">Оборот POS</div>
                 <p className="mt-2 text-sm text-slate-300">Это объём оплат, прошедших через терминал или сервис {cashLabels.providerName} по конкретному типу оплаты. Он нужен только для расчёта комиссии банка.</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                <div className="text-sm font-medium text-white">Комиссия POS</div>
-                <p className="mt-2 text-sm text-slate-300">Это удержание банка за эквайринг. Она не увеличивает выручку и не заменяет расходы из журнала, а отдельно уменьшает прибыль месяца.</p>
+              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <div className="text-sm font-medium text-white">Комиссия POS — без двойного счёта</div>
+                <p className="mt-2 text-sm text-slate-300">Если ты ведёшь категорию с группой <span className="text-cyan-300 font-medium">«Комиссия POS / эквайринг»</span> в журнале — она автоматически попадает в EBITDA. Если ещё заполнить «Оборот POS × Ставка %» ниже — ручной расчёт ПЕРЕКРЫВАЕТ журнальный (не складывается). Используй один из двух способов, не оба сразу.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Что такое EBITDA</div>
@@ -478,22 +497,25 @@ export default function ProfitabilityPage() {
                         ['Выручка', selected.revenue],
                         ...(selected.cogs > 0 ? [['COGS (Себестоимость)', -selected.cogs], ['Валовая прибыль', selected.grossProfit]] : []),
                         ['Операционные расходы из журнала', -selected.journalOperatingExpenses],
-                        [`Комиссия ${cashLabels.pos}`, -selected.posCommission],
+                        [`Комиссия ${cashLabels.pos} / эквайринг`, -selected.posCommission],
                         ['Фонд оплаты труда', -selected.payroll],
                         ['Налоги на зарплату', -selected.payrollTaxes],
                         ['Прочие операционные', -selected.otherOperating],
                         ['EBITDA', selected.ebitda],
                         ['Износ', -selected.depreciation],
                         ['Амортизация', -selected.amortization],
-                        ['Операционная прибыль', selected.operatingProfit],
-                        ['Неоперационные расходы из журнала', -selected.nonOperatingJournalExpenses],
+                        ['Операционная прибыль (EBIT)', selected.operatingProfit],
+                        ['Финансовые расходы (% по кредитам)', -selected.financialExpensesJournal],
+                        ['EBT (прибыль до налога)', selected.ebt],
                         ['Налог на прибыль / 3%', -selected.incomeTax],
+                        ['Неоперационные / разовые', -selected.nonOperatingJournalExpenses],
                         ['Чистая прибыль', selected.netProfit],
                       ].map(([label, value]) => <tr key={String(label)} className="border-b border-white/5 last:border-b-0"><td className="px-4 py-3 text-slate-300">{label}</td><td className={`px-4 py-3 text-right font-medium ${(Number(value) >= 0) ? 'text-emerald-300' : 'text-rose-300'}`}>{money(Number(value))}</td></tr>)}
-                      {selected.journalCapex > 0 && <>
-                        <tr className="border-t-2 border-amber-500/20"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wide text-amber-500/70">Справочно — инвестиции (не в P&L)</td></tr>
-                        <tr className="border-b border-white/5"><td className="px-4 py-3 text-slate-400">CAPEX (покупка активов)</td><td className="px-4 py-3 text-right font-medium text-amber-400">−{money(selected.journalCapex)}</td></tr>
-                        <tr><td className="px-4 py-3 text-slate-300">FCF (свободный денежный поток)</td><td className={`px-4 py-3 text-right font-semibold ${(selected.netProfit - selected.journalCapex) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex)}</td></tr>
+                      {(selected.journalCapex > 0 || selected.profitDistributionJournal > 0) && <>
+                        <tr className="border-t-2 border-amber-500/20"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wide text-amber-500/70">Справочно — вне P&L (после чистой прибыли)</td></tr>
+                        {selected.journalCapex > 0 && <tr className="border-b border-white/5"><td className="px-4 py-3 text-slate-400">CAPEX (покупка активов)</td><td className="px-4 py-3 text-right font-medium text-amber-400">−{money(selected.journalCapex)}</td></tr>}
+                        {selected.profitDistributionJournal > 0 && <tr className="border-b border-white/5"><td className="px-4 py-3 text-slate-400">Распределение прибыли (доля партнёра / дивиденды)</td><td className="px-4 py-3 text-right font-medium text-purple-300">−{money(selected.profitDistributionJournal)}</td></tr>}
+                        <tr><td className="px-4 py-3 text-slate-300">Остаток после CAPEX + распределения (FCF)</td><td className={`px-4 py-3 text-right font-semibold ${(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal)}</td></tr>
                       </>}
                     </tbody></table>
                   </div>
@@ -516,12 +538,15 @@ export default function ProfitabilityPage() {
                       <div className="mb-2 text-sm font-medium text-white">Автоматическая раскладка журнала</div>
                       <div className="space-y-2 text-sm text-slate-300">
                         <div className="flex justify-between"><span>Операционные</span><span>{money(selected.journalOperatingExpenses)}</span></div>
+                        <div className="flex justify-between"><span>Комиссия POS / эквайринг (журнал){selected.manualPosCommission > 0 && selected.journalPosCommission > 0 ? <span className="ml-1 text-xs text-amber-300">перекрыто ручным расчётом</span> : null}</span><span>{money(selected.journalPosCommission)}</span></div>
                         <div className="flex justify-between"><span>ФОТ</span><span>{money(selected.journalPayrollExpenses)}</span></div>
                         <div className="flex justify-between"><span>Налоги на зарплату</span><span>{money(selected.journalPayrollTaxes)}</span></div>
                         <div className="flex justify-between"><span>Налог 3% / прибыль</span><span>{money(selected.journalIncomeTax)}</span></div>
-                        <div className="flex justify-between"><span>Финансовые расходы</span><span>{money(selected.nonOperatingJournalExpenses)}</span></div>
+                        <div className="flex justify-between"><span>Финансовые расходы (% по кредитам)</span><span>{money(selected.financialExpensesJournal)}</span></div>
+                        <div className="flex justify-between"><span>Неоперационные / разовые</span><span>{money(selected.nonOperatingJournalExpenses)}</span></div>
                         {selected.journalDepreciation > 0 ? <div className="flex justify-between"><span>Амортизация (авто){selected.depreciationManual > 0 ? <span className="ml-1 text-xs text-amber-300">перекрыто вручную</span> : null}</span><span>{money(selected.journalDepreciation)}</span></div> : null}
-                        {selected.journalCapex > 0 ? <div className="flex justify-between text-slate-400"><span>CAPEX (справочно, не в P&L)</span><span>{money(selected.journalCapex)}</span></div> : null}
+                        {selected.journalCapex > 0 ? <div className="flex justify-between text-amber-400/80"><span>CAPEX (вне P&L)</span><span>{money(selected.journalCapex)}</span></div> : null}
+                        {selected.profitDistributionJournal > 0 ? <div className="flex justify-between text-purple-300/80"><span>Распределение прибыли (вне P&L)</span><span>{money(selected.profitDistributionJournal)}</span></div> : null}
                         <div className="border-t border-white/10 pt-2 text-xs text-slate-400">
                           Общая сумма журнала: {money(selected.journalExpenses)}
                         </div>
