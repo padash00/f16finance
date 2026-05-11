@@ -34,7 +34,6 @@ const INPUT_TABS = [
 type InputTab = typeof INPUT_TABS[number]['id']
 
 const money = (v: number) => `${(Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
-const pct = (v: number) => `${(Number.isFinite(v) ? v : 0).toFixed(2)}%`
 const currentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 const shiftMonth = (month: string, offset: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + offset, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 const monthLabel = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleString('ru-RU', { month: 'long', year: 'numeric' })
@@ -88,7 +87,6 @@ export default function ProfitabilityPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [inputTab, setInputTab] = useState<InputTab>('revenue')
   const [whatIf, setWhatIf] = useState({ revenueAdj: 0, expenseAdj: 0 })
-  const [showWhatIf, setShowWhatIf] = useState(false)
 
   const months = useMemo(() => buildMonths(monthFrom, monthTo), [monthFrom, monthTo])
 
@@ -646,6 +644,73 @@ export default function ProfitabilityPage() {
             </Card>
           </div>
 
+          {/* ═══ POS & БЕЗНАЛ — разбивка комиссии эквайринга ═══ */}
+          {(selected.posCommission > 0 || selected.cashlessRevenue > 0) && (
+            <Card className="border-border bg-card p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-cyan-400" />
+                  POS и безнал
+                </h2>
+                <span className="text-xs text-muted-foreground">{selected.label}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 mb-4">
+                <div className="rounded-lg border border-border bg-white/[0.02] p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Наличка</div>
+                  <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{money(selected.cashRevenue)}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-white/[0.02] p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Безнал</div>
+                  <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{money(selected.cashlessRevenue)}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-white/[0.02] p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Оборот POS (ручной)</div>
+                  <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{money(selected.posTurnover)}</div>
+                </div>
+                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-cyan-300">Итого комиссия POS</div>
+                  <div className="mt-1 text-base font-semibold text-cyan-200 tabular-nums">{money(selected.posCommission)}</div>
+                </div>
+              </div>
+              {selected.posTurnover > 0 ? (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Разбивка по типам оплаты (оборот × ставка)</p>
+                  {[
+                    [cashLabels.qr, selected.kaspiQrTurnover, selected.kaspiQrRate, selected.kaspiQrCommission],
+                    [cashLabels.gold, selected.kaspiGoldTurnover, selected.kaspiGoldRate, selected.kaspiGoldCommission],
+                    ['Другие карты', selected.otherCardsTurnover, selected.otherCardsRate, selected.otherCardsCommission],
+                    [cashLabels.red, selected.kaspiRedTurnover, selected.kaspiRedRate, selected.kaspiRedCommission],
+                    [cashLabels.kredit, selected.kaspiKreditTurnover, selected.kaspiKreditRate, selected.kaspiKreditCommission],
+                  ].filter(([, turnover]) => Number(turnover) > 0).map(([label, turnover, rate, commission]) => (
+                    <div key={String(label)} className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-3 rounded-md bg-white/[0.02] px-3 py-1.5 text-sm">
+                      <span className="text-foreground">{label}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">{money(Number(turnover))}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">× {Number(rate).toFixed(2)}%</span>
+                      <span className="text-cyan-300 font-medium tabular-nums">= {money(Number(commission))}</span>
+                    </div>
+                  ))}
+                  {selected.legacyQrGoldTurnover > 0 ? (
+                    <div className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-3 rounded-md bg-amber-500/5 border border-amber-500/15 px-3 py-1.5 text-sm">
+                      <span className="text-amber-200">Старый общий QR/Gold</span>
+                      <span className="text-xs text-amber-300/80 tabular-nums">{money(selected.legacyQrGoldTurnover)}</span>
+                      <span className="text-xs text-amber-300/80 tabular-nums">× {Number(selected.legacyQrGoldRate).toFixed(2)}%</span>
+                      <span className="text-amber-300 font-medium tabular-nums">= {money(selected.legacyQrGoldCommission)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : selected.journalPosCommission > 0 ? (
+                <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/[0.03] p-3 text-sm text-muted-foreground">
+                  <Info className="inline h-3.5 w-3.5 mr-1 text-cyan-400" />
+                  Комиссия взята из журнала расходов (категории с группой «Комиссия POS / эквайринг»: {money(selected.journalPosCommission)}). Для детальной разбивки по типам — заполни обороты ниже в «Ручных корректировках».
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border bg-white/[0.02] p-3 text-xs text-muted-foreground">
+                  Комиссия POS не заполнена ни в журнале, ни вручную.
+                </div>
+              )}
+            </Card>
+          )}
+
           {/* ═══ DETAILED P&L TABLE (collapsed by default) ═══ */}
           <details className="group">
             <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-white/5">
@@ -799,20 +864,34 @@ export default function ProfitabilityPage() {
                   setInputTab={setInputTab}
                 />
                 {selected && draftPreview ? (
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                    <div className="text-sm">
-                      <div className="text-xs uppercase tracking-wider text-emerald-300 mb-2">После сохранения:</div>
-                      <div className="flex justify-between text-muted-foreground"><span>EBITDA</span><span className={`tabular-nums ${draftPreview.ebitda >= selected.ebitda ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.ebitda)}</span></div>
-                      <div className="flex justify-between text-muted-foreground"><span>Опер. прибыль</span><span className={`tabular-nums ${draftPreview.operatingProfit >= selected.operatingProfit ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.operatingProfit)}</span></div>
-                      <div className="flex justify-between text-foreground font-medium"><span>Чистая</span><span className={`tabular-nums ${draftPreview.netProfit >= selected.netProfit ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.netProfit)}</span></div>
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <div className="mb-3 text-xs uppercase tracking-wider text-emerald-300 flex items-center gap-2">
+                      <Calculator className="h-3.5 w-3.5" />
+                      Превью для {monthLabel(selectedMonth)}
                     </div>
-                    <div className="text-sm md:col-span-2 self-end">
-                      {canEdit && (
-                        <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500">
-                          <Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем…' : `Сохранить ${monthLabel(selectedMonth)}`}
-                        </Button>
-                      )}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mb-4">
+                      <div className="rounded-lg border border-border bg-white/[0.02] p-3 text-sm space-y-1.5">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Сейчас сохранено</div>
+                        <div className="flex justify-between text-muted-foreground"><span>Выручка</span><span className="tabular-nums">{money(selected.revenue)}</span></div>
+                        <div className="flex justify-between text-muted-foreground"><span>Комиссия POS</span><span className="tabular-nums">{money(selected.posCommission)}</span></div>
+                        <div className="flex justify-between text-muted-foreground"><span>EBITDA</span><span className="tabular-nums">{money(selected.ebitda)}</span></div>
+                        <div className="flex justify-between text-muted-foreground"><span>Опер. прибыль</span><span className="tabular-nums">{money(selected.operatingProfit)}</span></div>
+                        <div className="flex justify-between text-foreground font-medium pt-1 border-t border-border"><span>Чистая</span><span className="tabular-nums">{money(selected.netProfit)}</span></div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] p-3 text-sm space-y-1.5">
+                        <div className="text-[10px] uppercase tracking-wider text-emerald-300 mb-1.5">После сохранения</div>
+                        <div className="flex justify-between text-foreground"><span>Выручка</span><span className={`tabular-nums ${draftPreview.revenue !== selected.revenue ? 'text-cyan-300' : ''}`}>{money(draftPreview.revenue)}</span></div>
+                        <div className="flex justify-between text-foreground"><span>Комиссия POS</span><span className={`tabular-nums ${Math.round(draftPreview.posCommission) !== Math.round(selected.posCommission) ? 'text-cyan-300' : ''}`}>{money(draftPreview.posCommission)}</span></div>
+                        <div className="flex justify-between text-foreground"><span>EBITDA</span><span className={`tabular-nums ${draftPreview.ebitda >= selected.ebitda ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.ebitda)}</span></div>
+                        <div className="flex justify-between text-foreground"><span>Опер. прибыль</span><span className={`tabular-nums ${draftPreview.operatingProfit >= selected.operatingProfit ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.operatingProfit)}</span></div>
+                        <div className="flex justify-between font-medium pt-1 border-t border-emerald-500/20"><span className="text-foreground">Чистая</span><span className={`tabular-nums ${draftPreview.netProfit >= selected.netProfit ? 'text-emerald-200' : 'text-rose-300'}`}>{money(draftPreview.netProfit)}</span></div>
+                      </div>
                     </div>
+                    {canEdit && (
+                      <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500">
+                        <Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем…' : `Сохранить ${monthLabel(selectedMonth)}`}
+                      </Button>
+                    )}
                   </div>
                 ) : null}
 
