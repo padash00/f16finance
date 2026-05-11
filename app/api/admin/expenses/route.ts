@@ -147,13 +147,24 @@ export async function GET(req: Request) {
     const expenseIds = rows.map((row: any) => String(row.id)).filter(Boolean)
     if (expenseIds.length === 0) return json({ data: rows })
 
-    const { data: attachments, error: attachmentsError } = await supabase
-      .from('expense_attachments')
-      .select('id, expense_id, document_url, file_name, mime_type, file_size, sort_order, created_at')
-      .in('expense_id', expenseIds)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
-    if (attachmentsError && attachmentsError.code !== '42P01') throw attachmentsError
+    // Чанкуем .in() — длинный URL (>8KB) с сотнями UUID валит Vercel/PostgREST
+    // в generic 400 «Bad Request» без подробностей. По 200 UUID на запрос — безопасно.
+    const ATTACH_IN_CHUNK = 200
+    const attachments: any[] = []
+    for (let i = 0; i < expenseIds.length; i += ATTACH_IN_CHUNK) {
+      const slice = expenseIds.slice(i, i + ATTACH_IN_CHUNK)
+      const { data: chunkData, error: chunkError } = await supabase
+        .from('expense_attachments')
+        .select('id, expense_id, document_url, file_name, mime_type, file_size, sort_order, created_at')
+        .in('expense_id', slice)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+      if (chunkError) {
+        if (chunkError.code === '42P01') break  // нет таблицы attachments — пропускаем целиком
+        throw chunkError
+      }
+      if (chunkData) attachments.push(...chunkData)
+    }
 
     const attachmentsByExpense = new Map<string, any[]>()
     for (const attachment of attachments || []) {
