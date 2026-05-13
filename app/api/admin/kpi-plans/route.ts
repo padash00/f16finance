@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { addDaysISO } from '@/lib/core/date'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -245,7 +246,7 @@ export async function GET(req: Request) {
       area: 'api/admin/kpi-plans.GET',
       message: error?.message || 'error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить планы' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось загрузить планы') }, 500)
   }
 }
 
@@ -312,36 +313,62 @@ export async function POST(req: Request) {
       return json({ ok: true, data })
     }
 
+    // Fallback: некоторые БД унаследовали legacy-колонку plan_key NOT NULL.
+    // Заполняем её детерминированно (company|kind|period_start), чтобы insert
+    // не падал даже без применения миграции 20260518.
+    const planKey = [companyId || 'org', kind, start].join('|')
+
+    const insertPayload: Record<string, unknown> = {
+      company_id: companyId,
+      kind,
+      target_amount: target,
+      period_start: start,
+      period_end: end,
+      created_by: access.user?.id || null,
+      plan_key: planKey,
+    }
+
     const { data, error } = await supabase
       .from('kpi_plans')
-      .insert([{
-        company_id: companyId,
-        kind,
-        target_amount: target,
-        period_start: start,
-        period_end: end,
-        created_by: access.user?.id || null,
-      }])
+      .insert([insertPayload])
       .select('*')
       .single()
-    if (error) throw error
+    if (error) {
+      // Если колонки plan_key в БД нет — пробуем без неё.
+      const msg = String(error?.message || '')
+      if (msg.includes('plan_key') && (msg.includes('column') || msg.includes('schema'))) {
+        delete (insertPayload as any).plan_key
+        const retry = await supabase
+          .from('kpi_plans')
+          .insert([insertPayload])
+          .select('*')
+          .single()
+        if (retry.error) throw retry.error
+        return await finalizeInsert(retry.data)
+      }
+      throw error
+    }
 
-    await writeAuditLog(supabase as any, {
-      actorUserId: access.user?.id || null,
-      entityType: 'kpi-plan',
-      entityId: String((data as any).id),
-      action: 'create',
-      payload: { kind, target, period_start: start, period_end: end },
-    })
+    const actorUserId = ('user' in access ? access.user?.id : null) || null
+    async function finalizeInsert(row: any) {
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'kpi-plan',
+        entityId: String(row?.id),
+        action: 'create',
+        payload: { kind, target, period_start: start, period_end: end },
+      })
+      return json({ ok: true, data: row })
+    }
 
-    return json({ ok: true, data })
+    return await finalizeInsert(data)
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/kpi-plans.POST',
       message: error?.message || 'error',
     })
-    return json({ error: error?.message || 'Не удалось сохранить план' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось сохранить план') }, 500)
   }
 }
 
@@ -375,7 +402,7 @@ export async function DELETE(req: Request) {
       area: 'api/admin/kpi-plans.DELETE',
       message: error?.message || 'error',
     })
-    return json({ error: error?.message || 'Не удалось удалить' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось удалить') }, 500)
   }
 }
 

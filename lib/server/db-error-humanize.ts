@@ -184,12 +184,30 @@ export function humanizeDbError(error: unknown, fallback: string): string {
     return 'Данные не прошли проверку формата. Проверьте поля и повторите.'
   }
 
+  if (code === '23502' || raw.includes('not-null constraint') || raw.includes('null value in column')) {
+    // Пытаемся вытащить имя колонки из "null value in column \"X\""
+    const colMatch = `${message} ${details}`.match(/column "([^"]+)"/i)
+    const col = colMatch?.[1] || ''
+    if (col) {
+      return `В таблице есть устаревшая обязательная колонка «${col}», которой нет в форме. Сообщите админу — нужна миграция, чтобы её сделать необязательной.`
+    }
+    return 'Одно из обязательных полей не заполнено. Проверьте форму и попробуйте снова.'
+  }
+
   if (code === '22P02' || raw.includes('invalid input syntax')) {
     return 'Неверный формат данных в одном из полей.'
   }
 
   if (code === '42501' || raw.includes('permission denied') || raw.includes('row-level security')) {
     return 'Недостаточно прав для выполнения этого действия.'
+  }
+
+  if (code === '42703' || raw.includes('column') && raw.includes('does not exist')) {
+    return 'В базе нет нужной колонки — скорее всего не применена последняя миграция. Сообщите админу.'
+  }
+
+  if (code === '42P01' || raw.includes('relation') && raw.includes('does not exist')) {
+    return 'В базе нет нужной таблицы — миграция не применена.'
   }
 
   return fallback
