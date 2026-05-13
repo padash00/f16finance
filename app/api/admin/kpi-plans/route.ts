@@ -340,6 +340,7 @@ export async function POST(req: Request) {
     let entityTypeIdx = 0
     let attempt: Record<string, unknown> = { ...insertPayload, entity_type: entityTypeFallbacks[0] }
     let inserted: any = null
+    let uniqueRetry = false
     while (true) {
       const res = await supabase
         .from('kpi_plans')
@@ -350,6 +351,7 @@ export async function POST(req: Request) {
         inserted = res.data
         break
       }
+      const code = String((res.error as any)?.code || '')
       const msg = String(res.error?.message || '').toLowerCase()
       const details = String((res.error as any)?.details || '').toLowerCase()
       const combined = `${msg} ${details}`
@@ -384,6 +386,58 @@ export async function POST(req: Request) {
         // Все варианты не подошли — пробуем без поля совсем.
         delete attempt.entity_type
         continue
+      }
+
+      // 3) UNIQUE violation (23505) — запись уже есть по legacy unique-ключу
+      // (например, на plan_key или month_start). Наш поиск existing не нашёл,
+      // потому что искал по другому набору колонок. Делаем UPDATE.
+      const isUnique = code === '23505' || combined.includes('duplicate key') || combined.includes('unique constraint')
+      if (isUnique && !uniqueRetry) {
+        uniqueRetry = true
+        // Ищем по самым стабильным бизнес-ключам.
+        // Попытка #1: plan_key (если такая колонка существует в БД).
+        let foundId: string | null = null
+        try {
+          const byKey = await supabase
+            .from('kpi_plans')
+            .select('id')
+            .eq('plan_key', planKey)
+            .limit(1)
+            .maybeSingle()
+          if (!byKey.error && byKey.data) foundId = (byKey.data as any).id
+        } catch {}
+
+        // Попытка #2: company_id + period_start + kind.
+        if (!foundId) {
+          let q = supabase
+            .from('kpi_plans')
+            .select('id')
+            .eq('period_start', start)
+            .eq('kind', kind)
+            .limit(1)
+          q = companyId ? q.eq('company_id', companyId) : q.is('company_id', null)
+          const byBiz = await q.maybeSingle()
+          if (!byBiz.error && byBiz.data) foundId = (byBiz.data as any).id
+        }
+
+        if (foundId) {
+          const upd = await supabase
+            .from('kpi_plans')
+            .update({ target_amount: target, period_end: end })
+            .eq('id', foundId)
+            .select('*')
+            .single()
+          if (upd.error) throw upd.error
+          inserted = upd.data
+          await writeAuditLog(supabase as any, {
+            actorUserId,
+            entityType: 'kpi-plan',
+            entityId: String(foundId),
+            action: 'update',
+            payload: { kind, target },
+          })
+          return json({ ok: true, data: inserted })
+        }
       }
 
       throw res.error
