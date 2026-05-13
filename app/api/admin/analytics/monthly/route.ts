@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { addDaysISO } from '@/lib/core/date'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -68,9 +70,16 @@ export async function GET(req: Request) {
     })
 
     const yearStart = `${year}-01-01`
-    const yearEnd = `${year}-12-31`
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const currentYear = new Date().getFullYear()
+    // Для текущего года обрезаем диапазон до сегодня, чтобы будущие плановые
+    // записи в expenses/incomes не попадали в «факт». Для прошлых годов —
+    // полный год.
+    const yearEnd = year >= currentYear ? todayIso : `${year}-12-31`
     const prevYearStart = `${year - 1}-01-01`
-    const prevYearEnd = `${year - 1}-12-31`
+    // Тянем incomes за один день шире, чтобы поймать ночной kaspi из
+    // последнего дня предыдущего года (после полуночи он относится на 1.01).
+    const incomeFetchFrom = addDaysISO(prevYearStart, -1)
 
     // ── Companies ───────────────────────────────────────────────────────────
     let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
@@ -87,16 +96,20 @@ export async function GET(req: Request) {
     if (companiesError) throw companiesError
 
     // ── Incomes (текущий + прошлый год для YoY) ─────────────────────────────
+    // Подтягиваем lat-night-split поля (shift + kaspi_before_midnight), чтобы
+    // потом применить splitIncomeKaspiByCalendarDay — иначе ночной kaspi из
+    // последнего дня предыдущего года не уйдёт в 1 января текущего.
     let incomesQuery = supabase
       .from('incomes')
-      .select('date, company_id, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', prevYearStart)
+      .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
+      .gte('date', incomeFetchFrom)
       .lte('date', yearEnd)
     if (companyScope.allowedCompanyIds !== null) {
       incomesQuery = incomesQuery.in('company_id', companyScope.allowedCompanyIds)
     }
-    const { data: incomes, error: incomesError } = await incomesQuery
+    const { data: rawIncomes, error: incomesError } = await incomesQuery
     if (incomesError) throw incomesError
+    const incomes = splitIncomeKaspiByCalendarDay((rawIncomes || []) as ReportIncomeCalendarRow[])
 
     // ── Expenses (текущий год) ───────────────────────────────────────────────
     let expensesQuery = supabase

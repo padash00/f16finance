@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { addDaysISO } from '@/lib/core/date'
+import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -66,7 +68,13 @@ export async function GET(req: Request) {
     })
 
     const yearStart = `${year}-01-01`
-    const yearEnd = `${year}-12-31`
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const currentYear = new Date().getFullYear()
+    // Для текущего года не считаем будущее как факт — обрезаем до сегодня
+    // (как делает /api/admin/reports/bundle). Для прошлых годов — полный год.
+    const yearEnd = year >= currentYear ? todayIso : `${year}-12-31`
+    // На 1 день шире, чтоб поймать ночной kaspi с 31.12 прошлого года.
+    const incomeFetchFrom = addDaysISO(yearStart, -1)
 
     // Companies
     let cq = supabase.from('companies').select('id, name, code').order('name')
@@ -93,15 +101,16 @@ export async function GET(req: Request) {
     const { data: plans, error: pErr } = await pq
     if (pErr) throw pErr
 
-    // Facts — incomes/expenses/point_sales за год
+    // Facts — incomes/expenses/point_sales за год (с late-night kaspi split).
     let incomesQ = supabase
       .from('incomes')
-      .select('date, company_id, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', yearStart)
+      .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
+      .gte('date', incomeFetchFrom)
       .lte('date', yearEnd)
     if (companyScope.allowedCompanyIds !== null) incomesQ = incomesQ.in('company_id', companyScope.allowedCompanyIds)
-    const { data: incomes, error: iErr } = await incomesQ
+    const { data: rawIncomes, error: iErr } = await incomesQ
     if (iErr) throw iErr
+    const incomes = splitIncomeKaspiByCalendarDay((rawIncomes || []) as ReportIncomeCalendarRow[])
 
     let expensesQ = supabase
       .from('expenses')
