@@ -859,6 +859,9 @@ function PeriodView({
           {companies.map((c) => {
             const f = computeFacts(daily, c.id, start, end)
             const companyPlan = periodPlans.find((p) => p.metric === activeMetric && p.company_id === c.id)
+            const orgTarget = Number(activePlan?.target_amount || 0)
+            const orgFactValue = facts[activeMetric as keyof typeof facts] as number
+            const sharePct = orgFactValue > 0 ? Math.round((Number(f[activeMetric]) / orgFactValue) * 1000) / 10 : 0
             return (
               <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                 <p className="text-sm font-semibold">{c.name}</p>
@@ -881,6 +884,11 @@ function PeriodView({
                       </div>
                     )
                   })()
+                ) : orgTarget > 0 ? (
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>В общем плане</span>
+                    <span className="text-violet-300 font-semibold">{sharePct}%</span>
+                  </div>
                 ) : (
                   <p className="mt-2 text-[10px] text-muted-foreground">План не задан</p>
                 )}
@@ -993,6 +1001,9 @@ function MonthDetailDialog({
                 {companies.map((c) => {
                   const f = computeFacts(daily, c.id, start, end)
                   const companyPlan = plans.find((p) => p.metric === activeMetric && p.company_id === c.id)
+                  const orgFactValue = facts[activeMetric as keyof typeof facts] as number
+                  const orgTarget = Number(orgPlan?.target_amount || 0)
+                  const sharePct = orgFactValue > 0 ? Math.round((Number(f[activeMetric]) / orgFactValue) * 1000) / 10 : 0
                   return (
                     <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                       <p className="text-sm font-semibold">{c.name}</p>
@@ -1014,6 +1025,11 @@ function MonthDetailDialog({
                             </div>
                           )
                         })()
+                      ) : orgTarget > 0 ? (
+                        <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>В общем плане</span>
+                          <span className="text-violet-300 font-semibold">{sharePct}%</span>
+                        </div>
                       ) : (
                         <p className="mt-2 text-[10px] text-muted-foreground">План не задан</p>
                       )}
