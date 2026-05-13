@@ -181,6 +181,18 @@ export function humanizeDbError(error: unknown, fallback: string): string {
   }
 
   if (code === '23514' || raw.includes('check constraint')) {
+    // Имя констрейнта вытащим, чтобы было понятно что именно нарушено
+    const constraintMatch = `${message} ${details}`.match(/constraint\s+"([^"]+)"/i)
+    const constraintName = constraintMatch?.[1] || ''
+    // Колонка из «failing row contains» или из «for column "X"»
+    const colMatch = `${message} ${details}`.match(/column\s+"([^"]+)"|for relation "[^"]+" column "([^"]+)"/i)
+    const colName = (colMatch?.[1] || colMatch?.[2] || '').trim()
+    if (constraintName || colName) {
+      const parts: string[] = []
+      if (colName) parts.push(`колонка «${colName}»`)
+      if (constraintName) parts.push(`ограничение «${constraintName}»`)
+      return `Значение не прошло проверку: ${parts.join(', ')}. Скорее всего legacy CHECK — сообщите админу.`
+    }
     return 'Данные не прошли проверку формата. Проверьте поля и повторите.'
   }
 

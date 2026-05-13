@@ -334,7 +334,11 @@ export async function POST(req: Request) {
     }
 
     const optionalLegacyCols = ['plan_key', 'month_start', 'entity_type']
-    let attempt: Record<string, unknown> = { ...insertPayload }
+    // Возможные значения для legacy entity_type — если CHECK сужает домен,
+    // перебираем по очереди. Финально — удалить из payload.
+    const entityTypeFallbacks = ['kpi_plan', 'kpi', 'goal', 'plan', 'budget']
+    let entityTypeIdx = 0
+    let attempt: Record<string, unknown> = { ...insertPayload, entity_type: entityTypeFallbacks[0] }
     let inserted: any = null
     while (true) {
       const res = await supabase
@@ -349,8 +353,8 @@ export async function POST(req: Request) {
       const msg = String(res.error?.message || '').toLowerCase()
       const details = String((res.error as any)?.details || '').toLowerCase()
       const combined = `${msg} ${details}`
-      // Удалять колонку из payload надо ТОЛЬКО если она физически
-      // отсутствует в схеме (а не «не указана при NOT NULL»).
+
+      // 1) Колонки физически нет в схеме — выкидываем из payload.
       const columnMissing =
         combined.includes('does not exist') ||
         combined.includes('schema cache') ||
@@ -364,6 +368,24 @@ export async function POST(req: Request) {
           continue
         }
       }
+
+      // 2) CHECK на entity_type — пробуем следующее значение.
+      const isCheck = combined.includes('check constraint')
+      const mentionsEntityType =
+        combined.includes('entity_type') ||
+        combined.includes('entity-type') ||
+        combined.includes('entitytype')
+      if (isCheck && mentionsEntityType && 'entity_type' in attempt) {
+        entityTypeIdx += 1
+        if (entityTypeIdx < entityTypeFallbacks.length) {
+          attempt = { ...attempt, entity_type: entityTypeFallbacks[entityTypeIdx] }
+          continue
+        }
+        // Все варианты не подошли — пробуем без поля совсем.
+        delete attempt.entity_type
+        continue
+      }
+
       throw res.error
     }
 
