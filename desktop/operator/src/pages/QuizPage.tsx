@@ -106,7 +106,7 @@ export default function QuizPage({ config, session, onComplete, onSkip }: QuizPa
 
   if (phase === 'loading') {
     return (
-      <div className="grid h-screen place-items-center bg-slate-50 dark:bg-slate-950">
+      <div className="grid h-screen place-items-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="text-center">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-emerald-500" />
           <p className="mt-4 text-sm text-slate-500">Готовлю вопросы...</p>
@@ -156,7 +156,7 @@ export default function QuizPage({ config, session, onComplete, onSkip }: QuizPa
 
   if (phase === 'submitting') {
     return (
-      <div className="grid h-screen place-items-center bg-slate-50 dark:bg-slate-950">
+      <div className="grid h-screen place-items-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
         <div className="text-center">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-emerald-500" />
           <p className="mt-4 text-sm text-slate-500">Проверяю ответы...</p>
@@ -172,7 +172,7 @@ export default function QuizPage({ config, session, onComplete, onSkip }: QuizPa
   const progress = ((currentIdx + 1) / questions.length) * 100
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+    <div className="relative flex min-h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
       {/* Header */}

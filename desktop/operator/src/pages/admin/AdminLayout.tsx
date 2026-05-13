@@ -42,13 +42,13 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
-      <header className="drag-region flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
+      <header className="drag-region relative z-10 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200/70 bg-white/80 px-5 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-900/80">
         <div className="no-drag flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
-            <span className="text-[10px] font-bold tracking-tight text-white">OP</span>
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold tracking-tight text-white shadow-md shadow-emerald-500/30">
+            OP
           </div>
           <div className="space-y-1">
             <p className="text-sm font-semibold leading-none">Глобальный администратор</p>

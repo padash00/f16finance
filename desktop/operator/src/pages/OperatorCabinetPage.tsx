@@ -364,18 +364,18 @@ export default function OperatorCabinetPage({
   }
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-violet-500/5 blur-3xl dark:bg-violet-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
-      <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
+      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
+      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/80 px-5 py-2 backdrop-blur-xl no-drag dark:border-slate-800/70 dark:bg-slate-900/80">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
-            <span className="text-[10px] font-bold tracking-tight text-white">OP</span>
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold tracking-tight text-white shadow-md shadow-emerald-500/30">
+            OP
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">Личный кабинет{isOffline ? ' (кеш)' : ''}</p>
-            <p className="text-xs text-muted-foreground">{profileName}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{profileName}</p>
           </div>
         </div>
 
@@ -644,14 +644,14 @@ export default function OperatorCabinetPage({
                                 rows={2}
                                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
                               />
-                              <div className="flex flex-wrap gap-2">
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                                 {task.status !== 'in_progress' ? (
                                   <Button
                                     type="button"
                                     size="sm"
-                                    variant="outline"
                                     disabled={!!taskActionLoading}
                                     onClick={() => void handleTaskResponse(task.id, 'accept')}
+                                    className="h-9 border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
                                   >
                                     {taskActionLoading === `${task.id}:accept` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
                                     В работу
@@ -660,9 +660,9 @@ export default function OperatorCabinetPage({
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant="outline"
                                   disabled={!!taskActionLoading}
                                   onClick={() => void handleTaskResponse(task.id, 'need_info')}
+                                  className="h-9 border border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
                                 >
                                   {taskActionLoading === `${task.id}:need_info` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
                                   Нужны детали
@@ -670,9 +670,19 @@ export default function OperatorCabinetPage({
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant="outline"
+                                  disabled={!!taskActionLoading}
+                                  onClick={() => void handleTaskResponse(task.id, 'blocked')}
+                                  className="h-9 border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 dark:text-rose-300"
+                                >
+                                  {taskActionLoading === `${task.id}:blocked` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                                  Не могу
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
                                   disabled={!!taskActionLoading}
                                   onClick={() => void handleTaskResponse(task.id, 'already_done')}
+                                  className="h-9 border border-violet-500/30 bg-violet-500/10 text-violet-700 hover:bg-violet-500/20 dark:text-violet-300"
                                 >
                                   {taskActionLoading === `${task.id}:already_done` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
                                   Уже сделано
@@ -682,21 +692,23 @@ export default function OperatorCabinetPage({
                                   size="sm"
                                   disabled={!!taskActionLoading}
                                   onClick={() => void handleTaskResponse(task.id, 'complete')}
+                                  className="h-9 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow shadow-emerald-500/30 hover:from-emerald-600 hover:to-teal-700"
                                 >
                                   {taskActionLoading === `${task.id}:complete` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-2 h-3.5 w-3.5" />}
                                   Готово
                                 </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={!!taskActionLoading || !String(taskNotes[task.id] || '').trim()}
-                                  onClick={() => void handleTaskComment(task.id)}
-                                >
-                                  {taskActionLoading === `${task.id}:comment` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="mr-2 h-3.5 w-3.5" />}
-                                  Комментарий
-                                </Button>
                               </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={!!taskActionLoading || !String(taskNotes[task.id] || '').trim()}
+                                onClick={() => void handleTaskComment(task.id)}
+                                className="h-8 self-start text-xs text-muted-foreground"
+                              >
+                                {taskActionLoading === `${task.id}:comment` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="mr-2 h-3.5 w-3.5" />}
+                                Добавить комментарий
+                              </Button>
                             </div>
                           ) : null}
                         </div>
