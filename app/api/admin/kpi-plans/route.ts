@@ -345,13 +345,23 @@ export async function POST(req: Request) {
         inserted = res.data
         break
       }
-      const msg = String(res.error?.message || '')
-      const offending = optionalLegacyCols.find(
-        (col) => msg.includes(col) && (msg.includes('column') || msg.includes('schema cache')),
-      )
-      if (offending && offending in attempt) {
-        delete attempt[offending]
-        continue
+      const msg = String(res.error?.message || '').toLowerCase()
+      const details = String((res.error as any)?.details || '').toLowerCase()
+      const combined = `${msg} ${details}`
+      // Удалять колонку из payload надо ТОЛЬКО если она физически
+      // отсутствует в схеме (а не «не указана при NOT NULL»).
+      const columnMissing =
+        combined.includes('does not exist') ||
+        combined.includes('schema cache') ||
+        combined.includes('could not find the')
+      if (columnMissing) {
+        const offending = optionalLegacyCols.find(
+          (col) => combined.includes(col) && col in attempt,
+        )
+        if (offending) {
+          delete attempt[offending]
+          continue
+        }
       }
       throw res.error
     }
