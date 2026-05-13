@@ -18,13 +18,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Coins,
-  CreditCard,
   Loader2,
   Lock,
   Percent,
   Plus,
   RefreshCw,
-  Receipt,
   Sparkles,
   Target,
   Trash2,
@@ -53,7 +51,7 @@ import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Типы ───────────────────────────────────────────────────────────────────
 
-type Metric = 'revenue' | 'profit' | 'checks' | 'avg_check' | 'margin'
+type Metric = 'revenue' | 'profit' | 'margin'
 type PeriodKind = 'year' | 'h1' | 'h2' | 'month'
 
 type Company = { id: string; name: string; code?: string | null }
@@ -109,8 +107,6 @@ const METRICS: Array<{ value: Metric; label: string; unit: string; icon: any; ac
   { value: 'revenue', label: 'Выручка', unit: '₸', icon: TrendingUp, accent: 'emerald' },
   { value: 'profit', label: 'Прибыль', unit: '₸', icon: Coins, accent: 'cyan' },
   { value: 'margin', label: 'Маржа', unit: '%', icon: Percent, accent: 'violet' },
-  { value: 'checks', label: 'Чеки', unit: 'шт', icon: Receipt, accent: 'amber' },
-  { value: 'avg_check', label: 'Средний чек', unit: '₸', icon: CreditCard, accent: 'rose' },
 ]
 
 const PERIOD_LABEL: Record<PeriodKind, string> = {
@@ -187,7 +183,7 @@ function enumerateDates(start: string, end: string): string[] {
  */
 function seasonalWeights(
   priorMonthly: PriorMonthlyRow[],
-  metric: 'revenue' | 'profit' | 'checks',
+  metric: 'revenue' | 'profit',
   companyId: string | null,
 ): number[] {
   const totals = new Array(12).fill(0) as number[]
@@ -197,7 +193,6 @@ function seasonalWeights(
     if (m < 0 || m > 11) continue
     if (metric === 'revenue') totals[m] += r.revenue
     else if (metric === 'profit') totals[m] += r.revenue - r.expenses
-    else if (metric === 'checks') totals[m] += r.checks
   }
   const sum = totals.reduce((s, v) => s + Math.max(0, v), 0)
   if (sum <= 0) return new Array(12).fill(1 / 12)
@@ -251,7 +246,7 @@ function runRateForecast(params: {
   companyId: string | null
   year: number
   monthIdx: number
-  metric: 'revenue' | 'profit' | 'checks'
+  metric: 'revenue' | 'profit'
 }): { forecast: number; daysPassed: number; daysTotal: number; dailyAvg: number } | null {
   const today = new Date()
   const isCurrentMonth = today.getFullYear() === params.year && today.getMonth() === params.monthIdx
@@ -269,7 +264,6 @@ function runRateForecast(params: {
     }
     if (params.metric === 'revenue') value += r.revenue
     else if (params.metric === 'profit') value += r.revenue - r.expenses
-    else if (params.metric === 'checks') value += r.checks
   }
   const dailyAvg = value / daysPassed
   return { forecast: dailyAvg * lastDay, daysPassed, daysTotal: lastDay, dailyAvg }
@@ -314,13 +308,11 @@ function buildSeries(params: {
       switch (params.metric) {
         case 'revenue': factValue = Math.round(cumR); break
         case 'profit': factValue = Math.round(cumR - cumE); break
-        case 'checks': factValue = cumC; break
-        case 'avg_check': factValue = cumC > 0 ? Math.round(cumR / cumC) : 0; break
         case 'margin': factValue = cumR > 0 ? Math.round(((cumR - cumE) / cumR) * 1000) / 10 : 0; break
       }
     }
     const targetValue = params.target > 0
-      ? params.metric === 'avg_check' || params.metric === 'margin'
+      ? params.metric === 'margin'
         ? params.target
         : Math.round((params.target * (i + 1)) / totalDays)
       : 0
@@ -1027,7 +1019,7 @@ function PeriodView({
     : []
 
   // Только аддитивные метрики можно суммировать из месячных
-  const ADDITIVE_METRICS: Metric[] = ['revenue', 'profit', 'checks']
+  const ADDITIVE_METRICS: Metric[] = ['revenue', 'profit']
 
   const syntheticTargetFromMonths = (metric: Metric, companyId: string | null): number => {
     if (!ADDITIVE_METRICS.includes(metric) || monthRange.length === 0) return 0
@@ -1067,7 +1059,6 @@ function PeriodView({
       .reduce((acc, r) => {
         if (activeMetric === 'revenue') acc += r.revenue
         else if (activeMetric === 'profit') acc += r.revenue - r.expenses
-        else if (activeMetric === 'checks') acc += r.checks
         return acc
       }, 0)
     return prior > 0 ? prior : null
@@ -1076,7 +1067,7 @@ function PeriodView({
   return (
     <div className="space-y-5">
       {/* KPI hero row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {METRICS.map((m) => {
           const factValue = facts[m.value as keyof typeof facts] as number
           const tg = effectiveTarget(m.value, null)
@@ -1108,7 +1099,7 @@ function PeriodView({
             <LineChart data={series}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
-              <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => activeMetric === 'margin' ? `${v}%` : activeMetric === 'checks' || activeMetric === 'avg_check' ? fmt(Number(v)) : `${Math.round(Number(v) / 1000)}k`} />
+              <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => activeMetric === 'margin' ? `${v}%` : `${Math.round(Number(v) / 1000)}k`} />
               <Tooltip
                 formatter={(v: any) => v == null ? '—' : activeMetric === 'margin' ? `${v}%` : `${fmt(Number(v))} ${metricMeta(activeMetric).unit}`}
                 contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
@@ -1239,9 +1230,9 @@ function MonthDetailDialog({
   const isClosed = year < new Date().getFullYear() || (year === new Date().getFullYear() && monthIdx < new Date().getMonth())
 
   // Run-rate прогноз (только для текущего месяца, аддитивных метрик)
-  const ADDITIVE: Metric[] = ['revenue', 'profit', 'checks']
+  const ADDITIVE: Metric[] = ['revenue', 'profit']
   const runRate = ADDITIVE.includes(activeMetric)
-    ? runRateForecast({ daily, companyId: null, year, monthIdx, metric: activeMetric as 'revenue' | 'profit' | 'checks' })
+    ? runRateForecast({ daily, companyId: null, year, monthIdx, metric: activeMetric as 'revenue' | 'profit' })
     : null
 
   // Аллокация общего плана по точкам по долям выручки (YTD / прошлый год)
@@ -1255,7 +1246,6 @@ function MonthDetailDialog({
       .reduce((acc, r) => {
         if (activeMetric === 'revenue') acc += r.revenue
         else if (activeMetric === 'profit') acc += r.revenue - r.expenses
-        else if (activeMetric === 'checks') acc += r.checks
         return acc
       }, 0)
     return prior > 0 ? prior : null
@@ -1287,7 +1277,7 @@ function MonthDetailDialog({
 
         <div className="flex-1 overflow-auto p-6 space-y-5">
           {/* KPI row */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {METRICS.map((m) => {
               const factValue = facts[m.value as keyof typeof facts] as number
               const planP = plans.find((p) => p.metric === m.value && !p.company_id)
@@ -1363,7 +1353,7 @@ function MonthDetailDialog({
                 <LineChart data={series}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
-                  <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => activeMetric === 'margin' ? `${v}%` : activeMetric === 'checks' || activeMetric === 'avg_check' ? fmt(Number(v)) : `${Math.round(Number(v) / 1000)}k`} />
+                  <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => activeMetric === 'margin' ? `${v}%` : `${Math.round(Number(v) / 1000)}k`} />
                   <Tooltip formatter={(v: any) => v == null ? '—' : activeMetric === 'margin' ? `${v}%` : `${fmt(Number(v))} ${metricMeta(activeMetric).unit}`} contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   {targetValue > 0 ? <Line type="monotone" dataKey="Цель" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} /> : null}
