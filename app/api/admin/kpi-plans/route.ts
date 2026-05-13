@@ -105,42 +105,71 @@ export async function GET(req: Request) {
     if (pErr) throw pErr
 
     // Facts — incomes/expenses/point_sales за год (с late-night kaspi split).
-    // ВАЖНО: Supabase по умолчанию возвращает 1000 строк, поэтому ставим .range
-    // — иначе расходы за активный год недосчитываются и прибыль завышается.
-    const PAGE = 50000
-    let incomesQ = supabase
-      .from('incomes')
-      .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
-      .gte('date', incomeFetchFrom)
-      .lte('date', yearEnd)
-      .range(0, PAGE - 1)
-    if (companyScope.allowedCompanyIds !== null) incomesQ = incomesQ.in('company_id', companyScope.allowedCompanyIds)
-    const { data: rawIncomes, error: iErr } = await incomesQ
-    if (iErr) throw iErr
-    const incomes = splitIncomeKaspiByCalendarDay((rawIncomes || []) as ReportIncomeCalendarRow[])
+    // ВАЖНО: PostgREST max-rows = 1000. Без пагинации режется → расходы
+    // недосчитываются и прибыль завышается. Тянем чанками по 1000.
+    const CHUNK = 1000
 
-    let expensesQ = supabase
-      .from('expenses')
-      .select('date, company_id, cash_amount, kaspi_amount')
-      .gte('date', yearStart)
-      .lte('date', yearEnd)
-      .range(0, PAGE - 1)
-    if (companyScope.allowedCompanyIds !== null) expensesQ = expensesQ.in('company_id', companyScope.allowedCompanyIds)
-    const { data: expenses, error: eErr } = await expensesQ
-    if (eErr) {
-      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:expenses', message: eErr.message })
+    async function fetchAll<T>(buildQuery: () => any): Promise<T[]> {
+      const all: T[] = []
+      let cursor = 0
+      while (true) {
+        const upper = cursor + CHUNK - 1
+        const { data, error } = await buildQuery().range(cursor, upper)
+        if (error) throw error
+        const batch = (data || []) as T[]
+        all.push(...batch)
+        if (batch.length < CHUNK) break
+        cursor += CHUNK
+      }
+      return all
     }
 
-    let salesQ = supabase
-      .from('point_sales')
-      .select('sale_date, company_id, total_amount')
-      .gte('sale_date', yearStart)
-      .lte('sale_date', yearEnd)
-      .range(0, PAGE - 1)
-    if (companyScope.allowedCompanyIds !== null) salesQ = salesQ.in('company_id', companyScope.allowedCompanyIds)
-    const { data: sales, error: sErr } = await salesQ
-    if (sErr) {
-      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:point_sales', message: sErr.message })
+    const buildIncomesQ = () => {
+      let q = supabase
+        .from('incomes')
+        .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
+        .gte('date', incomeFetchFrom)
+        .lte('date', yearEnd)
+        .order('date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+    const buildExpensesQ = () => {
+      let q = supabase
+        .from('expenses')
+        .select('date, company_id, cash_amount, kaspi_amount')
+        .gte('date', yearStart)
+        .lte('date', yearEnd)
+        .order('date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+    const buildSalesQ = () => {
+      let q = supabase
+        .from('point_sales')
+        .select('sale_date, company_id, total_amount')
+        .gte('sale_date', yearStart)
+        .lte('sale_date', yearEnd)
+        .order('sale_date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+
+    const rawIncomes = await fetchAll<any>(buildIncomesQ)
+    const incomes = splitIncomeKaspiByCalendarDay(rawIncomes as ReportIncomeCalendarRow[])
+
+    let expenses: any[] = []
+    try {
+      expenses = await fetchAll<any>(buildExpensesQ)
+    } catch (eErr: any) {
+      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:expenses', message: eErr?.message || 'expenses fetch error' })
+    }
+
+    let sales: any[] = []
+    try {
+      sales = await fetchAll<any>(buildSalesQ)
+    } catch (sErr: any) {
+      await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:point_sales', message: sErr?.message || 'sales fetch error' })
     }
 
     // Агрегаторы: ключ '${companyId}|${start}|${end}' (companyId = '' для общего)

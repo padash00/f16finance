@@ -99,60 +99,79 @@ export async function GET(req: Request) {
     if (companiesError) throw companiesError
 
     // ── Incomes (текущий + прошлый год для YoY) ─────────────────────────────
-    // Подтягиваем late-night-split поля (shift + kaspi_before_midnight), чтобы
-    // потом применить splitIncomeKaspiByCalendarDay — иначе ночной kaspi из
-    // последнего дня предыдущего года не уйдёт в 1 января текущего.
-    // PAGE = 50000 — иначе Supabase по умолчанию режет до 1000.
-    const PAGE = 50000
-    let incomesQuery = supabase
-      .from('incomes')
-      .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
-      .gte('date', incomeFetchFrom)
-      .lte('date', yearEnd)
-      .range(0, PAGE - 1)
-    if (companyScope.allowedCompanyIds !== null) {
-      incomesQuery = incomesQuery.in('company_id', companyScope.allowedCompanyIds)
+    // PostgREST max-rows = 1000 → пагинируем чанками, иначе расходы/доходы
+    // недосчитываются и итоги искажаются.
+    const CHUNK = 1000
+
+    async function fetchAll<T>(buildQuery: () => any): Promise<T[]> {
+      const all: T[] = []
+      let cursor = 0
+      while (true) {
+        const upper = cursor + CHUNK - 1
+        const { data, error } = await buildQuery().range(cursor, upper)
+        if (error) throw error
+        const batch = (data || []) as T[]
+        all.push(...batch)
+        if (batch.length < CHUNK) break
+        cursor += CHUNK
+      }
+      return all
     }
-    const { data: rawIncomes, error: incomesError } = await incomesQuery
-    if (incomesError) throw incomesError
-    const incomes = splitIncomeKaspiByCalendarDay((rawIncomes || []) as ReportIncomeCalendarRow[])
+
+    const buildIncomesQuery = () => {
+      let q = supabase
+        .from('incomes')
+        .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
+        .gte('date', incomeFetchFrom)
+        .lte('date', yearEnd)
+        .order('date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+    const rawIncomes = await fetchAll<any>(buildIncomesQuery)
+    const incomes = splitIncomeKaspiByCalendarDay(rawIncomes as ReportIncomeCalendarRow[])
 
     // ── Expenses (текущий год) ───────────────────────────────────────────────
-    let expensesQuery = supabase
-      .from('expenses')
-      .select('date, company_id, cash_amount, kaspi_amount')
-      .gte('date', yearStart)
-      .lte('date', yearEnd)
-      .range(0, PAGE - 1)
-    if (companyScope.allowedCompanyIds !== null) {
-      expensesQuery = expensesQuery.in('company_id', companyScope.allowedCompanyIds)
+    const buildExpensesQuery = () => {
+      let q = supabase
+        .from('expenses')
+        .select('date, company_id, cash_amount, kaspi_amount')
+        .gte('date', yearStart)
+        .lte('date', yearEnd)
+        .order('date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
     }
-    const { data: expenses, error: expensesError } = await expensesQuery
-    if (expensesError) {
-      // expenses таблица может отсутствовать в каких-то env — не критично
+    let expenses: any[] = []
+    try {
+      expenses = await fetchAll<any>(buildExpensesQuery)
+    } catch (expensesError: any) {
       await writeSystemErrorLogSafe({
         scope: 'server',
         area: 'api/admin/analytics/monthly:expenses',
-        message: expensesError.message || 'expenses fetch failed',
+        message: expensesError?.message || 'expenses fetch failed',
       })
     }
 
     // ── point_sales для подсчёта чеков и среднего чека ──────────────────────
-    let salesQuery = supabase
-      .from('point_sales')
-      .select('sale_date, company_id, total_amount')
-      .gte('sale_date', yearStart)
-      .lte('sale_date', yearEnd)
-      .range(0, PAGE - 1)
-    if (companyScope.allowedCompanyIds !== null) {
-      salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+    const buildSalesQuery = () => {
+      let q = supabase
+        .from('point_sales')
+        .select('sale_date, company_id, total_amount')
+        .gte('sale_date', yearStart)
+        .lte('sale_date', yearEnd)
+        .order('sale_date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
     }
-    const { data: sales, error: salesError } = await salesQuery
-    if (salesError) {
+    let sales: any[] = []
+    try {
+      sales = await fetchAll<any>(buildSalesQuery)
+    } catch (salesError: any) {
       await writeSystemErrorLogSafe({
         scope: 'server',
         area: 'api/admin/analytics/monthly:point_sales',
-        message: salesError.message || 'point_sales fetch failed',
+        message: salesError?.message || 'point_sales fetch failed',
       })
     }
 
