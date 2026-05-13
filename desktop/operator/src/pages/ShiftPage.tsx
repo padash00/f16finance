@@ -31,6 +31,7 @@ import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
 import { syncQueue, getPendingCount, queueClosePointShift, queueShiftReport } from '@/lib/offline'
+import { clearParkedCarts } from '@/lib/parked-carts'
 import QueueViewer from '@/components/QueueViewer'
 import type { OpenShiftInfo } from '@/lib/api'
 import type {
@@ -621,6 +622,12 @@ export default function ShiftPage({
         setPendingCount(await getPendingCount())
         setResult('queued')
       }
+      // Очищаем отложки текущей смены — они актуальны только до закрытия.
+      clearParkedCarts({
+        companyId: session.company.id,
+        date: form.date,
+        shift: form.shift,
+      })
       resetForm()
       onLogout()
     } catch (confirmError) {

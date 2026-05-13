@@ -18,6 +18,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  BookmarkPlus,
+  Clock,
   Loader2,
   LogOut,
   Minus,
@@ -54,12 +56,18 @@ import {
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatMoney, localRef, parseMoney } from '@/lib/utils'
+import {
+  deleteParkedCart,
+  loadParkedCarts,
+  saveParkedCart,
+} from '@/lib/parked-carts'
 import type {
   AppConfig,
   BootstrapData,
   Customer,
   LoyaltyConfig,
   OperatorSession,
+  ParkedCart,
   PointInventorySaleContext,
   PointInventorySaleItem,
 } from '@/types'
@@ -83,6 +91,7 @@ type CartLine = {
   unit?: string | null
   quantity: number
   unit_price: number
+  comment?: string | null // комментарий к позиции (используется в универсальной продаже)
 }
 
 const UNIVERSAL_PRODUCT_PREFIX = 'universal:'
@@ -140,6 +149,18 @@ export default function InventorySalesPageMinimal({
   const [showUniversal, setShowUniversal] = useState(false)
   const [uniName, setUniName] = useState('')
   const [uniPrice, setUniPrice] = useState('')
+  const [uniComment, setUniComment] = useState('')
+
+  // Отложка корзины
+  const todayDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const parkedScope = useMemo(
+    () => ({ companyId: session.company.id, date: todayDate, shift: runtimeShift.shift }),
+    [session.company.id, todayDate, runtimeShift.shift],
+  )
+  const [parkedCarts, setParkedCarts] = useState<ParkedCart[]>(() => loadParkedCarts(parkedScope))
+  const [showParkedList, setShowParkedList] = useState(false)
+  const [showParkDialog, setShowParkDialog] = useState(false)
+  const [parkLabelInput, setParkLabelInput] = useState('')
 
   // Режим: продажа или история
   const [viewMode, setViewMode] = useState<'sale' | 'history'>('sale')
@@ -412,6 +433,88 @@ export default function InventorySalesPageMinimal({
     beep('ok')
   }
 
+  function openParkDialog() {
+    if (cart.length === 0) {
+      toastError('Корзина пуста — нечего откладывать')
+      return
+    }
+    const nextNumber = parkedCarts.length + 1
+    setParkLabelInput(`Отложка #${nextNumber}`)
+    setShowParkDialog(true)
+  }
+
+  function confirmParkCart() {
+    if (cart.length === 0) return
+    const label = parkLabelInput.trim() || `Отложка #${parkedCarts.length + 1}`
+    const parked: ParkedCart = {
+      id: `park-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      label,
+      createdAt: new Date().toISOString(),
+      items: cart.map((l) => ({
+        id: l.id,
+        item_id: l.item_id,
+        name: l.name,
+        unit: l.unit || null,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        comment: l.comment || null,
+      })),
+      customer: selectedCustomer
+        ? { id: selectedCustomer.id, name: selectedCustomer.name, phone: selectedCustomer.phone }
+        : null,
+      comment: comment.trim() || null,
+    }
+    const next = saveParkedCart({ ...parkedScope, cart: parked })
+    setParkedCarts(next)
+    clearAll()
+    setShowParkDialog(false)
+    setParkLabelInput('')
+    toastSuccess(`Отложено: ${label}`)
+    beep('ok')
+  }
+
+  function restoreParkedCart(parked: ParkedCart) {
+    if (cart.length > 0) {
+      const ok = window.confirm('В корзине есть товары. Заменить их содержимым отложки?')
+      if (!ok) return
+    }
+    setCart(
+      parked.items.map((it) => ({
+        id: it.id,
+        item_id: it.item_id,
+        name: it.name,
+        unit: it.unit || null,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        comment: it.comment || null,
+      })),
+    )
+    if (parked.customer) {
+      setSelectedCustomer({
+        id: parked.customer.id,
+        name: parked.customer.name,
+        phone: parked.customer.phone,
+        card_number: null,
+        loyalty_points: 0,
+      } as Customer)
+    } else {
+      setSelectedCustomer(null)
+    }
+    if (parked.comment) setComment(parked.comment)
+    const next = deleteParkedCart({ ...parkedScope, id: parked.id })
+    setParkedCarts(next)
+    setShowParkedList(false)
+    setViewMode('sale')
+    beep('ok')
+    toastSuccess(`Отложка восстановлена: ${parked.label}`)
+  }
+
+  function removeParkedCart(id: string) {
+    const next = deleteParkedCart({ ...parkedScope, id })
+    setParkedCarts(next)
+    if (next.length === 0) setShowParkedList(false)
+  }
+
   function addUniversalItem() {
     const name = uniName.trim()
     const price = parseMoney(uniPrice)
@@ -431,10 +534,12 @@ export default function InventorySalesPageMinimal({
         name,
         quantity: 1,
         unit_price: price,
+        comment: uniComment.trim() || null,
       },
     ])
     setUniName('')
     setUniPrice('')
+    setUniComment('')
     setShowUniversal(false)
     beep('ok')
   }
@@ -634,6 +739,7 @@ export default function InventorySalesPageMinimal({
         universal_name: l.item_id ? null : l.name,
         quantity: l.quantity,
         unit_price: l.unit_price,
+        comment: l.comment || null,
       })),
       customer_id: selectedCustomer?.id || null,
       loyalty_points_spent: selectedCustomer ? loyaltyPointsToSpend : 0,
@@ -742,6 +848,17 @@ export default function InventorySalesPageMinimal({
           </div>
         </div>
         <div className="flex items-center gap-2 no-drag">
+          {parkedCarts.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowParkedList((v) => !v)}
+              className="hidden items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60 sm:inline-flex"
+              title="Отложенные корзины этой смены"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Отложено · {parkedCarts.length}
+            </button>
+          )}
           <span className="hidden text-sm tabular-nums text-slate-500 sm:inline dark:text-slate-400">{timeStr}</span>
           <WorkModeSwitch
             active="sale"
@@ -801,6 +918,46 @@ export default function InventorySalesPageMinimal({
                 <p className="text-xs text-slate-500">Все ваши продажи за смену появятся здесь</p>
               </div>
             ) : (
+              <>
+                {/* Сводка дня */}
+                {(() => {
+                  const sales = context?.sales || []
+                  const total = sales.reduce((s, x) => s + Number(x.total_amount || 0), 0)
+                  const cashSum = sales.reduce(
+                    (s, x) =>
+                      s + (x.payment_method === 'cash' ? Number(x.total_amount || 0) : Number((x as any).cash_amount || 0)),
+                    0,
+                  )
+                  const kaspiSum = sales.reduce(
+                    (s, x) =>
+                      s + (x.payment_method === 'kaspi' ? Number(x.total_amount || 0) : Number((x as any).kaspi_amount || 0)),
+                    0,
+                  )
+                  return (
+                    <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Чеков</p>
+                        <p className="mt-1 text-xl font-semibold tabular-nums">{sales.length}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Сумма</p>
+                        <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {formatMoney(total)} ₸
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
+                        <p className="text-[10px] uppercase tracking-wider text-emerald-700/80 dark:text-emerald-300/70">Наличные</p>
+                        <p className="mt-1 text-xl font-semibold tabular-nums">{formatMoney(cashSum)} ₸</p>
+                      </div>
+                      <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 p-3 dark:border-sky-900/40 dark:bg-sky-950/30">
+                        <p className="text-[10px] uppercase tracking-wider text-sky-700/80 dark:text-sky-300/70">
+                          {cashLabels.providerName}
+                        </p>
+                        <p className="mt-1 text-xl font-semibold tabular-nums">{formatMoney(kaspiSum)} ₸</p>
+                      </div>
+                    </div>
+                  )
+                })()}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                 <table className="w-full">
                   <thead>
@@ -856,6 +1013,7 @@ export default function InventorySalesPageMinimal({
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </section>
         ) : (
@@ -895,11 +1053,10 @@ export default function InventorySalesPageMinimal({
                 type="button"
                 onClick={() => setShowUniversal(true)}
                 className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                title="Универсальный товар: ввести название и цену вручную (требует серверной доработки)"
+                title="Универсальная продажа: услуга или товар не из каталога"
               >
-                + Товар
+                + Универсальная
               </button>
-              {/* Универсальный товар сейчас только для UI-теста — серверная поддержка отсутствует */}
             </div>
 
             {searchResults.length > 0 && (
@@ -1267,11 +1424,28 @@ export default function InventorySalesPageMinimal({
               >
                 ОПЛАТИТЬ · {formatMoney(finalTotal)} ₸
               </Button>
-              {cart.length > 0 && (
-                <Button type="button" variant="outline" onClick={clearAll} className="h-10 rounded-xl">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openParkDialog}
+                  disabled={cart.length === 0}
+                  className="h-10 gap-1.5 rounded-xl"
+                  title="Отложить корзину до конца смены"
+                >
+                  <BookmarkPlus className="h-4 w-4" />
+                  Отложить
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={clearAll}
+                  disabled={cart.length === 0}
+                  className="h-10 rounded-xl"
+                >
                   Очистить
                 </Button>
-              )}
+              </div>
             </div>
           </div>
         </aside>
@@ -1559,38 +1733,172 @@ export default function InventorySalesPageMinimal({
         </div>
       )}
 
-      {/* Модалка универсального товара */}
+      {/* Модалка универсальной продажи */}
       {showUniversal && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setShowUniversal(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
           >
-            <h3 className="text-base font-semibold">Универсальный товар</h3>
-            <p className="mt-1 text-xs text-slate-500">Введите название и цену вручную (товара нет в каталоге).</p>
+            <h3 className="text-base font-semibold">Универсальная продажа</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Услуга или товар, которого нет на витрине. Способ оплаты выбирается перед проводом чека.
+            </p>
             <div className="mt-4 space-y-3">
               <label className="block">
-                <span className="text-xs text-slate-500">Название</span>
+                <span className="text-xs text-slate-500">Наименование*</span>
                 <input
                   value={uniName}
                   onChange={(e) => setUniName(e.target.value)}
+                  placeholder="Например: услуга или товар не из каталога"
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
                   autoFocus
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-slate-500">Цена, ₸</span>
+                <span className="text-xs text-slate-500">Сумма, ₸*</span>
                 <input
                   value={uniPrice}
                   onChange={(e) => setUniPrice(e.target.value)}
                   inputMode="numeric"
+                  placeholder="0"
                   className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm tabular-nums outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-slate-500">Комментарий</span>
+                <textarea
+                  value={uniComment}
+                  onChange={(e) => setUniComment(e.target.value)}
+                  placeholder="Что именно продано (необязательно)"
+                  rows={2}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
                 />
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setShowUniversal(false)}>Отмена</Button>
-              <Button type="button" onClick={addUniversalItem} className="bg-emerald-500 hover:bg-emerald-600">Добавить</Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowUniversal(false)
+                  setUniName('')
+                  setUniPrice('')
+                  setUniComment('')
+                }}
+              >
+                Отмена
+              </Button>
+              <Button type="button" onClick={addUniversalItem} className="bg-emerald-500 hover:bg-emerald-600">
+                Добавить
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Диалог отложки — задать подпись */}
+      {showParkDialog && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setShowParkDialog(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+          >
+            <h3 className="text-base font-semibold">Отложить корзину</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Сохранит {cart.length} позиций на {formatMoney(finalTotal)} ₸ как черновик до конца смены.
+            </p>
+            <label className="mt-4 block">
+              <span className="text-xs text-slate-500">Подпись (необязательно)</span>
+              <input
+                value={parkLabelInput}
+                onChange={(e) => setParkLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    confirmParkCart()
+                  }
+                }}
+                placeholder="Например: клиент в синей куртке"
+                autoFocus
+                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-800"
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setShowParkDialog(false)}>
+                Отмена
+              </Button>
+              <Button type="button" onClick={confirmParkCart} className="bg-amber-500 hover:bg-amber-600">
+                Отложить
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Список отложек этой смены */}
+      {showParkedList && (
+        <div className="fixed inset-0 z-50 grid place-items-start bg-black/40 p-4 pt-20" onClick={() => setShowParkedList(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Отложки этой смены</h3>
+              <button
+                type="button"
+                onClick={() => setShowParkedList(false)}
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Восстанавливается одноразово. После закрытия смены все отложки сбрасываются.
+            </p>
+            <div className="mt-4 space-y-2">
+              {parkedCarts.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700">
+                  Пусто
+                </p>
+              ) : (
+                parkedCarts.map((parked) => {
+                  const total = parked.items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+                  const time = new Date(parked.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <div
+                      key={parked.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{parked.label}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {time} · {parked.items.length} поз. · {formatMoney(total)} ₸
+                          {parked.customer ? ` · ${parked.customer.name}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => restoreParkedCart(parked)}
+                          className="h-8 rounded-lg bg-emerald-500 px-3 text-xs hover:bg-emerald-600"
+                        >
+                          Восстановить
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => removeParkedCart(parked.id)}
+                          className="grid h-8 w-8 place-items-center rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                          title="Удалить отложку"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </div>
         </div>

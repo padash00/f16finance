@@ -580,3 +580,22 @@ export interface ArenaSession {
   refund_at?: string | null
   discount_percent: number
 }
+
+// Отложка корзины (parked cart) — локальный черновик чека.
+// Хранится в localStorage по ключу parked-carts:${shiftId}, очищается при закрытии смены.
+export interface ParkedCart {
+  id: string
+  label: string
+  createdAt: string
+  items: Array<{
+    id: string
+    item_id: string | null
+    name: string
+    unit?: string | null
+    quantity: number
+    unit_price: number
+    comment?: string | null
+  }>
+  customer?: { id: string; name: string; phone: string | null } | null
+  comment?: string | null
+}
