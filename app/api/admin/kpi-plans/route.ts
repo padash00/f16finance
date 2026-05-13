@@ -76,7 +76,10 @@ export async function GET(req: Request) {
     const currentYear = new Date().getFullYear()
     // Для текущего года не считаем будущее как факт — обрезаем до сегодня
     // (как делает /api/admin/reports/bundle). Для прошлых годов — полный год.
-    const yearEnd = year >= currentYear ? todayIso : `${year}-12-31`
+    const factEnd = year >= currentYear ? todayIso : `${year}-12-31`
+    // Для запроса планов — всегда полный год, иначе планы текущего месяца
+    // (например period_end=2026-05-31 при сегодня=2026-05-13) выпадают.
+    const yearEnd = `${year}-12-31`
     // На 1 день шире, чтоб поймать ночной kaspi с 31.12 прошлого года.
     const incomeFetchFrom = addDaysISO(yearStart, -1)
 
@@ -130,7 +133,7 @@ export async function GET(req: Request) {
         .from('incomes')
         .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
         .gte('date', incomeFetchFrom)
-        .lte('date', yearEnd)
+        .lte('date', factEnd)
         .order('date', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
@@ -140,7 +143,7 @@ export async function GET(req: Request) {
         .from('expenses')
         .select('date, company_id, cash_amount, kaspi_amount')
         .gte('date', yearStart)
-        .lte('date', yearEnd)
+        .lte('date', factEnd)
         .order('date', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
@@ -150,7 +153,7 @@ export async function GET(req: Request) {
         .from('point_sales')
         .select('sale_date, company_id, total_amount')
         .gte('sale_date', yearStart)
-        .lte('sale_date', yearEnd)
+        .lte('sale_date', factEnd)
         .order('sale_date', { ascending: true })
       if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
