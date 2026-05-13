@@ -395,17 +395,17 @@ export default function OperatorCabinetPage({
               К чек-листам
             </Button>
           ) : null}
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-slate-500 dark:text-slate-400">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="text-slate-500 dark:text-slate-400">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <nav className="flex w-52 shrink-0 flex-col gap-1 border-r bg-sidebar px-2 py-3">
+        <nav className="flex w-52 shrink-0 flex-col gap-1 border-r bg-white/60 dark:bg-slate-900/60 px-2 py-3">
           {TABS.map((tab) => {
             const Icon = tab.icon
             return (
@@ -414,8 +414,8 @@ export default function OperatorCabinetPage({
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors no-drag ${
                   activeTab === tab.id
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                    ? 'bg-white/60 dark:bg-slate-900/60-primary text-sidebar-primary-foreground'
+                    : 'text-sidebar-foreground hover:bg-white/60 dark:bg-slate-900/60-accent hover:text-sidebar-accent-foreground'
                 }`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -430,23 +430,23 @@ export default function OperatorCabinetPage({
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-xs text-muted-foreground">Смен за период</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Смен за период</div>
                   <div className="mt-2 text-2xl font-semibold">{filteredShifts.length}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{formatMoney(totalShiftRevenue)}</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatMoney(totalShiftRevenue)}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-xs text-muted-foreground">Активные задачи</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Активные задачи</div>
                   <div className="mt-2 text-2xl font-semibold">{activeTasks}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">Всего задач: {tasks.length}</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Всего задач: {tasks.length}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <div className="text-xs text-muted-foreground">Активный долг</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Активный долг</div>
                   <div className="mt-2 text-2xl font-semibold">{formatMoney(totalDebt)}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">Позиции: {filteredDebts.length}</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Позиции: {filteredDebts.length}</div>
                 </CardContent>
               </Card>
             </div>
@@ -472,12 +472,12 @@ export default function OperatorCabinetPage({
             {activeTab !== 'profile' && activeTab !== 'knowledge' ? (
               <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground">С</label>
-                  <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+                  <label className="text-xs text-slate-500 dark:text-slate-400">С</label>
+                  <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground">По</label>
-                  <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+                  <label className="text-xs text-slate-500 dark:text-slate-400">По</label>
+                  <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 text-sm" />
                 </div>
               </div>
             ) : null}
@@ -491,7 +491,7 @@ export default function OperatorCabinetPage({
                         <ShieldCheck className="h-4 w-4 text-primary" />
                         Правила, FAQ и подтверждения
                       </CardTitle>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         Здесь правила смены, ответы на частые проблемы, штрафы, бонусы и материалы для обучения.
                       </p>
                     </div>
@@ -503,13 +503,13 @@ export default function OperatorCabinetPage({
                 <CardContent className="space-y-4">
                   <SectionError message={sectionErrors.knowledge} />
 
-                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-3 py-2">
+                    <Search className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
                     <input
                       value={knowledgeQuery}
                       onChange={(event) => setKnowledgeQuery(event.target.value)}
                       placeholder="Поиск: Безналичный, штраф, закрытие смены, клиент, техника..."
-                      className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500 dark:text-slate-400"
                     />
                   </div>
 
@@ -545,7 +545,7 @@ export default function OperatorCabinetPage({
                       />
                     ))}
                     {visibleKnowledgeArticles.length === 0 && pendingConfirmations.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-muted-foreground">
+                      <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-5 text-sm text-slate-500 dark:text-slate-400">
                         Материалов пока нет или ничего не найдено по запросу.
                       </div>
                     ) : null}
@@ -556,7 +556,7 @@ export default function OperatorCabinetPage({
 
             {loading ? (
               <div className="flex h-40 items-center justify-center">
-                <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
+                <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-foreground" />
               </div>
             ) : null}
 
@@ -568,18 +568,18 @@ export default function OperatorCabinetPage({
                 <CardContent className="space-y-3">
                   <SectionError message={sectionErrors.shifts} />
                   {filteredShifts.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">За выбранный период смен нет.</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">За выбранный период смен нет.</div>
                   ) : (
                     filteredShifts.map((shift) => (
-                      <div key={shift.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                      <div key={shift.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium">{formatDate(shift.date)} · {shift.shift === 'day' ? 'День' : 'Ночь'}</div>
-                            <div className="text-xs text-muted-foreground">{shift.company_name || session.company.name}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{shift.company_name || session.company.name}</div>
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-semibold tabular-nums">{formatMoney(shift.total)}</div>
-                            <div className="text-xs text-muted-foreground">Нал {formatMoney(shift.cash)} · Безналичный {formatMoney(shift.kaspi + shift.kaspi_online)}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">Нал {formatMoney(shift.cash)} · Безналичный {formatMoney(shift.kaspi + shift.kaspi_online)}</div>
                           </div>
                         </div>
                       </div>
@@ -597,52 +597,52 @@ export default function OperatorCabinetPage({
                 <CardContent className="space-y-3">
                   <SectionError message={sectionErrors.tasks} />
                   {tasks.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Сейчас задач нет.</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Сейчас задач нет.</div>
                   ) : (
                     tasks.map((task) => {
                       const comments = taskCommentsByTask.get(task.id) || []
                       const isClosed = ['done', 'archived'].includes(task.status)
                       return (
-                        <div key={task.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                        <div key={task.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="space-y-1">
                               <div className="text-sm font-medium">#{task.task_number} · {task.title}</div>
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
                                 {task.company_name || 'Без точки'}
                                 {task.due_date ? ` · дедлайн ${formatDate(task.due_date)}` : ''}
                               </div>
-                              {task.description ? <div className="pt-1 text-sm text-muted-foreground">{task.description}</div> : null}
+                              {task.description ? <div className="pt-1 text-sm text-slate-500 dark:text-slate-400">{task.description}</div> : null}
                             </div>
                             <div className="flex flex-col items-end gap-2">
                               <Badge variant={task.status === 'done' ? 'success' : task.status === 'in_progress' ? 'warning' : 'secondary'}>
                                 {taskStatusLabel(task.status)}
                               </Badge>
-                              <div className="text-xs text-muted-foreground">{taskPriorityLabel(task.priority)}</div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">{taskPriorityLabel(task.priority)}</div>
                             </div>
                           </div>
 
                           {comments.length > 0 ? (
-                            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                            <div className="mt-3 space-y-2 border-t border-slate-200 dark:border-slate-800 pt-3">
                               {comments.slice(-3).map((comment) => (
-                                <div key={`${comment.task_id}:${comment.created_at}:${comment.content.slice(0, 12)}`} className="rounded-lg bg-white/[0.04] px-3 py-2">
-                                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <div key={`${comment.task_id}:${comment.created_at}:${comment.content.slice(0, 12)}`} className="rounded-lg bg-white/70 dark:bg-slate-800/50 px-3 py-2">
+                                  <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                                     <MessageSquare className="h-3 w-3" />
                                     {comment.author_name} · {formatDate(comment.created_at)}
                                   </div>
-                                  <div className="mt-1 text-xs text-foreground/80">{comment.content}</div>
+                                  <div className="mt-1 text-xs text-slate-700 dark:text-slate-200">{comment.content}</div>
                                 </div>
                               ))}
                             </div>
                           ) : null}
 
                           {!isClosed ? (
-                            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                            <div className="mt-3 space-y-2 border-t border-slate-200 dark:border-slate-800 pt-3">
                               <textarea
                                 value={taskNotes[task.id] || ''}
                                 onChange={(event) => setTaskNotes((current) => ({ ...current, [task.id]: event.target.value }))}
                                 placeholder="Комментарий к задаче..."
                                 rows={2}
-                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                                className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 py-2 text-sm outline-none placeholder:text-slate-500 dark:text-slate-400"
                               />
                               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                                 {task.status !== 'in_progress' ? (
@@ -704,7 +704,7 @@ export default function OperatorCabinetPage({
                                 variant="ghost"
                                 disabled={!!taskActionLoading || !String(taskNotes[task.id] || '').trim()}
                                 onClick={() => void handleTaskComment(task.id)}
-                                className="h-8 self-start text-xs text-muted-foreground"
+                                className="h-8 self-start text-xs text-slate-500 dark:text-slate-400"
                               >
                                 {taskActionLoading === `${task.id}:comment` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="mr-2 h-3.5 w-3.5" />}
                                 Добавить комментарий
@@ -730,28 +730,28 @@ export default function OperatorCabinetPage({
                     Здесь только просмотр долгов. Оператор не закрывает долг вручную: удержание и погашение делает руководитель через зарплату/админку.
                   </div>
                   {debtsByWeek.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">За выбранный период долгов нет.</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">За выбранный период долгов нет.</div>
                   ) : (
                     debtsByWeek.map(([week, items]) => (
                       <div key={week} className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                             Неделя с {formatDate(week)}
                           </p>
-                          <p className="text-xs tabular-nums text-muted-foreground">
+                          <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                             {formatMoney(items.filter(i => i.status === 'active').reduce((s, i) => s + i.total_amount, 0))}
                           </p>
                         </div>
                         {items.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                      <div key={item.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium">{item.item_name}</div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-slate-500 dark:text-slate-400">
                               {formatDate(item.created_at.slice(0, 10))} · {item.quantity} шт. × {formatMoney(item.unit_price)}
                               {item.company_name ? ` · ${item.company_name}` : null}
                             </div>
-                            {item.comment ? <div className="pt-1 text-sm text-muted-foreground">{item.comment}</div> : null}
+                            {item.comment ? <div className="pt-1 text-sm text-slate-500 dark:text-slate-400">{item.comment}</div> : null}
                           </div>
                           <div className="flex flex-col items-end gap-2">
                             <div className="text-sm font-semibold tabular-nums">{formatMoney(item.total_amount)}</div>
@@ -775,25 +775,25 @@ export default function OperatorCabinetPage({
                   <CardTitle className="text-base">Профиль</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-xs text-muted-foreground">Оператор</div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Оператор</div>
                     <div className="mt-1 text-sm font-medium">{profileName}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">@{session.operator.username}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">@{session.operator.username}</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-xs text-muted-foreground">Роль</div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Роль</div>
                     <div className="mt-1 text-sm font-medium">{session.operator.role_in_company || 'Оператор'}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{session.operator.is_primary ? 'Основная точка' : 'Доп. точка'}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{session.operator.is_primary ? 'Основная точка' : 'Доп. точка'}</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-xs text-muted-foreground">Точка</div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Точка</div>
                     <div className="mt-1 text-sm font-medium">{session.company.name}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{bootstrap.device.name || bootstrap.device.point_mode}</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-xs text-muted-foreground">Telegram</div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Telegram</div>
                     <div className="mt-1 text-sm font-medium">{session.operator.telegram_chat_id || 'Не привязан'}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">Нужен для уведомлений о долгах и отчётах</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Нужен для уведомлений о долгах и отчётах</div>
                   </div>
                 </CardContent>
               </Card>
@@ -820,7 +820,7 @@ function KnowledgeArticleCard({
   const isDanger = article.severity === 'critical' || article.severity === 'warning'
 
   return (
-    <article className={`rounded-xl border p-4 ${required ? 'border-amber-500/25 bg-amber-500/10' : 'border-white/10 bg-black/20'}`}>
+    <article className={`rounded-xl border p-4 ${required ? 'border-amber-500/25 bg-amber-500/10' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50'}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -831,18 +831,18 @@ function KnowledgeArticleCard({
           </div>
           <h3 className="mt-3 break-words text-base font-semibold">{article.title}</h3>
           {article.summary ? (
-            <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{article.summary}</p>
+            <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{article.summary}</p>
           ) : null}
           {article.content ? (
             <div
-              className="mt-3 max-h-48 overflow-auto rounded-xl border border-white/10 bg-background/50 p-3 text-sm leading-6 text-foreground/85"
+              className="mt-3 max-h-48 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900/60 p-3 text-sm leading-6 text-slate-700 dark:text-slate-200"
               dangerouslySetInnerHTML={{ __html: article.content }}
             />
           ) : null}
           {article.tags?.length ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {article.tags.map((tag) => (
-                <span key={tag} className="rounded-full bg-white/5 px-2 py-1 text-[11px] text-muted-foreground">
+                <span key={tag} className="rounded-full bg-white/5 px-2 py-1 text-[11px] text-slate-500 dark:text-slate-400">
                   #{tag}
                 </span>
               ))}

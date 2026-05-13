@@ -133,15 +133,15 @@ export default function DebtHistoryPage({ config, session }: Props) {
 
         <div className="w-full flex gap-6 py-2 border-t text-sm">
           <div>
-            <p className="text-xs text-muted-foreground">Активных долгов</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Активных долгов</p>
             <p className="text-lg font-bold tabular-nums text-destructive-foreground">{formatMoney(totalActive)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Должников</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Должников</p>
             <p className="text-lg font-bold">{byDebtor.length}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Позиций</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Позиций</p>
             <p className="text-lg font-bold">{rows.length}</p>
           </div>
         </div>
@@ -149,10 +149,10 @@ export default function DebtHistoryPage({ config, session }: Props) {
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
-          <span className="animate-spin h-6 w-6 border-2 border-border border-t-foreground rounded-full" />
+          <span className="animate-spin h-6 w-6 border-2 border-slate-200 dark:border-slate-700 border-t-foreground rounded-full" />
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
+        <div className="flex h-40 items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
           Долгов нет за выбранный период
         </div>
       ) : (
@@ -171,14 +171,14 @@ export default function DebtHistoryPage({ config, session }: Props) {
                 <tbody className="divide-y">
                   {items.map(item => (
                     <tr key={item.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-2.5 text-muted-foreground text-xs tabular-nums">
+                      <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-xs tabular-nums">
                         {item.created_at ? formatDate(item.created_at.slice(0, 10)) : '—'}
                       </td>
                       <td className="px-4 py-2.5 font-medium">{item.item_name}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">
+                      <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 font-mono text-xs">
                         {item.barcode || '—'}
                       </td>
-                      <td className="px-4 py-2.5 text-right text-muted-foreground text-xs">×{item.quantity}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-500 dark:text-slate-400 text-xs">×{item.quantity}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums font-semibold">
                         {formatMoney(item.total_amount)}
                       </td>

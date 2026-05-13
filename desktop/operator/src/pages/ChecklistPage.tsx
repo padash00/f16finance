@@ -371,7 +371,7 @@ export default function ChecklistPage({
           </div>
           <div>
             <p className="text-sm font-semibold">{session.company.name}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Чек-листы смены · {session.operator.full_name || session.operator.name || session.operator.username}
             </p>
           </div>
@@ -391,7 +391,7 @@ export default function ChecklistPage({
       <main className="min-h-0 flex-1 overflow-y-auto p-5">
         <div className="mx-auto grid w-full max-w-7xl gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
           <aside className="space-y-4">
-            <Card className="border-white/10 bg-card/90">
+            <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ClipboardList className="h-4 w-4 text-primary" />
@@ -400,12 +400,12 @@ export default function ChecklistPage({
               </CardHeader>
               <CardContent className="space-y-2">
                 {loading ? (
-                  <p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-muted-foreground">
+                  <p className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-slate-500 dark:text-slate-400">
                     Загружаем чек-листы...
                   </p>
                 ) : null}
                 {!loading && templates.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-white/10 bg-black/20 p-3 text-sm text-muted-foreground">
+                  <p className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-slate-500 dark:text-slate-400">
                     Для этой точки пока нет активных чек-листов.
                   </p>
                 ) : null}
@@ -422,13 +422,13 @@ export default function ChecklistPage({
                       className={`w-full rounded-2xl border p-3 text-left transition ${
                         active
                           ? 'border-primary/40 bg-primary/10'
-                          : 'border-white/10 bg-black/20 hover:border-primary/25'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:border-primary/25'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold">{template.title}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{items.length} пунктов</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{items.length} пунктов</p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           {due ? <Badge variant="destructive">Нужно пройти</Badge> : null}
@@ -442,7 +442,7 @@ export default function ChecklistPage({
                         </div>
                       </div>
                       {template.description ? (
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                           {template.description}
                         </p>
                       ) : null}
@@ -452,7 +452,7 @@ export default function ChecklistPage({
               </CardContent>
             </Card>
 
-            <Card className="border-white/10 bg-card/90">
+            <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
               <CardHeader>
                 <CardTitle className="text-base">Сводка</CardTitle>
               </CardHeader>
@@ -492,7 +492,7 @@ export default function ChecklistPage({
                   {pendingConfirmations.slice(0, 4).map((article) => (
                     <div
                       key={article.id}
-                      className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">{article.title}</p>
@@ -516,8 +516,8 @@ export default function ChecklistPage({
             ) : null}
 
             {selectedTemplate ? (
-              <Card className="border-white/10 bg-card/90">
-                <CardHeader className="border-b border-white/10">
+              <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
+                <CardHeader className="border-b border-slate-200 dark:border-slate-800">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap gap-2">
@@ -526,7 +526,7 @@ export default function ChecklistPage({
                         {activeRun?.status ? <Badge variant="secondary">{activeRun.status}</Badge> : null}
                       </div>
                       <CardTitle className="mt-3 break-words text-2xl">{selectedTemplate.title}</CardTitle>
-                      <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">
+                      <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">
                         {selectedTemplate.description || 'Пройдите пункты и сохраните результат смены.'}
                       </p>
                     </div>
@@ -553,13 +553,13 @@ export default function ChecklistPage({
                 </CardHeader>
                 <CardContent className="space-y-5 pt-5">
                   {selectedItems.length > 0 ? (
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                             Пошаговый режим
                           </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
+                          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                             Пункт {Math.min(currentItemIndex + 1, selectedItems.length)} из {selectedItems.length} · {progressPercent}% готово
                           </p>
                         </div>
@@ -605,7 +605,7 @@ export default function ChecklistPage({
                                     ? 'border-rose-400/40 bg-rose-500/15 text-rose-200'
                                     : answered
                                       ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200'
-                                      : 'border-white/10 bg-white/5 text-muted-foreground'
+                                      : 'border-slate-200 dark:border-slate-800 bg-white/5 text-slate-500 dark:text-slate-400'
                               }`}
                               aria-label={`Пункт ${index + 1}`}
                             >
@@ -630,8 +630,8 @@ export default function ChecklistPage({
                   ) : null}
 
                   {currentItem ? (
-                    <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-muted-foreground">
+                    <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         {currentItemAnswered
                           ? 'Пункт заполнен. Можно перейти дальше или завершить чек-лист.'
                           : 'Заполните текущий пункт: отметка, комментарий и фото, если оно требуется.'}
@@ -657,7 +657,7 @@ export default function ChecklistPage({
                   ) : null}
 
                   {!selectedItems.length ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-5 text-sm text-slate-500 dark:text-slate-400">
                       В этом сценарии пока нет пунктов. Добавьте пункты в админке базы знаний.
                     </div>
                   ) : null}
@@ -685,10 +685,10 @@ function SummaryRow({
       ? 'text-emerald-300'
       : tone === 'danger'
         ? 'text-rose-300'
-        : 'text-foreground'
+        : 'text-slate-900 dark:text-slate-100'
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-      <span className="text-muted-foreground">{label}</span>
+    <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-3 py-2">
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <span className={`font-semibold ${valueClass}`}>{value}</span>
     </div>
   )
@@ -730,7 +730,7 @@ function ChecklistItemCard({
   }
 
   return (
-    <div className={`rounded-2xl border p-4 ${failed ? 'border-rose-500/30 bg-rose-500/10' : 'border-white/10 bg-black/20'}`}>
+    <div className={`rounded-2xl border p-4 ${failed ? 'border-rose-500/30 bg-rose-500/10' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50'}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -750,7 +750,7 @@ function ChecklistItemCard({
             </Badge>
           </div>
           {item.description ? (
-            <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">{item.description}</p>
+            <p className="mt-3 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{item.description}</p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             {Number(item.fine_amount || 0) > 0 ? (
@@ -809,7 +809,7 @@ function ChecklistItemCard({
           </div>
         ) : (
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
+            <Label className="text-xs text-slate-500 dark:text-slate-400">
               {item.answer_type === 'number'
                 ? 'Число'
                 : item.answer_type === 'photo'
@@ -826,13 +826,13 @@ function ChecklistItemCard({
           </div>
         )}
         <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Комментарий</Label>
+          <Label className="text-xs text-slate-500 dark:text-slate-400">Комментарий</Label>
           <textarea
             disabled={disabled}
             value={String(answer?.note ?? '')}
             onChange={(event) => onChange({ note: event.target.value })}
             placeholder="Что именно проверили, какая проблема, кому сообщили..."
-            className="min-h-20 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-primary disabled:opacity-60"
+            className="min-h-20 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 py-2 text-sm outline-none transition focus:border-primary disabled:opacity-60"
           />
         </div>
       </div>
@@ -893,7 +893,7 @@ function ChecklistItemCard({
               <img
                 src={answer.photo_data_url}
                 alt="Фото проверки"
-                className="h-28 w-full rounded-xl border border-white/10 object-cover"
+                className="h-28 w-full rounded-xl border border-slate-200 dark:border-slate-800 object-cover"
               />
               <div className="text-xs leading-5 text-sky-100/75">
                 <p className="font-medium text-sky-100">{answer.photo_name || 'Фото прикреплено'}</p>
@@ -904,7 +904,7 @@ function ChecklistItemCard({
               </div>
             </div>
           ) : (
-            <p className="mt-3 rounded-xl border border-dashed border-sky-300/20 bg-black/20 px-3 py-2 text-xs text-sky-100/70">
+            <p className="mt-3 rounded-xl border border-dashed border-sky-300/20 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-xs text-sky-100/70">
               Фото пока не прикреплено. Для обязательного фото чек-лист нельзя завершить без снимка.
             </p>
           )}

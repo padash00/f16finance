@@ -709,25 +709,25 @@ export default function ShiftPage({
   const totalEntered = vCash + vCoins + vKaspiTotal + vKaspiOnline + vDebts + vStart + vWipon
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
       {/* Декоративные акценты — тонкий градиент для глубины (в обеих темах) */}
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
-      <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
+      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
+      <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-5 pb-3 no-drag">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-lg shadow-emerald-500/30">
             <span className="text-[10px] font-bold tracking-tight text-white">OP</span>
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="rounded-full border border-border/80 bg-background/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="rounded-full border border-slate-200/70 dark:border-slate-700/70 bg-white/70 dark:bg-slate-900/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Рабочий терминал
               </span>
-              <span className="text-[11px] text-muted-foreground">{workspaceSubtitle(bootstrap, session)}</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{workspaceSubtitle(bootstrap, session)}</span>
             </div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-xs text-muted-foreground">{operatorName}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{operatorName}</p>
           </div>
         </div>
 
@@ -780,12 +780,12 @@ export default function ShiftPage({
             size="sm"
             onClick={doSync}
             disabled={syncing}
-            className="text-muted-foreground"
+            className="text-slate-500 dark:text-slate-400"
           >
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={onLogout} className="gap-1.5 text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="gap-1.5 text-slate-500 dark:text-slate-400">
             <LogOut className="h-4 w-4" />
             Выйти
           </Button>
@@ -832,7 +832,7 @@ export default function ShiftPage({
                   icon={<CalendarDays className="h-4 w-4" />}
                 />
               ) : (
-                <div className="rounded-xl border border-dashed border-border/70 bg-card/40 p-3 text-xs text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-slate-200/70 dark:border-slate-700/70 bg-white/70 dark:bg-slate-900/60 p-3 text-xs text-slate-500 dark:text-slate-400">
                   Суточная сверка Kaspi выключена для этого терминала.
                 </div>
               )}
@@ -888,41 +888,41 @@ export default function ShiftPage({
                   <CardContent className="space-y-5 p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-3">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                           <CalendarDays className="h-3.5 w-3.5" />
                           Суточная сверка
                         </div>
                         <div>
                           <h1 className="text-2xl font-semibold tracking-tight">{cashLabels.providerName} за календарные сутки</h1>
-                          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
                             Сумма собирается из дневной смены выбранной даты, ночной смены этой даты до 00:00 и хвоста прошлой ночной смены после 00:00.
                           </p>
                         </div>
                       </div>
 
                       <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             <Building2 className="h-3.5 w-3.5" />
                             Точка
                           </div>
                           <div className="mt-1 text-sm font-medium">{session.company.name}</div>
-                          <div className="text-xs text-muted-foreground">{workspaceSubtitle(bootstrap, session)}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">{workspaceSubtitle(bootstrap, session)}</div>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             <Calculator className="h-3.5 w-3.5" />
                             Режим
                           </div>
                           <div className="mt-1 text-sm font-medium">{cashLabels.providerName} split</div>
-                          <div className="text-xs text-muted-foreground">Ночные смены до и после 00:00</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">Ночные смены до и после 00:00</div>
                         </div>
                       </div>
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-[220px_auto]">
                       <div className="space-y-1.5">
-                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Дата суток</Label>
+                        <Label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Дата суток</Label>
                         <Input
                           type="date"
                           value={dailyDate}
@@ -945,7 +945,7 @@ export default function ShiftPage({
                   </CardContent>
                 </Card>
 
-                <Card className="border-white/10 bg-card/90">
+                <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Разбивка суточного {cashLabels.providerName}</CardTitle>
                   </CardHeader>
@@ -958,7 +958,7 @@ export default function ShiftPage({
 
                     {!dailyError && dailyLoading ? (
                       <div className="flex h-32 items-center justify-center">
-                        <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
+                        <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-foreground" />
                       </div>
                     ) : null}
 
@@ -966,10 +966,10 @@ export default function ShiftPage({
                       <>
                         <div className="grid gap-3 md:grid-cols-3">
                           {dailyReport.parts.map((part) => (
-                            <div key={part.key} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{part.label}</div>
+                            <div key={part.key} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4">
+                              <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{part.label}</div>
                               <div className="mt-2 text-2xl font-semibold tabular-nums">{formatMoney(part.amount)}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">
+                              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                 {part.rowCount > 0 ? `Смен: ${part.rowCount}` : 'Нет записей'}
                               </div>
                             </div>
@@ -991,11 +991,11 @@ export default function ShiftPage({
                 <Card className="overflow-hidden border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
                   <CardContent className="space-y-4 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{cashLabels.providerName} за сутки</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{cashLabels.providerName} за сутки</p>
                       <p className="mt-2 text-4xl font-semibold tabular-nums">
                         {dailyReport ? formatMoney(dailyReport.total) : '0'}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">{dailyDate}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{dailyDate}</p>
                     </div>
                     <Badge variant={dailyReport?.isPrecise === false ? 'warning' : 'secondary'}>
                       {dailyReport?.isPrecise === false ? 'Есть старые неточные смены' : 'Точный расчёт'}
@@ -1003,15 +1003,15 @@ export default function ShiftPage({
                   </CardContent>
                 </Card>
 
-                <Card className="border-white/10 bg-card/90">
+                <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Формула суток</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2.5 text-sm text-muted-foreground">
+                  <CardContent className="space-y-2.5 text-sm text-slate-500 dark:text-slate-400">
                     <div>Дневная смена даты</div>
                     <div>+ Ночная смена даты до 00:00</div>
                     <div>+ Ночная смена предыдущей даты после 00:00</div>
-                    <div className="pt-2 text-xs text-muted-foreground/80">
+                    <div className="pt-2 text-xs text-slate-500 dark:text-slate-400/80">
                       `kaspi_amount` хранит полный Kaspi по смене, а `kaspi_before_midnight` нужен только для точной суточной сверки.
                     </div>
                   </CardContent>
@@ -1027,14 +1027,14 @@ export default function ShiftPage({
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 mb-2">
                         <ReceiptText className="h-3.5 w-3.5" />
                         Смена арены
                       </div>
                       <h1 className="text-2xl font-semibold tracking-tight">Платежи за сегодня</h1>
-                      <p className="mt-1 text-sm text-muted-foreground">Записи создаются автоматически при запуске сессий.</p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Записи создаются автоматически при запуске сессий.</p>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={loadArenaIncome} disabled={arenaIncomeLoading} className="text-muted-foreground">
+                    <Button type="button" variant="ghost" size="sm" onClick={loadArenaIncome} disabled={arenaIncomeLoading} className="text-slate-500 dark:text-slate-400">
                       <RefreshCw className={`h-4 w-4 ${arenaIncomeLoading ? 'animate-spin' : ''}`} />
                     </Button>
                   </div>
@@ -1046,13 +1046,13 @@ export default function ShiftPage({
                     const total = totalCash + totalKaspi
                     return (
                       <div className="grid grid-cols-3 gap-3">
-                        <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center">
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Нал</div>
-                          <div className="text-lg font-bold text-foreground">{totalCash.toLocaleString('ru-RU')} ₸</div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 text-center">
+                          <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Нал</div>
+                          <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{totalCash.toLocaleString('ru-RU')} ₸</div>
                         </div>
-                        <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center">
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{cashLabels.providerName}</div>
-                          <div className="text-lg font-bold text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 text-center">
+                          <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">{cashLabels.providerName}</div>
+                          <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{totalKaspi.toLocaleString('ru-RU')} ₸</div>
                         </div>
                         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-center">
                           <div className="text-[10px] uppercase tracking-wide text-emerald-400 mb-1">Итого</div>
@@ -1065,10 +1065,10 @@ export default function ShiftPage({
                   {/* Payments list */}
                   {arenaIncomeLoading && arenaIncomeRows.length === 0 ? (
                     <div className="flex h-24 items-center justify-center">
-                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-foreground" />
                     </div>
                   ) : arenaIncomeRows.length === 0 ? (
-                    <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                    <div className="flex h-24 items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                       Нет платежей за сегодня
                     </div>
                   ) : (
@@ -1078,12 +1078,12 @@ export default function ShiftPage({
                         const isCash = Number(row.cash_amount || 0) > 0 && Number(row.kaspi_amount || 0) === 0
                         const isKaspi = Number(row.kaspi_amount || 0) > 0 && Number(row.cash_amount || 0) === 0
                         return (
-                          <div key={i} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                          <div key={i} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/60 dark:bg-slate-800/40 px-3 py-2">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-base shrink-0">{isCash ? '💵' : isKaspi ? '📱' : '🔀'}</span>
-                              <span className="truncate text-sm text-foreground">{row.comment || 'Арена'}</span>
+                              <span className="truncate text-sm text-slate-900 dark:text-slate-100">{row.comment || 'Арена'}</span>
                             </div>
-                            <div className="ml-3 shrink-0 text-sm font-semibold text-foreground">
+                            <div className="ml-3 shrink-0 text-sm font-semibold text-slate-900 dark:text-slate-100">
                               {rowTotal.toLocaleString('ru-RU')} ₸
                             </div>
                           </div>
@@ -1104,7 +1104,7 @@ export default function ShiftPage({
                       <div className="space-y-1">
                         {[...arenaTechRows].reverse().map((r) => (
                           <div key={r.id} className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground truncate">
+                            <span className="text-slate-500 dark:text-slate-400 truncate">
                               🔧 {r.station_name ? `${r.station_name} — ` : ''}{r.reason}
                             </span>
                             <span className="ml-2 shrink-0 font-medium text-amber-300">
@@ -1190,7 +1190,7 @@ export default function ShiftPage({
 
             return (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl space-y-4">
+                <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 p-6 shadow-2xl space-y-4">
                   <h2 className="text-lg font-semibold">Закрыть смену</h2>
 
                   {/* Shift selector */}
@@ -1201,7 +1201,7 @@ export default function ShiftPage({
                         type="button"
                         onClick={() => setField('shift', s)}
                         className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
-                          closeShift === s ? 'bg-primary text-primary-foreground border-primary' : 'border-white/10 text-muted-foreground hover:text-foreground'
+                          closeShift === s ? 'bg-primary text-primary-foreground border-primary' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
                         }`}
                       >
                         {s === 'day' ? '☀️ День' : '🌙 Ночь'}
@@ -1210,35 +1210,35 @@ export default function ShiftPage({
                   </div>
 
                   {/* Totals */}
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 p-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">💵 Наличка</span>
+                      <span className="text-slate-500 dark:text-slate-400">💵 Наличка</span>
                       <span className="font-semibold">{totalCash.toLocaleString('ru-RU')} ₸</span>
                     </div>
                     {doSplit ? (
                       <>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">📱 {cashLabels.providerName} до 00:00</span>
+                          <span className="text-slate-500 dark:text-slate-400">📱 {cashLabels.providerName} до 00:00</span>
                           <span className="font-semibold">{kaspiBeforeMidnight.toLocaleString('ru-RU')} ₸</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">📱 {cashLabels.providerName} после 00:00</span>
+                          <span className="text-slate-500 dark:text-slate-400">📱 {cashLabels.providerName} после 00:00</span>
                           <span className="font-semibold">{kaspiAfterMidnight.toLocaleString('ru-RU')} ₸</span>
                         </div>
                       </>
                     ) : (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">📱 {cashLabels.providerName}</span>
+                        <span className="text-slate-500 dark:text-slate-400">📱 {cashLabels.providerName}</span>
                         <span className="font-semibold">{totalKaspi.toLocaleString('ru-RU')} ₸</span>
                       </div>
                     )}
                     {totalDebts > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">🔧 Тех. компенс.</span>
+                        <span className="text-slate-500 dark:text-slate-400">🔧 Тех. компенс.</span>
                         <span className="font-semibold text-amber-400">−{totalDebts.toLocaleString('ru-RU')} ₸</span>
                       </div>
                     )}
-                    <div className="border-t border-white/10 pt-2 flex justify-between text-sm font-bold">
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-2 flex justify-between text-sm font-bold">
                       <span>Итого</span>
                       <span className="text-emerald-400">{(totalCash + totalKaspi).toLocaleString('ru-RU')} ₸</span>
                     </div>
@@ -1263,34 +1263,34 @@ export default function ShiftPage({
                 <CardContent className="space-y-5 p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                         <ReceiptText className="h-3.5 w-3.5" />
                         Рабочая смена
                       </div>
                       <div>
                         <h1 className="text-2xl font-semibold tracking-tight">Отчёт по смене</h1>
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                        <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
                           Быстрый ввод выручки с живым расчётом факта и итоговой суммы. Черновик сохраняется автоматически.
                         </p>
                       </div>
                     </div>
 
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           <Building2 className="h-3.5 w-3.5" />
                           Точка
                         </div>
                         <div className="mt-1 text-sm font-medium">{session.company.name}</div>
-                        <div className="text-xs text-muted-foreground">{workspaceSubtitle(bootstrap, session)}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{workspaceSubtitle(bootstrap, session)}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           <UserCircle2 className="h-3.5 w-3.5" />
                           Оператор
                         </div>
                         <div className="mt-1 text-sm font-medium">{operatorName}</div>
-                        <div className="text-xs text-muted-foreground">{shiftIcon} {shiftLabel}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{shiftIcon} {shiftLabel}</div>
                       </div>
                     </div>
                   </div>
@@ -1403,7 +1403,7 @@ export default function ShiftPage({
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">Дата</Label>
+                      <Label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Дата</Label>
                       <Input
                         type="date"
                         value={form.date}
@@ -1412,7 +1412,7 @@ export default function ShiftPage({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">Смена</Label>
+                      <Label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Смена</Label>
                       <Select value={form.shift} onValueChange={(value) => setField('shift', value)}>
                         <SelectTrigger disabled={submitting}>
                           <SelectValue />
@@ -1428,10 +1428,10 @@ export default function ShiftPage({
               </Card>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)]">
-                <Card className="border-white/10 bg-card/90">
+                <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Приход</CardTitle>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       Всё, что формирует факт по кассе на этой смене.
                     </p>
                   </CardHeader>
@@ -1509,10 +1509,10 @@ export default function ShiftPage({
                 </Card>
 
                 <div className="space-y-4">
-                  <Card className="border-white/10 bg-card/90">
+                  <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Вычеты</CardTitle>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Эти значения уменьшают итог по смене.
                       </p>
                     </CardHeader>
@@ -1536,7 +1536,7 @@ export default function ShiftPage({
                     </CardContent>
                   </Card>
 
-                  <Card className="border-white/10 bg-card/90">
+                  <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Комментарий</CardTitle>
                     </CardHeader>
@@ -1574,11 +1574,11 @@ export default function ShiftPage({
                 <CardContent className="space-y-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог смены</p>
-                      <p className={`mt-2 text-4xl font-semibold tabular-nums ${itog < 0 ? 'text-destructive-foreground' : 'text-foreground'}`}>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Итог смены</p>
+                      <p className={`mt-2 text-4xl font-semibold tabular-nums ${itog < 0 ? 'text-destructive-foreground' : 'text-slate-900 dark:text-slate-100'}`}>
                         {itog > 0 ? '+' : ''}{formatMoney(itog)}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">ФАКТ минус {wiponLabel}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">ФАКТ минус {wiponLabel}</p>
                     </div>
                     <Badge variant={itog < 0 ? 'destructive' : 'secondary'}>
                       {itog < 0 ? 'Недостача' : 'Готово'}
@@ -1586,12 +1586,12 @@ export default function ShiftPage({
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">ФАКТ</div>
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">ФАКТ</div>
                       <div className="mt-1 text-2xl font-semibold tabular-nums">{formatMoney(fact)}</div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{wiponLabel}</div>
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{wiponLabel}</div>
                       <div className="mt-1 text-2xl font-semibold tabular-nums">{formatMoney(vWipon)}</div>
                     </div>
                   </div>
@@ -1627,7 +1627,7 @@ export default function ShiftPage({
                 </CardContent>
               </Card>
 
-              <Card className="border-white/10 bg-card/90">
+              <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Быстрые действия</CardTitle>
                 </CardHeader>
@@ -1688,7 +1688,7 @@ export default function ShiftPage({
                 </CardContent>
               </Card>
 
-              <Card className="border-white/10 bg-card/90">
+              <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Формула расчёта</CardTitle>
                 </CardHeader>
@@ -1701,30 +1701,30 @@ export default function ShiftPage({
                   {useArenaShiftDashboard ? <SummaryRow label={cashLabels.online} value={vKaspiOnline} dim /> : null}
                   <SummaryRow label="Тех. компенс." value={vDebts} />
                   <SummaryRow label="− Старт кассы" value={-vStart} highlight={vStart > 0} />
-                  <div className="my-2 border-t border-border/70" />
+                  <div className="my-2 border-t border-slate-200/70 dark:border-slate-700/70" />
                   <SummaryRow label="ФАКТ" value={fact} />
                   <SummaryRow label={`− ${wiponLabel}`} value={-vWipon} highlight={vWipon > 0} />
-                  <div className="my-2 border-t border-border/70" />
+                  <div className="my-2 border-t border-slate-200/70 dark:border-slate-700/70" />
                   <SummaryRow label="ИТОГ" value={itog} emphasize />
                 </CardContent>
               </Card>
 
-              <Card className="border-white/10 bg-card/90">
+              <Card className="border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Быстрые подсказки</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">После отправки</div>
-                    <div className="mt-1 text-sm text-foreground/90">Если сеть есть, отчёт сразу уйдёт на сервер. Если сети нет, он автоматически попадёт в очередь.</div>
+                <CardContent className="space-y-3 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">После отправки</div>
+                    <div className="mt-1 text-sm text-slate-900 dark:text-slate-100/90">Если сеть есть, отчёт сразу уйдёт на сервер. Если сети нет, он автоматически попадёт в очередь.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Горячая клавиша</div>
-                    <div className="mt-1 text-sm text-foreground/90">Используй <span className="font-medium">Ctrl+Enter</span>, чтобы отправить смену без мышки.</div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Горячая клавиша</div>
+                    <div className="mt-1 text-sm text-slate-900 dark:text-slate-100/90">Используй <span className="font-medium">Ctrl+Enter</span>, чтобы отправить смену без мышки.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Режим точки</div>
-                    <div className="mt-1 text-sm text-foreground/90">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Режим точки</div>
+                    <div className="mt-1 text-sm text-slate-900 dark:text-slate-100/90">
                       {useArenaShiftDashboard
                         ? `Arena: учитываем ${cashLabels.online} и сценарий разбивки ночной смены на две даты.`
                         : 'Стандартный режим: быстрый отчёт без разбивки по датам.'}
@@ -1738,20 +1738,20 @@ export default function ShiftPage({
       </div>
 
       {!activeOpenShift ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
           <Card className="mx-4 w-full max-w-sm border-primary/20">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Calculator className="h-4 w-4 text-primary" />
                 Открытие смены
               </CardTitle>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Укажите старт кассы перед продажами и закрытием отчёта. Если мелочи нет, введите 0.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Смена</Label>
+                <Label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Смена</Label>
                 <Select value={form.shift} onValueChange={(value) => setField('shift', value)}>
                   <SelectTrigger disabled={openingShift}>
                     <SelectValue />
@@ -1797,7 +1797,7 @@ export default function ShiftPage({
       ) : null}
 
       {confirmDialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
           <Card className={`mx-4 w-full max-w-sm ${itog < 0 ? 'border-destructive/40' : ''}`}>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -1815,20 +1815,20 @@ export default function ShiftPage({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1.5 rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
-                <p className="mb-2 text-xs text-muted-foreground">
+              <div className="space-y-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm">
+                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
                   👤 {session.operator.short_name || session.operator.name || session.operator.username} · {form.date} · {form.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'}
                 </p>
-                {vCash > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Наличные</span><span>{formatMoney(vCash)} ₸</span></div> : null}
-                {vCoins > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Мелочь</span><span>{formatMoney(vCoins)} ₸</span></div> : null}
-                {vKaspiTotal > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspiTotal)} ₸</span></div> : null}
-                {isNightKaspiSplit && vKaspiBeforeMidnight > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">до 00:00</span><span>{formatMoney(vKaspiBeforeMidnight)} ₸</span></div> : null}
-                {isNightKaspiSplit && vKaspi > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">после 00:00</span><span>{formatMoney(vKaspi)} ₸</span></div> : null}
-                {useArenaShiftDashboard && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{cashLabels.online}</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
-                {vDebts > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Тех</span><span>{formatMoney(vDebts)} ₸</span></div> : null}
-                {vStart > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Старт</span><span>−{formatMoney(vStart)} ₸</span></div> : null}
-                {vWipon > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div> : null}
-                <div className="flex justify-between border-t border-white/10 pt-2 font-semibold">
+                {vCash > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Наличные</span><span>{formatMoney(vCash)} ₸</span></div> : null}
+                {vCoins > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Мелочь</span><span>{formatMoney(vCoins)} ₸</span></div> : null}
+                {vKaspiTotal > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">{kaspiLabel}</span><span>{formatMoney(vKaspiTotal)} ₸</span></div> : null}
+                {isNightKaspiSplit && vKaspiBeforeMidnight > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">до 00:00</span><span>{formatMoney(vKaspiBeforeMidnight)} ₸</span></div> : null}
+                {isNightKaspiSplit && vKaspi > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">после 00:00</span><span>{formatMoney(vKaspi)} ₸</span></div> : null}
+                {useArenaShiftDashboard && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">{cashLabels.online}</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
+                {vDebts > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Тех</span><span>{formatMoney(vDebts)} ₸</span></div> : null}
+                {vStart > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Старт</span><span>−{formatMoney(vStart)} ₸</span></div> : null}
+                {vWipon > 0 ? <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div> : null}
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-2 font-semibold">
                   <span>ИТОГ</span>
                   <span className={itog < 0 ? 'text-destructive-foreground' : 'text-emerald-400'}>
                     {itog > 0 ? '+' : ''}{formatMoney(itog)} ₸
@@ -1851,21 +1851,21 @@ export default function ShiftPage({
       <QueueViewer open={showQueue} onClose={() => setShowQueue(false)} />
 
       {splitDialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
           <Card className="mx-4 w-full max-w-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <SplitSquareVertical className="h-4 w-4 text-primary" />
                 <CardTitle className="text-base">Разбивка по месяцу</CardTitle>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Ночная смена в последний день месяца. Укажите суммы <b>после 00:00</b>, которые должны уйти на следующую дату.
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 pb-1 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{form.date}</span>
-                <span className="text-right font-medium text-foreground">{nextDayISO(form.date)}</span>
+              <div className="grid grid-cols-2 gap-2 pb-1 text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-medium text-slate-900 dark:text-slate-100">{form.date}</span>
+                <span className="text-right font-medium text-slate-900 dark:text-slate-100">{nextDayISO(form.date)}</span>
               </div>
 
               <MoneyInput
@@ -1923,17 +1923,17 @@ function ModeToggleCard({
       className={`group rounded-xl border p-3 text-left transition-all ${
         active
           ? 'border-primary/30 bg-primary/10 shadow-[0_16px_40px_rgba(255,255,255,0.05)]'
-          : 'border-white/10 bg-card/70 hover:border-primary/20 hover:bg-card'
+          : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 hover:border-primary/20 hover:bg-white/80 backdrop-blur-xl dark:bg-slate-900/80'
       }`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <div className="text-sm font-semibold">{title}</div>
-          <div className="text-[11px] leading-4 text-muted-foreground">{description}</div>
+          <div className="text-[11px] leading-4 text-slate-500 dark:text-slate-400">{description}</div>
         </div>
         <div
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-            active ? 'bg-primary text-primary-foreground' : 'bg-black/20 text-muted-foreground'
+            active ? 'bg-primary text-primary-foreground' : 'bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400'
           }`}
         >
           {icon}
@@ -1961,7 +1961,7 @@ function TerminalStatusChip({
       ? 'border-amber-500/20 bg-amber-500/10'
       : tone === 'success'
         ? 'border-emerald-500/20 bg-emerald-500/10'
-        : 'border-white/10 bg-card/80'
+        : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70'
 
   return (
     <button
@@ -1969,7 +1969,7 @@ function TerminalStatusChip({
       onClick={onClick}
       className={`rounded-2xl border px-4 py-3 text-left ${toneClass} ${onClick ? 'cursor-pointer transition-opacity hover:opacity-90' : 'cursor-default'}`}
     >
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {icon}
         {label}
       </div>
@@ -1998,13 +1998,13 @@ function TerminalMiniStat({
           ? 'text-sky-300'
           : tone === 'destructive'
             ? 'text-rose-300'
-            : 'text-foreground'
+            : 'text-slate-900 dark:text-slate-100'
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-1 text-sm font-medium ${valueClass}`}>{value}</div>
-      {note ? <div className="mt-1 text-[11px] text-muted-foreground">{note}</div> : null}
+      {note ? <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{note}</div> : null}
     </div>
   )
 }
@@ -2046,8 +2046,8 @@ function MoneyInput({
   return (
     <div className="flex items-center gap-3">
       <div className={`${labelWidth} shrink-0`}>
-        <Label className="block text-xs leading-none text-muted-foreground">{label}</Label>
-        {note ? <span className="mt-1 block text-[10px] text-muted-foreground/60">{note}</span> : null}
+        <Label className="block text-xs leading-none text-slate-500 dark:text-slate-400">{label}</Label>
+        {note ? <span className="mt-1 block text-[10px] text-slate-500 dark:text-slate-400/60">{note}</span> : null}
       </div>
       <div className="relative flex-1">
         <Input
@@ -2060,7 +2060,7 @@ function MoneyInput({
           disabled={disabled}
           className="pr-6 text-right tabular-nums"
         />
-        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₸</span>
+        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-500 dark:text-slate-400">₸</span>
       </div>
     </div>
   )
@@ -2080,20 +2080,20 @@ function SummaryRow({
   emphasize?: boolean
 }) {
   const textClass = emphasize
-    ? 'text-foreground'
+    ? 'text-slate-900 dark:text-slate-100'
     : highlight
       ? 'text-destructive-foreground/80'
       : dim
-        ? 'text-muted-foreground/50'
-        : 'text-muted-foreground'
+        ? 'text-slate-500 dark:text-slate-400/50'
+        : 'text-slate-500 dark:text-slate-400'
 
   const valueClass = emphasize
-    ? 'font-semibold text-foreground'
+    ? 'font-semibold text-slate-900 dark:text-slate-100'
     : highlight
       ? 'text-destructive-foreground'
       : dim
-        ? 'text-muted-foreground/50'
-        : 'text-foreground'
+        ? 'text-slate-500 dark:text-slate-400/50'
+        : 'text-slate-900 dark:text-slate-100'
 
   return (
     <div className="flex justify-between text-sm">

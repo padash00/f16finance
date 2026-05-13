@@ -149,29 +149,29 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
         {/* Итоги */}
         <div className="w-full flex gap-6 py-2 border-t text-sm flex-wrap">
           <div>
-            <p className="text-xs text-muted-foreground">Выручка за период</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Выручка за период</p>
             <p className="text-lg font-bold tabular-nums">{formatMoney(totalRevenue)}</p>
           </div>
           {totalCash > 0 && (
             <div>
-              <p className="text-xs text-muted-foreground">Наличные</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Наличные</p>
               <p className="text-base font-semibold tabular-nums">{formatMoney(totalCash)}</p>
             </div>
           )}
           {totalKaspi > 0 && (
             <div>
-              <p className="text-xs text-muted-foreground">Безналичный POS</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Безналичный POS</p>
               <p className="text-base font-semibold tabular-nums">{formatMoney(totalKaspi)}</p>
             </div>
           )}
           {totalOnline > 0 && (
             <div>
-              <p className="text-xs text-muted-foreground">Безналичный Online</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Безналичный Online</p>
               <p className="text-base font-semibold tabular-nums">{formatMoney(totalOnline)}</p>
             </div>
           )}
           <div>
-            <p className="text-xs text-muted-foreground">Смен</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Смен</p>
             <p className="text-lg font-bold">{rows.length}</p>
           </div>
         </div>
@@ -179,10 +179,10 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
-          <span className="animate-spin h-6 w-6 border-2 border-border border-t-foreground rounded-full" />
+          <span className="animate-spin h-6 w-6 border-2 border-slate-200 dark:border-slate-700 border-t-foreground rounded-full" />
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
+        <div className="flex h-40 items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
           Нет данных за выбранный период
         </div>
       ) : (
@@ -190,12 +190,12 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
           {/* Итоги по операторам */}
           {byOperator.length > 1 && (
             <div className="rounded-lg border overflow-hidden">
-              <div className="bg-muted/40 px-4 py-2 text-xs font-semibold text-muted-foreground">По операторам</div>
+              <div className="bg-muted/40 px-4 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400">По операторам</div>
               <div className="divide-y">
                 {byOperator.map(([name, totals]) => (
                   <div key={name} className="flex items-center px-4 py-2 text-sm gap-4">
                     <span className="flex-1 font-medium">{name}</span>
-                    <span className="text-xs text-muted-foreground">{totals.count} смен</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{totals.count} смен</span>
                     <span className="tabular-nums w-32 text-right font-semibold">{formatMoney(totals.total)}</span>
                   </div>
                 ))}
@@ -209,11 +209,11 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
               <thead>
                 <tr className="border-b bg-muted/40">
                   <th className="w-6 px-2 py-2.5" />
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Дата</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Смена</th>
-                  {isAdmin && <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Точка</th>}
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Оператор</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Выручка</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Дата</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Смена</th>
+                  {isAdmin && <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Точка</th>}
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Оператор</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Выручка</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -227,7 +227,7 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
                         className={`hover:bg-muted/20 transition-colors ${hasBreakdown ? 'cursor-pointer' : ''}`}
                         onClick={() => hasBreakdown && toggleExpand(row.id)}
                       >
-                        <td className="px-2 py-2.5 text-muted-foreground">
+                        <td className="px-2 py-2.5 text-slate-500 dark:text-slate-400">
                           {hasBreakdown && (
                             isOpen
                               ? <ChevronDown className="h-3.5 w-3.5" />
@@ -240,23 +240,23 @@ export default function ShiftHistoryPage({ config, session, bootstrap }: Props) 
                             {row.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
                           </Badge>
                         </td>
-                        {isAdmin && <td className="px-4 py-2.5 text-xs text-muted-foreground">{row.company_name || '—'}</td>}
-                        <td className="px-4 py-2.5 text-muted-foreground">{row.operator_name || '—'}</td>
+                        {isAdmin && <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{row.company_name || '—'}</td>}
+                        <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{row.operator_name || '—'}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatMoney(row.total)}</td>
                       </tr>
                       {isOpen && (
                         <tr key={`${row.id}-detail`} className="bg-muted/10">
                           <td />
                           <td colSpan={4} className="px-4 py-2">
-                            <div className="flex gap-6 text-xs text-muted-foreground">
+                            <div className="flex gap-6 text-xs text-slate-500 dark:text-slate-400">
                               {row.cash > 0 && (
-                                <span>Нал: <strong className="text-foreground tabular-nums">{formatMoney(row.cash)}</strong></span>
+                                <span>Нал: <strong className="text-slate-900 dark:text-slate-100 tabular-nums">{formatMoney(row.cash)}</strong></span>
                               )}
                               {row.kaspi > 0 && (
-                                <span>Безналичный POS: <strong className="text-foreground tabular-nums">{formatMoney(row.kaspi)}</strong></span>
+                                <span>Безналичный POS: <strong className="text-slate-900 dark:text-slate-100 tabular-nums">{formatMoney(row.kaspi)}</strong></span>
                               )}
                               {row.kaspi_online > 0 && (
-                                <span>Online: <strong className="text-foreground tabular-nums">{formatMoney(row.kaspi_online)}</strong></span>
+                                <span>Online: <strong className="text-slate-900 dark:text-slate-100 tabular-nums">{formatMoney(row.kaspi_online)}</strong></span>
                               )}
                             </div>
                           </td>

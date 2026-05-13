@@ -1455,7 +1455,7 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка после успешной продажи: подтверждение + превью чека */}
       {lastReceipt && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3 sm:p-4" onClick={() => setLastReceipt(null)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-100 dark:bg-slate-800/60 p-3 sm:p-4" onClick={() => setLastReceipt(null)}>
           <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-900">
             {/* Шапка */}
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-emerald-50 px-5 py-4 dark:border-slate-800 dark:bg-emerald-950/30">
@@ -1519,7 +1519,7 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка подтверждения оплаты */}
       {showPayConfirm && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => !saving && setShowPayConfirm(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-100 dark:bg-slate-800/60 p-4" onClick={() => !saving && setShowPayConfirm(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-slate-900">
             {/* Шапка */}
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
@@ -1652,7 +1652,7 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка корректировки оплаты */}
       {selectedSale && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={closeCorrection}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-50 dark:bg-slate-800/50 p-4" onClick={closeCorrection}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
             <h3 className="text-base font-semibold">Исправить оплату</h3>
             <p className="mt-1 text-xs text-slate-500">
@@ -1735,7 +1735,7 @@ export default function InventorySalesPageMinimal({
 
       {/* Модалка универсальной продажи */}
       {showUniversal && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setShowUniversal(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-50 dark:bg-slate-800/50 p-4" onClick={() => setShowUniversal(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
@@ -1799,7 +1799,7 @@ export default function InventorySalesPageMinimal({
 
       {/* Диалог отложки — задать подпись */}
       {showParkDialog && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setShowParkDialog(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-50 dark:bg-slate-800/50 p-4" onClick={() => setShowParkDialog(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
@@ -1838,7 +1838,7 @@ export default function InventorySalesPageMinimal({
 
       {/* Список отложек этой смены */}
       {showParkedList && (
-        <div className="fixed inset-0 z-50 grid place-items-start bg-black/40 p-4 pt-20" onClick={() => setShowParkedList(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-start bg-slate-50 dark:bg-slate-800/50 p-4 pt-20" onClick={() => setShowParkedList(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"

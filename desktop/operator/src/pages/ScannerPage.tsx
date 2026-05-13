@@ -406,7 +406,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-xs text-muted-foreground">{operatorName}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{operatorName}</p>
           </div>
         </div>
 
@@ -439,11 +439,11 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             onCabinet={onOpenCabinet}
           />
 
-          <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-slate-500 dark:text-slate-400">
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="text-slate-500 dark:text-slate-400">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
@@ -473,7 +473,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                   autoFocus
                 />
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Нажмите Enter после сканирования</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Нажмите Enter после сканирования</p>
                   <button
                     type="button"
                     onClick={() => { setShowNameSearch(!showNameSearch); setNameSearch('') }}
@@ -494,7 +494,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     autoFocus={showNameSearch}
                   />
                   {nameSearchResults.length > 0 && (
-                    <div className="rounded-md border bg-popover shadow-md overflow-hidden">
+                    <div className="rounded-md border bg-white dark:bg-slate-900 shadow-md overflow-hidden">
                       {nameSearchResults.map(p => (
                         <button
                           key={p.id}
@@ -503,13 +503,13 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                           className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors cursor-pointer text-left"
                         >
                           <span className="truncate">{p.name}</span>
-                          <span className="ml-2 shrink-0 tabular-nums text-muted-foreground text-xs">{formatMoney(p.price)}</span>
+                          <span className="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400 text-xs">{formatMoney(p.price)}</span>
                         </button>
                       ))}
                     </div>
                   )}
                   {nameSearch.trim().length >= 2 && nameSearchResults.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Ничего не найдено</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Ничего не найдено</p>
                   )}
                 </div>
               )}
@@ -532,7 +532,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                   <Separator />
                   <div className="rounded-lg bg-muted/50 border p-3 space-y-1">
                     <p className="text-sm font-medium">{foundProduct.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {foundProduct.barcode} · {formatMoney(foundProduct.price)} / шт.
                     </p>
                   </div>
@@ -600,7 +600,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <Package className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               Долги за неделю
               <Badge variant="secondary">{filteredDebts.length}</Badge>
               {totalDebt > 0 && (
@@ -609,7 +609,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                 </span>
               )}
             </h2>
-            <Button variant="ghost" size="sm" onClick={() => api.getDebts(config, session.company.id).then(setDebts).catch(() => {})} className="text-xs text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={() => api.getDebts(config, session.company.id).then(setDebts).catch(() => {})} className="text-xs text-slate-500 dark:text-slate-400">
               <RefreshCw className="h-3.5 w-3.5 mr-1" /> Обновить
             </Button>
           </div>
@@ -619,7 +619,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
               <select
                 value={debtFilterOpId}
                 onChange={e => setDebtFilterOpId(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-1.5 text-xs text-foreground"
+                className="w-full rounded-md border bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100"
               >
                 <option value="all">Все операторы ({debts.length})</option>
                 {debtOperators.map(([id, name]) => (
@@ -631,20 +631,20 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
           {loading ? (
             <div className="flex flex-1 items-center justify-center">
-              <span className="animate-spin h-6 w-6 border-2 border-border border-t-foreground rounded-full" />
+              <span className="animate-spin h-6 w-6 border-2 border-slate-200 dark:border-slate-700 border-t-foreground rounded-full" />
             </div>
           ) : debts.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
               <Package className="h-10 w-10 opacity-20" />
               <p className="text-sm">Долгов нет</p>
             </div>
           ) : (
             <div className="flex-1 overflow-auto space-y-2">
               {filteredDebts.map(debt => (
-                <div key={debt.id} className="flex items-start justify-between rounded-lg border bg-card px-4 py-3 gap-4">
+                <div key={debt.id} className="flex items-start justify-between rounded-lg border bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-4 py-3 gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{debt.item_name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {debt.debtor_name} · {debt.quantity} шт.
                       {debt.comment && <> · {debt.comment}</>}
                     </p>
@@ -658,7 +658,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive-foreground"
+                        className="h-7 w-7 text-slate-500 dark:text-slate-400 hover:text-destructive-foreground"
                         onClick={() => setDeleteConfirm(debt.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -669,7 +669,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-muted-foreground/40 hover:text-amber-500"
+                      className="h-7 w-7 text-slate-500 dark:text-slate-400/40 hover:text-amber-500"
                       title="Админ: удалить или оплатить"
                       onClick={() => { setAdminTarget({ id: debt.id, item_name: debt.item_name, total_amount: debt.total_amount }); setAdminTokenInput(''); setAdminError(null) }}
                     >
@@ -687,13 +687,13 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
       {/* ─── Админ-модал ─── */}
       {adminTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
           <Card className="w-full max-w-xs mx-4">
             <CardContent className="pt-5 space-y-4">
               <p className="text-sm font-semibold flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-amber-500" /> Действие администратора
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {adminTarget.item_name} — <span className="font-medium">{formatMoney(adminTarget.total_amount)}</span>
               </p>
               <div className="space-y-1.5">
@@ -739,12 +739,12 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       {deleteConfirm && (() => {
         const debt = debts.find(d => d.id === deleteConfirm)
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-sm">
             <Card className="w-full max-w-xs mx-4">
               <CardContent className="pt-5 space-y-4">
                 <p className="text-sm">
                   Удалить долг <strong>{debt?.item_name}</strong>?
-                  {debt && <span className="block text-xs text-muted-foreground mt-1">{debt.debtor_name} · {formatMoney(debt.total_amount)}</span>}
+                  {debt && <span className="block text-xs text-slate-500 dark:text-slate-400 mt-1">{debt.debtor_name} · {formatMoney(debt.total_amount)}</span>}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirm(null)}>

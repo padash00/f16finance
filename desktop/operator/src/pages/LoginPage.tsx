@@ -265,7 +265,7 @@ export default function LoginPage({
 
   if (changePassData) {
     return (
-      <div className="flex h-screen flex-col bg-background">
+      <div className="flex h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
         <div className="h-9 drag-region" />
         <div className="flex flex-1 items-center justify-center p-6">
           <div className="w-full max-w-sm space-y-6">
@@ -274,7 +274,7 @@ export default function LoginPage({
                 <KeyRound className="h-6 w-6 text-white" />
               </div>
               <h1 className="mt-3 text-xl font-bold">Смена пароля</h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Вы вошли с временным паролем. Придумайте постоянный пароль.
               </p>
             </div>
@@ -296,7 +296,7 @@ export default function LoginPage({
                     autoFocus
                     className="no-drag pr-10"
                   />
-                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowNewPass(v => !v)}>
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" onClick={() => setShowNewPass(v => !v)}>
                     {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
@@ -351,7 +351,7 @@ export default function LoginPage({
             </div>
           )}
 
-          <div className="no-drag flex gap-1 rounded-xl border border-white/10 bg-slate-900/40 p-1 backdrop-blur-sm">
+          <div className="no-drag flex gap-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/40 p-1 backdrop-blur-sm">
             <button
               type="button"
               onClick={() => {
@@ -386,7 +386,7 @@ export default function LoginPage({
           </div>
 
           {mode === 'operator' ? (
-            <div className="no-drag flex gap-1 rounded-xl border border-white/10 bg-slate-900/40 p-1 backdrop-blur-sm">
+            <div className="no-drag flex gap-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/40 p-1 backdrop-blur-sm">
               <button
                 type="button"
                 onClick={() => {
@@ -420,7 +420,7 @@ export default function LoginPage({
             </div>
           ) : null}
 
-          <Card className="border-white/10 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40">
+          <Card className="border-slate-200 dark:border-slate-800 bg-slate-900/60 backdrop-blur-xl shadow-2xl shadow-black/40">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-white">
                 {mode === 'operator' ? 'Вход для оператора' : 'Вход администратора'}
@@ -441,7 +441,7 @@ export default function LoginPage({
                       Вход по QR требует интернет. Подключитесь к сети или используйте пароль.
                     </p>
                   ) : qrBusy && !qrImg ? (
-                    <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-slate-500 dark:text-slate-400">
                       <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                       Готовим QR-код…
                     </div>
@@ -452,7 +452,7 @@ export default function LoginPage({
                           <img src={qrImg} alt="QR для входа на терминале" className="h-[220px] w-[220px]" />
                         </div>
                       ) : null}
-                      <p className="text-center text-xs text-muted-foreground">
+                      <p className="text-center text-xs text-slate-500 dark:text-slate-400">
                         Войдите в кабинет оператора на телефоне и подтвердите вход на этой странице.
                       </p>
                       <Button
@@ -484,7 +484,7 @@ export default function LoginPage({
                       autoComplete="username"
                       autoFocus
                       disabled={loading}
-                      className="no-drag h-11 bg-slate-800/40 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-400/50 transition-colors"
+                      className="no-drag h-11 bg-slate-800/40 border-slate-200 dark:border-slate-800 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-400/50 transition-colors"
                     />
                   </div>
                 ) : (
@@ -499,7 +499,7 @@ export default function LoginPage({
                       autoComplete="email"
                       autoFocus
                       disabled={loading}
-                      className="no-drag h-11 bg-slate-800/40 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-amber-500/40 focus-visible:border-amber-400/50 transition-colors"
+                      className="no-drag h-11 bg-slate-800/40 border-slate-200 dark:border-slate-800 text-white placeholder:text-slate-500 focus-visible:ring-amber-500/40 focus-visible:border-amber-400/50 transition-colors"
                     />
                   </div>
                 )}
@@ -515,7 +515,7 @@ export default function LoginPage({
                       placeholder="••••••••"
                       autoComplete="current-password"
                       disabled={loading}
-                      className="no-drag pr-10 h-11 bg-slate-800/40 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-400/50 transition-colors"
+                      className="no-drag pr-10 h-11 bg-slate-800/40 border-slate-200 dark:border-slate-800 text-white placeholder:text-slate-500 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-400/50 transition-colors"
                     />
                     <button
                       type="button"
@@ -572,7 +572,7 @@ export default function LoginPage({
       </div>
 
       {showSetupGate ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-100/70 dark:bg-slate-950/70 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-3">
@@ -585,7 +585,7 @@ export default function LoginPage({
                 <button
                   type="button"
                   onClick={() => setShowSetupGate(false)}
-                  className="no-drag text-muted-foreground transition-colors hover:text-foreground"
+                  className="no-drag text-slate-500 dark:text-slate-400 transition-colors hover:text-slate-900 dark:text-slate-100"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -623,7 +623,7 @@ export default function LoginPage({
                     <button
                       type="button"
                       onClick={() => setShowPass((value) => !value)}
-                      className="no-drag absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="no-drag absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
                     >
                       {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

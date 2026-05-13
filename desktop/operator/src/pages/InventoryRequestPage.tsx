@@ -221,18 +221,18 @@ export default function InventoryRequestPage({
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
-      <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-card px-4 pb-2 no-drag">
+      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-4 pb-2 no-drag">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 shadow-md shadow-emerald-500/30">
             <span className="text-[9px] font-bold tracking-tight text-white">OP</span>
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-[10px] text-muted-foreground">{operatorName}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">{operatorName}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 no-drag">
@@ -248,10 +248,10 @@ export default function InventoryRequestPage({
             onScanner={onSwitchToScanner}
             onCabinet={onOpenCabinet}
           />
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="h-7 w-7 p-0 text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="h-7 w-7 p-0 text-slate-500 dark:text-slate-400">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="h-7 w-7 p-0 text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="h-7 w-7 p-0 text-slate-500 dark:text-slate-400">
             <LogOut className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -260,11 +260,11 @@ export default function InventoryRequestPage({
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT: searchable item catalog */}
-        <div className="flex flex-1 flex-col overflow-hidden border-r border-white/10">
+        <div className="flex flex-1 flex-col overflow-hidden border-r border-slate-200 dark:border-slate-800">
           {/* Search */}
-          <div className="shrink-0 border-b border-white/10 p-2">
+          <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 p-2">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
               <Input
                 ref={searchRef}
                 value={search}
@@ -280,7 +280,7 @@ export default function InventoryRequestPage({
                 autoFocus
               />
               {search && (
-                <button onClick={() => setSearch('')} className="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground">
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
                   <X className="h-4 w-4" />
                 </button>
               )}
@@ -291,12 +291,12 @@ export default function InventoryRequestPage({
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex h-40 items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="h-5 w-5 animate-spin text-slate-500 dark:text-slate-400" />
               </div>
             ) : error ? (
               <div className="m-3 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</div>
             ) : filteredItems.length === 0 ? (
-              <div className="flex h-40 flex-col items-center justify-center gap-1 text-muted-foreground">
+              <div className="flex h-40 flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400">
                 <Search className="h-6 w-6 opacity-30" />
                 <p className="text-xs">{search ? 'Ничего не найдено' : 'Каталог пуст'}</p>
               </div>
@@ -309,16 +309,16 @@ export default function InventoryRequestPage({
                       key={item.id}
                       type="button"
                       onClick={() => addToCart(item.id)}
-                      className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs transition hover:bg-white/[0.04] ${inCart ? 'bg-blue-500/[0.06]' : ''}`}
+                      className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-xs transition hover:bg-white/70 dark:bg-slate-800/50 ${inCart ? 'bg-blue-500/[0.06]' : ''}`}
                     >
                       <div className="min-w-0">
-                        <p className={`truncate font-medium ${inCart ? 'text-blue-300' : 'text-foreground'}`}>{item.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className={`truncate font-medium ${inCart ? 'text-blue-300' : 'text-slate-900 dark:text-slate-100'}`}>{item.name}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
                           {item.barcode || '—'}
-                          {' · '}склад: <span className="text-foreground">{item.warehouse_qty ?? 0}</span> {item.unit || 'шт'}
+                          {' · '}склад: <span className="text-slate-900 dark:text-slate-100">{item.warehouse_qty ?? 0}</span> {item.unit || 'шт'}
                         </p>
                       </div>
-                      <div className={`ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition ${inCart ? 'bg-blue-500/30 text-blue-300' : 'bg-white/[0.06] text-muted-foreground hover:bg-blue-500/20 hover:text-blue-300'}`}>
+                      <div className={`ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition ${inCart ? 'bg-blue-500/30 text-blue-300' : 'bg-white/[0.06] text-slate-500 dark:text-slate-400 hover:bg-blue-500/20 hover:text-blue-300'}`}>
                         {inCart ? <span className="text-[10px] font-bold">{inCart.qty}</span> : <Plus className="h-3.5 w-3.5" />}
                       </div>
                     </button>
@@ -333,16 +333,16 @@ export default function InventoryRequestPage({
         <div className="flex w-80 shrink-0 flex-col overflow-hidden">
 
           {/* Cart */}
-          <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden border-b border-white/10" style={{ minHeight: cart.length === 0 ? 'auto' : undefined }}>
-            <div className="shrink-0 border-b border-white/10 px-3 py-2">
+          <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden border-b border-slate-200 dark:border-slate-800" style={{ minHeight: cart.length === 0 ? 'auto' : undefined }}>
+            <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-3 py-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <ShoppingCart className="h-3.5 w-3.5" />
                   Заявка
                   {cartTotal > 0 && <Badge variant="secondary" className="text-[10px]">{cart.length} поз.</Badge>}
                 </div>
                 {cart.length > 0 && (
-                  <button type="button" onClick={() => setCart([])} className="text-[10px] text-muted-foreground hover:text-rose-400 transition">
+                  <button type="button" onClick={() => setCart([])} className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-rose-400 transition">
                     Очистить
                   </button>
                 )}
@@ -350,7 +350,7 @@ export default function InventoryRequestPage({
             </div>
 
             {cart.length === 0 ? (
-              <div className="flex h-24 flex-col items-center justify-center gap-1 text-muted-foreground">
+              <div className="flex h-24 flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400">
                 <ShoppingCart className="h-5 w-5 opacity-20" />
                 <p className="text-[11px]">Нажмите на товар слева</p>
               </div>
@@ -361,47 +361,47 @@ export default function InventoryRequestPage({
                     <div key={c.item_id} className="px-3 py-2 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs font-medium leading-tight truncate">{c.name}</p>
-                        <button type="button" onClick={() => removeFromCart(c.item_id)} className="shrink-0 text-muted-foreground hover:text-rose-400 transition mt-0.5">
+                        <button type="button" onClick={() => removeFromCart(c.item_id)} className="shrink-0 text-slate-500 dark:text-slate-400 hover:text-rose-400 transition mt-0.5">
                           <X className="h-3 w-3" />
                         </button>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1">
-                          <button type="button" onClick={() => setCartQty(c.item_id, c.qty - 1)} className="flex h-6 w-6 items-center justify-center rounded border border-white/10 hover:bg-white/[0.06]">
+                          <button type="button" onClick={() => setCartQty(c.item_id, c.qty - 1)} className="flex h-6 w-6 items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-white/[0.06]">
                             <Minus className="h-3 w-3" />
                           </button>
                           <input
                             type="number"
                             value={c.qty}
                             onChange={(e) => setCartQty(c.item_id, Number(e.target.value) || 0)}
-                            className="h-6 w-12 rounded border border-input bg-background px-1 text-center text-xs outline-none focus:border-blue-400/50"
+                            className="h-6 w-12 rounded border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-1 text-center text-xs outline-none focus:border-blue-400/50"
                             min={0}
                           />
-                          <button type="button" onClick={() => setCartQty(c.item_id, c.qty + 1)} className="flex h-6 w-6 items-center justify-center rounded border border-white/10 hover:bg-white/[0.06]">
+                          <button type="button" onClick={() => setCartQty(c.item_id, c.qty + 1)} className="flex h-6 w-6 items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-white/[0.06]">
                             <Plus className="h-3 w-3" />
                           </button>
-                          <span className="text-[10px] text-muted-foreground">{c.unit}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">{c.unit}</span>
                         </div>
                       </div>
                       <input
                         value={c.comment}
                         onChange={(e) => setCartComment(c.item_id, e.target.value)}
                         placeholder="Комментарий (опц.)"
-                        className="w-full rounded border border-input bg-background px-2 py-1 text-[10px] outline-none focus:border-blue-400/50"
+                        className="w-full rounded border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1 text-[10px] outline-none focus:border-blue-400/50"
                       />
                     </div>
                   ))}
                 </div>
 
-                <div className="shrink-0 space-y-2 border-t border-white/10 p-3">
+                <div className="shrink-0 space-y-2 border-t border-slate-200 dark:border-slate-800 p-3">
                   <div>
-                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Комментарий к заявке</Label>
+                    <Label className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Комментарий к заявке</Label>
                     <textarea
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       placeholder="Что нужно и почему..."
                       rows={2}
-                      className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-blue-400/50"
+                      className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-xs outline-none focus:border-blue-400/50"
                     />
                   </div>
                   <Button type="submit" className="h-10 w-full gap-2 font-semibold" disabled={saving || loading}>
@@ -414,8 +414,8 @@ export default function InventoryRequestPage({
           </form>
 
           {/* History */}
-          <div className="shrink-0 border-b border-white/10 px-3 py-2">
-            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 px-3 py-2">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               <span>История заявок</span>
               {pendingCount > 0 && <Badge variant="secondary" className="text-[10px]">{pendingCount} новых</Badge>}
             </div>
@@ -423,22 +423,22 @@ export default function InventoryRequestPage({
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {loading ? (
               <div className="flex h-20 items-center justify-center">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 className="h-4 w-4 animate-spin text-slate-500 dark:text-slate-400" />
               </div>
             ) : (context?.requests || []).length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">История пустая</p>
+              <p className="py-4 text-center text-xs text-slate-500 dark:text-slate-400">История пустая</p>
             ) : (
               (context?.requests || []).map((request) => (
-                <div key={request.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                <div key={request.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-800/40 p-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-[10px] text-muted-foreground">{formatDate(request.created_at)}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{formatDate(request.created_at)}</p>
                     <Badge variant={requestStatusVariant(request.status)} className="text-[10px] shrink-0">
                       {requestStatusLabel(request.status)}
                     </Badge>
                   </div>
                   <div className="mt-1.5 space-y-0.5">
                     {(request.items || []).slice(0, 4).map((item) => (
-                      <div key={item.id} className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <div key={item.id} className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
                         <span className="truncate">{item.item?.name || 'Товар'}</span>
                         <span className="ml-2 shrink-0 font-mono">
                           {item.requested_qty}{item.approved_qty !== null ? ` → ${item.approved_qty}` : ''}
@@ -446,11 +446,11 @@ export default function InventoryRequestPage({
                       </div>
                     ))}
                     {(request.items?.length || 0) > 4 && (
-                      <p className="text-[10px] text-muted-foreground">+{(request.items?.length || 0) - 4} ещё</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">+{(request.items?.length || 0) - 4} ещё</p>
                     )}
                   </div>
                   {request.decision_comment && (
-                    <p className="mt-1.5 rounded border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-muted-foreground">{request.decision_comment}</p>
+                    <p className="mt-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-2 py-1 text-[10px] text-slate-500 dark:text-slate-400">{request.decision_comment}</p>
                   )}
                   {request.status === 'issued' && (
                     <Button

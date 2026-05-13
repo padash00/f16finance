@@ -132,7 +132,7 @@ export default function DevicesPage({ config, session }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold">Устройства</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
             Здесь можно задать Telegram chat ID, включить ночную сверку Kaspi и отдельно выключить сканер долгов по точке.
           </p>
         </div>
@@ -158,10 +158,10 @@ export default function DevicesPage({ config, session }: Props) {
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
-          <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-foreground" />
         </div>
       ) : devices.length === 0 ? (
-        <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
+        <div className="flex h-40 flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
           <Monitor className="h-8 w-8 opacity-40" />
           <p className="text-sm">Нет устройств</p>
         </div>
@@ -173,7 +173,7 @@ export default function DevicesPage({ config, session }: Props) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{device.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{device.company_name}</p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{device.company_name}</p>
                   </div>
                   <Badge variant={device.is_active ? 'success' : 'secondary'} className="shrink-0">
                     {device.is_active ? (
@@ -188,23 +188,23 @@ export default function DevicesPage({ config, session }: Props) {
                   </Badge>
                 </div>
 
-                <div className="space-y-1 text-xs text-muted-foreground">
+                <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400">
                   <div className="flex justify-between">
                     <span>Режим</span>
-                    <span className="font-mono text-foreground">{device.point_mode}</span>
+                    <span className="font-mono text-slate-900 dark:text-slate-100">{device.point_mode}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Активность</span>
-                    <span className="text-foreground">{formatLastSeen(device.last_seen_at)}</span>
+                    <span className="text-slate-900 dark:text-slate-100">{formatLastSeen(device.last_seen_at)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Токен</span>
-                    <span className="font-mono text-foreground">{device.device_token.slice(0, 6)}••••••••</span>
+                    <span className="font-mono text-slate-900 dark:text-slate-100">{device.device_token.slice(0, 6)}••••••••</span>
                   </div>
                 </div>
 
-                <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <div className="space-y-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                     <MessageSquare className="h-3.5 w-3.5" />
                     Telegram и режимы точки
                   </div>
@@ -215,7 +215,7 @@ export default function DevicesPage({ config, session }: Props) {
                     placeholder="-1001234567890"
                   />
 
-                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -233,7 +233,7 @@ export default function DevicesPage({ config, session }: Props) {
                     </span>
                   </label>
 
-                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -247,11 +247,11 @@ export default function DevicesPage({ config, session }: Props) {
                     />
                     <span>
                       Включить сканер долгов для этой точки.
-                      Он работает только для режимов <span className="font-medium text-foreground">cash-desk</span>, <span className="font-medium text-foreground">universal</span> и <span className="font-medium text-foreground">debts</span>.
+                      Он работает только для режимов <span className="font-medium text-slate-900 dark:text-slate-100">cash-desk</span>, <span className="font-medium text-slate-900 dark:text-slate-100">universal</span> и <span className="font-medium text-slate-900 dark:text-slate-100">debts</span>.
                     </span>
                   </label>
 
-                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -265,11 +265,11 @@ export default function DevicesPage({ config, session }: Props) {
                     />
                     <span>
                       Запрашивать мелочь на начало смены.
-                      При входе оператора программа покажет диалог «Сколько мелочи в кассе?» и подставит значение в поле <span className="font-medium text-foreground">Старт кассы</span>.
+                      При входе оператора программа покажет диалог «Сколько мелочи в кассе?» и подставит значение в поле <span className="font-medium text-slate-900 dark:text-slate-100">Старт кассы</span>.
                     </span>
                   </label>
 
-                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/5 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -283,15 +283,15 @@ export default function DevicesPage({ config, session }: Props) {
                     />
                     <span>
                       Арена: не писать доход в «Доходы» при каждом тарифе — только после сменного отчёта. Суммы по-прежнему вносятся оператором в форму отчёта; строки{' '}
-                      <span className="font-medium text-foreground">source: arena-session</span> при активации станций не создаются.
+                      <span className="font-medium text-slate-900 dark:text-slate-100">source: arena-session</span> при активации станций не создаются.
                     </span>
                   </label>
 
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Chat ID нужен для канала или группы со сменными отчётами. Если точка не магазин, просто выключите сканер долгов здесь.
                   </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Для режима <span className="font-medium text-foreground">shift-report</span> главной страницей всё равно остаётся калькулятор смены, даже если сканер случайно включён.
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Для режима <span className="font-medium text-slate-900 dark:text-slate-100">shift-report</span> главной страницей всё равно остаётся калькулятор смены, даже если сканер случайно включён.
                   </p>
 
                   <Button

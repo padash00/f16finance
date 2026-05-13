@@ -147,7 +147,7 @@ export default function ProductsPage({ config, session }: Props) {
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-slate-400" />
           <Input
             placeholder="Поиск по названию или штрихкоду..."
             value={search}
@@ -158,7 +158,7 @@ export default function ProductsPage({ config, session }: Props) {
 
         <div className="ml-auto flex items-center gap-2">
           {importStatus && (
-            <p className="text-xs text-muted-foreground">{importStatus}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{importStatus}</p>
           )}
           <Button variant="outline" size="sm" onClick={handleImport} className="gap-1.5">
             <Upload className="h-4 w-4" /> Импорт Excel
@@ -182,25 +182,25 @@ export default function ProductsPage({ config, session }: Props) {
       )}
 
       {/* Stats */}
-      <div className="flex gap-4 text-sm text-muted-foreground">
-        <span>Всего: <strong className="text-foreground">{products.length}</strong></span>
-        <span>Активных: <strong className="text-foreground">{products.filter(p => p.is_active).length}</strong></span>
+      <div className="flex gap-4 text-sm text-slate-500 dark:text-slate-400">
+        <span>Всего: <strong className="text-slate-900 dark:text-slate-100">{products.length}</strong></span>
+        <span>Активных: <strong className="text-slate-900 dark:text-slate-100">{products.filter(p => p.is_active).length}</strong></span>
       </div>
 
       {/* Table */}
       {loading ? (
         <div className="flex h-40 items-center justify-center">
-          <span className="animate-spin h-6 w-6 border-2 border-border border-t-foreground rounded-full" />
+          <span className="animate-spin h-6 w-6 border-2 border-slate-200 dark:border-slate-700 border-t-foreground rounded-full" />
         </div>
       ) : (
         <div className="rounded-lg border overflow-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Название</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Штрихкод</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Цена</th>
-                <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">Статус</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Название</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Штрихкод</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Цена</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Статус</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -208,7 +208,7 @@ export default function ProductsPage({ config, session }: Props) {
               {filtered.map(product => (
                 <tr key={product.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-2.5 font-medium">{product.name}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{product.barcode}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{product.barcode}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(product.price)}</td>
                   <td className="px-4 py-2.5 text-center">
                     <Badge variant={product.is_active ? 'success' : 'secondary'}>
@@ -219,14 +219,14 @@ export default function ProductsPage({ config, session }: Props) {
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost" size="icon"
-                        className="h-7 w-7 text-muted-foreground"
+                        className="h-7 w-7 text-slate-500 dark:text-slate-400"
                         onClick={() => setEditProduct(product)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost" size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive-foreground"
+                        className="h-7 w-7 text-slate-500 dark:text-slate-400 hover:text-destructive-foreground"
                         onClick={() => handleDelete(product)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -237,7 +237,7 @@ export default function ProductsPage({ config, session }: Props) {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
                     {search ? 'Ничего не найдено' : 'Товаров нет'}
                   </td>
                 </tr>

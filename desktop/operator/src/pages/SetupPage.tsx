@@ -64,10 +64,10 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
   }
 
   return (
-    <div className="relative flex h-screen flex-col bg-background">
+    <div className="relative flex h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-emerald-500/5 blur-3xl dark:bg-emerald-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-500/5 blur-3xl dark:bg-blue-500/10" />
-      <div className="h-9 shrink-0 drag-region" />
+      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
@@ -75,7 +75,7 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
             <span className="text-xl font-bold tracking-tight text-white">OP</span>
           </div>
           <h1 className="text-2xl font-bold">Orda Point</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {initialConfig ? 'Настройка устройства и сервера' : 'Первоначальная настройка терминала'}
           </p>
         </div>
@@ -94,7 +94,7 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="apiUrl" className="flex items-center gap-1.5">
-                  <Wifi className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Wifi className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   Адрес сервера
                 </Label>
                 <Input
@@ -109,7 +109,7 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
 
               <div className="space-y-2">
                 <Label htmlFor="deviceToken" className="flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                  <KeyRound className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   Токен устройства
                 </Label>
                 <Input
@@ -146,7 +146,7 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400">
           {appVersion ? `Orda Point v${appVersion}` : 'Orda Point'}
         </p>
       </div>

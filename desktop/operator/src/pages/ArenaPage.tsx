@@ -129,16 +129,16 @@ function StartSessionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Запустить сессию</h2>
-          <button type="button" onClick={onCancel} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onCancel} className="rounded-full p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="mb-4 text-sm text-muted-foreground">
-          Станция: <span className="font-medium text-foreground">{station.name}</span>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          Станция: <span className="font-medium text-slate-900 dark:text-slate-100">{station.name}</span>
         </p>
 
         <p className="mb-2 text-sm font-medium">Выберите тариф</p>
@@ -150,8 +150,8 @@ function StartSessionModal({
               onClick={() => setSelected(t.id)}
               className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
                 selected === t.id
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                  ? 'border-primary bg-primary/10 text-slate-900 dark:text-slate-100'
+                  : 'border-slate-200 dark:border-slate-700 bg-muted/30 text-slate-500 dark:text-slate-400 hover:border-primary/50 hover:text-slate-900 dark:text-slate-100'
               }`}
             >
               <span className="font-medium">{t.name}</span>
@@ -160,12 +160,12 @@ function StartSessionModal({
                   <Clock className="h-3 w-3" />
                   {formatArenaTariffSchedule(t)}
                 </span>
-                <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{formatMoney(t.price)}</span>
               </span>
             </button>
           ))}
           {sorted.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">
               Нет тарифов для этой зоны. Добавьте тарифы на сайте Orda.
             </p>
           )}
@@ -173,7 +173,7 @@ function StartSessionModal({
 
         {/* Discount */}
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">Скидка %</span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">Скидка %</span>
           <input
             type="number"
             min="0"
@@ -181,14 +181,14 @@ function StartSessionModal({
             value={discountPct}
             onChange={e => setDiscountPct(e.target.value)}
             placeholder="0"
-            className="w-20 rounded-lg border border-white/10 bg-background px-2 py-1 text-sm text-right"
+            className="w-20 rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1 text-sm text-right"
           />
         </div>
 
         {/* Final price */}
         {selectedTariff && (
           <div className="mb-4 flex items-center justify-between rounded-xl bg-muted/30 px-4 py-2">
-            <span className="text-sm text-muted-foreground">К оплате</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">К оплате</span>
             <span className="text-lg font-bold">
               {formatMoney(finalPrice)}
               {discPct > 0 && (
@@ -209,7 +209,7 @@ function StartSessionModal({
               className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
                 payMethod === m
                   ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-white/10 text-muted-foreground hover:text-foreground'
+                  : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
               }`}
             >
               {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Безналичный' : 'Смешанный'}
@@ -221,25 +221,25 @@ function StartSessionModal({
         {payMethod === 'mixed' && (
           <div className="mb-4 grid grid-cols-2 gap-2">
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
+              <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Наличка ₸</p>
               <input
                 type="number"
                 min="0"
                 value={cashAmt}
                 onChange={e => setCashAmt(e.target.value)}
                 placeholder="0"
-                className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">{cashlessName} ₸</p>
+              <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">{cashlessName} ₸</p>
               <input
                 type="number"
                 min="0"
                 value={kaspiAmt}
                 onChange={e => setKaspiAmt(e.target.value)}
                 placeholder="0"
-                className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm"
               />
             </div>
           </div>
@@ -327,10 +327,10 @@ function ManageSessionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{station.name}</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onClose} className="rounded-full p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -339,17 +339,17 @@ function ManageSessionModal({
           <>
             <div className="mb-5 rounded-xl bg-muted/40 p-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Оканчивается в</span>
+                <span className="text-slate-500 dark:text-slate-400">Оканчивается в</span>
                 <span className="font-medium">{timeStr}</span>
               </div>
               <div className="mt-2 flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Осталось</span>
+                <span className="text-slate-500 dark:text-slate-400">Осталось</span>
                 <span className={`font-bold text-base ${isExpired ? 'text-destructive' : remainingMs < 5 * 60_000 ? 'text-amber-500' : 'text-emerald-500'}`}>
                   {isExpired ? 'Истекло' : formatRemaining(remainingMs)}
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Сумма</span>
+                <span className="text-slate-500 dark:text-slate-400">Сумма</span>
                 <span className="font-medium">{formatMoney(arenaSession.amount)}</span>
               </div>
             </div>
@@ -387,18 +387,18 @@ function ManageSessionModal({
         ) : (
           <>
             {!rateTariff ? (
-              <p className="mb-4 text-sm text-muted-foreground">
+              <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
                 Продление по сумме недоступно: у сессии не сохранён тариф. Завершите сессию и запустите станцию заново с нужным тарифом.
               </p>
             ) : (
               <>
-                <div className="mb-4 rounded-xl border border-white/10 bg-muted/30 p-3 text-sm">
-                  <p className="font-medium text-foreground">{rateTariff.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                <div className="mb-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-muted/30 p-3 text-sm">
+                  <p className="font-medium text-slate-900 dark:text-slate-100">{rateTariff.name}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     Пакет: {formatMoney(Number(rateTariff.price))} за {rateTariff.duration_minutes} мин
                     {rateTariff.tariff_type === 'time_window' ? ` · ${formatArenaTariffSchedule(rateTariff)}` : ''}
                   </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                     {extensionHourlyEffective != null
                       ? `Продление по сумме: ${formatMoney(extensionHourlyEffective)} за 60 мин (час зоны или тариф «1 ч»). Меньше суммы пакета — по этому часу; от полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
                       : zoneIdForHourly && !zoneRow
@@ -417,7 +417,7 @@ function ManageSessionModal({
                       className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
                         extPayMethod === m
                           ? 'bg-primary text-primary-foreground border-primary'
-                          : 'border-white/10 text-muted-foreground hover:text-foreground'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
                       }`}
                     >
                       {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Безналичный' : 'Смешанный'}
@@ -428,24 +428,24 @@ function ManageSessionModal({
                 {extPayMethod === 'mixed' ? (
                   <div className="mb-4 grid grid-cols-2 gap-2">
                     <div>
-                      <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
-                      <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                      <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Наличка ₸</p>
+                      <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm" />
                     </div>
                     <div>
-                      <p className="mb-1 text-xs text-muted-foreground">{cashlessName} ₸</p>
-                      <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                      <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">{cashlessName} ₸</p>
+                      <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm" />
                     </div>
                   </div>
                 ) : (
                   <div className="mb-4">
-                    <p className="mb-1 text-xs text-muted-foreground">Сумма ₸</p>
+                    <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Сумма ₸</p>
                     <input
                       type="number"
                       min="0"
                       value={extAmount}
                       onChange={e => setExtAmount(e.target.value)}
                       placeholder="200"
-                      className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm"
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm"
                     />
                   </div>
                 )}
@@ -512,16 +512,16 @@ function TechLogModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Тех. компенсация</h2>
-          <button type="button" onClick={onCancel} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onCancel} className="rounded-full p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="mb-4 text-sm text-muted-foreground">
-          Станция: <span className="font-medium text-foreground">{station.name}</span>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          Станция: <span className="font-medium text-slate-900 dark:text-slate-100">{station.name}</span>
         </p>
 
         <p className="mb-2 text-sm font-medium">Причина</p>
@@ -533,8 +533,8 @@ function TechLogModal({
               onClick={() => setReason(r)}
               className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${
                 reason === r
-                  ? 'border-amber-500/50 bg-amber-500/10 text-foreground'
-                  : 'border-border bg-muted/30 text-muted-foreground hover:border-amber-500/30 hover:text-foreground'
+                  ? 'border-amber-500/50 bg-amber-500/10 text-slate-900 dark:text-slate-100'
+                  : 'border-slate-200 dark:border-slate-700 bg-muted/30 text-slate-500 dark:text-slate-400 hover:border-amber-500/30 hover:text-slate-900 dark:text-slate-100'
               }`}
             >
               {r}
@@ -549,7 +549,7 @@ function TechLogModal({
           value={amount}
           onChange={e => setAmount(e.target.value)}
           placeholder="0"
-          className="mb-5 w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+          className="mb-5 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-3 py-2 text-sm"
         />
 
         <div className="flex gap-2">
@@ -600,16 +600,16 @@ function MassZoneStartModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Запустить зону</h2>
-          <button type="button" onClick={onCancel} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onCancel} className="rounded-full p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="mb-4 text-sm text-muted-foreground">
-          Зона: <span className="font-medium text-foreground">{zone.name}</span>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          Зона: <span className="font-medium text-slate-900 dark:text-slate-100">{zone.name}</span>
           {' · '}<span className="text-emerald-400">{freeCount} свободных станций</span>
         </p>
 
@@ -622,8 +622,8 @@ function MassZoneStartModal({
               onClick={() => setSelected(t.id)}
               className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
                 selected === t.id
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                  ? 'border-primary bg-primary/10 text-slate-900 dark:text-slate-100'
+                  : 'border-slate-200 dark:border-slate-700 bg-muted/30 text-slate-500 dark:text-slate-400 hover:border-primary/50 hover:text-slate-900 dark:text-slate-100'
               }`}
             >
               <span className="font-medium">{t.name}</span>
@@ -632,12 +632,12 @@ function MassZoneStartModal({
                   <Clock className="h-3 w-3" />
                   {formatArenaTariffSchedule(t)}
                 </span>
-                <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{formatMoney(t.price)}</span>
               </span>
             </button>
           ))}
           {sorted.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">
               Нет тарифов для этой зоны.
             </p>
           )}
@@ -653,7 +653,7 @@ function MassZoneStartModal({
               className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
                 payMethod === m
                   ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-white/10 text-muted-foreground hover:text-foreground'
+                  : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'
               }`}
             >
               {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Безналичный' : 'Смешанный'}
@@ -663,12 +663,12 @@ function MassZoneStartModal({
         {payMethod === 'mixed' && (
           <div className="mb-4 grid grid-cols-2 gap-2">
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
-              <input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+              <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">Наличка ₸</p>
+              <input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">{cashlessName} ₸</p>
-              <input type="number" min="0" value={kaspiAmt} onChange={e => setKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+              <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">{cashlessName} ₸</p>
+              <input type="number" min="0" value={kaspiAmt} onChange={e => setKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm" />
             </div>
           </div>
         )}
@@ -769,24 +769,24 @@ const StationCard = memo(function StationCard({
         {occupied && activeSession ? (
           <div className="mb-4 space-y-2">
             {tariff && (
-              <p className="text-xs font-medium text-muted-foreground">{tariff.name}</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{tariff.name}</p>
             )}
             {/* Big countdown */}
             <div
               className={`text-3xl font-bold tabular-nums tracking-tight ${
-                isExpired ? 'text-destructive' : isWarning ? 'text-amber-400' : 'text-foreground'
+                isExpired ? 'text-destructive' : isWarning ? 'text-amber-400' : 'text-slate-900 dark:text-slate-100'
               }`}
             >
               {isExpired ? '—:——' : formatRemaining(remainingMs)}
             </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
               <span>до {endTime}</span>
-              <span className="font-medium text-foreground">{formatMoney(activeSession.amount)}</span>
+              <span className="font-medium text-slate-900 dark:text-slate-100">{formatMoney(activeSession.amount)}</span>
             </div>
           </div>
         ) : (
           <div className="mb-4 h-[72px] flex items-center justify-center">
-            <div className="text-muted-foreground/30">
+            <div className="text-slate-500 dark:text-slate-400/30">
               <Monitor className="h-8 w-8" />
             </div>
           </div>
@@ -799,7 +799,7 @@ const StationCard = memo(function StationCard({
           className={`w-full rounded-xl py-2 text-sm font-semibold transition-all ${
             !occupied
               ? 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-95'
-              : 'border border-white/15 bg-white/5 text-foreground hover:bg-white/10 active:scale-95'
+              : 'border border-white/15 bg-white/5 text-slate-900 dark:text-slate-100 hover:bg-white/10 active:scale-95'
           }`}
         >
           {occupied ? 'Управление' : 'Запустить'}
@@ -942,28 +942,28 @@ function TodayIncomeBar({
       </div>
       <div className="flex gap-4 text-sm">
         {todayIncome.cash > 0 && (
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <span className="text-xs">💵</span> Нал: <span className="font-semibold text-foreground">{todayIncome.cash.toLocaleString('ru-RU')} ₸</span>
+          <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <span className="text-xs">💵</span> Нал: <span className="font-semibold text-slate-900 dark:text-slate-100">{todayIncome.cash.toLocaleString('ru-RU')} ₸</span>
           </span>
         )}
         {todayIncome.kaspi > 0 && (
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <span className="text-xs">📱</span> {cashlessName}: <span className="font-semibold text-foreground">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
+          <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <span className="text-xs">📱</span> {cashlessName}: <span className="font-semibold text-slate-900 dark:text-slate-100">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
           </span>
         )}
       </div>
       {todayIncome.rows.length > 0 && (
         <div className="mt-2 flex flex-col gap-0.5">
           {todayIncome.rows.slice(-5).map((r, i) => (
-            <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+            <div key={i} className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
               <span className="truncate">{r.comment || 'Арена'}</span>
-              <span className="ml-2 shrink-0 font-medium text-foreground">
+              <span className="ml-2 shrink-0 font-medium text-slate-900 dark:text-slate-100">
                 {(Number(r.cash_amount) + Number(r.kaspi_amount)).toLocaleString('ru-RU')} ₸
               </span>
             </div>
           ))}
           {todayIncome.rows.length > 5 && (
-            <span className="text-xs text-muted-foreground">...ещё {todayIncome.rows.length - 5} записей</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">...ещё {todayIncome.rows.length - 5} записей</span>
           )}
         </div>
       )}
@@ -996,7 +996,7 @@ function ArenaMapView({
 
   if (stationsOnMap.length === 0) {
     return (
-      <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+      <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
         <MapIcon className="h-8 w-8 opacity-30" />
         <p className="text-sm">Карта не настроена. Настройте расположение станций на сайте Orda.</p>
       </div>
@@ -1488,19 +1488,19 @@ export default function ArenaPage({
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative flex h-screen flex-col bg-background text-foreground">
+    <div className="relative flex h-screen flex-col bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 text-slate-900 dark:text-slate-100">
       <div className="pointer-events-none absolute -top-40 -right-40 h-80 w-80 rounded-full bg-fuchsia-500/5 blur-3xl dark:bg-fuchsia-500/10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-cyan-500/5 blur-3xl dark:bg-cyan-500/10" />
       {/* Drag region */}
-      <div className="h-9 shrink-0 drag-region bg-card" />
+      <div className="h-9 shrink-0 drag-region bg-white/80 backdrop-blur dark:bg-slate-900/80" />
 
       {/* Header */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white/80 backdrop-blur-xl dark:bg-slate-900/80 px-5 pb-3 no-drag">
         <div className="flex items-center gap-2 min-w-0">
-          <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <Monitor className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
           <div className="flex min-w-0 flex-col leading-tight">
             <span className="truncate text-sm font-semibold">{session.company.name}</span>
-            <span className="truncate text-[11px] text-muted-foreground">
+            <span className="truncate text-[11px] text-slate-500 dark:text-slate-400">
               {(bootstrap.device.name || '').trim() && (bootstrap.device.name || '').trim() !== (session.company.name || '').trim()
                 ? `${bootstrap.device.name} · `
                 : ''}
@@ -1512,11 +1512,11 @@ export default function ArenaPage({
         <div className="flex shrink-0 items-center gap-2 no-drag">
           {/* Map/List toggle */}
           {hasMapData && (
-            <div className="flex rounded-lg border border-border overflow-hidden">
+            <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
-                className={`px-2 py-1.5 text-xs transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-2 py-1.5 text-xs transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'}`}
                 title="Список"
               >
                 <List className="h-3.5 w-3.5" />
@@ -1524,7 +1524,7 @@ export default function ArenaPage({
               <button
                 type="button"
                 onClick={() => setViewMode('map')}
-                className={`px-2 py-1.5 text-xs transition ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-2 py-1.5 text-xs transition ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100'}`}
                 title="Карта"
               >
                 <MapIcon className="h-3.5 w-3.5" />
@@ -1538,7 +1538,7 @@ export default function ArenaPage({
             size="sm"
             title="История сессий"
             onClick={() => setShowHistory(true)}
-            className="rounded-lg px-2 text-muted-foreground hover:text-foreground"
+            className="rounded-lg px-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
           >
             <History className="h-4 w-4" />
           </Button>
@@ -1550,7 +1550,7 @@ export default function ArenaPage({
               size="sm"
               title="Экспорт в CSV"
               onClick={handleExportCsv}
-              className="rounded-lg px-2 text-muted-foreground hover:text-foreground"
+              className="rounded-lg px-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
             >
               <Download className="h-4 w-4" />
             </Button>
@@ -1562,7 +1562,7 @@ export default function ArenaPage({
             size="sm"
             title="Обновить"
             onClick={loadArena}
-            className="rounded-lg px-2 text-muted-foreground hover:text-foreground"
+            className="rounded-lg px-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -1586,7 +1586,7 @@ export default function ArenaPage({
             size="sm"
             title="Выйти"
             onClick={onLogout}
-            className="rounded-lg px-2 text-muted-foreground hover:text-foreground"
+            className="rounded-lg px-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100"
           >
             <LogOut className="h-4 w-4" />
           </Button>
@@ -1596,12 +1596,12 @@ export default function ArenaPage({
       {/* Content */}
       <main className="flex-1 overflow-y-auto p-4">
         {loading ? (
-          <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
-            <span className="animate-spin mr-2 inline-block h-4 w-4 rounded-full border-2 border-border border-t-foreground" />
+          <div className="flex h-32 items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
+            <span className="animate-spin mr-2 inline-block h-4 w-4 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-foreground" />
             Загрузка...
           </div>
         ) : stations.length === 0 ? (
-          <div className="flex h-32 flex-col items-center justify-center gap-2 text-muted-foreground">
+          <div className="flex h-32 flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
             <Monitor className="h-8 w-8 opacity-30" />
             <p className="text-sm">Нет станций. Добавьте их на сайте Orda.</p>
           </div>
@@ -1627,7 +1627,7 @@ export default function ArenaPage({
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {sessions.length} занято
               </span>
-              <span className="ml-auto text-muted-foreground">
+              <span className="ml-auto text-slate-500 dark:text-slate-400">
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸
               </span>
             </div>
@@ -1641,7 +1641,7 @@ export default function ArenaPage({
               return (
                 <section key={zone.id}>
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       {zone.name}
                     </h2>
                     {freeInZone > 0 && tariffs.some(t => t.zone_id === zone.id) && (
@@ -1678,7 +1678,7 @@ export default function ArenaPage({
             {unzoned.length > 0 && (
               <section>
                 {zoneGroups.length > 0 && (
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Без зоны
                   </h2>
                 )}
@@ -1711,7 +1711,7 @@ export default function ArenaPage({
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {sessions.length} занято
               </span>
-              <span className="ml-auto text-muted-foreground">
+              <span className="ml-auto text-slate-500 dark:text-slate-400">
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸ за сессии
               </span>
             </div>
@@ -1875,29 +1875,29 @@ function PrintReceiptModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-xs rounded-2xl border border-border bg-background p-6 shadow-2xl">
+      <div className="w-full max-w-xs rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold">Чек готов</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onClose} className="rounded-full p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="mb-4 space-y-1.5 rounded-xl bg-muted/30 p-4 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Станция</span>
+            <span className="text-slate-500 dark:text-slate-400">Станция</span>
             <span className="font-medium">{receipt.stationName}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Тариф</span>
+            <span className="text-slate-500 dark:text-slate-400">Тариф</span>
             <span>{receipt.tariffName}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Время</span>
+            <span className="text-slate-500 dark:text-slate-400">Время</span>
             <span>{receipt.durationMin} мин</span>
           </div>
-          <div className="flex justify-between border-t border-border pt-2 mt-2">
-            <span className="text-muted-foreground">Итого</span>
+          <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
+            <span className="text-slate-500 dark:text-slate-400">Итого</span>
             <span className="font-bold">{formatReceiptMoney(receipt.amount)}</span>
           </div>
         </div>
@@ -1914,7 +1914,7 @@ function PrintReceiptModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-border px-4 py-2.5 text-sm text-muted-foreground transition hover:text-foreground"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:text-slate-100"
           >
             Закрыть
           </button>
@@ -1993,11 +1993,11 @@ function SessionHistoryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="flex w-full max-w-3xl flex-col rounded-2xl border border-border bg-background shadow-2xl" style={{ maxHeight: '85vh' }}>
+      <div className="flex w-full max-w-3xl flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 shadow-2xl" style={{ maxHeight: '85vh' }}>
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b px-6 py-4">
           <h2 className="text-base font-semibold">История сессий</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onClose} className="rounded-full p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -2005,21 +2005,21 @@ function SessionHistoryModal({
         {/* Filters */}
         <div className="flex shrink-0 items-center gap-3 border-b px-6 py-3">
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">С</span>
+            <span className="text-slate-500 dark:text-slate-400">С</span>
             <input
               type="date"
               value={from}
               onChange={e => setFrom(e.target.value)}
-              className="rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-sm focus:outline-none"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-muted/30 px-3 py-1.5 text-sm focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">По</span>
+            <span className="text-slate-500 dark:text-slate-400">По</span>
             <input
               type="date"
               value={to}
               onChange={e => setTo(e.target.value)}
-              className="rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-sm focus:outline-none"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-muted/30 px-3 py-1.5 text-sm focus:outline-none"
             />
           </div>
           <button
@@ -2034,7 +2034,7 @@ function SessionHistoryModal({
             <button
               type="button"
               onClick={exportCsv}
-              className="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:text-slate-100"
             >
               <Download className="h-3.5 w-3.5" />
               CSV
@@ -2045,17 +2045,17 @@ function SessionHistoryModal({
         {/* Table */}
         <div className="flex-1 overflow-y-auto">
           {!loaded ? (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+            <div className="flex h-32 items-center justify-center text-sm text-slate-500 dark:text-slate-400">
               Выберите период и нажмите «Показать»
             </div>
           ) : rows.length === 0 ? (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+            <div className="flex h-32 items-center justify-center text-sm text-slate-500 dark:text-slate-400">
               Нет сессий за выбранный период
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-background border-b">
-                <tr className="text-left text-xs text-muted-foreground">
+              <thead className="sticky top-0 bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100 border-b">
+                <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
                   <th className="px-4 py-2 font-medium">Станция</th>
                   <th className="px-4 py-2 font-medium">Тариф</th>
                   <th className="px-4 py-2 font-medium">Начало</th>
@@ -2071,20 +2071,20 @@ function SessionHistoryModal({
                   const stName = st?.name ?? (r as any)['arena_stations']?.name ?? '—'
                   const tName = t?.name ?? (r as any)['arena_tariffs']?.name ?? '—'
                   return (
-                    <tr key={r.id} className="border-b border-border/40 hover:bg-muted/20">
+                    <tr key={r.id} className="border-b border-slate-200 dark:border-slate-700/40 hover:bg-muted/20">
                       <td className="px-4 py-2 font-medium">{stName}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{tName}</td>
-                      <td className="px-4 py-2 text-muted-foreground text-xs">
+                      <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{tName}</td>
+                      <td className="px-4 py-2 text-slate-500 dark:text-slate-400 text-xs">
                         {new Date(r.started_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                       </td>
-                      <td className="px-4 py-2 text-muted-foreground text-xs">
+                      <td className="px-4 py-2 text-slate-500 dark:text-slate-400 text-xs">
                         {r.ended_at
                           ? new Date(r.ended_at).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
                           : <span className="text-emerald-400">активна</span>}
                       </td>
                       <td className="px-4 py-2 text-right font-medium">{r.amount.toLocaleString('ru-RU')} ₸</td>
                       <td className="px-4 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${r.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${r.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-slate-500 dark:text-slate-400'}`}>
                           {r.status === 'active' ? 'активна' : 'завершена'}
                         </span>
                       </td>
@@ -2099,10 +2099,10 @@ function SessionHistoryModal({
         {/* Footer totals */}
         {rows.length > 0 && (
           <div className="flex shrink-0 items-center justify-between border-t px-6 py-3 text-sm">
-            <span className="text-muted-foreground">{rows.length} сессий</span>
+            <span className="text-slate-500 dark:text-slate-400">{rows.length} сессий</span>
             <div className="flex gap-4">
-              {totalCash > 0 && <span className="text-muted-foreground">Нал: <span className="font-medium text-foreground">{totalCash.toLocaleString('ru-RU')} ₸</span></span>}
-              {totalKaspi > 0 && <span className="text-muted-foreground">{cashlessName}: <span className="font-medium text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</span></span>}
+              {totalCash > 0 && <span className="text-slate-500 dark:text-slate-400">Нал: <span className="font-medium text-slate-900 dark:text-slate-100">{totalCash.toLocaleString('ru-RU')} ₸</span></span>}
+              {totalKaspi > 0 && <span className="text-slate-500 dark:text-slate-400">{cashlessName}: <span className="font-medium text-slate-900 dark:text-slate-100">{totalKaspi.toLocaleString('ru-RU')} ₸</span></span>}
               <span className="font-semibold">Итого: {totalAmount.toLocaleString('ru-RU')} ₸</span>
             </div>
           </div>
