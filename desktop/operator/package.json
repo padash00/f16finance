@@ -1,6 +1,6 @@
 {
   "name": "orda-point-client",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "Orda Control Point — десктопный терминал",
   "author": "Orda <https://github.com/padash00/f16finance>",
   "main": "electron.cjs",

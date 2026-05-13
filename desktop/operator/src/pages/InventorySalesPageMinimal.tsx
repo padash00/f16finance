@@ -70,6 +70,7 @@ import type {
   ParkedCart,
   PointInventorySaleContext,
   PointInventorySaleItem,
+  PointReceiptSettings,
 } from '@/types'
 
 type Props = {
@@ -171,6 +172,7 @@ export default function InventorySalesPageMinimal({
 
   // Превью чека после успешной продажи (в iframe внутри программы)
   const [lastReceipt, setLastReceipt] = useState<SaleReceiptPreview | null>(null)
+  const [receiptSettings, setReceiptSettings] = useState<PointReceiptSettings | null>(null)
   const receiptIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   // Корректировка оплаты
@@ -218,6 +220,19 @@ export default function InventorySalesPageMinimal({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [cart.length, showPayConfirm])
+
+  // Подгружаем реквизиты чека ККМ (один раз). Если сервер ответит — кэшируется
+  // внутри api.getPointReceiptSettings в localStorage, для офлайн-печати.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const settings = await api.getPointReceiptSettings(config, session.company.id)
+      if (!cancelled) setReceiptSettings(settings)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [config, session.company.id])
 
   // Первичная загрузка с кэшем
   useEffect(() => {
@@ -800,6 +815,7 @@ export default function InventorySalesPageMinimal({
         operatorName,
         companyName: session.company?.name || '',
         locationName: context?.location?.name || '',
+        receiptSettings,
         lines: cartDetailed.map((l) => ({
           name: l.name,
           quantity: l.quantity,

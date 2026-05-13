@@ -581,6 +581,23 @@ export interface ArenaSession {
   discount_percent: number
 }
 
+// Реквизиты фискального чека ККМ (приказ Минфина РК №626 от 24.10.2025).
+// Подгружаются с сервера один раз при логине, кэшируются в localStorage.
+export interface PointReceiptSettings {
+  tax_payer_name: string
+  tax_payer_bin: string
+  point_address: string
+  kkm_factory_number: string
+  kkm_registration_number: string
+  is_vat_payer: boolean
+  vat_rate: number
+  ofd_name: string
+  ofd_check_url: string
+  receipt_language: 'ru' | 'kk' | 'both'
+  receipt_footer_text: string
+  require_buyer_iin: boolean
+}
+
 // Отложка корзины (parked cart) — локальный черновик чека.
 // Хранится в localStorage по ключу parked-carts:${shiftId}, очищается при закрытии смены.
 export interface ParkedCart {

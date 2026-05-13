@@ -18,6 +18,7 @@ import type {
   PointInventorySaleContext,
   PointInventorySaleShiftSummary,
   PointInventoryReturnContext,
+  PointReceiptSettings,
   Customer,
   LoyaltyConfig,
   ArenaZone,
@@ -1285,4 +1286,39 @@ export async function checkSync(config: AppConfig): Promise<SyncVersions> {
 /** Operator подтверждает что показал push-сообщение */
 export async function ackSyncMessage(config: AppConfig, messageId: string): Promise<void> {
   await request(config, 'POST', '/api/point/sync-check/ack', { messageId })
+}
+
+/**
+ * Реквизиты фискального чека ККМ (приказ Минфина РК №626 от 24.10.2025).
+ * Кэшируем в localStorage по company_id — для офлайн-печати чека.
+ */
+export async function getPointReceiptSettings(
+  config: AppConfig,
+  companyId?: string | null,
+): Promise<PointReceiptSettings | null> {
+  try {
+    const data = await request<{ ok: boolean; data: { settings: PointReceiptSettings } }>(
+      config,
+      'GET',
+      '/api/point/receipt-settings',
+      undefined,
+      companyHeader(companyId),
+    )
+    const settings = data.data.settings || null
+    if (settings && companyId && typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(`receipt-settings:${companyId}`, JSON.stringify(settings))
+      } catch { /* ignore quota */ }
+    }
+    return settings
+  } catch {
+    // Офлайн или сервер не отвечает — читаем из кэша
+    if (companyId && typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(`receipt-settings:${companyId}`)
+        if (raw) return JSON.parse(raw) as PointReceiptSettings
+      } catch { /* ignore */ }
+    }
+    return null
+  }
 }

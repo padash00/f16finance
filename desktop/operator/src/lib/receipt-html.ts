@@ -4,6 +4,7 @@
  */
 
 import { formatMoney } from '@/lib/utils'
+import type { PointReceiptSettings } from '@/types'
 
 export type SaleReceiptPreview = {
   saleId: string | null
@@ -22,6 +23,10 @@ export type SaleReceiptPreview = {
   operatorName: string
   companyName: string
   locationName: string
+  // Реквизиты ККМ (приказ Минфина РК №626 от 24.10.2025).
+  // Подгружаются с сервера и кэшируются локально. Если null — печатается старый
+  // шаблон без обязательных реквизитов (нелегально с 01.01.2026).
+  receiptSettings?: PointReceiptSettings | null
   lines: Array<{
     name: string
     quantity: number
@@ -64,6 +69,46 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
   const totalQty = preview.lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
   const itemsCount = preview.lines.length
 
+  // Реквизиты ККМ для шапки и подвала (приказ МФ РК №626).
+  const rs = preview.receiptSettings || null
+
+  const taxPayerBlock = rs?.tax_payer_name
+    ? `<div style="font-weight:700;font-size:14px;margin-top:6px;">${escapeHtml(rs.tax_payer_name)}</div>
+       ${rs.tax_payer_bin ? `<div class="muted">БИН/ИИН: ${escapeHtml(rs.tax_payer_bin)}</div>` : ''}
+       ${rs.point_address ? `<div class="muted">${escapeHtml(rs.point_address)}</div>` : ''}`
+    : ''
+
+  const kkmBlock = rs && (rs.kkm_factory_number || rs.kkm_registration_number)
+    ? `<div style="margin-top:6px;font-size:11px;">
+         ${rs.kkm_factory_number ? `<div>ККМ зав. №: <strong>${escapeHtml(rs.kkm_factory_number)}</strong></div>` : ''}
+         ${rs.kkm_registration_number ? `<div>ККМ рег. №: <strong>${escapeHtml(rs.kkm_registration_number)}</strong></div>` : ''}
+       </div>`
+    : ''
+
+  // НДС: если плательщик — отдельная строка в итогах. Расчёт «в т.ч. НДС».
+  const vatRate = Number(rs?.vat_rate || 0)
+  const vatInclusiveAmount = rs?.is_vat_payer && vatRate > 0
+    ? (preview.totalAmount * vatRate) / (100 + vatRate)
+    : 0
+  const vatBlock = rs?.is_vat_payer && vatInclusiveAmount > 0
+    ? `<div class="summary-row"><span>в т.ч. НДС (${vatRate}%)</span><strong>${escapeHtml(formatMoney(vatInclusiveAmount))}</strong></div>`
+    : ''
+
+  // Фискальный признак — placeholder. Заменится реальным значением после
+  // подключения Webkassa (Уровень B плана).
+  const fiscalSign = (preview.saleId || '').replace(/[^a-z0-9]/gi, '').slice(-16).toUpperCase().padStart(16, '0')
+
+  const ofdBlock = rs && (rs.ofd_name || rs.ofd_check_url)
+    ? `<div style="margin-top:8px;font-size:11px;">
+         ${rs.ofd_name ? `<div>ОФД: <strong>${escapeHtml(rs.ofd_name)}</strong></div>` : ''}
+         ${rs.ofd_check_url ? `<div class="muted">Проверка чека: ${escapeHtml(rs.ofd_check_url)}</div>` : ''}
+       </div>`
+    : ''
+
+  const footerExtra = rs?.receipt_footer_text
+    ? `<div class="muted" style="margin-top:8px;">${escapeHtml(rs.receipt_footer_text)}</div>`
+    : '<div class="muted" style="margin-top:6px;">Сохраните чек до выхода</div><div class="muted" style="margin-top:4px;">Возврат: 14 дней</div>'
+
   return `<!doctype html>
 <html lang="ru">
   <head>
@@ -94,6 +139,8 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       .payment-label { font-weight: 600; }
       .footer { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000; font-size: 11px; }
       .thanks { font-size: 16px; font-weight: 700; margin-top: 8px; }
+      .fiscal { font-family: 'Courier New', monospace; letter-spacing: 1px; font-size: 12px; margin-top: 6px; }
+      .placeholder-note { color: #b45309; font-size: 10px; margin-top: 4px; font-style: italic; }
     </style>
   </head>
   <body>
@@ -102,6 +149,8 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
         <div class="header-title">ORDA POINT</div>
         <div class="header-sub">${escapeHtml(preview.companyName)}</div>
         <div class="muted">${escapeHtml(preview.locationName)}</div>
+        ${taxPayerBlock}
+        ${kkmBlock}
       </div>
       <div class="line"></div>
       <div class="meta">
@@ -164,12 +213,15 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       `
           : ''
       }
+      ${vatBlock}
       ${customerBlock}
       ${commentBlock}
+      ${ofdBlock}
       <div class="footer center">
         <div class="thanks">СПАСИБО ЗА ПОКУПКУ!</div>
-        <div class="muted" style="margin-top:6px;">Сохраните чек до выхода</div>
-        <div class="muted" style="margin-top:4px;">Возврат: 14 дней</div>
+        <div class="fiscal">ФП: ${fiscalSign}</div>
+        <div class="placeholder-note">фискализация: тестовый режим</div>
+        ${footerExtra}
       </div>
     </div>
     <script>
