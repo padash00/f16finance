@@ -925,6 +925,10 @@ function MonthDetailDialog({
   return (
     <Dialog open={true} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="!w-[96vw] !max-w-[1200px] flex h-[90vh] flex-col gap-0 overflow-hidden p-0">
+        <DialogTitle className="sr-only">{MONTH_FULL[monthIdx]} {year} — детали месяца</DialogTitle>
+        <DialogDescription className="sr-only">
+          Факт и план по выбранному месяцу с разбивкой по точкам и динамикой по дням.
+        </DialogDescription>
         <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-violet-500/[0.08] to-fuchsia-500/[0.04] px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg shadow-violet-500/30">
