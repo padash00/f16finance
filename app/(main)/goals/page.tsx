@@ -1,7 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Lock, Plus, RefreshCw, Target, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, Lock, Plus, RefreshCw, Target, Trash2 } from 'lucide-react'
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -50,9 +60,17 @@ type Plan = {
   is_closed: boolean
 }
 
+type DailyAggregate = {
+  date: string
+  company_id: string | null
+  revenue: number
+  expenses: number
+  checks: number
+}
+
 type ApiResponse = {
   ok: boolean
-  data?: { year: number; companies: Company[]; plans: Plan[] }
+  data?: { year: number; companies: Company[]; plans: Plan[]; dailyAggregates?: DailyAggregate[] }
   error?: string
 }
 
@@ -64,6 +82,101 @@ function metricUnit(m: Metric | null) {
 
 function metricLabel(m: Metric | null) {
   return METRICS.find((x) => x.value === m)?.label || m || ''
+}
+
+function enumerateDates(start: string, end: string): string[] {
+  const out: string[] = []
+  const a = new Date(`${start}T00:00:00Z`)
+  const b = new Date(`${end}T00:00:00Z`)
+  for (let d = new Date(a); d.getTime() <= b.getTime(); d.setUTCDate(d.getUTCDate() + 1)) {
+    out.push(d.toISOString().slice(0, 10))
+  }
+  return out
+}
+
+/**
+ * Кумулятивная серия для графика плана.
+ * - Для revenue / profit / checks / avg_check / margin строим день-за-днём
+ * - Цель — прямая линия от 0 до target равномерно по дням периода
+ * - Сегодня и будущее — фактическая линия обрывается, целевая идёт до конца
+ */
+function buildSeries(params: {
+  plan: Plan
+  daily: DailyAggregate[]
+}): Array<{ day: string; idx: number; Факт: number | null; Цель: number }> {
+  const { plan, daily } = params
+  const dates = enumerateDates(plan.period_start, plan.period_end)
+  if (dates.length === 0) return []
+  const todayKey = new Date().toISOString().slice(0, 10)
+
+  // Фильтруем daily по company_id плана: общий план -> только company_id===null строки
+  const target = Number(plan.target_amount || 0)
+  const factByDate = new Map<string, { revenue: number; expenses: number; checks: number }>()
+  for (const r of daily) {
+    if (r.date < plan.period_start || r.date > plan.period_end) continue
+    if (plan.company_id) {
+      if (r.company_id !== plan.company_id) continue
+    } else {
+      if (r.company_id !== null) continue // только агрегированные (org)
+    }
+    const cur = factByDate.get(r.date) || { revenue: 0, expenses: 0, checks: 0 }
+    cur.revenue += r.revenue
+    cur.expenses += r.expenses
+    cur.checks += r.checks
+    factByDate.set(r.date, cur)
+  }
+
+  // Кумуляторы
+  let cumRevenue = 0
+  let cumExpenses = 0
+  let cumChecks = 0
+  const result: Array<{ day: string; idx: number; Факт: number | null; Цель: number }> = []
+  const totalDays = dates.length
+  dates.forEach((d, i) => {
+    const day = d
+    const t = factByDate.get(day)
+    if (t) {
+      cumRevenue += t.revenue
+      cumExpenses += t.expenses
+      cumChecks += t.checks
+    }
+    let factValue: number | null = null
+    if (day <= todayKey) {
+      switch (plan.metric) {
+        case 'revenue':
+          factValue = Math.round(cumRevenue)
+          break
+        case 'profit':
+          factValue = Math.round(cumRevenue - cumExpenses)
+          break
+        case 'checks':
+          factValue = cumChecks
+          break
+        case 'avg_check':
+          factValue = cumChecks > 0 ? Math.round(cumRevenue / cumChecks) : 0
+          break
+        case 'margin':
+          factValue = cumRevenue > 0 ? Math.round(((cumRevenue - cumExpenses) / cumRevenue) * 1000) / 10 : 0
+          break
+        default:
+          factValue = 0
+      }
+    }
+    // Целевая линия:
+    //   - кумулятивные KPI (revenue, profit, checks) растут линейно от 0 до target
+    //   - не-кумулятивные (avg_check, margin) — горизонтальная линия на уровне target
+    const targetValue =
+      plan.metric === 'avg_check' || plan.metric === 'margin'
+        ? target
+        : Math.round((target * (i + 1)) / totalDays)
+    result.push({
+      day: `${day.slice(8, 10)}.${day.slice(5, 7)}`,
+      idx: i + 1,
+      Факт: factValue,
+      Цель: targetValue,
+    })
+  })
+  return result
 }
 
 export default function GoalsPage() {
@@ -117,6 +230,7 @@ export default function GoalsPage() {
 
   const companies = data?.companies || []
   const plans = data?.plans || []
+  const daily = data?.dailyAggregates || []
 
   const filteredPlans = useMemo(
     () => plans.filter((p) => p.period_kind === tab),
@@ -312,9 +426,9 @@ export default function GoalsPage() {
           </div>
 
           {tab === 'month' ? (
-            <MonthsView year={year} monthGroups={monthGroups} companies={companies} onDelete={handleDelete} />
+            <MonthsView year={year} monthGroups={monthGroups} companies={companies} daily={daily} onDelete={handleDelete} />
           ) : (
-            <PeriodsView groupedByCompanyMetric={groupedByCompanyMetric} companies={companies} onDelete={handleDelete} />
+            <PeriodsView groupedByCompanyMetric={groupedByCompanyMetric} companies={companies} daily={daily} onDelete={handleDelete} />
           )}
 
           {filteredPlans.length === 0 ? (
@@ -411,11 +525,13 @@ function MonthsView({
   year,
   monthGroups,
   companies,
+  daily,
   onDelete,
 }: {
   year: number
   monthGroups: Map<number, Plan[]>
   companies: Company[]
+  daily: DailyAggregate[]
   onDelete: (id: string) => void
 }) {
   return (
@@ -450,7 +566,7 @@ function MonthsView({
               </div>
               <div className="mt-2 space-y-1.5">
                 {plans.map((p) => (
-                  <PlanRow key={p.id} plan={p} companies={companies} onDelete={onDelete} />
+                  <PlanRow key={p.id} plan={p} companies={companies} daily={daily} onDelete={onDelete} />
                 ))}
               </div>
             </div>
@@ -464,10 +580,12 @@ function MonthsView({
 function PeriodsView({
   groupedByCompanyMetric,
   companies,
+  daily,
   onDelete,
 }: {
   groupedByCompanyMetric: Record<string, Record<Metric, Plan[]>>
   companies: Company[]
+  daily: DailyAggregate[]
   onDelete: (id: string) => void
 }) {
   const keys = Object.keys(groupedByCompanyMetric)
@@ -483,7 +601,7 @@ function PeriodsView({
             <h2 className="mb-3 text-sm font-semibold">{title}</h2>
             <div className="space-y-1.5">
               {allPlans.map((p) => (
-                <PlanRow key={p.id} plan={p} companies={companies} onDelete={onDelete} />
+                <PlanRow key={p.id} plan={p} companies={companies} daily={daily} onDelete={onDelete} />
               ))}
             </div>
           </Card>
@@ -496,12 +614,15 @@ function PeriodsView({
 function PlanRow({
   plan,
   companies,
+  daily,
   onDelete,
 }: {
   plan: Plan
   companies: Company[]
+  daily: DailyAggregate[]
   onDelete: (id: string) => void
 }) {
+  const [expanded, setExpanded] = useState(false)
   const target = Number(plan.target_amount || 0)
   const fact = Number(plan.fact_value || 0)
   const pct = target > 0 ? Math.round((fact / target) * 1000) / 10 : 0
@@ -509,48 +630,99 @@ function PlanRow({
   const company = plan.company_id ? companies.find((c) => c.id === plan.company_id) : null
   const unit = metricUnit(plan.metric)
 
+  const series = useMemo(
+    () => (expanded ? buildSeries({ plan, daily }) : []),
+    [expanded, plan, daily],
+  )
+
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_120px_36px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
-      <div className="min-w-0">
-        <p className="truncate font-medium">{metricLabel(plan.metric)}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {company ? company.name : 'Общий'}
-          {plan.is_closed ? ' · закрыт' : ''}
-        </p>
-      </div>
-      <div className="text-right tabular-nums">
-        <p className="text-xs text-muted-foreground">План</p>
-        <p className="font-semibold">{fmt(target)} {unit}</p>
-      </div>
-      <div className="text-right tabular-nums">
-        <p className="text-xs text-muted-foreground">Факт</p>
-        <p className={`font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
-          {fmt(fact)} {unit}
-        </p>
-      </div>
-      <div>
-        <div className="flex items-center justify-end gap-2 tabular-nums">
-          <span className={`text-sm font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
-            {pct}%
-          </span>
-        </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div
-            className={`h-full transition-all ${positive ? 'bg-emerald-500' : 'bg-amber-500'}`}
-            style={{ width: `${Math.min(100, pct)}%` }}
-          />
-        </div>
-      </div>
-      <div className="flex justify-end">
+    <div className="rounded-xl border border-white/10 bg-white/[0.02]">
+      <div className="grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_120px_36px] items-center gap-3 px-3 py-2 text-sm">
         <button
           type="button"
-          onClick={() => onDelete(plan.id)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-rose-400 transition hover:bg-rose-500/10"
-          title="Удалить план"
+          onClick={() => setExpanded((v) => !v)}
+          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-white/[0.04] hover:text-foreground"
+          title={expanded ? 'Свернуть график' : 'Показать график'}
         >
-          <Trash2 className="h-4 w-4" />
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
+        <div className="min-w-0">
+          <p className="truncate font-medium">{metricLabel(plan.metric)}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {company ? company.name : 'Общий'}
+            {plan.is_closed ? ' · закрыт' : ''}
+          </p>
+        </div>
+        <div className="text-right tabular-nums">
+          <p className="text-xs text-muted-foreground">План</p>
+          <p className="font-semibold">{fmt(target)} {unit}</p>
+        </div>
+        <div className="text-right tabular-nums">
+          <p className="text-xs text-muted-foreground">Факт</p>
+          <p className={`font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
+            {fmt(fact)} {unit}
+          </p>
+        </div>
+        <div>
+          <div className="flex items-center justify-end gap-2 tabular-nums">
+            <span className={`text-sm font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
+              {pct}%
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`h-full transition-all ${positive ? 'bg-emerald-500' : 'bg-amber-500'}`}
+              style={{ width: `${Math.min(100, pct)}%` }}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => onDelete(plan.id)}
+            className="grid h-8 w-8 place-items-center rounded-lg text-rose-400 transition hover:bg-rose-500/10"
+            title="Удалить план"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+      {expanded ? (
+        <div className="border-t border-white/[0.06] p-4">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Кумулятивный факт по дням vs пропорциональная цель ·
+            {' '}{plan.period_start.slice(8, 10)}.{plan.period_start.slice(5, 7)} — {plan.period_end.slice(8, 10)}.{plan.period_end.slice(5, 7)}
+          </p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={series}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
+                <YAxis
+                  stroke="rgba(255,255,255,0.45)"
+                  fontSize={10}
+                  tickFormatter={(v) => {
+                    if (plan.metric === 'margin') return `${v}%`
+                    if (plan.metric === 'checks' || plan.metric === 'avg_check') return fmt(Number(v))
+                    return `${Math.round(Number(v) / 1000)}k`
+                  }}
+                />
+                <Tooltip
+                  formatter={(v: any) => {
+                    if (v == null) return '—'
+                    if (plan.metric === 'margin') return `${v}%`
+                    return `${fmt(Number(v))} ${unit}`
+                  }}
+                  contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="Цель" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Line type="monotone" dataKey="Факт" stroke={positive ? '#10b981' : '#f59e0b'} strokeWidth={2.5} dot={false} connectNulls={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

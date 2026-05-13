@@ -152,12 +152,44 @@ export async function GET(req: Request) {
       }
     })
 
+    // Дневные агрегаты для графиков динамики плана.
+    // Возвращаем массив {date, company_id|null('org' для общего), revenue, expenses, checks}.
+    const dailyMap = new Map<string, {
+      date: string
+      company_id: string | null
+      revenue: number
+      expenses: number
+      checks: number
+    }>()
+    const bump = (date: string, companyId: string | null, patch: { revenue?: number; expenses?: number; checks?: number }) => {
+      const key = `${date}|${companyId || 'org'}`
+      const cur = dailyMap.get(key) || { date, company_id: companyId, revenue: 0, expenses: 0, checks: 0 }
+      cur.revenue += patch.revenue || 0
+      cur.expenses += patch.expenses || 0
+      cur.checks += patch.checks || 0
+      dailyMap.set(key, cur)
+      // Дублируем как «общий» (company_id=null) для агрегации
+      if (companyId) {
+        const orgKey = `${date}|org`
+        const orgCur = dailyMap.get(orgKey) || { date, company_id: null, revenue: 0, expenses: 0, checks: 0 }
+        orgCur.revenue += patch.revenue || 0
+        orgCur.expenses += patch.expenses || 0
+        orgCur.checks += patch.checks || 0
+        dailyMap.set(orgKey, orgCur)
+      }
+    }
+    for (const r of facts.incomes) bump(r.date, r.company_id, { revenue: r.total })
+    for (const r of facts.expenses) bump(r.date, r.company_id, { expenses: r.total })
+    for (const r of facts.sales) bump(r.date, r.company_id, { checks: 1, revenue: 0 })
+    const dailyAggregates = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+
     return json({
       ok: true,
       data: {
         year,
         companies: companies || [],
         plans: enrichedPlans,
+        dailyAggregates,
       },
     })
   } catch (error: any) {
