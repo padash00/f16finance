@@ -357,6 +357,15 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'store-receipt-settings',
+        path: '/store/receipt-settings',
+        label: 'Реквизиты чека ККМ',
+        capabilities: [
+          { id: 'store-receipt-settings.view', label: 'Просмотр реквизитов чека', severity: 'low' },
+          { id: 'store-receipt-settings.edit', label: 'Изменение реквизитов чека', severity: 'high' },
+        ],
+      },
+      {
         id: 'store-consumables',
         path: '/store/consumables',
         label: 'Расходники',
