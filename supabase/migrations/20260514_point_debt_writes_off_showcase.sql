@@ -14,6 +14,14 @@
 --   - inventory_delete_point_debt (без правок) уже возвращает на ту же
 --     inventory_location_id.
 
+-- В БД могут жить старые перегрузки (14-параметровая до 20260328_created_by).
+-- Их нужно убрать, иначе comment on function name без сигнатуры падает с
+-- "function name is not unique".
+drop function if exists public.inventory_create_point_debt(
+  uuid, uuid, uuid, uuid, text, text, text,
+  integer, numeric, numeric, text, date, text, text
+);
+
 create or replace function public.inventory_create_point_debt(
   p_company_id uuid,
   p_location_id uuid,
@@ -158,7 +166,10 @@ begin
 end;
 $fn_create_debt$;
 
-comment on function public.inventory_create_point_debt is
+comment on function public.inventory_create_point_debt(
+  uuid, uuid, uuid, uuid, text, text, text,
+  integer, numeric, numeric, text, date, text, text, uuid
+) is
   'v9: при создании долга списывает количество с витрины (point_display) и сохраняет inventory_location_id; ошибка inventory-debt-insufficient-stock если не хватает остатка.';
 
 notify pgrst, 'reload schema';
