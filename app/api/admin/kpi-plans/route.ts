@@ -292,6 +292,8 @@ export async function POST(req: Request) {
       ? existingQ.eq('company_id', companyId)
       : existingQ.is('company_id', null)
 
+    const actorUserId = ('user' in access ? access.user?.id : null) || null
+
     const { data: existing, error: existErr } = await filteredQ.maybeSingle()
     if (existErr) throw existErr
 
@@ -304,7 +306,7 @@ export async function POST(req: Request) {
         .single()
       if (error) throw error
       await writeAuditLog(supabase as any, {
-        actorUserId: access.user?.id || null,
+        actorUserId,
         entityType: 'kpi-plan',
         entityId: String((existing as any).id),
         action: 'update',
@@ -313,9 +315,9 @@ export async function POST(req: Request) {
       return json({ ok: true, data })
     }
 
-    // Fallback: некоторые БД унаследовали legacy-колонку plan_key NOT NULL.
-    // Заполняем её детерминированно (company|kind|period_start), чтобы insert
-    // не падал даже без применения миграции 20260518.
+    // Fallback: некоторые БД унаследовали legacy-колонки NOT NULL, которых
+    // нет в актуальной схеме. Заполняем их детерминированно, чтобы INSERT
+    // не падал. Если колонки в БД нет — retry без неё.
     const planKey = [companyId || 'org', kind, start].join('|')
 
     const insertPayload: Record<string, unknown> = {
@@ -324,44 +326,45 @@ export async function POST(req: Request) {
       target_amount: target,
       period_start: start,
       period_end: end,
-      created_by: access.user?.id || null,
+      created_by: actorUserId,
+      // Legacy-колонки (могут существовать в части БД):
       plan_key: planKey,
+      month_start: start, // legacy: совпадает с period_start
     }
 
-    const { data, error } = await supabase
-      .from('kpi_plans')
-      .insert([insertPayload])
-      .select('*')
-      .single()
-    if (error) {
-      // Если колонки plan_key в БД нет — пробуем без неё.
-      const msg = String(error?.message || '')
-      if (msg.includes('plan_key') && (msg.includes('column') || msg.includes('schema'))) {
-        delete (insertPayload as any).plan_key
-        const retry = await supabase
-          .from('kpi_plans')
-          .insert([insertPayload])
-          .select('*')
-          .single()
-        if (retry.error) throw retry.error
-        return await finalizeInsert(retry.data)
+    const optionalLegacyCols = ['plan_key', 'month_start']
+    let attempt: Record<string, unknown> = { ...insertPayload }
+    let inserted: any = null
+    while (true) {
+      const res = await supabase
+        .from('kpi_plans')
+        .insert([attempt])
+        .select('*')
+        .single()
+      if (!res.error) {
+        inserted = res.data
+        break
       }
-      throw error
+      const msg = String(res.error?.message || '')
+      const offending = optionalLegacyCols.find(
+        (col) => msg.includes(col) && (msg.includes('column') || msg.includes('schema cache')),
+      )
+      if (offending && offending in attempt) {
+        delete attempt[offending]
+        continue
+      }
+      throw res.error
     }
 
-    const actorUserId = ('user' in access ? access.user?.id : null) || null
-    async function finalizeInsert(row: any) {
-      await writeAuditLog(supabase as any, {
-        actorUserId,
-        entityType: 'kpi-plan',
-        entityId: String(row?.id),
-        action: 'create',
-        payload: { kind, target, period_start: start, period_end: end },
-      })
-      return json({ ok: true, data: row })
-    }
+    await writeAuditLog(supabase as any, {
+      actorUserId,
+      entityType: 'kpi-plan',
+      entityId: String((inserted as any)?.id || ''),
+      action: 'create',
+      payload: { kind, target, period_start: start, period_end: end },
+    })
 
-    return await finalizeInsert(data)
+    return json({ ok: true, data: inserted })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
