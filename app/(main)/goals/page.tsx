@@ -618,12 +618,14 @@ function KpiCard({
   metric,
   fact,
   plan,
+  planLabel,
   large = false,
   compact = false,
 }: {
   metric: Metric
   fact: number
   plan?: number | null
+  planLabel?: string
   large?: boolean
   compact?: boolean
 }) {
@@ -641,6 +643,9 @@ function KpiCard({
             <Icon className="h-3.5 w-3.5" />
           </div>
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{meta.label}</span>
+          {planLabel ? (
+            <span className="ml-auto rounded-full border border-violet-500/30 bg-violet-500/[0.08] px-2 py-0.5 text-[9px] uppercase tracking-wider text-violet-300">{planLabel}</span>
+          ) : null}
         </div>
         <p className={`mt-2 font-bold tabular-nums ${large ? 'text-3xl' : compact ? 'text-lg' : 'text-2xl'} ${a.text}`}>
           {fmt(fact)} <span className="text-xs opacity-70">{meta.unit}</span>
@@ -792,11 +797,41 @@ function PeriodView({
   onDelete: (id: string) => void
 }) {
   const periodPlans = plans.filter((p) => p.period_kind === tab)
-  const orgPlan = (metric: Metric) => periodPlans.find((p) => p.metric === metric && !p.company_id)
+  const monthPlans = plans.filter((p) => p.period_kind === 'month')
   const { start, end } = periodBounds(tab, year)
 
+  // Месячные диапазоны для авто-агрегации
+  const monthRange: number[] =
+    tab === 'h1' ? [1, 2, 3, 4, 5, 6]
+    : tab === 'h2' ? [7, 8, 9, 10, 11, 12]
+    : tab === 'year' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    : []
+
+  // Только аддитивные метрики можно суммировать из месячных
+  const ADDITIVE_METRICS: Metric[] = ['revenue', 'profit', 'checks']
+
+  const syntheticTargetFromMonths = (metric: Metric, companyId: string | null): number => {
+    if (!ADDITIVE_METRICS.includes(metric) || monthRange.length === 0) return 0
+    return monthPlans
+      .filter((p) => p.metric === metric)
+      .filter((p) => (companyId == null ? !p.company_id : p.company_id === companyId))
+      .filter((p) => monthRange.includes(Number(p.period_start.slice(5, 7))))
+      .reduce((s, p) => s + Number(p.target_amount || 0), 0)
+  }
+
+  // Эффективная цель: явная > сумма месячных
+  const effectiveTarget = (metric: Metric, companyId: string | null): { value: number; isSynthetic: boolean } => {
+    const explicit = (companyId == null
+      ? periodPlans.find((p) => p.metric === metric && !p.company_id)
+      : periodPlans.find((p) => p.metric === metric && p.company_id === companyId))
+    if (explicit) return { value: Number(explicit.target_amount || 0), isSynthetic: false }
+    return { value: syntheticTargetFromMonths(metric, companyId), isSynthetic: true }
+  }
+
+  const orgPlan = (metric: Metric) => periodPlans.find((p) => p.metric === metric && !p.company_id)
   const activePlan = orgPlan(activeMetric)
-  const targetValue = Number(activePlan?.target_amount || 0)
+  const activeTarget = effectiveTarget(activeMetric, null)
+  const targetValue = activeTarget.value
   const series = useMemo(
     () => buildSeries({ daily, companyId: null, start, end, metric: activeMetric, target: targetValue }),
     [daily, start, end, activeMetric, targetValue],
@@ -808,7 +843,7 @@ function PeriodView({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {METRICS.map((m) => {
           const factValue = facts[m.value as keyof typeof facts] as number
-          const plan = orgPlan(m.value)?.target_amount
+          const tg = effectiveTarget(m.value, null)
           return (
             <button
               key={m.value}
@@ -816,7 +851,7 @@ function PeriodView({
               onClick={() => setActiveMetric(m.value)}
               className={`text-left transition ${activeMetric === m.value ? 'scale-[1.02]' : 'opacity-80 hover:opacity-100'}`}
             >
-              <KpiCard metric={m.value} fact={factValue} plan={plan} large={activeMetric === m.value} />
+              <KpiCard metric={m.value} fact={factValue} plan={tg.value > 0 ? tg.value : undefined} planLabel={tg.isSynthetic ? 'Σ месяцы' : undefined} large={activeMetric === m.value} />
             </button>
           )
         })}
@@ -858,10 +893,10 @@ function PeriodView({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {companies.map((c) => {
             const f = computeFacts(daily, c.id, start, end)
-            const companyPlan = periodPlans.find((p) => p.metric === activeMetric && p.company_id === c.id)
-            const orgTarget = Number(activePlan?.target_amount || 0)
+            const ct = effectiveTarget(activeMetric, c.id)
             const orgFactValue = facts[activeMetric as keyof typeof facts] as number
             const sharePct = orgFactValue > 0 ? Math.round((Number(f[activeMetric]) / orgFactValue) * 1000) / 10 : 0
+            const orgHasPlan = activeTarget.value > 0
             return (
               <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                 <p className="text-sm font-semibold">{c.name}</p>
@@ -869,13 +904,16 @@ function PeriodView({
                   {fmt(f[activeMetric])}{' '}
                   <span className="text-xs text-muted-foreground">{metricMeta(activeMetric).unit}</span>
                 </p>
-                {companyPlan ? (
+                {ct.value > 0 ? (
                   (() => {
-                    const pct = companyPlan.target_amount > 0 ? Math.round((f[activeMetric] / companyPlan.target_amount) * 1000) / 10 : 0
+                    const pct = ct.value > 0 ? Math.round((Number(f[activeMetric]) / ct.value) * 1000) / 10 : 0
                     return (
                       <div className="mt-2 space-y-1">
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-muted-foreground">План {fmt(companyPlan.target_amount)} {metricMeta(activeMetric).unit}</span>
+                          <span className="text-muted-foreground">
+                            План {fmt(ct.value)} {metricMeta(activeMetric).unit}
+                            {ct.isSynthetic ? <span className="ml-1 text-violet-300">(Σ мес)</span> : null}
+                          </span>
                           <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -884,7 +922,7 @@ function PeriodView({
                       </div>
                     )
                   })()
-                ) : orgTarget > 0 ? (
+                ) : orgHasPlan ? (
                   <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>В общем плане</span>
                     <span className="text-violet-300 font-semibold">{sharePct}%</span>
