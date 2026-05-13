@@ -238,9 +238,9 @@ export default function GoalsPage() {
   const [form, setForm] = useState({
     period_kind: 'month' as PeriodKind,
     month_idx: new Date().getMonth(),
-    metric: 'revenue' as Metric,
     company_id: 'all' as string,
-    target_amount: '',
+    revenue: '',
+    expense: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -308,34 +308,55 @@ export default function GoalsPage() {
     return periodFacts[tab]
   }, [tab, periodFacts])
 
+  const parseMoneyInput = (raw: string) =>
+    Number(String(raw).replace(/\s/g, '').replace(',', '.'))
+
   const handleAddPlan = async () => {
-    const target = Number(String(form.target_amount).replace(/\s/g, '').replace(',', '.'))
-    if (!Number.isFinite(target) || target <= 0) {
-      setError('Введите цель больше 0')
+    const revenue = parseMoneyInput(form.revenue)
+    const expense = parseMoneyInput(form.expense)
+    if (!Number.isFinite(revenue) || revenue <= 0) {
+      setError('Введите выручку больше 0')
       return
     }
+    if (!Number.isFinite(expense) || expense < 0) {
+      setError('Расходы не могут быть отрицательными')
+      return
+    }
+    const profit = revenue - expense
+    const companyId = form.company_id === 'all' ? null : form.company_id
+
     setSaving(true)
     setError(null)
     setSuccess(null)
     try {
-      const res = await fetch('/api/admin/kpi-plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year,
-          period_kind: form.period_kind,
-          month_idx: form.period_kind === 'month' ? form.month_idx : undefined,
-          metric: form.metric,
-          company_id: form.company_id === 'all' ? null : form.company_id,
-          target_amount: target,
-        }),
-      })
-      const j = await res.json().catch(() => null)
-      if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось сохранить')
-      setSuccess('План сохранён')
+      // Сохраняем сразу 2 плана: выручка и прибыль (расходы выводятся как
+      // revenue - profit, маржа считается из (profit/revenue)*100).
+      const payloads: Array<{ metric: Metric; target_amount: number }> = [
+        { metric: 'revenue', target_amount: revenue },
+        { metric: 'profit', target_amount: profit },
+      ]
+
+      for (const p of payloads) {
+        const res = await fetch('/api/admin/kpi-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            year,
+            period_kind: form.period_kind,
+            month_idx: form.period_kind === 'month' ? form.month_idx : undefined,
+            metric: p.metric,
+            company_id: companyId,
+            target_amount: p.target_amount,
+          }),
+        })
+        const j = await res.json().catch(() => null)
+        if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось сохранить')
+      }
+
+      setSuccess('Цель сохранена')
       setTimeout(() => setSuccess(null), 2200)
       setDialogOpen(false)
-      setForm((f) => ({ ...f, target_amount: '' }))
+      setForm((f) => ({ ...f, revenue: '', expense: '' }))
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось сохранить')
@@ -472,45 +493,46 @@ export default function GoalsPage() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Новая цель</DialogTitle>
-              <DialogDescription>Задай таргет по KPI. Факт считается автоматически.</DialogDescription>
+              <DialogDescription>
+                Заполни выручку и расходы — прибыль и маржа посчитаются автоматически.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Период</Label>
-                <Select value={form.period_kind} onValueChange={(v) => setForm((f) => ({ ...f, period_kind: v as PeriodKind }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="year">Год</SelectItem>
-                    <SelectItem value="h1">I полугодие</SelectItem>
-                    <SelectItem value="h2">II полугодие</SelectItem>
-                    <SelectItem value="month">Месяц</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {form.period_kind === 'month' ? (
+              <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
-                  <Label>Месяц</Label>
-                  <Select value={String(form.month_idx)} onValueChange={(v) => setForm((f) => ({ ...f, month_idx: Number(v) }))}>
+                  <Label>Период</Label>
+                  <Select value={form.period_kind} onValueChange={(v) => setForm((f) => ({ ...f, period_kind: v as PeriodKind }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {MONTH_FULL.map((m, idx) => (
-                        <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
-                      ))}
+                      <SelectItem value="month">Месяц</SelectItem>
+                      <SelectItem value="h1">I полугодие</SelectItem>
+                      <SelectItem value="h2">II полугодие</SelectItem>
+                      <SelectItem value="year">Год</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              ) : null}
-              <div className="space-y-1.5">
-                <Label>KPI</Label>
-                <Select value={form.metric} onValueChange={(v) => setForm((f) => ({ ...f, metric: v as Metric }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {METRICS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label} ({m.unit})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {form.period_kind === 'month' ? (
+                  <div className="space-y-1.5">
+                    <Label>Месяц</Label>
+                    <Select value={String(form.month_idx)} onValueChange={(v) => setForm((f) => ({ ...f, month_idx: Number(v) }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {MONTH_FULL.map((m, idx) => (
+                          <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label>Год</Label>
+                    <div className="grid h-10 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-sm tabular-nums">
+                      {year}
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div className="space-y-1.5">
                 <Label>Точка</Label>
                 <Select value={form.company_id} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v }))}>
@@ -523,16 +545,58 @@ export default function GoalsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Цель ({metricMeta(form.metric).unit})</Label>
-                <Input
-                  value={form.target_amount}
-                  onChange={(e) => setForm((f) => ({ ...f, target_amount: e.target.value }))}
-                  placeholder="0"
-                  inputMode="numeric"
-                  className="h-11 text-base tabular-nums"
-                />
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-emerald-300">Выручка, ₸</Label>
+                  <Input
+                    value={form.revenue}
+                    onChange={(e) => setForm((f) => ({ ...f, revenue: e.target.value }))}
+                    placeholder="0"
+                    inputMode="numeric"
+                    className="h-11 text-base tabular-nums"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-rose-300">Расходы, ₸</Label>
+                  <Input
+                    value={form.expense}
+                    onChange={(e) => setForm((f) => ({ ...f, expense: e.target.value }))}
+                    placeholder="0"
+                    inputMode="numeric"
+                    className="h-11 text-base tabular-nums"
+                  />
+                </div>
               </div>
+
+              {/* Авто-рассчёт прибыли и маржи */}
+              {(() => {
+                const rev = parseMoneyInput(form.revenue) || 0
+                const exp = parseMoneyInput(form.expense) || 0
+                const prof = rev - exp
+                const margin = rev > 0 ? (prof / rev) * 100 : 0
+                return (
+                  <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/[0.06] p-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Прибыль</p>
+                        <p className={`mt-1 text-xl font-bold tabular-nums ${prof >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>
+                          {fmt(prof)} ₸
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Маржа</p>
+                        <p className={`mt-1 text-xl font-bold tabular-nums ${margin >= 0 ? 'text-violet-300' : 'text-rose-300'}`}>
+                          {margin.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Считается автоматически по введённым выручке и расходам.
+                    </p>
+                  </div>
+                )
+              })()}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
