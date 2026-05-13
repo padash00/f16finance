@@ -1,21 +1,25 @@
--- В kpi_plans есть legacy CHECK-ограничение «kpi_plans_entity_type_check»,
--- которое не пускает наши значения entity_type (kpi_plan / kpi / goal / ...).
--- Так как entity_type — legacy-колонка, не используемая в актуальной схеме,
--- снимаем CHECK и NOT NULL. Сама колонка остаётся, дефолт остаётся.
+-- В kpi_plans бывает legacy CHECK-ограничение на entity_type, которое
+-- не пускает наши значения. Имя у разных баз отличается:
+-- «kpi_plans_entity_type_check», «kpi_plans_entity_type_chk» и т.п.
+-- Чтобы покрыть все варианты — ищем ВСЕ CHECK-ограничения, в определении
+-- которых упоминается entity_type, и дропаем.
 
 do $$
+declare
+  v_constraint_name text;
 begin
-  -- Снимаем CHECK
-  if exists (
-    select 1
-    from pg_constraint
-    where conname = 'kpi_plans_entity_type_check'
-      and conrelid = 'public.kpi_plans'::regclass
-  ) then
-    alter table public.kpi_plans drop constraint kpi_plans_entity_type_check;
-  end if;
+  for v_constraint_name in
+    select c.conname
+    from pg_constraint c
+    where c.conrelid = 'public.kpi_plans'::regclass
+      and c.contype = 'c'
+      and pg_get_constraintdef(c.oid) ilike '%entity_type%'
+  loop
+    execute format('alter table public.kpi_plans drop constraint %I', v_constraint_name);
+    raise notice 'dropped check constraint %', v_constraint_name;
+  end loop;
 
-  -- Снимаем NOT NULL (если у колонки нет NOT NULL — оператор no-op)
+  -- Снимаем NOT NULL (если оно ещё там)
   if exists (
     select 1
     from information_schema.columns
