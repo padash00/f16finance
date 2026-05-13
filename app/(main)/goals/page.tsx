@@ -1,7 +1,38 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, Lock, Plus, RefreshCw, Target, Trash2 } from 'lucide-react'
+/**
+ * Цели и план — переделанная страница.
+ *
+ * Логика:
+ *  - Страница ВСЕГДА показывает фактические цифры (выручка/прибыль/маржа/чеки/средний чек)
+ *    по выбранному периоду, даже если планов нет.
+ *  - Если есть план — рядом с фактом маленький бейдж с целью и % выполнения,
+ *    появляется прогресс-бар.
+ *  - Дизайн: hero KPI карточки сверху, плитки месяцев, glass-стилистика.
+ *  - Клик по месяцу → детали месяца с графиком динамики.
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  CreditCard,
+  Loader2,
+  Lock,
+  Percent,
+  Plus,
+  RefreshCw,
+  Receipt,
+  Sparkles,
+  Target,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Unlock,
+  X,
+} from 'lucide-react'
 import {
   CartesianGrid,
   Legend,
@@ -14,32 +45,13 @@ import {
 } from 'recharts'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { isAbortError } from '@/lib/is-abort-error'
 
-const MONTH_LABELS_RU = [
-  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-]
-
-const METRICS: { value: Metric; label: string; unit: string }[] = [
-  { value: 'revenue', label: 'Выручка', unit: '₸' },
-  { value: 'profit', label: 'Прибыль', unit: '₸' },
-  { value: 'checks', label: 'Число чеков', unit: 'шт' },
-  { value: 'avg_check', label: 'Средний чек', unit: '₸' },
-  { value: 'margin', label: 'Маржа', unit: '%' },
-]
-
-const PERIOD_LABELS: Record<PeriodKind, string> = {
-  year: 'Год',
-  h1: 'I полугодие',
-  h2: 'II полугодие',
-  month: 'Месяц',
-}
+// ─── Типы ───────────────────────────────────────────────────────────────────
 
 type Metric = 'revenue' | 'profit' | 'checks' | 'avg_check' | 'margin'
 type PeriodKind = 'year' | 'h1' | 'h2' | 'month'
@@ -74,14 +86,72 @@ type ApiResponse = {
   error?: string
 }
 
-const fmt = (v: number) => Math.round(v).toLocaleString('ru-RU')
+// ─── Константы ──────────────────────────────────────────────────────────────
 
-function metricUnit(m: Metric | null) {
-  return METRICS.find((x) => x.value === m)?.unit || ''
+const MONTH_FULL = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+const MONTH_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+
+const METRICS: Array<{ value: Metric; label: string; unit: string; icon: any; accent: string }> = [
+  { value: 'revenue', label: 'Выручка', unit: '₸', icon: TrendingUp, accent: 'emerald' },
+  { value: 'profit', label: 'Прибыль', unit: '₸', icon: Coins, accent: 'cyan' },
+  { value: 'margin', label: 'Маржа', unit: '%', icon: Percent, accent: 'violet' },
+  { value: 'checks', label: 'Чеки', unit: 'шт', icon: Receipt, accent: 'amber' },
+  { value: 'avg_check', label: 'Средний чек', unit: '₸', icon: CreditCard, accent: 'rose' },
+]
+
+const PERIOD_LABEL: Record<PeriodKind, string> = {
+  year: 'Год',
+  h1: 'I полугодие',
+  h2: 'II полугодие',
+  month: 'Месяц',
 }
 
-function metricLabel(m: Metric | null) {
-  return METRICS.find((x) => x.value === m)?.label || m || ''
+const fmt = (v: number) => Math.round(v).toLocaleString('ru-RU')
+const metricMeta = (m: Metric) => METRICS.find((x) => x.value === m)!
+const accentClasses = (accent: string) => {
+  const map: Record<string, { border: string; bg: string; text: string; fill: string }> = {
+    emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/[0.06]', text: 'text-emerald-300', fill: '#10b981' },
+    cyan: { border: 'border-cyan-500/30', bg: 'bg-cyan-500/[0.06]', text: 'text-cyan-300', fill: '#06b6d4' },
+    violet: { border: 'border-violet-500/30', bg: 'bg-violet-500/[0.06]', text: 'text-violet-300', fill: '#8b5cf6' },
+    amber: { border: 'border-amber-500/30', bg: 'bg-amber-500/[0.06]', text: 'text-amber-300', fill: '#f59e0b' },
+    rose: { border: 'border-rose-500/30', bg: 'bg-rose-500/[0.06]', text: 'text-rose-300', fill: '#f43f5e' },
+  }
+  return map[accent] || map.emerald
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function periodBounds(period: PeriodKind, year: number, monthIdx?: number): { start: string; end: string } {
+  if (period === 'year') return { start: `${year}-01-01`, end: `${year}-12-31` }
+  if (period === 'h1') return { start: `${year}-01-01`, end: `${year}-06-30` }
+  if (period === 'h2') return { start: `${year}-07-01`, end: `${year}-12-31` }
+  const m = String((monthIdx || 0) + 1).padStart(2, '0')
+  const last = new Date(year, (monthIdx || 0) + 1, 0).getDate()
+  return { start: `${year}-${m}-01`, end: `${year}-${m}-${String(last).padStart(2, '0')}` }
+}
+
+function computeFacts(daily: DailyAggregate[], companyId: string | null, start: string, end: string) {
+  let revenue = 0, expenses = 0, checks = 0
+  for (const r of daily) {
+    if (r.date < start || r.date > end) continue
+    if (companyId == null) {
+      if (r.company_id !== null) continue
+    } else {
+      if (r.company_id !== companyId) continue
+    }
+    revenue += r.revenue
+    expenses += r.expenses
+    checks += r.checks
+  }
+  const profit = revenue - expenses
+  return {
+    revenue: Math.round(revenue),
+    expenses: Math.round(expenses),
+    profit: Math.round(profit),
+    checks,
+    avg_check: checks > 0 ? Math.round(revenue / checks) : 0,
+    margin: revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
+  }
 }
 
 function enumerateDates(start: string, end: string): string[] {
@@ -94,30 +164,24 @@ function enumerateDates(start: string, end: string): string[] {
   return out
 }
 
-/**
- * Кумулятивная серия для графика плана.
- * - Для revenue / profit / checks / avg_check / margin строим день-за-днём
- * - Цель — прямая линия от 0 до target равномерно по дням периода
- * - Сегодня и будущее — фактическая линия обрывается, целевая идёт до конца
- */
 function buildSeries(params: {
-  plan: Plan
   daily: DailyAggregate[]
-}): Array<{ day: string; idx: number; Факт: number | null; Цель: number }> {
-  const { plan, daily } = params
-  const dates = enumerateDates(plan.period_start, plan.period_end)
+  companyId: string | null
+  start: string
+  end: string
+  metric: Metric
+  target: number
+}) {
+  const dates = enumerateDates(params.start, params.end)
   if (dates.length === 0) return []
   const todayKey = new Date().toISOString().slice(0, 10)
-
-  // Фильтруем daily по company_id плана: общий план -> только company_id===null строки
-  const target = Number(plan.target_amount || 0)
   const factByDate = new Map<string, { revenue: number; expenses: number; checks: number }>()
-  for (const r of daily) {
-    if (r.date < plan.period_start || r.date > plan.period_end) continue
-    if (plan.company_id) {
-      if (r.company_id !== plan.company_id) continue
+  for (const r of params.daily) {
+    if (r.date < params.start || r.date > params.end) continue
+    if (params.companyId == null) {
+      if (r.company_id !== null) continue
     } else {
-      if (r.company_id !== null) continue // только агрегированные (org)
+      if (r.company_id !== params.companyId) continue
     }
     const cur = factByDate.get(r.date) || { revenue: 0, expenses: 0, checks: 0 }
     cur.revenue += r.revenue
@@ -125,59 +189,39 @@ function buildSeries(params: {
     cur.checks += r.checks
     factByDate.set(r.date, cur)
   }
-
-  // Кумуляторы
-  let cumRevenue = 0
-  let cumExpenses = 0
-  let cumChecks = 0
-  const result: Array<{ day: string; idx: number; Факт: number | null; Цель: number }> = []
+  let cumR = 0, cumE = 0, cumC = 0
   const totalDays = dates.length
-  dates.forEach((d, i) => {
-    const day = d
+  return dates.map((day, i) => {
     const t = factByDate.get(day)
     if (t) {
-      cumRevenue += t.revenue
-      cumExpenses += t.expenses
-      cumChecks += t.checks
+      cumR += t.revenue
+      cumE += t.expenses
+      cumC += t.checks
     }
     let factValue: number | null = null
     if (day <= todayKey) {
-      switch (plan.metric) {
-        case 'revenue':
-          factValue = Math.round(cumRevenue)
-          break
-        case 'profit':
-          factValue = Math.round(cumRevenue - cumExpenses)
-          break
-        case 'checks':
-          factValue = cumChecks
-          break
-        case 'avg_check':
-          factValue = cumChecks > 0 ? Math.round(cumRevenue / cumChecks) : 0
-          break
-        case 'margin':
-          factValue = cumRevenue > 0 ? Math.round(((cumRevenue - cumExpenses) / cumRevenue) * 1000) / 10 : 0
-          break
-        default:
-          factValue = 0
+      switch (params.metric) {
+        case 'revenue': factValue = Math.round(cumR); break
+        case 'profit': factValue = Math.round(cumR - cumE); break
+        case 'checks': factValue = cumC; break
+        case 'avg_check': factValue = cumC > 0 ? Math.round(cumR / cumC) : 0; break
+        case 'margin': factValue = cumR > 0 ? Math.round(((cumR - cumE) / cumR) * 1000) / 10 : 0; break
       }
     }
-    // Целевая линия:
-    //   - кумулятивные KPI (revenue, profit, checks) растут линейно от 0 до target
-    //   - не-кумулятивные (avg_check, margin) — горизонтальная линия на уровне target
-    const targetValue =
-      plan.metric === 'avg_check' || plan.metric === 'margin'
-        ? target
-        : Math.round((target * (i + 1)) / totalDays)
-    result.push({
+    const targetValue = params.target > 0
+      ? params.metric === 'avg_check' || params.metric === 'margin'
+        ? params.target
+        : Math.round((params.target * (i + 1)) / totalDays)
+      : 0
+    return {
       day: `${day.slice(8, 10)}.${day.slice(5, 7)}`,
-      idx: i + 1,
       Факт: factValue,
-      Цель: targetValue,
-    })
+      Цель: params.target > 0 ? targetValue : null,
+    }
   })
-  return result
 }
+
+// ─── Компонент ──────────────────────────────────────────────────────────────
 
 export default function GoalsPage() {
   const currentYear = new Date().getFullYear()
@@ -188,6 +232,8 @@ export default function GoalsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [activeMetric, setActiveMetric] = useState<Metric>('revenue')
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({
     period_kind: 'month' as PeriodKind,
@@ -204,11 +250,11 @@ export default function GoalsPage() {
     else setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/admin/kpi-plans?year=${year}`, { cache: 'no-store', signal })
-      const json = (await response.json().catch(() => null)) as ApiResponse | null
+      const res = await fetch(`/api/admin/kpi-plans?year=${year}`, { cache: 'no-store', signal })
+      const j = (await res.json().catch(() => null)) as ApiResponse | null
       if (signal?.aborted) return
-      if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить планы')
-      setData(json.data)
+      if (!res.ok || !j?.ok || !j.data) throw new Error(j?.error || 'Не удалось загрузить')
+      setData(j.data)
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return
       if (!soft) setData(null)
@@ -232,54 +278,35 @@ export default function GoalsPage() {
   const plans = data?.plans || []
   const daily = data?.dailyAggregates || []
 
-  const filteredPlans = useMemo(
-    () => plans.filter((p) => p.period_kind === tab),
-    [plans, tab],
-  )
+  // Факты для каждого периода и месяца — org-wide.
+  const periodFacts = useMemo(() => {
+    const get = (period: PeriodKind, monthIdx?: number) => {
+      const { start, end } = periodBounds(period, year, monthIdx)
+      return computeFacts(daily, null, start, end)
+    }
+    return {
+      year: get('year'),
+      h1: get('h1'),
+      h2: get('h2'),
+      months: Array.from({ length: 12 }, (_, i) => get('month', i)),
+    }
+  }, [daily, year])
 
-  const monthGroups = useMemo(() => {
-    const map = new Map<number, Plan[]>()
-    for (const p of filteredPlans) {
-      const mIdx = parseInt(p.period_start.slice(5, 7), 10) - 1
-      if (Number.isFinite(mIdx)) {
-        const list = map.get(mIdx) || []
-        list.push(p)
-        map.set(mIdx, list)
-      }
-    }
-    return map
-  }, [filteredPlans])
+  // Планы по периоду + месяцу + метрике + компании.
+  const planFor = (period: PeriodKind, monthIdx: number | null, metric: Metric, companyId: string | null) => {
+    return plans.find((p) =>
+      p.period_kind === period &&
+      p.metric === metric &&
+      ((!p.company_id && !companyId) || p.company_id === companyId) &&
+      (period !== 'month' || (monthIdx != null && p.period_start.slice(5, 7) === String(monthIdx + 1).padStart(2, '0'))),
+    )
+  }
 
-  const groupedByCompanyMetric = useMemo(() => {
-    const map: Record<string, Record<Metric, Plan[]>> = {}
-    for (const p of filteredPlans) {
-      if (!p.metric) continue
-      const key = p.company_id || '__org__'
-      map[key] = map[key] || ({} as Record<Metric, Plan[]>)
-      const arr = map[key][p.metric] || []
-      arr.push(p)
-      map[key][p.metric] = arr
-    }
-    return map
-  }, [filteredPlans])
-
-  const summary = useMemo(() => {
-    const byMetric: Record<Metric, { plan: number; fact: number; count: number }> = {
-      revenue: { plan: 0, fact: 0, count: 0 },
-      profit: { plan: 0, fact: 0, count: 0 },
-      checks: { plan: 0, fact: 0, count: 0 },
-      avg_check: { plan: 0, fact: 0, count: 0 },
-      margin: { plan: 0, fact: 0, count: 0 },
-    }
-    for (const p of filteredPlans) {
-      if (!p.metric) continue
-      if (p.company_id) continue // только общеорганизационные
-      byMetric[p.metric].plan += Number(p.target_amount || 0)
-      byMetric[p.metric].fact += Number(p.fact_value || 0)
-      byMetric[p.metric].count += 1
-    }
-    return byMetric
-  }, [filteredPlans])
+  // KPI hero для текущей вкладки (org-wide)
+  const tabFacts = useMemo(() => {
+    if (tab === 'month') return null
+    return periodFacts[tab]
+  }, [tab, periodFacts])
 
   const handleAddPlan = async () => {
     const target = Number(String(form.target_amount).replace(/\s/g, '').replace(',', '.'))
@@ -291,7 +318,7 @@ export default function GoalsPage() {
     setError(null)
     setSuccess(null)
     try {
-      const response = await fetch('/api/admin/kpi-plans', {
+      const res = await fetch('/api/admin/kpi-plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -303,10 +330,10 @@ export default function GoalsPage() {
           target_amount: target,
         }),
       })
-      const json = await response.json().catch(() => null)
-      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить')
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось сохранить')
       setSuccess('План сохранён')
-      setTimeout(() => setSuccess(null), 2000)
+      setTimeout(() => setSuccess(null), 2200)
       setDialogOpen(false)
       setForm((f) => ({ ...f, target_amount: '' }))
       await load(undefined, { soft: true })
@@ -320,409 +347,616 @@ export default function GoalsPage() {
   const handleDelete = async (planId: string) => {
     if (!window.confirm('Удалить план?')) return
     try {
-      const response = await fetch(`/api/admin/kpi-plans?id=${encodeURIComponent(planId)}`, { method: 'DELETE' })
-      const json = await response.json().catch(() => null)
-      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить')
+      const res = await fetch(`/api/admin/kpi-plans?id=${encodeURIComponent(planId)}`, { method: 'DELETE' })
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось удалить')
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось удалить')
     }
   }
 
+  const openMonthDetail = (idx: number) => {
+    setSelectedMonth(idx)
+  }
+
   return (
-    <div className="app-page-wide space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
-            <Target className="h-5 w-5 text-blue-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">Цели и план</h1>
-            <p className="truncate text-xs text-muted-foreground">План vs факт по периодам и точкам</p>
-          </div>
-        </div>
+    <div className="relative">
+      {/* Декоративные акценты */}
+      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
 
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
-            <Button size="sm" variant="ghost" onClick={() => setYear((y) => y - 1)} className="h-8 w-8 p-0" disabled={loading}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="px-3 text-sm font-medium tabular-nums">{year}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))}
-              className="h-8 w-8 p-0"
-              disabled={loading || year >= currentYear + 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-          <Button size="sm" onClick={() => setDialogOpen(true)} className="h-9 gap-1.5 bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-3.5 w-3.5" />
-            Новый план
-          </Button>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
-      ) : null}
-      {success ? (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div>
-      ) : null}
-
-      <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
-        {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setTab(p)}
-            className={`rounded-md px-3 py-1.5 transition ${tab === p ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {PERIOD_LABELS[p]}
-          </button>
-        ))}
-      </div>
-
-      {loading && !data ? (
-        <Card className="border-white/10 bg-card/70 p-8">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Грузим планы за {year}…
-          </div>
-        </Card>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {METRICS.map((m) => {
-              const row = summary[m.value]
-              const pct = row.plan > 0 ? Math.round((row.fact / row.plan) * 1000) / 10 : 0
-              const positive = pct >= 100
-              return (
-                <Card
-                  key={m.value}
-                  className={`border p-3 ${row.count > 0 ? (positive ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-amber-500/30 bg-amber-500/[0.05]') : 'border-white/10 bg-white/[0.03]'}`}
-                >
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{m.label}</p>
-                  {row.count > 0 ? (
-                    <>
-                      <p className="mt-1 text-base font-semibold tabular-nums">
-                        {fmt(row.fact)} <span className="text-xs text-muted-foreground">/ {fmt(row.plan)} {m.unit}</span>
-                      </p>
-                      <p className={`mt-0.5 text-xs ${positive ? 'text-emerald-300' : 'text-amber-300'}`}>
-                        {pct}%{positive ? ' ✓' : ''}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-1 text-sm text-muted-foreground">План не задан</p>
-                  )}
-                </Card>
-              )
-            })}
-          </div>
-
-          {tab === 'month' ? (
-            <MonthsView year={year} monthGroups={monthGroups} companies={companies} daily={daily} onDelete={handleDelete} />
-          ) : (
-            <PeriodsView groupedByCompanyMetric={groupedByCompanyMetric} companies={companies} daily={daily} onDelete={handleDelete} />
-          )}
-
-          {filteredPlans.length === 0 ? (
-            <Card className="border-dashed border-white/10 bg-card/40 p-8 text-center text-sm text-muted-foreground">
-              На {PERIOD_LABELS[tab].toLowerCase()} планов пока нет. Нажми «Новый план».
-            </Card>
-          ) : null}
-        </>
-      )}
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Новый план</DialogTitle>
-            <DialogDescription>Задай цель по KPI на выбранный период.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Период</Label>
-              <Select value={form.period_kind} onValueChange={(v) => setForm((f) => ({ ...f, period_kind: v as PeriodKind }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="year">Год</SelectItem>
-                  <SelectItem value="h1">I полугодие</SelectItem>
-                  <SelectItem value="h2">II полугодие</SelectItem>
-                  <SelectItem value="month">Месяц</SelectItem>
-                </SelectContent>
-              </Select>
+      <div className="relative space-y-6">
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg shadow-violet-500/40">
+              <Target className="h-5 w-5" />
             </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-bold tracking-tight">Цели и план</h1>
+              <p className="truncate text-xs text-muted-foreground">Реальные цифры по периодам · план накладывается поверх</p>
+            </div>
+          </div>
 
-            {form.period_kind === 'month' ? (
+          <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
+              <button onClick={() => setYear((y) => y - 1)} disabled={loading} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-4 text-sm font-semibold tabular-nums">{year}</span>
+              <button onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))} disabled={loading || year >= currentYear + 1} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <button onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50" title="Обновить">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition hover:from-violet-700 hover:to-fuchsia-700">
+              <Plus className="h-4 w-4" />
+              Новая цель
+            </button>
+          </div>
+        </div>
+
+        {error ? (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
+        ) : null}
+        {success ? (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div>
+        ) : null}
+
+        {/* Pill-Tabs */}
+        <div className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+          {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => { setTab(p); setSelectedMonth(null) }}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                tab === p
+                  ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow shadow-violet-500/20'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {PERIOD_LABEL[p]}
+            </button>
+          ))}
+        </div>
+
+        {loading && !data ? (
+          <div className="grid place-items-center rounded-2xl border border-white/10 bg-white/[0.02] p-12 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="mt-2">Грузим данные за {year}…</span>
+          </div>
+        ) : (
+          <>
+            {tab === 'month' ? (
+              <MonthGrid
+                year={year}
+                periodFacts={periodFacts.months}
+                plans={plans}
+                onOpenMonth={openMonthDetail}
+              />
+            ) : (
+              <PeriodView
+                tab={tab}
+                facts={tabFacts!}
+                plans={plans}
+                companies={companies}
+                daily={daily}
+                year={year}
+                activeMetric={activeMetric}
+                setActiveMetric={setActiveMetric}
+                onDelete={handleDelete}
+              />
+            )}
+          </>
+        )}
+
+        {/* Модалка месяца */}
+        {selectedMonth != null ? (
+          <MonthDetailDialog
+            year={year}
+            monthIdx={selectedMonth}
+            facts={periodFacts.months[selectedMonth]}
+            plans={plans.filter((p) => p.period_kind === 'month' && p.period_start.slice(5, 7) === String(selectedMonth + 1).padStart(2, '0'))}
+            companies={companies}
+            daily={daily}
+            onClose={() => setSelectedMonth(null)}
+            onDelete={handleDelete}
+          />
+        ) : null}
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Новая цель</DialogTitle>
+              <DialogDescription>Задай таргет по KPI. Факт считается автоматически.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Месяц</Label>
-                <Select value={String(form.month_idx)} onValueChange={(v) => setForm((f) => ({ ...f, month_idx: Number(v) }))}>
+                <Label>Период</Label>
+                <Select value={form.period_kind} onValueChange={(v) => setForm((f) => ({ ...f, period_kind: v as PeriodKind }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MONTH_LABELS_RU.map((m, idx) => (
-                      <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
+                    <SelectItem value="year">Год</SelectItem>
+                    <SelectItem value="h1">I полугодие</SelectItem>
+                    <SelectItem value="h2">II полугодие</SelectItem>
+                    <SelectItem value="month">Месяц</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.period_kind === 'month' ? (
+                <div className="space-y-1.5">
+                  <Label>Месяц</Label>
+                  <Select value={String(form.month_idx)} onValueChange={(v) => setForm((f) => ({ ...f, month_idx: Number(v) }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MONTH_FULL.map((m, idx) => (
+                        <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <div className="space-y-1.5">
+                <Label>KPI</Label>
+                <Select value={form.metric} onValueChange={(v) => setForm((f) => ({ ...f, metric: v as Metric }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {METRICS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label} ({m.unit})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            ) : null}
-
-            <div className="space-y-1.5">
-              <Label>KPI</Label>
-              <Select value={form.metric} onValueChange={(v) => setForm((f) => ({ ...f, metric: v as Metric }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {METRICS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label} ({m.unit})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-1.5">
+                <Label>Точка</Label>
+                <Select value={form.company_id} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Общий по организации</SelectItem>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Цель ({metricMeta(form.metric).unit})</Label>
+                <Input
+                  value={form.target_amount}
+                  onChange={(e) => setForm((f) => ({ ...f, target_amount: e.target.value }))}
+                  placeholder="0"
+                  inputMode="numeric"
+                  className="h-11 text-base tabular-nums"
+                />
+              </div>
             </div>
-
-            <div className="space-y-1.5">
-              <Label>Точка</Label>
-              <Select value={form.company_id} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Общий по организации</SelectItem>
-                  {companies.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
+              <Button onClick={handleAddPlan} disabled={saving} className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Сохранить
+              </Button>
             </div>
-
-            <div className="space-y-1.5">
-              <Label>Цель ({METRICS.find((m) => m.value === form.metric)?.unit})</Label>
-              <Input
-                value={form.target_amount}
-                onChange={(e) => setForm((f) => ({ ...f, target_amount: e.target.value }))}
-                placeholder="0"
-                inputMode="numeric"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
-            <Button onClick={handleAddPlan} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Сохранить
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   )
 }
 
-function MonthsView({
-  year,
-  monthGroups,
-  companies,
-  daily,
-  onDelete,
+// ─── KpiCard ───────────────────────────────────────────────────────────────
+
+function KpiCard({
+  metric,
+  fact,
+  plan,
+  large = false,
+  compact = false,
 }: {
-  year: number
-  monthGroups: Map<number, Plan[]>
-  companies: Company[]
-  daily: DailyAggregate[]
-  onDelete: (id: string) => void
+  metric: Metric
+  fact: number
+  plan?: number | null
+  large?: boolean
+  compact?: boolean
 }) {
+  const meta = metricMeta(metric)
+  const a = accentClasses(meta.accent)
+  const Icon = meta.icon
+  const pct = plan && plan > 0 ? Math.round((fact / plan) * 1000) / 10 : null
+
   return (
-    <Card className="border-white/10 bg-card/70 overflow-hidden p-0">
-      <div className="border-b border-white/10 px-5 py-3">
-        <h2 className="text-sm font-semibold">Планы по месяцам · {year}</h2>
-      </div>
-      <div className="divide-y divide-white/[0.04]">
-        {MONTH_LABELS_RU.map((mLabel, idx) => {
-          const plans = monthGroups.get(idx) || []
-          if (plans.length === 0) {
-            return (
-              <div key={idx} className="flex items-center justify-between px-5 py-3 text-sm">
-                <span className="font-medium">{mLabel}</span>
-                <span className="text-muted-foreground">План не задан</span>
-              </div>
-            )
-          }
-          return (
-            <div key={idx} className="px-5 py-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{mLabel}</span>
-                {plans[0]?.is_closed ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] text-slate-300">
-                    <Lock className="h-3 w-3" /> Закрыт
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
-                    Открыт
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 space-y-1.5">
-                {plans.map((p) => (
-                  <PlanRow key={p.id} plan={p} companies={companies} daily={daily} onDelete={onDelete} />
-                ))}
-              </div>
+    <div className={`relative overflow-hidden rounded-2xl border ${a.border} ${a.bg} ${large ? 'p-5' : compact ? 'p-3' : 'p-4'}`}>
+      <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full opacity-20 blur-2xl" style={{ background: a.fill }} />
+      <div className="relative">
+        <div className="flex items-center gap-2">
+          <div className={`grid h-7 w-7 place-items-center rounded-lg border ${a.border} ${a.bg} ${a.text}`}>
+            <Icon className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{meta.label}</span>
+        </div>
+        <p className={`mt-2 font-bold tabular-nums ${large ? 'text-3xl' : compact ? 'text-lg' : 'text-2xl'} ${a.text}`}>
+          {fmt(fact)} <span className="text-xs opacity-70">{meta.unit}</span>
+        </p>
+        {plan && plan > 0 ? (
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">План {fmt(plan)} {meta.unit}</span>
+              <span className={pct! >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
             </div>
-          )
-        })}
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className={`h-full transition-all ${pct! >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                style={{ width: `${Math.min(100, pct || 0)}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
-    </Card>
+    </div>
   )
 }
 
-function PeriodsView({
-  groupedByCompanyMetric,
-  companies,
-  daily,
-  onDelete,
+// ─── Month grid (tile UI) ──────────────────────────────────────────────────
+
+function MonthGrid({
+  year,
+  periodFacts,
+  plans,
+  onOpenMonth,
 }: {
-  groupedByCompanyMetric: Record<string, Record<Metric, Plan[]>>
-  companies: Company[]
-  daily: DailyAggregate[]
-  onDelete: (id: string) => void
+  year: number
+  periodFacts: ReturnType<typeof computeFacts>[]
+  plans: Plan[]
+  onOpenMonth: (idx: number) => void
 }) {
-  const keys = Object.keys(groupedByCompanyMetric)
+  const todayMonth = new Date().getFullYear() === year ? new Date().getMonth() : -1
   return (
-    <div className="space-y-4">
-      {keys.map((key) => {
-        const company = key === '__org__' ? null : companies.find((c) => c.id === key)
-        const title = company ? company.name : 'Общий план по организации'
-        const metricMap = groupedByCompanyMetric[key]
-        const allPlans: Plan[] = Object.values(metricMap).flat()
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {MONTH_FULL.map((mLabel, idx) => {
+        const facts = periodFacts[idx]
+        const isClosed = year < new Date().getFullYear() || idx < todayMonth
+        const isCurrent = idx === todayMonth
+        const monthPlans = plans.filter((p) => p.period_kind === 'month' && p.period_start.slice(5, 7) === String(idx + 1).padStart(2, '0'))
+        const revenuePlan = monthPlans.find((p) => p.metric === 'revenue' && !p.company_id)
+        const profitPlan = monthPlans.find((p) => p.metric === 'profit' && !p.company_id)
+        const pct = revenuePlan && revenuePlan.target_amount > 0 ? Math.round((facts.revenue / revenuePlan.target_amount) * 1000) / 10 : null
+        const hasActivity = facts.revenue > 0 || facts.expenses > 0
         return (
-          <Card key={key} className="border-white/10 bg-card/70 p-5">
-            <h2 className="mb-3 text-sm font-semibold">{title}</h2>
-            <div className="space-y-1.5">
-              {allPlans.map((p) => (
-                <PlanRow key={p.id} plan={p} companies={companies} daily={daily} onDelete={onDelete} />
-              ))}
+          <button
+            key={idx}
+            type="button"
+            onClick={() => onOpenMonth(idx)}
+            className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition hover:scale-[1.02] hover:shadow-xl ${
+              isCurrent
+                ? 'border-violet-500/40 bg-gradient-to-br from-violet-500/[0.08] to-fuchsia-500/[0.04] hover:border-violet-500/60'
+                : isClosed
+                  ? 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
+                  : 'border-dashed border-white/10 bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">{mLabel}</p>
+              {isCurrent ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+                  <Sparkles className="h-3 w-3" /> Сейчас
+                </span>
+              ) : isClosed ? (
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Lock className="h-3 w-3" /> Закрыт
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Unlock className="h-3 w-3" /> Впереди
+                </span>
+              )}
             </div>
-          </Card>
+
+            {hasActivity ? (
+              <>
+                <div className="mt-3 space-y-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Выручка</span>
+                    <span className="text-lg font-bold tabular-nums text-emerald-300">
+                      {fmt(facts.revenue)} <span className="text-xs opacity-70">₸</span>
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-muted-foreground">Прибыль</span>
+                    <span className={`font-semibold tabular-nums ${facts.profit >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>
+                      {fmt(facts.profit)} ₸
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-muted-foreground">Маржа</span>
+                    <span className={`font-semibold ${facts.margin >= 0 ? 'text-violet-300' : 'text-rose-300'}`}>
+                      {facts.margin}%
+                    </span>
+                  </div>
+                </div>
+                {revenuePlan ? (
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground">План: {fmt(revenuePlan.target_amount)} ₸</span>
+                      <span className={pct! >= 100 ? 'text-emerald-300 font-bold' : 'text-amber-300 font-bold'}>{pct}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={`h-full ${pct! >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                        style={{ width: `${Math.min(100, pct || 0)}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 text-[10px] text-muted-foreground">План не задан</div>
+                )}
+              </>
+            ) : (
+              <div className="mt-3 text-xs text-muted-foreground">Активности пока нет</div>
+            )}
+          </button>
         )
       })}
     </div>
   )
 }
 
-function PlanRow({
-  plan,
+// ─── Period View (year/h1/h2) ──────────────────────────────────────────────
+
+function PeriodView({
+  tab,
+  facts,
+  plans,
   companies,
   daily,
+  year,
+  activeMetric,
+  setActiveMetric,
   onDelete,
 }: {
-  plan: Plan
+  tab: PeriodKind
+  facts: ReturnType<typeof computeFacts>
+  plans: Plan[]
   companies: Company[]
   daily: DailyAggregate[]
+  year: number
+  activeMetric: Metric
+  setActiveMetric: (m: Metric) => void
   onDelete: (id: string) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const target = Number(plan.target_amount || 0)
-  const fact = Number(plan.fact_value || 0)
-  const pct = target > 0 ? Math.round((fact / target) * 1000) / 10 : 0
-  const positive = pct >= 100
-  const company = plan.company_id ? companies.find((c) => c.id === plan.company_id) : null
-  const unit = metricUnit(plan.metric)
+  const periodPlans = plans.filter((p) => p.period_kind === tab)
+  const orgPlan = (metric: Metric) => periodPlans.find((p) => p.metric === metric && !p.company_id)
+  const { start, end } = periodBounds(tab, year)
 
+  const activePlan = orgPlan(activeMetric)
+  const targetValue = Number(activePlan?.target_amount || 0)
   const series = useMemo(
-    () => (expanded ? buildSeries({ plan, daily }) : []),
-    [expanded, plan, daily],
+    () => buildSeries({ daily, companyId: null, start, end, metric: activeMetric, target: targetValue }),
+    [daily, start, end, activeMetric, targetValue],
   )
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02]">
-      <div className="grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_120px_36px] items-center gap-3 px-3 py-2 text-sm">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-white/[0.04] hover:text-foreground"
-          title={expanded ? 'Свернуть график' : 'Показать график'}
-        >
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
-        <div className="min-w-0">
-          <p className="truncate font-medium">{metricLabel(plan.metric)}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {company ? company.name : 'Общий'}
-            {plan.is_closed ? ' · закрыт' : ''}
-          </p>
+    <div className="space-y-5">
+      {/* KPI hero row */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {METRICS.map((m) => {
+          const factValue = facts[m.value as keyof typeof facts] as number
+          const plan = orgPlan(m.value)?.target_amount
+          return (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setActiveMetric(m.value)}
+              className={`text-left transition ${activeMetric === m.value ? 'scale-[1.02]' : 'opacity-80 hover:opacity-100'}`}
+            >
+              <KpiCard metric={m.value} fact={factValue} plan={plan} large={activeMetric === m.value} />
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Динамика выбранной метрики */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Динамика: {metricMeta(activeMetric).label}</h2>
+          {activePlan ? (
+            <button onClick={() => onDelete(activePlan.id)} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2 py-1 text-xs text-rose-300 hover:bg-rose-500/10">
+              <Trash2 className="h-3.5 w-3.5" /> Удалить план
+            </button>
+          ) : null}
         </div>
-        <div className="text-right tabular-nums">
-          <p className="text-xs text-muted-foreground">План</p>
-          <p className="font-semibold">{fmt(target)} {unit}</p>
-        </div>
-        <div className="text-right tabular-nums">
-          <p className="text-xs text-muted-foreground">Факт</p>
-          <p className={`font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
-            {fmt(fact)} {unit}
-          </p>
-        </div>
-        <div>
-          <div className="flex items-center justify-end gap-2 tabular-nums">
-            <span className={`text-sm font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
-              {pct}%
-            </span>
-          </div>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
-            <div
-              className={`h-full transition-all ${positive ? 'bg-emerald-500' : 'bg-amber-500'}`}
-              style={{ width: `${Math.min(100, pct)}%` }}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => onDelete(plan.id)}
-            className="grid h-8 w-8 place-items-center rounded-lg text-rose-400 transition hover:bg-rose-500/10"
-            title="Удалить план"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={series}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
+              <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => activeMetric === 'margin' ? `${v}%` : activeMetric === 'checks' || activeMetric === 'avg_check' ? fmt(Number(v)) : `${Math.round(Number(v) / 1000)}k`} />
+              <Tooltip
+                formatter={(v: any) => v == null ? '—' : activeMetric === 'margin' ? `${v}%` : `${fmt(Number(v))} ${metricMeta(activeMetric).unit}`}
+                contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {targetValue > 0 ? (
+                <Line type="monotone" dataKey="Цель" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+              ) : null}
+              <Line type="monotone" dataKey="Факт" stroke={accentClasses(metricMeta(activeMetric).accent).fill} strokeWidth={2.5} dot={false} connectNulls={false} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
-      {expanded ? (
-        <div className="border-t border-white/[0.06] p-4">
-          <p className="mb-2 text-xs text-muted-foreground">
-            Кумулятивный факт по дням vs пропорциональная цель ·
-            {' '}{plan.period_start.slice(8, 10)}.{plan.period_start.slice(5, 7)} — {plan.period_end.slice(8, 10)}.{plan.period_end.slice(5, 7)}
-          </p>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={series}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
-                <YAxis
-                  stroke="rgba(255,255,255,0.45)"
-                  fontSize={10}
-                  tickFormatter={(v) => {
-                    if (plan.metric === 'margin') return `${v}%`
-                    if (plan.metric === 'checks' || plan.metric === 'avg_check') return fmt(Number(v))
-                    return `${Math.round(Number(v) / 1000)}k`
-                  }}
-                />
-                <Tooltip
-                  formatter={(v: any) => {
-                    if (v == null) return '—'
-                    if (plan.metric === 'margin') return `${v}%`
-                    return `${fmt(Number(v))} ${unit}`
-                  }}
-                  contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="Цель" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                <Line type="monotone" dataKey="Факт" stroke={positive ? '#10b981' : '#f59e0b'} strokeWidth={2.5} dot={false} connectNulls={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+
+      {/* По точкам */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">По точкам</h2>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {companies.map((c) => {
+            const f = computeFacts(daily, c.id, start, end)
+            const companyPlan = periodPlans.find((p) => p.metric === activeMetric && p.company_id === c.id)
+            return (
+              <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-sm font-semibold">{c.name}</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums">
+                  {fmt(f[activeMetric])}{' '}
+                  <span className="text-xs text-muted-foreground">{metricMeta(activeMetric).unit}</span>
+                </p>
+                {companyPlan ? (
+                  (() => {
+                    const pct = companyPlan.target_amount > 0 ? Math.round((f[activeMetric] / companyPlan.target_amount) * 1000) / 10 : 0
+                    return (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-muted-foreground">План {fmt(companyPlan.target_amount)} {metricMeta(activeMetric).unit}</span>
+                          <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div className={`h-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <p className="mt-2 text-[10px] text-muted-foreground">План не задан</p>
+                )}
+              </div>
+            )
+          })}
         </div>
-      ) : null}
+      </div>
     </div>
+  )
+}
+
+// ─── Month Detail Dialog ───────────────────────────────────────────────────
+
+function MonthDetailDialog({
+  year,
+  monthIdx,
+  facts,
+  plans,
+  companies,
+  daily,
+  onClose,
+  onDelete,
+}: {
+  year: number
+  monthIdx: number
+  facts: ReturnType<typeof computeFacts>
+  plans: Plan[]
+  companies: Company[]
+  daily: DailyAggregate[]
+  onClose: () => void
+  onDelete: (id: string) => void
+}) {
+  const [activeMetric, setActiveMetric] = useState<Metric>('revenue')
+  const { start, end } = periodBounds('month', year, monthIdx)
+  const orgPlan = plans.find((p) => p.metric === activeMetric && !p.company_id)
+  const targetValue = Number(orgPlan?.target_amount || 0)
+  const series = buildSeries({ daily, companyId: null, start, end, metric: activeMetric, target: targetValue })
+  const isCurrent = new Date().getFullYear() === year && new Date().getMonth() === monthIdx
+  const isClosed = year < new Date().getFullYear() || (year === new Date().getFullYear() && monthIdx < new Date().getMonth())
+
+  return (
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="!w-[96vw] !max-w-[1200px] flex h-[90vh] flex-col gap-0 overflow-hidden p-0">
+        <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-violet-500/[0.08] to-fuchsia-500/[0.04] px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg shadow-violet-500/30">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-lg font-bold">{MONTH_FULL[monthIdx]} {year}</p>
+              <p className="text-xs text-muted-foreground">
+                {isCurrent ? 'Текущий месяц — данные обновляются ежедневно' : isClosed ? 'Закрытый период' : 'Будущий период'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-white/[0.06] hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-6 space-y-5">
+          {/* KPI row */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {METRICS.map((m) => {
+              const factValue = facts[m.value as keyof typeof facts] as number
+              const planP = plans.find((p) => p.metric === m.value && !p.company_id)
+              return (
+                <button key={m.value} type="button" onClick={() => setActiveMetric(m.value)} className={`text-left transition ${activeMetric === m.value ? 'scale-[1.02]' : 'opacity-80 hover:opacity-100'}`}>
+                  <KpiCard metric={m.value} fact={factValue} plan={planP?.target_amount} large={activeMetric === m.value} />
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Chart */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Динамика по дням: {metricMeta(activeMetric).label}</h2>
+              {orgPlan ? (
+                <button onClick={() => onDelete(orgPlan.id)} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/20 px-2 py-1 text-xs text-rose-300 hover:bg-rose-500/10">
+                  <Trash2 className="h-3.5 w-3.5" /> Удалить план
+                </button>
+              ) : null}
+            </div>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={series}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={10} interval="preserveStartEnd" />
+                  <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => activeMetric === 'margin' ? `${v}%` : activeMetric === 'checks' || activeMetric === 'avg_check' ? fmt(Number(v)) : `${Math.round(Number(v) / 1000)}k`} />
+                  <Tooltip formatter={(v: any) => v == null ? '—' : activeMetric === 'margin' ? `${v}%` : `${fmt(Number(v))} ${metricMeta(activeMetric).unit}`} contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {targetValue > 0 ? <Line type="monotone" dataKey="Цель" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} /> : null}
+                  <Line type="monotone" dataKey="Факт" stroke={accentClasses(metricMeta(activeMetric).accent).fill} strokeWidth={2.5} dot={false} connectNulls={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* By company */}
+          {companies.length > 0 ? (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">По точкам</h2>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {companies.map((c) => {
+                  const f = computeFacts(daily, c.id, start, end)
+                  const companyPlan = plans.find((p) => p.metric === activeMetric && p.company_id === c.id)
+                  return (
+                    <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                      <p className="text-sm font-semibold">{c.name}</p>
+                      <p className="mt-2 text-xl font-bold tabular-nums">
+                        {fmt(f[activeMetric])} <span className="text-xs text-muted-foreground">{metricMeta(activeMetric).unit}</span>
+                      </p>
+                      {companyPlan ? (
+                        (() => {
+                          const pct = companyPlan.target_amount > 0 ? Math.round((f[activeMetric] / companyPlan.target_amount) * 1000) / 10 : 0
+                          return (
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-muted-foreground">План {fmt(companyPlan.target_amount)} {metricMeta(activeMetric).unit}</span>
+                                <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                                <div className={`h-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })()
+                      ) : (
+                        <p className="mt-2 text-[10px] text-muted-foreground">План не задан</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
