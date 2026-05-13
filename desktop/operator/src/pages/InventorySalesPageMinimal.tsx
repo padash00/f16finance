@@ -379,7 +379,9 @@ export default function InventorySalesPageMinimal({
     }))
   }, [cart])
 
-  // Customer display: пушим текущее состояние корзины в окно клиента (если открыто)
+  // Customer display: пушим текущее состояние корзины в окно клиента (если открыто).
+  // lastAddedId — id последней позиции в корзине, чтобы на экране клиента подсветить
+  // только что добавленное.
   useEffect(() => {
     try {
       window.electron.customerDisplay.push({
@@ -394,14 +396,22 @@ export default function InventorySalesPageMinimal({
             unit_price: l.unit_price,
             comment: l.comment || null,
           })),
+          lastAddedId: cart[cart.length - 1]?.id || null,
           subtotal,
           discount: discountAmount + loyaltyDiscountAmount,
           total: finalTotal,
           paymentMethod,
+          customer: selectedCustomer
+            ? {
+                name: selectedCustomer.name,
+                phone: selectedCustomer.phone,
+                loyaltyPoints: Number(selectedCustomer.loyalty_points || 0),
+              }
+            : null,
         },
       })
     } catch { /* customerDisplay API может отсутствовать в старых сборках */ }
-  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name])
+  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name, selectedCustomer])
 
   // Авто-добавление по штрихкоду / Enter
   function handleSearchSubmit() {
