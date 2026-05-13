@@ -458,15 +458,7 @@ export async function POST(req: Request) {
       area: 'api/admin/kpi-plans.POST',
       message: error?.message || 'error',
     })
-    return json({
-      error: humanizeDbError(error, 'Не удалось сохранить план'),
-      debug: {
-        code: String(error?.code || ''),
-        message: String(error?.message || ''),
-        details: String(error?.details || ''),
-        hint: String(error?.hint || ''),
-      },
-    }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось сохранить план') }, 500)
   }
 }
 
