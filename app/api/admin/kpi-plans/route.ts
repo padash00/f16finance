@@ -82,6 +82,11 @@ export async function GET(req: Request) {
     const yearEnd = `${year}-12-31`
     // На 1 день шире, чтоб поймать ночной kaspi с 31.12 прошлого года.
     const incomeFetchFrom = addDaysISO(yearStart, -1)
+    // Прошлогодний диапазон для сезонности.
+    const priorYear = year - 1
+    const priorYearStart = `${priorYear}-01-01`
+    const priorYearEnd = `${priorYear}-12-31`
+    const priorIncomeFrom = addDaysISO(priorYearStart, -1)
 
     // Companies
     let cq = supabase.from('companies').select('id, name, code').order('name')
@@ -176,6 +181,47 @@ export async function GET(req: Request) {
       await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/kpi-plans:point_sales', message: sErr?.message || 'sales fetch error' })
     }
 
+    // Прошлогодние факты — для сезонности и YoY. Тянем без жёсткой обвязки:
+    // если упадёт — просто отдадим пустые данные, не ломаем основную выдачу.
+    const buildPriorIncomesQ = () => {
+      let q = supabase
+        .from('incomes')
+        .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
+        .gte('date', priorIncomeFrom)
+        .lte('date', priorYearEnd)
+        .order('date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+    const buildPriorExpensesQ = () => {
+      let q = supabase
+        .from('expenses')
+        .select('date, company_id, cash_amount, kaspi_amount')
+        .gte('date', priorYearStart)
+        .lte('date', priorYearEnd)
+        .order('date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+    const buildPriorSalesQ = () => {
+      let q = supabase
+        .from('point_sales')
+        .select('sale_date, company_id, total_amount')
+        .gte('sale_date', priorYearStart)
+        .lte('sale_date', priorYearEnd)
+        .order('sale_date', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      return q
+    }
+
+    let priorIncomesRaw: any[] = []
+    let priorExpenses: any[] = []
+    let priorSales: any[] = []
+    try { priorIncomesRaw = await fetchAll<any>(buildPriorIncomesQ) } catch {}
+    try { priorExpenses = await fetchAll<any>(buildPriorExpensesQ) } catch {}
+    try { priorSales = await fetchAll<any>(buildPriorSalesQ) } catch {}
+    const priorIncomes = splitIncomeKaspiByCalendarDay(priorIncomesRaw as ReportIncomeCalendarRow[])
+
     // Агрегаторы: ключ '${companyId}|${start}|${end}' (companyId = '' для общего)
     const facts = computeFacts({
       incomes: (incomes || []) as any[],
@@ -234,6 +280,45 @@ export async function GET(req: Request) {
     for (const r of facts.sales) bump(r.date, r.company_id, { checks: 1, revenue: 0 })
     const dailyAggregates = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date))
 
+    // Прошлогодние месячные итоги — для сезонности и YoY.
+    // Формат: для каждой пары (company_id|null, month 1..12) — revenue/expenses/checks.
+    const priorFacts = computeFacts({
+      incomes: (priorIncomes || []) as any[],
+      expenses: (priorExpenses || []) as any[],
+      sales: (priorSales || []) as any[],
+    })
+    const priorMonthlyMap = new Map<string, {
+      company_id: string | null
+      month: number
+      revenue: number
+      expenses: number
+      checks: number
+    }>()
+    const monthOf = (date: string) => Number(String(date || '').slice(5, 7))
+    const bumpPrior = (m: number, companyId: string | null, patch: { revenue?: number; expenses?: number; checks?: number }) => {
+      if (m < 1 || m > 12) return
+      const key = `${companyId || 'org'}|${m}`
+      const cur = priorMonthlyMap.get(key) || { company_id: companyId, month: m, revenue: 0, expenses: 0, checks: 0 }
+      cur.revenue += patch.revenue || 0
+      cur.expenses += patch.expenses || 0
+      cur.checks += patch.checks || 0
+      priorMonthlyMap.set(key, cur)
+      if (companyId) {
+        const orgKey = `org|${m}`
+        const orgCur = priorMonthlyMap.get(orgKey) || { company_id: null, month: m, revenue: 0, expenses: 0, checks: 0 }
+        orgCur.revenue += patch.revenue || 0
+        orgCur.expenses += patch.expenses || 0
+        orgCur.checks += patch.checks || 0
+        priorMonthlyMap.set(orgKey, orgCur)
+      }
+    }
+    for (const r of priorFacts.incomes) bumpPrior(monthOf(r.date), r.company_id, { revenue: r.total })
+    for (const r of priorFacts.expenses) bumpPrior(monthOf(r.date), r.company_id, { expenses: r.total })
+    for (const r of priorFacts.sales) bumpPrior(monthOf(r.date), r.company_id, { checks: 1 })
+    const priorYearMonthly = Array.from(priorMonthlyMap.values()).sort((a, b) =>
+      (a.company_id || 'org').localeCompare(b.company_id || 'org') || a.month - b.month,
+    )
+
     return json({
       ok: true,
       data: {
@@ -241,6 +326,7 @@ export async function GET(req: Request) {
         companies: companies || [],
         plans: enrichedPlans,
         dailyAggregates,
+        priorYearMonthly,
       },
     })
   } catch (error: any) {

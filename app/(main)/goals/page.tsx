@@ -80,9 +80,23 @@ type DailyAggregate = {
   checks: number
 }
 
+type PriorMonthlyRow = {
+  company_id: string | null
+  month: number
+  revenue: number
+  expenses: number
+  checks: number
+}
+
 type ApiResponse = {
   ok: boolean
-  data?: { year: number; companies: Company[]; plans: Plan[]; dailyAggregates?: DailyAggregate[] }
+  data?: {
+    year: number
+    companies: Company[]
+    plans: Plan[]
+    dailyAggregates?: DailyAggregate[]
+    priorYearMonthly?: PriorMonthlyRow[]
+  }
   error?: string
 }
 
@@ -164,6 +178,103 @@ function enumerateDates(start: string, end: string): string[] {
   return out
 }
 
+// ─── «Умные» helpers: сезонность, run-rate, аллокация ──────────────────────
+
+/**
+ * Веса месяцев по прошлогодним фактам.
+ * Если данных за прошлый год по этой метрике нет → равномерно 1/12.
+ * Аддитивные метрики: revenue/expenses/checks. Для profit считаем revenue - expenses.
+ */
+function seasonalWeights(
+  priorMonthly: PriorMonthlyRow[],
+  metric: 'revenue' | 'profit' | 'checks',
+  companyId: string | null,
+): number[] {
+  const totals = new Array(12).fill(0) as number[]
+  for (const r of priorMonthly) {
+    if ((companyId == null && r.company_id !== null) || (companyId != null && r.company_id !== companyId)) continue
+    const m = r.month - 1
+    if (m < 0 || m > 11) continue
+    if (metric === 'revenue') totals[m] += r.revenue
+    else if (metric === 'profit') totals[m] += r.revenue - r.expenses
+    else if (metric === 'checks') totals[m] += r.checks
+  }
+  const sum = totals.reduce((s, v) => s + Math.max(0, v), 0)
+  if (sum <= 0) return new Array(12).fill(1 / 12)
+  return totals.map((v) => Math.max(0, v) / sum)
+}
+
+/**
+ * Доля каждой точки в общем (для аллокации общего плана по точкам).
+ * Берётся YTD выручка. Если её нет — fallback на прошлогоднюю выручку.
+ */
+function companyShares(
+  daily: DailyAggregate[],
+  priorMonthly: PriorMonthlyRow[],
+  companies: Company[],
+): Map<string, number> {
+  const shares = new Map<string, number>()
+  const ytd = new Map<string, number>()
+  let ytdTotal = 0
+  for (const r of daily) {
+    if (!r.company_id) continue
+    ytd.set(r.company_id, (ytd.get(r.company_id) || 0) + r.revenue)
+    ytdTotal += r.revenue
+  }
+  if (ytdTotal > 0) {
+    for (const c of companies) shares.set(c.id, (ytd.get(c.id) || 0) / ytdTotal)
+    return shares
+  }
+  // fallback на прошлый год
+  const prior = new Map<string, number>()
+  let priorTotal = 0
+  for (const r of priorMonthly) {
+    if (!r.company_id) continue
+    prior.set(r.company_id, (prior.get(r.company_id) || 0) + r.revenue)
+    priorTotal += r.revenue
+  }
+  if (priorTotal > 0) {
+    for (const c of companies) shares.set(c.id, (prior.get(c.id) || 0) / priorTotal)
+    return shares
+  }
+  // совсем нет данных — равные доли
+  for (const c of companies) shares.set(c.id, 1 / Math.max(1, companies.length))
+  return shares
+}
+
+/**
+ * Run-rate прогноз для текущего месяца.
+ * Берёт средний дневной факт по уже прошедшим дням и экстраполирует на всё число дней в месяце.
+ */
+function runRateForecast(params: {
+  daily: DailyAggregate[]
+  companyId: string | null
+  year: number
+  monthIdx: number
+  metric: 'revenue' | 'profit' | 'checks'
+}): { forecast: number; daysPassed: number; daysTotal: number; dailyAvg: number } | null {
+  const today = new Date()
+  const isCurrentMonth = today.getFullYear() === params.year && today.getMonth() === params.monthIdx
+  if (!isCurrentMonth) return null
+  const lastDay = new Date(params.year, params.monthIdx + 1, 0).getDate()
+  const daysPassed = Math.max(1, today.getDate())
+  let value = 0
+  const mm = String(params.monthIdx + 1).padStart(2, '0')
+  for (const r of params.daily) {
+    if (!r.date.startsWith(`${params.year}-${mm}-`)) continue
+    if (params.companyId == null) {
+      if (r.company_id !== null) continue
+    } else {
+      if (r.company_id !== params.companyId) continue
+    }
+    if (params.metric === 'revenue') value += r.revenue
+    else if (params.metric === 'profit') value += r.revenue - r.expenses
+    else if (params.metric === 'checks') value += r.checks
+  }
+  const dailyAvg = value / daysPassed
+  return { forecast: dailyAvg * lastDay, daysPassed, daysTotal: lastDay, dailyAvg }
+}
+
 function buildSeries(params: {
   daily: DailyAggregate[]
   companyId: string | null
@@ -241,6 +352,7 @@ export default function GoalsPage() {
     company_id: 'all' as string,
     revenue: '',
     expense: '',
+    distributeSeasonal: true, // для года: разлить по месяцам с учётом сезонности
   })
   const [saving, setSaving] = useState(false)
 
@@ -277,6 +389,7 @@ export default function GoalsPage() {
   const companies = data?.companies || []
   const plans = data?.plans || []
   const daily = data?.dailyAggregates || []
+  const priorMonthly = data?.priorYearMonthly || []
 
   // Факты для каждого периода и месяца — org-wide.
   const periodFacts = useMemo(() => {
@@ -336,25 +449,59 @@ export default function GoalsPage() {
         { metric: 'profit', target_amount: profit },
       ]
 
-      for (const p of payloads) {
-        const res = await fetch('/api/admin/kpi-plans', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            year,
-            period_kind: form.period_kind,
-            month_idx: form.period_kind === 'month' ? form.month_idx : undefined,
-            metric: p.metric,
-            company_id: companyId,
-            target_amount: p.target_amount,
-          }),
-        })
-        const j = await res.json().catch(() => null)
-        if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось сохранить')
+      // Сценарий 1: годовая цель + опция «распределить по сезонности» →
+      // создаём 12 месячных планов с весами из прошлогоднего факта.
+      const distribute = form.period_kind === 'year' && form.distributeSeasonal
+      if (distribute) {
+        const reqs: Array<Promise<Response>> = []
+        for (const p of payloads) {
+          const weights = seasonalWeights(priorMonthly, p.metric as 'revenue' | 'profit', companyId)
+          for (let m = 0; m < 12; m++) {
+            const share = Math.round(p.target_amount * weights[m])
+            if (share <= 0) continue
+            reqs.push(
+              fetch('/api/admin/kpi-plans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  year,
+                  period_kind: 'month',
+                  month_idx: m,
+                  metric: p.metric,
+                  company_id: companyId,
+                  target_amount: share,
+                }),
+              }),
+            )
+          }
+        }
+        const results = await Promise.all(reqs)
+        for (const r of results) {
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j?.ok) throw new Error(j?.error || 'Не удалось сохранить (распределение)')
+        }
+      } else {
+        // Сценарий 2: обычное сохранение в одном периоде.
+        for (const p of payloads) {
+          const res = await fetch('/api/admin/kpi-plans', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              year,
+              period_kind: form.period_kind,
+              month_idx: form.period_kind === 'month' ? form.month_idx : undefined,
+              metric: p.metric,
+              company_id: companyId,
+              target_amount: p.target_amount,
+            }),
+          })
+          const j = await res.json().catch(() => null)
+          if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось сохранить')
+        }
       }
 
-      setSuccess('Цель сохранена')
-      setTimeout(() => setSuccess(null), 2200)
+      setSuccess(distribute ? 'Цель сохранена и разлита по месяцам' : 'Цель сохранена')
+      setTimeout(() => setSuccess(null), 2400)
       setDialogOpen(false)
       setForm((f) => ({ ...f, revenue: '', expense: '' }))
       await load(undefined, { soft: true })
@@ -457,6 +604,7 @@ export default function GoalsPage() {
                 year={year}
                 periodFacts={periodFacts.months}
                 plans={plans}
+                daily={daily}
                 onOpenMonth={openMonthDetail}
               />
             ) : (
@@ -466,6 +614,7 @@ export default function GoalsPage() {
                 plans={plans}
                 companies={companies}
                 daily={daily}
+                priorMonthly={priorMonthly}
                 year={year}
                 activeMetric={activeMetric}
                 setActiveMetric={setActiveMetric}
@@ -484,6 +633,7 @@ export default function GoalsPage() {
             plans={plans.filter((p) => p.period_kind === 'month' && p.period_start.slice(5, 7) === String(selectedMonth + 1).padStart(2, '0'))}
             companies={companies}
             daily={daily}
+            priorMonthly={priorMonthly}
             onClose={() => setSelectedMonth(null)}
             onDelete={handleDelete}
           />
@@ -597,6 +747,52 @@ export default function GoalsPage() {
                   </div>
                 )
               })()}
+
+              {/* Сезонность: только для года */}
+              {form.period_kind === 'year' ? (() => {
+                const rev = parseMoneyInput(form.revenue) || 0
+                const exp = parseMoneyInput(form.expense) || 0
+                const prof = rev - exp
+                const companyId = form.company_id === 'all' ? null : form.company_id
+                const wRev = seasonalWeights(priorMonthly, 'revenue', companyId)
+                const wProf = seasonalWeights(priorMonthly, 'profit', companyId)
+                const hasPriorData = priorMonthly.some((r) => (companyId == null ? !r.company_id : r.company_id === companyId) && (r.revenue !== 0 || r.expenses !== 0))
+                return (
+                  <div className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-3 space-y-2">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.distributeSeasonal}
+                        onChange={(e) => setForm((f) => ({ ...f, distributeSeasonal: e.target.checked }))}
+                        className="mt-0.5 h-4 w-4 accent-violet-500"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-violet-200">Разлить по месяцам с учётом сезонности</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {hasPriorData
+                            ? `Веса берутся из факта ${year - 1} года. Создастся 12 месячных целей.`
+                            : `За ${year - 1} нет данных — разольётся равномерно (по 1/12).`}
+                        </p>
+                      </div>
+                    </label>
+                    {form.distributeSeasonal && rev > 0 ? (
+                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                        {MONTH_SHORT.map((mLabel, idx) => {
+                          const shareRev = Math.round(rev * wRev[idx])
+                          const shareProf = Math.round(prof * wProf[idx])
+                          return (
+                            <div key={idx} className="rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5 text-center">
+                              <p className="text-[9px] uppercase text-muted-foreground">{mLabel}</p>
+                              <p className="text-[11px] font-semibold tabular-nums text-emerald-300">{fmt(shareRev / 1000)}k</p>
+                              <p className="text-[10px] tabular-nums text-cyan-300">{fmt(shareProf / 1000)}k</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })() : null}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
@@ -675,11 +871,13 @@ function MonthGrid({
   year,
   periodFacts,
   plans,
+  daily,
   onOpenMonth,
 }: {
   year: number
   periodFacts: ReturnType<typeof computeFacts>[]
   plans: Plan[]
+  daily: DailyAggregate[]
   onOpenMonth: (idx: number) => void
 }) {
   const todayMonth = new Date().getFullYear() === year ? new Date().getMonth() : -1
@@ -694,6 +892,8 @@ function MonthGrid({
         const profitPlan = monthPlans.find((p) => p.metric === 'profit' && !p.company_id)
         const pct = revenuePlan && revenuePlan.target_amount > 0 ? Math.round((facts.revenue / revenuePlan.target_amount) * 1000) / 10 : null
         const hasActivity = facts.revenue > 0 || facts.expenses > 0
+        // Run-rate только для текущего месяца
+        const runRate = isCurrent ? runRateForecast({ daily, companyId: null, year, monthIdx: idx, metric: 'revenue' }) : null
         return (
           <button
             key={idx}
@@ -762,6 +962,23 @@ function MonthGrid({
                 ) : (
                   <div className="mt-3 text-[10px] text-muted-foreground">План не задан</div>
                 )}
+
+                {/* Run-rate прогноз для текущего месяца */}
+                {runRate ? (() => {
+                  const target = Number(revenuePlan?.target_amount || 0)
+                  const diff = target > 0 ? runRate.forecast - target : 0
+                  const onTrack = target > 0 ? runRate.forecast >= target : true
+                  return (
+                    <div className={`mt-2 rounded-lg border px-2 py-1.5 text-[10px] ${onTrack ? 'border-emerald-500/30 bg-emerald-500/[0.05] text-emerald-300' : 'border-amber-500/30 bg-amber-500/[0.05] text-amber-300'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">Прогноз: ~{fmt(runRate.forecast)} ₸</span>
+                        {target > 0 ? (
+                          <span className="font-bold">{onTrack ? `+${fmt(diff)}` : `−${fmt(-diff)}`}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })() : null}
               </>
             ) : (
               <div className="mt-3 text-xs text-muted-foreground">Активности пока нет</div>
@@ -781,6 +998,7 @@ function PeriodView({
   plans,
   companies,
   daily,
+  priorMonthly,
   year,
   activeMetric,
   setActiveMetric,
@@ -791,6 +1009,7 @@ function PeriodView({
   plans: Plan[]
   companies: Company[]
   daily: DailyAggregate[]
+  priorMonthly: PriorMonthlyRow[]
   year: number
   activeMetric: Metric
   setActiveMetric: (m: Metric) => void
@@ -836,6 +1055,23 @@ function PeriodView({
     () => buildSeries({ daily, companyId: null, start, end, metric: activeMetric, target: targetValue }),
     [daily, start, end, activeMetric, targetValue],
   )
+
+  // Доли точек (YTD → fallback на прошлый год)
+  const shares = useMemo(() => companyShares(daily, priorMonthly, companies), [daily, priorMonthly, companies])
+
+  // YoY для активной метрики (только аддитивные)
+  const yoyValue = (() => {
+    if (!ADDITIVE_METRICS.includes(activeMetric) || monthRange.length === 0) return null
+    const prior = priorMonthly
+      .filter((r) => !r.company_id && monthRange.includes(r.month))
+      .reduce((acc, r) => {
+        if (activeMetric === 'revenue') acc += r.revenue
+        else if (activeMetric === 'profit') acc += r.revenue - r.expenses
+        else if (activeMetric === 'checks') acc += r.checks
+        return acc
+      }, 0)
+    return prior > 0 ? prior : null
+  })()
 
   return (
     <div className="space-y-5">
@@ -887,6 +1123,26 @@ function PeriodView({
         </div>
       </div>
 
+      {/* YoY insight (если есть прошлогодний факт) */}
+      {yoyValue ? (() => {
+        const factValue = facts[activeMetric as keyof typeof facts] as number
+        const yoyDelta = ((factValue - yoyValue) / yoyValue) * 100
+        const positive = yoyDelta >= 0
+        return (
+          <div className={`rounded-2xl border p-4 ${positive ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-rose-500/30 bg-rose-500/[0.05]'}`}>
+            <div className="flex items-center gap-2">
+              {positive ? <TrendingUp className="h-4 w-4 text-emerald-300" /> : <TrendingDown className="h-4 w-4 text-rose-300" />}
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Год к году: {fmt(yoyValue)} → {fmt(factValue)} {metricMeta(activeMetric).unit}
+              </p>
+              <span className={`ml-auto text-lg font-bold tabular-nums ${positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {positive ? '+' : ''}{yoyDelta.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        )
+      })() : null}
+
       {/* По точкам */}
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-muted-foreground">По точкам</h2>
@@ -894,9 +1150,8 @@ function PeriodView({
           {companies.map((c) => {
             const f = computeFacts(daily, c.id, start, end)
             const ct = effectiveTarget(activeMetric, c.id)
-            const orgFactValue = facts[activeMetric as keyof typeof facts] as number
-            const sharePct = orgFactValue > 0 ? Math.round((Number(f[activeMetric]) / orgFactValue) * 1000) / 10 : 0
-            const orgHasPlan = activeTarget.value > 0
+            const share = shares.get(c.id) || 0
+            const allocated = ct.value <= 0 && activeTarget.value > 0 ? Math.round(activeTarget.value * share) : 0
             return (
               <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                 <p className="text-sm font-semibold">{c.name}</p>
@@ -922,11 +1177,24 @@ function PeriodView({
                       </div>
                     )
                   })()
-                ) : orgHasPlan ? (
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>В общем плане</span>
-                    <span className="text-violet-300 font-semibold">{sharePct}%</span>
-                  </div>
+                ) : allocated > 0 ? (
+                  (() => {
+                    const pct = Math.round((Number(f[activeMetric]) / allocated) * 1000) / 10
+                    return (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-muted-foreground">
+                            Доля {fmt(allocated)} {metricMeta(activeMetric).unit}
+                            <span className="ml-1 text-violet-300">({Math.round(share * 100)}%)</span>
+                          </span>
+                          <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div className={`h-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })()
                 ) : (
                   <p className="mt-2 text-[10px] text-muted-foreground">План не задан</p>
                 )}
@@ -948,6 +1216,7 @@ function MonthDetailDialog({
   plans,
   companies,
   daily,
+  priorMonthly,
   onClose,
   onDelete,
 }: {
@@ -957,6 +1226,7 @@ function MonthDetailDialog({
   plans: Plan[]
   companies: Company[]
   daily: DailyAggregate[]
+  priorMonthly: PriorMonthlyRow[]
   onClose: () => void
   onDelete: (id: string) => void
 }) {
@@ -967,6 +1237,29 @@ function MonthDetailDialog({
   const series = buildSeries({ daily, companyId: null, start, end, metric: activeMetric, target: targetValue })
   const isCurrent = new Date().getFullYear() === year && new Date().getMonth() === monthIdx
   const isClosed = year < new Date().getFullYear() || (year === new Date().getFullYear() && monthIdx < new Date().getMonth())
+
+  // Run-rate прогноз (только для текущего месяца, аддитивных метрик)
+  const ADDITIVE: Metric[] = ['revenue', 'profit', 'checks']
+  const runRate = ADDITIVE.includes(activeMetric)
+    ? runRateForecast({ daily, companyId: null, year, monthIdx, metric: activeMetric as 'revenue' | 'profit' | 'checks' })
+    : null
+
+  // Аллокация общего плана по точкам по долям выручки (YTD / прошлый год)
+  const shares = useMemo(() => companyShares(daily, priorMonthly, companies), [daily, priorMonthly, companies])
+
+  // YoY: тот же месяц год назад (для аддитивных метрик)
+  const yoyValue = (() => {
+    if (!ADDITIVE.includes(activeMetric)) return null
+    const prior = priorMonthly
+      .filter((r) => r.month === monthIdx + 1 && !r.company_id)
+      .reduce((acc, r) => {
+        if (activeMetric === 'revenue') acc += r.revenue
+        else if (activeMetric === 'profit') acc += r.revenue - r.expenses
+        else if (activeMetric === 'checks') acc += r.checks
+        return acc
+      }, 0)
+    return prior > 0 ? prior : null
+  })()
 
   return (
     <Dialog open={true} onOpenChange={(open) => { if (!open) onClose() }}>
@@ -1006,6 +1299,55 @@ function MonthDetailDialog({
             })}
           </div>
 
+          {/* Smart insights row (run-rate + YoY) */}
+          {(runRate || yoyValue) ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {runRate ? (() => {
+                const factValue = facts[activeMetric as keyof typeof facts] as number
+                const diff = targetValue > 0 ? runRate.forecast - targetValue : 0
+                const onTrack = targetValue > 0 ? runRate.forecast >= targetValue : true
+                return (
+                  <div className={`rounded-2xl border p-4 ${onTrack ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-amber-500/30 bg-amber-500/[0.05]'}`}>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className={`h-4 w-4 ${onTrack ? 'text-emerald-300' : 'text-amber-300'}`} />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Run-rate прогноз</p>
+                    </div>
+                    <p className={`mt-2 text-2xl font-bold tabular-nums ${onTrack ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      ~ {fmt(runRate.forecast)} <span className="text-xs opacity-70">{metricMeta(activeMetric).unit}</span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      При текущем темпе ({fmt(runRate.dailyAvg)} /день за {runRate.daysPassed} дн) к {String(runRate.daysTotal).padStart(2,'0')}.{String(monthIdx + 1).padStart(2,'0')}
+                    </p>
+                    {targetValue > 0 ? (
+                      <p className={`mt-1 text-[11px] font-semibold ${onTrack ? 'text-emerald-300' : 'text-amber-300'}`}>
+                        {onTrack ? `Перевыполнение +${fmt(diff)}` : `Недобор ${fmt(-diff)}`} {metricMeta(activeMetric).unit}
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              })() : null}
+              {yoyValue ? (() => {
+                const factValue = facts[activeMetric as keyof typeof facts] as number
+                const yoyDelta = ((factValue - yoyValue) / yoyValue) * 100
+                const positive = yoyDelta >= 0
+                return (
+                  <div className={`rounded-2xl border p-4 ${positive ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-rose-500/30 bg-rose-500/[0.05]'}`}>
+                    <div className="flex items-center gap-2">
+                      {positive ? <TrendingUp className="h-4 w-4 text-emerald-300" /> : <TrendingDown className="h-4 w-4 text-rose-300" />}
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">YoY ({MONTH_FULL[monthIdx]} {year - 1})</p>
+                    </div>
+                    <p className={`mt-2 text-2xl font-bold tabular-nums ${positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      {positive ? '+' : ''}{yoyDelta.toFixed(1)}%
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Было {fmt(yoyValue)} {metricMeta(activeMetric).unit} → стало {fmt(factValue)} {metricMeta(activeMetric).unit}
+                    </p>
+                  </div>
+                )
+              })() : null}
+            </div>
+          ) : null}
+
           {/* Chart */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <div className="mb-3 flex items-center justify-between">
@@ -1039,9 +1381,9 @@ function MonthDetailDialog({
                 {companies.map((c) => {
                   const f = computeFacts(daily, c.id, start, end)
                   const companyPlan = plans.find((p) => p.metric === activeMetric && p.company_id === c.id)
-                  const orgFactValue = facts[activeMetric as keyof typeof facts] as number
                   const orgTarget = Number(orgPlan?.target_amount || 0)
-                  const sharePct = orgFactValue > 0 ? Math.round((Number(f[activeMetric]) / orgFactValue) * 1000) / 10 : 0
+                  const share = shares.get(c.id) || 0
+                  const allocated = orgTarget > 0 ? Math.round(orgTarget * share) : 0
                   return (
                     <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                       <p className="text-sm font-semibold">{c.name}</p>
@@ -1063,11 +1405,24 @@ function MonthDetailDialog({
                             </div>
                           )
                         })()
-                      ) : orgTarget > 0 ? (
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
-                          <span>В общем плане</span>
-                          <span className="text-violet-300 font-semibold">{sharePct}%</span>
-                        </div>
+                      ) : allocated > 0 ? (
+                        (() => {
+                          const pct = Math.round((Number(f[activeMetric]) / allocated) * 1000) / 10
+                          return (
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-muted-foreground">
+                                  Доля {fmt(allocated)} {metricMeta(activeMetric).unit}
+                                  <span className="ml-1 text-violet-300">({Math.round(share * 100)}%)</span>
+                                </span>
+                                <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                                <div className={`h-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })()
                       ) : (
                         <p className="mt-2 text-[10px] text-muted-foreground">План не задан</p>
                       )}
