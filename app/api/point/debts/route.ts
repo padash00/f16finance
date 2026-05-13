@@ -428,7 +428,20 @@ export async function POST(request: Request) {
         p_created_by_operator_id: createdByOperatorId,
       })
 
-      if (insertError) throw insertError
+      if (insertError) {
+        const msg = String(insertError.message || '')
+        if (msg.includes('inventory-debt-insufficient-stock')) {
+          // Парсим сообщение: "inventory-debt-insufficient-stock: <name> (showcase: <qty>, requested: <qty>)"
+          const match = msg.match(/showcase:\s*(\S+),\s*requested:\s*(\S+)/i)
+          const have = match?.[1] ?? '?'
+          const want = match?.[2] ?? '?'
+          return json({ error: `На витрине ${have} шт., запрошено ${want}. Сначала добавьте товар на витрину.` }, 409)
+        }
+        if (msg.includes('inventory-debt-quantity-invalid')) {
+          return json({ error: 'Количество в долге должно быть больше 0' }, 400)
+        }
+        throw insertError
+      }
 
       const createdId = Array.isArray(createdRpc) ? createdRpc[0]?.debt_item_id : createdRpc?.debt_item_id
       const createdInventoryItemId = Array.isArray(createdRpc)
