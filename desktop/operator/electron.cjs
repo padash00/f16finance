@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-const { app, BrowserWindow, ipcMain, dialog, session, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, session, shell, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
@@ -333,6 +333,93 @@ function createWindow() {
   mainWindow.focus()
 }
 
+// ─── Customer display (второй монитор для клиента) ───────────────────────────
+
+let customerWindow = null
+
+function findExternalDisplay() {
+  const all = screen.getAllDisplays()
+  if (all.length <= 1) return null
+  let primaryId = null
+  try { primaryId = screen.getPrimaryDisplay()?.id } catch { /* noop */ }
+  const main = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null
+  const mainDisplay = main ? screen.getDisplayMatching(main) : null
+  // Возвращаем первый дисплей, отличный от того, где сидит operator-окно
+  const external = all.find((d) => {
+    if (mainDisplay && d.id === mainDisplay.id) return false
+    if (!mainDisplay && primaryId && d.id === primaryId) return false
+    return true
+  })
+  return external || null
+}
+
+function isCustomerDisplayAvailable() {
+  return !!findExternalDisplay()
+}
+
+function openCustomerDisplay() {
+  if (customerWindow && !customerWindow.isDestroyed()) {
+    customerWindow.show()
+    return { ok: true, alreadyOpen: true }
+  }
+  const display = findExternalDisplay()
+  if (!display) return { ok: false, reason: 'no-external-display' }
+
+  customerWindow = new BrowserWindow({
+    x: display.bounds.x,
+    y: display.bounds.y,
+    width: display.bounds.width,
+    height: display.bounds.height,
+    fullscreen: true,
+    frame: false,
+    backgroundColor: '#0f172a',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      webSecurity: true,
+    },
+  })
+
+  customerWindow.setMenu(null)
+  // Не блокирует operator-окно
+  customerWindow.setAlwaysOnTop(false)
+
+  const urlSuffix = '?role=customer'
+  if (isDev) {
+    customerWindow.loadURL(`http://localhost:5173/${urlSuffix}`)
+  } else {
+    customerWindow.loadFile(path.join(__dirname, 'dist/index.html'), {
+      search: urlSuffix,
+    })
+  }
+
+  customerWindow.on('closed', () => {
+    customerWindow = null
+  })
+
+  return { ok: true }
+}
+
+function closeCustomerDisplay() {
+  if (customerWindow && !customerWindow.isDestroyed()) {
+    customerWindow.close()
+  }
+  customerWindow = null
+  return { ok: true }
+}
+
+ipcMain.handle('customer-display:available', () => isCustomerDisplayAvailable())
+ipcMain.handle('customer-display:open', () => openCustomerDisplay())
+ipcMain.handle('customer-display:close', () => closeCustomerDisplay())
+ipcMain.on('customer-display:push', (_event, payload) => {
+  if (customerWindow && !customerWindow.isDestroyed()) {
+    customerWindow.webContents.send('customer-display:state', payload)
+  }
+})
+
 app.on('second-instance', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore()
@@ -420,6 +507,13 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  if (customerWindow && !customerWindow.isDestroyed()) {
+    try { customerWindow.destroy() } catch { /* ignore */ }
+    customerWindow = null
+  }
 })
 
 // ─── Config ──────────────────────────────────────────────────────────────────

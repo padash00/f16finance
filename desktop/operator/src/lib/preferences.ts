@@ -9,6 +9,7 @@ export type FontSize = 'sm' | 'md' | 'lg' | 'xl'
 const KEY_THEME = 'orda.theme'
 const KEY_FONT = 'orda.fontSize'
 const KEY_SOUND = 'orda.soundEnabled'
+const KEY_CUSTOMER_DISPLAY = 'orda.customerDisplay'
 
 export function getTheme(): Theme {
   if (typeof window === 'undefined') return 'dark'
@@ -68,8 +69,24 @@ export function setSoundEnabled(enabled: boolean) {
   window.localStorage.setItem(KEY_SOUND, enabled ? '1' : '0')
 }
 
+export function isCustomerDisplayEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(KEY_CUSTOMER_DISPLAY) === '1'
+}
+
+export function setCustomerDisplayEnabled(enabled: boolean) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(KEY_CUSTOMER_DISPLAY, enabled ? '1' : '0')
+}
+
 /** Применить все настройки при старте программы */
 export function applyAllPreferences() {
   applyTheme()
   applyFontSize()
+  // Customer display — открыть второе окно если включено в настройках и есть внешний монитор
+  if (typeof window !== 'undefined' && isCustomerDisplayEnabled()) {
+    try {
+      void window.electron?.customerDisplay?.open?.()
+    } catch { /* ignore */ }
+  }
 }

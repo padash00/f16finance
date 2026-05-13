@@ -41,4 +41,15 @@ contextBridge.exposeInMainWorld('electron', {
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   },
+  customerDisplay: {
+    available: () => ipcRenderer.invoke('customer-display:available'),
+    open: () => ipcRenderer.invoke('customer-display:open'),
+    close: () => ipcRenderer.invoke('customer-display:close'),
+    push: (state) => ipcRenderer.send('customer-display:push', state),
+    onState: (callback) => {
+      const handler = (_, state) => callback(state)
+      ipcRenderer.on('customer-display:state', handler)
+      return () => ipcRenderer.removeListener('customer-display:state', handler)
+    },
+  },
 })

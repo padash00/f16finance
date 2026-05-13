@@ -3,8 +3,8 @@
  * Открывается через шестерёнку в шапке.
  */
 
-import { useState, useEffect } from 'react'
-import { Sun, Moon, Monitor, Volume2, VolumeX, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { MonitorSmartphone, Sun, Moon, Monitor, Volume2, VolumeX, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +16,10 @@ import {
   setFontSize,
   isSoundEnabled,
   setSoundEnabled,
+  isCustomerDisplayEnabled,
+  setCustomerDisplayEnabled,
 } from '@/lib/preferences'
+import { toastError, toastSuccess } from '@/lib/toast'
 
 type PreferencesModalProps = {
   open: boolean
@@ -27,6 +30,8 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [fontSize, setFontSizeState] = useState<FontSize>(getFontSize())
   const [sound, setSound] = useState<boolean>(isSoundEnabled())
+  const [customerDisplay, setCustomerDisplay] = useState<boolean>(isCustomerDisplayEnabled())
+  const [customerDisplayAvailable, setCustomerDisplayAvailable] = useState<boolean>(false)
 
   useEffect(() => {
     if (!open) return
@@ -36,6 +41,15 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
+
+  useEffect(() => {
+    if (!open) return
+    try {
+      void window.electron?.customerDisplay?.available?.().then(setCustomerDisplayAvailable)
+    } catch {
+      setCustomerDisplayAvailable(false)
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -50,6 +64,33 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
   const onSoundChange = (s: boolean) => {
     setSound(s)
     setSoundEnabled(s)
+  }
+
+  const onCustomerDisplayChange = async (next: boolean) => {
+    if (next) {
+      try {
+        const result = await window.electron?.customerDisplay?.open?.()
+        if (!result?.ok) {
+          toastError(
+            result?.reason === 'no-external-display'
+              ? 'Второй монитор не подключён. Включите режим расширения экранов в настройках Windows.'
+              : 'Не удалось открыть экран клиента',
+          )
+          return
+        }
+        setCustomerDisplay(true)
+        setCustomerDisplayEnabled(true)
+        toastSuccess('Экран клиента открыт на втором мониторе')
+      } catch (err: any) {
+        toastError(err?.message || 'Ошибка открытия экрана клиента')
+      }
+    } else {
+      try {
+        await window.electron?.customerDisplay?.close?.()
+      } catch { /* ignore */ }
+      setCustomerDisplay(false)
+      setCustomerDisplayEnabled(false)
+    }
   }
 
   return (
@@ -138,6 +179,33 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
               <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${sound ? 'left-6' : 'left-0.5'}`} />
             </div>
           </button>
+        </div>
+
+        {/* Customer display */}
+        <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <p className="mb-3 text-sm font-medium">Экран клиента (второй монитор)</p>
+          <button
+            onClick={() => void onCustomerDisplayChange(!customerDisplay)}
+            disabled={!customerDisplayAvailable && !customerDisplay}
+            className={`flex w-full items-center justify-between rounded-xl border-2 px-4 py-3 transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              customerDisplay
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                : 'border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <MonitorSmartphone className="h-5 w-5" />
+              {customerDisplay ? 'Окно клиента открыто' : 'Окно клиента отключено'}
+            </span>
+            <div className={`relative h-6 w-12 rounded-full transition ${customerDisplay ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+              <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${customerDisplay ? 'left-6' : 'left-0.5'}`} />
+            </div>
+          </button>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {customerDisplayAvailable
+              ? 'Второй монитор обнаружен. На нём появится экран с корзиной и итогом для клиента.'
+              : 'Второй монитор не подключён или работает в режиме «Дублировать». В настройках Windows выберите «Расширить эти экраны».'}
+          </p>
         </div>
 
         {/* Footer */}

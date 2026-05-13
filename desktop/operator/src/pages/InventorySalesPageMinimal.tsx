@@ -379,6 +379,30 @@ export default function InventorySalesPageMinimal({
     }))
   }, [cart])
 
+  // Customer display: пушим текущее состояние корзины в окно клиента (если открыто)
+  useEffect(() => {
+    try {
+      window.electron.customerDisplay.push({
+        kind: 'update',
+        state: {
+          companyName: session.company?.name || null,
+          operatorName: operatorName || null,
+          cart: cart.map((l) => ({
+            id: l.id,
+            name: l.name,
+            quantity: l.quantity,
+            unit_price: l.unit_price,
+            comment: l.comment || null,
+          })),
+          subtotal,
+          discount: discountAmount + loyaltyDiscountAmount,
+          total: finalTotal,
+          paymentMethod,
+        },
+      })
+    } catch { /* customerDisplay API может отсутствовать в старых сборках */ }
+  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name])
+
   // Авто-добавление по штрихкоду / Enter
   function handleSearchSubmit() {
     const q = search.trim()
@@ -784,6 +808,24 @@ export default function InventorySalesPageMinimal({
     const customerSnapshot = selectedCustomer
     const commentSnapshot = comment
     showReceiptPreview(ref) // чек с временным local_ref
+    // Customer display: показать «Спасибо!»
+    try {
+      window.electron.customerDisplay.push({
+        kind: 'paid',
+        total: finalTotal,
+        paymentLabel:
+          paymentMethod === 'cash'
+            ? 'Оплата наличными'
+            : paymentMethod === 'kaspi'
+              ? `Оплата ${cashLabels.providerName}`
+              : 'Смешанная оплата',
+        lines: cartSnapshot.map((l) => ({
+          name: l.name,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+        })),
+      })
+    } catch { /* customerDisplay API недоступен — игнорируем */ }
     clearAll()
     setShowPayConfirm(false)
     setSaving(false) // оптимистично — оператор может работать дальше

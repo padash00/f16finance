@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import CustomerDisplay from './pages/CustomerDisplay'
 import Toaster from './components/Toaster'
 import { applyAllPreferences } from './lib/preferences'
 import './index.css'
@@ -15,9 +16,19 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 })
 
+// Электрон открывает второе окно с ?role=customer — там рендерим экран клиента,
+// а не основную операторскую программу.
+const role = new URLSearchParams(window.location.search).get('role')
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
-    <Toaster />
+    {role === 'customer' ? (
+      <CustomerDisplay />
+    ) : (
+      <>
+        <App />
+        <Toaster />
+      </>
+    )}
   </React.StrictMode>,
 )

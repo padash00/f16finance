@@ -67,6 +67,13 @@ declare global {
       shell: {
         openExternal: (url: string) => Promise<void>
       }
+      customerDisplay: {
+        available: () => Promise<boolean>
+        open: () => Promise<{ ok: boolean; reason?: string; alreadyOpen?: boolean }>
+        close: () => Promise<{ ok: boolean }>
+        push: (state: unknown) => void
+        onState: (callback: (state: unknown) => void) => () => void
+      }
     }
   }
 }
