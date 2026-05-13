@@ -361,7 +361,7 @@ export default function GoalsPage() {
   }
 
   return (
-    <div className="relative">
+    <div className="app-page-wide relative">
       {/* Декоративные акценты */}
       <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
