@@ -96,14 +96,17 @@ export async function GET(req: Request) {
     if (companiesError) throw companiesError
 
     // ── Incomes (текущий + прошлый год для YoY) ─────────────────────────────
-    // Подтягиваем lat-night-split поля (shift + kaspi_before_midnight), чтобы
+    // Подтягиваем late-night-split поля (shift + kaspi_before_midnight), чтобы
     // потом применить splitIncomeKaspiByCalendarDay — иначе ночной kaspi из
     // последнего дня предыдущего года не уйдёт в 1 января текущего.
+    // PAGE = 50000 — иначе Supabase по умолчанию режет до 1000.
+    const PAGE = 50000
     let incomesQuery = supabase
       .from('incomes')
       .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
       .gte('date', incomeFetchFrom)
       .lte('date', yearEnd)
+      .range(0, PAGE - 1)
     if (companyScope.allowedCompanyIds !== null) {
       incomesQuery = incomesQuery.in('company_id', companyScope.allowedCompanyIds)
     }
@@ -117,6 +120,7 @@ export async function GET(req: Request) {
       .select('date, company_id, cash_amount, kaspi_amount')
       .gte('date', yearStart)
       .lte('date', yearEnd)
+      .range(0, PAGE - 1)
     if (companyScope.allowedCompanyIds !== null) {
       expensesQuery = expensesQuery.in('company_id', companyScope.allowedCompanyIds)
     }
@@ -136,6 +140,7 @@ export async function GET(req: Request) {
       .select('sale_date, company_id, total_amount')
       .gte('sale_date', yearStart)
       .lte('sale_date', yearEnd)
+      .range(0, PAGE - 1)
     if (companyScope.allowedCompanyIds !== null) {
       salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
     }

@@ -102,11 +102,15 @@ export async function GET(req: Request) {
     if (pErr) throw pErr
 
     // Facts — incomes/expenses/point_sales за год (с late-night kaspi split).
+    // ВАЖНО: Supabase по умолчанию возвращает 1000 строк, поэтому ставим .range
+    // — иначе расходы за активный год недосчитываются и прибыль завышается.
+    const PAGE = 50000
     let incomesQ = supabase
       .from('incomes')
       .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, card_amount, online_amount, comment')
       .gte('date', incomeFetchFrom)
       .lte('date', yearEnd)
+      .range(0, PAGE - 1)
     if (companyScope.allowedCompanyIds !== null) incomesQ = incomesQ.in('company_id', companyScope.allowedCompanyIds)
     const { data: rawIncomes, error: iErr } = await incomesQ
     if (iErr) throw iErr
@@ -117,6 +121,7 @@ export async function GET(req: Request) {
       .select('date, company_id, cash_amount, kaspi_amount')
       .gte('date', yearStart)
       .lte('date', yearEnd)
+      .range(0, PAGE - 1)
     if (companyScope.allowedCompanyIds !== null) expensesQ = expensesQ.in('company_id', companyScope.allowedCompanyIds)
     const { data: expenses, error: eErr } = await expensesQ
     if (eErr) {
@@ -128,6 +133,7 @@ export async function GET(req: Request) {
       .select('sale_date, company_id, total_amount')
       .gte('sale_date', yearStart)
       .lte('sale_date', yearEnd)
+      .range(0, PAGE - 1)
     if (companyScope.allowedCompanyIds !== null) salesQ = salesQ.in('company_id', companyScope.allowedCompanyIds)
     const { data: sales, error: sErr } = await salesQ
     if (sErr) {
