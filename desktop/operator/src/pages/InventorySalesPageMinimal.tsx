@@ -319,9 +319,11 @@ export default function InventorySalesPageMinimal({
   // Operator name
   const operatorName = useMemo(() => {
     return (
-      session.operator?.full_name ||
-      session.operator?.short_name ||
-      bootstrap?.operatorName ||
+      session.operator?.full_name?.trim() ||
+      session.operator?.name?.trim() ||
+      session.operator?.short_name?.trim() ||
+      session.operator?.username?.trim() ||
+      bootstrap?.operatorName?.trim() ||
       'Оператор'
     )
   }, [session, bootstrap])
