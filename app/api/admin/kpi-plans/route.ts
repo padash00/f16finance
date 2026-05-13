@@ -330,9 +330,10 @@ export async function POST(req: Request) {
       // Legacy-колонки (могут существовать в части БД):
       plan_key: planKey,
       month_start: start, // legacy: совпадает с period_start
+      entity_type: 'kpi_plan', // legacy-тег типа записи
     }
 
-    const optionalLegacyCols = ['plan_key', 'month_start']
+    const optionalLegacyCols = ['plan_key', 'month_start', 'entity_type']
     let attempt: Record<string, unknown> = { ...insertPayload }
     let inserted: any = null
     while (true) {
