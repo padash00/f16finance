@@ -35,6 +35,7 @@ export interface BootstrapOperator {
 }
 
 export interface BootstrapData {
+  operatorName?: string | null
   device: {
     id: string
     name: string
@@ -170,7 +171,15 @@ export interface DebtItem {
 
 export interface QueueItem {
   id: number
-  type: 'shift_report' | 'create_debt' | 'delete_debt'
+  type:
+    | 'shift_report'
+    | 'close_shift'
+    | 'create_debt'
+    | 'delete_debt'
+    | 'inventory_sale'
+    | 'inventory_return'
+    | 'inventory_request'
+    | 'checklist_run'
   payload: Record<string, unknown>
   status: 'pending' | 'processing' | 'failed'
   local_ref: string | null
@@ -364,6 +373,8 @@ export interface PointInventoryRequestRow {
   decision_comment: string | null
   created_at: string
   approved_at: string | null
+  issued_at?: string | null
+  received_at?: string | null
   items?: Array<{
     id: string
     requested_qty: number
@@ -489,6 +500,7 @@ export interface LoyaltyConfig {
   tenge_per_point: number
   min_points_to_redeem: number
   max_redeem_percent: number
+  max_redeem_percent_per_purchase?: number
   is_active: boolean
 }
 
@@ -552,6 +564,7 @@ export interface ArenaSession {
   point_project_id: string
   station_id: string
   tariff_id: string | null
+  shift_id?: string | null
   operator_id: string | null
   started_at: string
   ends_at: string
@@ -561,5 +574,9 @@ export interface ArenaSession {
   payment_method: 'cash' | 'kaspi' | 'mixed'
   cash_amount: number
   kaspi_amount: number
+  refund_amount?: number
+  refund_cash_amount?: number
+  refund_kaspi_amount?: number
+  refund_at?: string | null
   discount_percent: number
 }

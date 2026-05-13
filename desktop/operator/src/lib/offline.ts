@@ -19,6 +19,19 @@ export async function queueShiftReport(
   return result.id
 }
 
+export async function queueClosePointShift(
+  payload: Record<string, unknown>,
+  companyId?: string | null,
+): Promise<number> {
+  const ref = localRef()
+  const result = await ipc.queue.add({
+    type: 'close_shift',
+    payload: { ...payload, _company_id: companyId || null },
+    localRef: ref,
+  })
+  return result.id
+}
+
 export async function queueCreateDebt(
   payload: Record<string, unknown>,
   companyId?: string | null,
@@ -143,13 +156,13 @@ export async function getPendingCount(): Promise<number> {
 }
 
 export async function getPendingItems(): Promise<QueueItem[]> {
-  return ipc.queue.list({ status: 'pending' })
+  return (await ipc.queue.list({ status: 'pending' })) as QueueItem[]
 }
 
 // ─── Sync engine ──────────────────────────────────────────────────────────────
 
 export async function syncQueue(config: AppConfig): Promise<{ synced: number; failed: number }> {
-  const items: QueueItem[] = await ipc.queue.list({ status: 'pending' })
+  const items = (await ipc.queue.list({ status: 'pending' })) as QueueItem[]
   let synced = 0
   let failed = 0
 
@@ -181,6 +194,13 @@ async function processQueueItem(config: AppConfig, item: QueueItem): Promise<voi
 
   if (item.type === 'shift_report') {
     await api.sendShiftReport(config, p as unknown as ShiftForm, String(p.local_ref || ''), companyId)
+    return
+  }
+
+  if (item.type === 'close_shift') {
+    const cleanPayload = { ...p }
+    delete cleanPayload._company_id
+    await api.closePointShift(config, cleanPayload as any, companyId)
     return
   }
 
@@ -252,4 +272,3 @@ async function processQueueItem(config: AppConfig, item: QueueItem): Promise<voi
     return
   }
 }
-

@@ -29,6 +29,7 @@ interface Props {
   onLogout: () => void
   onSwitchToShift: () => void
   onSwitchToSale?: () => void
+  onSwitchToReturn?: () => void
   onSwitchToScanner?: () => void
   onOpenCabinet?: () => void
 }
@@ -46,6 +47,8 @@ type CartItem = {
 function requestStatusVariant(status: string): 'default' | 'secondary' | 'success' | 'warning' | 'destructive' {
   if (status === 'approved_full') return 'success'
   if (status === 'approved_partial') return 'warning'
+  if (status === 'issued') return 'warning'
+  if (status === 'received') return 'success'
   if (status === 'rejected') return 'destructive'
   return 'secondary'
 }
@@ -53,6 +56,8 @@ function requestStatusVariant(status: string): 'default' | 'secondary' | 'succes
 function requestStatusLabel(status: string) {
   if (status === 'approved_full') return 'Одобрена'
   if (status === 'approved_partial') return 'Частично'
+  if (status === 'issued') return 'Отправлена'
+  if (status === 'received') return 'Получена'
   if (status === 'rejected') return 'Отклонена'
   return 'Новая'
 }
@@ -63,6 +68,7 @@ export default function InventoryRequestPage({
   onLogout,
   onSwitchToShift,
   onSwitchToSale,
+  onSwitchToReturn,
   onSwitchToScanner,
   onOpenCabinet,
 }: Props) {
@@ -73,6 +79,7 @@ export default function InventoryRequestPage({
   const [comment, setComment] = useState('')
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
+  const [receivingId, setReceivingId] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   async function load() {
@@ -196,6 +203,19 @@ export default function InventoryRequestPage({
     }
   }
 
+  async function handleReceive(requestId: string) {
+    setReceivingId(requestId)
+    try {
+      await api.receivePointInventoryRequest(config, session, requestId)
+      toastSuccess('Товар принят на витрину')
+      await load()
+    } catch (err: any) {
+      toastError(err?.message || 'Не удалось подтвердить получение')
+    } finally {
+      setReceivingId(null)
+    }
+  }
+
   const cartTotal = cart.reduce((s, c) => s + c.qty, 0)
   const pendingCount = (context?.requests || []).filter((r) => r.status === 'new').length
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
@@ -219,10 +239,12 @@ export default function InventoryRequestPage({
           <WorkModeSwitch
             active="request"
             showSale={!!onSwitchToSale}
+            showReturn={!!onSwitchToReturn}
             showScanner={!!onSwitchToScanner}
             showRequest
             onShift={onSwitchToShift}
             onSale={onSwitchToSale}
+            onReturn={onSwitchToReturn}
             onScanner={onSwitchToScanner}
             onCabinet={onOpenCabinet}
           />
@@ -429,6 +451,21 @@ export default function InventoryRequestPage({
                   </div>
                   {request.decision_comment && (
                     <p className="mt-1.5 rounded border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-muted-foreground">{request.decision_comment}</p>
+                  )}
+                  {request.status === 'issued' && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-2 h-8 w-full text-xs"
+                      disabled={receivingId === request.id}
+                      onClick={() => void handleReceive(request.id)}
+                    >
+                      {receivingId === request.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                      Получил товар
+                    </Button>
+                  )}
+                  {request.status === 'received' && request.received_at && (
+                    <p className="mt-1.5 text-[10px] text-emerald-300">Принято: {formatDate(request.received_at)}</p>
                   )}
                 </div>
               ))

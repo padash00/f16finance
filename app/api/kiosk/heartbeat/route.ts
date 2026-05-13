@@ -58,7 +58,8 @@ export async function POST(request: Request) {
 
     const stationId = String(body?.stationId || '').trim()
     const stationCode = String(body?.stationCode || '').trim()
-    const deviceToken = String(body?.deviceToken || '').trim()
+    const headerDeviceToken = request.headers.get('x-kiosk-device-token')?.trim() || ''
+    const deviceToken = String(body?.deviceToken || headerDeviceToken || '').trim()
     if (!stationId && !stationCode) {
       return json({ error: 'stationId-or-stationCode-required' }, 400)
     }
@@ -91,6 +92,16 @@ export async function POST(request: Request) {
     const providedSecretHash = secret ? sha256(secret) : ''
     const providedDeviceTokenHash = deviceToken ? sha256(deviceToken) : ''
 
+    if (!deviceToken) {
+      return json({ error: 'missing-device-token' }, 401)
+    }
+    if (!expectedDeviceTokenHash) {
+      return json({ error: 'device-not-bound' }, 409)
+    }
+    if (providedDeviceTokenHash !== expectedDeviceTokenHash) {
+      return json({ error: 'device-token-mismatch' }, 401)
+    }
+
     const authByPerDeviceSecret = Boolean(perDeviceHash && providedSecretHash && perDeviceHash === providedSecretHash)
     const authByGlobalSecret = Boolean(globalSecret && secret && globalSecret === secret)
     if (!authByPerDeviceSecret && !authByGlobalSecret) {
@@ -99,7 +110,7 @@ export async function POST(request: Request) {
     // Note: IP/MAC check removed — clientSecret + deviceToken are sufficient auth.
     // IP can change (DHCP, VPN, docker) and cause false 409s that break session sync.
 
-    console.log(`[heartbeat] OK station=${row.id} code=${row.station_code} status=${kioskStatus} ip=${deviceIp}`)
+    console.log(`[heartbeat] OK station=${row.id} code=${row.station_code} status=${kioskStatus} ip=${deviceIp} mac=${deviceMac}`)
     const nowIso = new Date().toISOString()
     const { error: updError } = await admin
       .from('arena_stations')

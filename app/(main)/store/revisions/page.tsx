@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { ClipboardCheck, Loader2, Package, RefreshCw, ScanSearch, Search, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ClipboardCheck, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -122,10 +122,18 @@ export default function StoreRevisionsPage() {
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
   const [formSheetOpen, setFormSheetOpen] = useState(false)
   const [revisionSearch, setRevisionSearch] = useState('')
-  const [formPrefilled, setFormPrefilled] = useState(false)
-  const [barcodeQuery, setBarcodeQuery] = useState('')
   const [selectedRevision, setSelectedRevision] = useState<InventoryRevision | null>(null)
   const [revisionDetailsOpen, setRevisionDetailsOpen] = useState(false)
+  const [scanInput, setScanInput] = useState('')
+  const [scanFeedback, setScanFeedback] = useState<
+    | { kind: 'ok'; itemName: string; prevQty: number; newQty: number; delta: number }
+    | { kind: 'error'; message: string }
+    | null
+  >(null)
+  const [recentScanItemId, setRecentScanItemId] = useState<string | null>(null)
+  const scanInputRef = useRef<HTMLInputElement | null>(null)
+  const scanFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scanHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
     const soft = Boolean(opts?.soft)
@@ -202,10 +210,75 @@ export default function StoreRevisionsPage() {
   }
 
   useEffect(() => {
-    if (!formSheetOpen || !locationId || !selectedBalances.length || formPrefilled) return
-    loadFromBalances()
-    setFormPrefilled(true)
-  }, [formSheetOpen, locationId, selectedBalances, formPrefilled])
+    if (!formSheetOpen || !locationId) return
+    const id = window.setTimeout(() => scanInputRef.current?.focus(), 80)
+    return () => window.clearTimeout(id)
+  }, [formSheetOpen, locationId])
+
+  useEffect(() => {
+    return () => {
+      if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current)
+      if (scanHighlightTimer.current) clearTimeout(scanHighlightTimer.current)
+    }
+  }, [])
+
+  const flashScanError = (message: string) => {
+    if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current)
+    setScanFeedback({ kind: 'error', message })
+    scanFeedbackTimer.current = setTimeout(() => setScanFeedback(null), 2000)
+  }
+
+  const flashScanOk = (payload: { itemName: string; prevQty: number; newQty: number; delta: number }) => {
+    if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current)
+    setScanFeedback({ kind: 'ok', ...payload })
+    scanFeedbackTimer.current = setTimeout(() => setScanFeedback(null), 1800)
+  }
+
+  const highlightScan = (itemId: string) => {
+    if (scanHighlightTimer.current) clearTimeout(scanHighlightTimer.current)
+    setRecentScanItemId(itemId)
+    scanHighlightTimer.current = setTimeout(() => setRecentScanItemId(null), 1200)
+  }
+
+  const handleScan = () => {
+    const barcode = scanInput.trim()
+    if (!barcode) return
+    if (!locationId) {
+      flashScanError('Сначала выберите локацию')
+      setScanInput('')
+      return
+    }
+    const found = itemByBarcode.get(barcode)
+    if (!found) {
+      flashScanError(`Штрихкод ${barcode} не найден в каталоге`)
+      setScanInput('')
+      return
+    }
+    const expectedQty = Number(selectedBalances.find((b) => b.item_id === found.id)?.quantity || 0)
+    const existingIndex = lines.findIndex((line) => line.item_id === found.id)
+    if (existingIndex === -1) {
+      setLines((current) => [
+        { item_id: found.id, actual_qty: '1', comment: '' },
+        ...current,
+      ])
+      flashScanOk({ itemName: found.name, prevQty: 0, newQty: 1, delta: 1 - expectedQty })
+    } else {
+      let prev = 0
+      let next = 0
+      setLines((current) =>
+        current.map((line, index) => {
+          if (index !== existingIndex) return line
+          prev = parseQty(line.actual_qty)
+          next = prev + 1
+          return { ...line, actual_qty: formatQty(next) }
+        }),
+      )
+      flashScanOk({ itemName: found.name, prevQty: prev, newQty: next, delta: next - expectedQty })
+    }
+    highlightScan(found.id)
+    setScanInput('')
+    scanInputRef.current?.focus()
+  }
 
   const totals = useMemo(() => {
     const rows = lines
@@ -269,32 +342,6 @@ export default function StoreRevisionsPage() {
     }
   }
 
-  const addItemByBarcode = () => {
-    const barcode = barcodeQuery.trim()
-    if (!barcode) return
-    const found = itemByBarcode.get(barcode)
-    if (!found) {
-      setError('Товар с таким штрихкодом не найден в каталоге')
-      return
-    }
-    const alreadyAdded = lines.some((line) => line.item_id === found.id)
-    if (alreadyAdded) {
-      setError('Этот товар уже добавлен в акт')
-      return
-    }
-    const expectedQty = Number(selectedBalances.find((b) => b.item_id === found.id)?.quantity || 0)
-    setLines((current) => [
-      ...current,
-      {
-        item_id: found.id,
-        actual_qty: formatQty(expectedQty),
-        comment: '',
-      },
-    ])
-    setBarcodeQuery('')
-    setError(null)
-  }
-
   const filteredRevisions = useMemo(() => {
     const q = revisionSearch.trim().toLowerCase()
     const list = data?.stocktakes || []
@@ -353,7 +400,6 @@ export default function StoreRevisionsPage() {
           <Button
             size="sm"
             onClick={() => {
-              setFormPrefilled(false)
               setFormSheetOpen(true)
             }}
             className="h-9 gap-1.5 bg-cyan-600 hover:bg-cyan-700"
@@ -530,7 +576,11 @@ export default function StoreRevisionsPage() {
         open={formSheetOpen}
         onOpenChange={(open) => {
           setFormSheetOpen(open)
-          if (!open) setFormPrefilled(false)
+          if (!open) {
+            setScanInput('')
+            setScanFeedback(null)
+            setRecentScanItemId(null)
+          }
         }}
       >
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
@@ -551,7 +601,6 @@ export default function StoreRevisionsPage() {
                   value={locationId}
                   onValueChange={(value) => {
                     setLocationId(value)
-                    setFormPrefilled(false)
                     setLines([])
                   }}
                 >
@@ -582,29 +631,67 @@ export default function StoreRevisionsPage() {
                 Локация: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               </span>
               <span>Позиций в системе: <span className="font-medium text-foreground">{selectedBalances.length}</span></span>
-              <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={loadFromBalances}>
-                Подтянуть остатки
-              </Button>
+              <span className="ml-auto">
+                Сосчитано: <span className="font-medium text-foreground">{lines.length}</span>
+                {selectedBalances.length ? ` / ${selectedBalances.length}` : ''}
+              </span>
             </div>
 
-            <div className="flex flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="min-w-[220px] flex-1 space-y-1.5">
-                <Label>Добавить по штрихкоду</Label>
+            <div
+              className={`space-y-2 rounded-2xl border p-3 transition ${
+                scanFeedback?.kind === 'error'
+                  ? 'border-rose-500/40 bg-rose-500/10'
+                  : scanFeedback?.kind === 'ok'
+                    ? 'border-emerald-500/30 bg-emerald-500/[0.05]'
+                    : 'border-cyan-500/20 bg-cyan-500/[0.03]'
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <ScanLine className="h-4 w-4 text-cyan-300" />
                 <Input
-                  value={barcodeQuery}
-                  onChange={(event) => setBarcodeQuery(event.target.value)}
+                  ref={scanInputRef}
+                  value={scanInput}
+                  onChange={(event) => setScanInput(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault()
-                      addItemByBarcode()
+                      handleScan()
                     }
                   }}
-                  placeholder="Сканируй или введи штрихкод"
+                  placeholder="Сканируйте или введите штрихкод и нажмите Enter"
+                  className="h-11 flex-1 text-base"
+                  autoComplete="off"
+                  disabled={!locationId}
                 />
+                <Button type="button" variant="outline" className="h-11" onClick={handleScan} disabled={!locationId}>
+                  Добавить +1
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11"
+                  onClick={loadFromBalances}
+                  disabled={!locationId || !selectedBalances.length}
+                >
+                  Подтянуть весь каталог
+                </Button>
               </div>
-              <Button type="button" variant="outline" onClick={addItemByBarcode}>
-                Добавить по штрихкоду
-              </Button>
+              <div className="text-xs">
+                {scanFeedback?.kind === 'ok' ? (
+                  <span className="text-emerald-200">
+                    {scanFeedback.itemName} · факт {formatQty(scanFeedback.prevQty)} → {formatQty(scanFeedback.newQty)}
+                    {' · Δ '}
+                    {scanFeedback.delta > 0 ? '+' : ''}
+                    {formatQty(scanFeedback.delta)}
+                  </span>
+                ) : scanFeedback?.kind === 'error' ? (
+                  <span className="text-rose-200">{scanFeedback.message}</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Скан добавляет товар (+1) или подтягивает весь каталог локации одной кнопкой.
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -616,8 +703,14 @@ export default function StoreRevisionsPage() {
                   ? itemById.get(line.item_id) || balanceItemById.get(line.item_id) || null
                   : null
                 const isManualLine = !line.item_id
+                const isRecent = recentScanItemId && recentScanItemId === line.item_id
                 return (
-                  <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.2fr)_160px_100px_100px_minmax(0,1fr)_110px_auto]">
+                  <div
+                    key={`revision-${index}`}
+                    className={`grid gap-3 rounded-2xl border p-3 transition md:grid-cols-[minmax(0,1.2fr)_160px_100px_100px_minmax(0,1fr)_110px_auto] ${
+                      isRecent ? 'border-emerald-500/40 bg-emerald-500/[0.05]' : 'border-white/10 bg-white/[0.02]'
+                    }`}
+                  >
                     <div className="space-y-1.5">
                       <Label>Товар</Label>
                       {isManualLine ? (

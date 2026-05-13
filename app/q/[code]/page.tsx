@@ -6,6 +6,10 @@ import { Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react'
 
 export default function QrLoginPage() {
   const { code } = useParams<{ code: string }>()
+  const [stationId] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return new URLSearchParams(window.location.search).get('stationId') || ''
+  })
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -22,7 +26,7 @@ export default function QrLoginPage() {
       const res = await fetch('/api/kiosk/qr-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, username, password }),
+        body: JSON.stringify({ code, stationId, username, password }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || 'Ошибка входа')

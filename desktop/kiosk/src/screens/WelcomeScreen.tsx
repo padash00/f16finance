@@ -55,7 +55,8 @@ export default function WelcomeScreen({ theme, config, onLoginSuccess }: Props) 
         const channel = supabase
           .channel(`kiosk-qr:${code}`)
           .on('broadcast', { event: 'qr_auth' }, ({ payload }: { payload: any }) => {
-            if (payload?.client && !cancelled) {
+            const payloadStationId = String(payload?.stationId || '')
+            if (payload?.client && payloadStationId === config.stationId && !cancelled) {
               setQrScanned(true)
               setTimeout(() => onLoginSuccess(payload.client), 600)
             }
@@ -101,7 +102,9 @@ export default function WelcomeScreen({ theme, config, onLoginSuccess }: Props) 
 
   const bgStyle = theme ? getBgStyle(theme) : { background: 'linear-gradient(135deg, #07080a 0%, #0f1520 100%)' }
   const accent = theme?.accentColor || '#2563eb'
-  const qrUrl = config && qrCode ? `${config.serverBaseUrl}/q/${qrCode}` : ''
+  const qrUrl = config && qrCode && config.stationId
+    ? `${config.serverBaseUrl}/q/${qrCode}?stationId=${encodeURIComponent(config.stationId)}`
+    : ''
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden relative" style={bgStyle}>
@@ -210,6 +213,10 @@ export default function WelcomeScreen({ theme, config, onLoginSuccess }: Props) 
               ) : qrUrl ? (
                 <div className="p-4 rounded-2xl bg-white">
                   <QRCodeSVG value={qrUrl} size={200} level="M" />
+                </div>
+              ) : config && !config.stationId ? (
+                <div className="w-52 h-52 rounded-2xl bg-white/10 flex items-center justify-center px-6 text-center">
+                  <p className="text-white/50 text-sm">Станция не привязана</p>
                 </div>
               ) : (
                 <div className="w-52 h-52 rounded-2xl bg-white/10 flex items-center justify-center">

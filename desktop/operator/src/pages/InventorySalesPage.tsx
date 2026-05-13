@@ -718,7 +718,8 @@ export default function InventorySalesPage({
 
     try {
       const saleResult = await api.createPointInventorySale(config, session, salePayload as any)
-      showReceipt(saleResult, false)
+      if (!saleResult.sale_id) throw new Error('Сервер не вернул номер продажи')
+      showReceipt({ ...saleResult, sale_id: saleResult.sale_id }, false)
       beep('ok')
       toastSuccess('Продажа сохранена и добавлена в сменный контур')
       resetSaleForm()

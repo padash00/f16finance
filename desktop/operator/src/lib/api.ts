@@ -336,6 +336,29 @@ export async function getPointDailyKaspiReport(
 // These functions are kept for backward compatibility but are no longer used in the app UI.
 
 export async function getProducts(config: AppConfig, companyId?: string | null): Promise<Product[]> {
+  try {
+    const inventory = await request<{ ok: boolean; data: PointInventorySaleContext }>(
+      config,
+      'GET',
+      '/api/point/inventory-sales',
+      undefined,
+      companyHeader(companyId),
+    )
+    const now = new Date().toISOString()
+    return (inventory.data.items || []).map((item) => ({
+      id: item.id,
+      company_id: inventory.data.company?.id || companyId || '',
+      name: item.name,
+      barcode: item.barcode,
+      price: Number(item.sale_price || 0),
+      is_active: Number(item.display_qty || 0) > 0,
+      created_at: now,
+      updated_at: now,
+    }))
+  } catch {
+    // Старые терминалы могут жить без inventory-sales; оставляем совместимость.
+  }
+
   const data = await request<{ ok: boolean; data: { products: Product[] } }>(
     config, 'GET', '/api/point/products', undefined, companyHeader(companyId),
   )
@@ -527,6 +550,47 @@ export async function getPointOperatorTasks(
   }
 }
 
+export async function respondPointOperatorTask(
+  config: AppConfig,
+  session: OperatorSession,
+  taskId: string,
+  response: 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete',
+  note?: string | null,
+): Promise<{ status: OperatorTask['status']; responseLabel?: string }> {
+  const data = await request<{ ok: boolean; status: OperatorTask['status']; responseLabel?: string }>(
+    config,
+    'POST',
+    '/api/point/operator-tasks',
+    {
+      action: 'respondTask',
+      taskId,
+      response,
+      note: note?.trim() || null,
+    },
+    operatorHeaders(session),
+  )
+  return { status: data.status, responseLabel: data.responseLabel }
+}
+
+export async function addPointOperatorTaskComment(
+  config: AppConfig,
+  session: OperatorSession,
+  taskId: string,
+  content: string,
+): Promise<void> {
+  await request(
+    config,
+    'POST',
+    '/api/point/operator-tasks',
+    {
+      action: 'addComment',
+      taskId,
+      content,
+    },
+    operatorHeaders(session),
+  )
+}
+
 export async function getPointOperatorCabinet(
   config: AppConfig,
   session: OperatorSession,
@@ -675,6 +739,24 @@ export async function createPointInventoryRequest(
     {
       action: 'createRequest',
       payload,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function receivePointInventoryRequest(
+  config: AppConfig,
+  session: OperatorSession,
+  requestId: string,
+): Promise<{ status: string; idempotent?: boolean }> {
+  const data = await request<{ ok: boolean; data: { status: string; idempotent?: boolean } }>(
+    config,
+    'POST',
+    '/api/point/inventory-requests',
+    {
+      action: 'receiveRequest',
+      requestId,
     },
     operatorHeaders(session),
   )

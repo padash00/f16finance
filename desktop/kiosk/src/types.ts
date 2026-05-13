@@ -63,6 +63,7 @@ export interface KioskConfig {
   clientSecret: string
   deviceToken: string
   stationCode: string
+  stationId?: string
 }
 
 export type UiScreen =

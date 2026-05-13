@@ -2,10 +2,110 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { requirePointDevice } from '@/lib/server/point-devices'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+
+type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
+type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
+
+type Body =
+  | {
+      action: 'respondTask'
+      taskId: string
+      response: TaskResponse
+      note?: string | null
+    }
+  | {
+      action: 'addComment'
+      taskId: string
+      content: string
+    }
+
+const RESPONSE_CONFIG: Record<
+  TaskResponse,
+  { label: string; status: TaskStatus; comment: string }
+> = {
+  accept: {
+    label: 'Принял в работу',
+    status: 'in_progress',
+    comment: 'Оператор подтвердил, что взял задачу в работу.',
+  },
+  need_info: {
+    label: 'Нужны уточнения',
+    status: 'backlog',
+    comment: 'Оператор запросил уточнения по задаче.',
+  },
+  blocked: {
+    label: 'Не могу выполнить',
+    status: 'backlog',
+    comment: 'Оператор сообщил, что не может выполнить задачу.',
+  },
+  already_done: {
+    label: 'Уже сделано',
+    status: 'review',
+    comment: 'Оператор сообщил, что задача уже выполнена и передана на проверку.',
+  },
+  complete: {
+    label: 'Завершил задачу',
+    status: 'done',
+    comment: 'Оператор завершил задачу в личном кабинете.',
+  },
+}
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+async function addTaskComment(
+  supabase: any,
+  payload: { taskId: string; content: string; operatorId: string },
+) {
+  const primaryInsert = await supabase
+    .from('task_comments')
+    .insert([
+      {
+        task_id: payload.taskId,
+        operator_id: payload.operatorId,
+        content: payload.content,
+      },
+    ])
+    .select('*')
+    .single()
+
+  if (!primaryInsert.error) return primaryInsert.data
+
+  const errorMessage = String(primaryInsert.error?.message || '')
+  const canRetryWithoutOperatorId =
+    errorMessage.includes("Could not find the 'operator_id' column") || errorMessage.includes('schema cache')
+
+  if (!canRetryWithoutOperatorId) {
+    throw primaryInsert.error
+  }
+
+  const fallbackInsert = await supabase
+    .from('task_comments')
+    .insert([
+      {
+        task_id: payload.taskId,
+        content: payload.content,
+      },
+    ])
+    .select('*')
+    .single()
+
+  if (fallbackInsert.error) throw fallbackInsert.error
+  return fallbackInsert.data
+}
+
+async function loadOwnedTask(supabase: any, taskId: string, operatorId: string) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', taskId)
+    .eq('operator_id', operatorId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data || null
 }
 
 async function requirePointOperator(request: Request) {
@@ -176,6 +276,108 @@ export async function GET(request: Request) {
       scope: 'server',
       area: 'api/point/operator-tasks:get',
       message: error?.message || 'Point operator tasks GET error',
+    })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const context = await requirePointOperator(request)
+    if ('response' in context) return context.response
+
+    const { supabase, operator, operatorAuth } = context
+    const operatorId = String(operator.id)
+    const body = (await request.json().catch(() => null)) as Body | null
+    if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
+
+    if (body.action === 'addComment') {
+      if (!body.taskId || !body.content?.trim()) {
+        return json({ error: 'taskId и content обязательны' }, 400)
+      }
+
+      const task = await loadOwnedTask(supabase, body.taskId, operatorId)
+      if (!task) return json({ error: 'Задача не найдена' }, 404)
+
+      const comment = await addTaskComment(supabase, {
+        taskId: body.taskId,
+        operatorId,
+        content: body.content.trim(),
+      })
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: null,
+        entityType: 'task',
+        entityId: String(body.taskId),
+        action: 'point-operator-add-comment',
+        payload: {
+          operator_id: operatorId,
+          operator_auth_id: operatorAuth.id,
+          comment_id: comment?.id || null,
+        },
+      })
+
+      return json({ ok: true, comment })
+    }
+
+    if (body.action === 'respondTask') {
+      if (!body.taskId || !RESPONSE_CONFIG[body.response]) {
+        return json({ error: 'taskId и response обязательны' }, 400)
+      }
+
+      const task = await loadOwnedTask(supabase, body.taskId, operatorId)
+      if (!task) return json({ error: 'Задача не найдена' }, 404)
+
+      const config = RESPONSE_CONFIG[body.response]
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({
+          status: config.status,
+          completed_at: config.status === 'done' ? new Date().toISOString() : null,
+        })
+        .eq('id', body.taskId)
+
+      if (updateError) throw updateError
+
+      const note = body.note?.trim() || null
+      const commentText = [config.comment, note ? `Комментарий: ${note}` : '']
+        .filter(Boolean)
+        .join(' ')
+
+      const comment = await addTaskComment(supabase, {
+        taskId: body.taskId,
+        operatorId,
+        content: commentText,
+      })
+
+      await writeAuditLog(supabase as any, {
+        actorUserId: null,
+        entityType: 'task',
+        entityId: String(body.taskId),
+        action: `point-operator-response-${body.response}`,
+        payload: {
+          operator_id: operatorId,
+          operator_auth_id: operatorAuth.id,
+          status: config.status,
+          comment_id: comment?.id || null,
+          note,
+        },
+      })
+
+      return json({
+        ok: true,
+        status: config.status,
+        responseLabel: config.label,
+      })
+    }
+
+    return json({ error: 'Неизвестное действие' }, 400)
+  } catch (error: any) {
+    console.error('Point operator tasks POST error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/point/operator-tasks:post',
+      message: error?.message || 'Point operator tasks POST error',
     })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }

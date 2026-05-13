@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
-import { ensureInventoryLocationAccess, fetchStoreRevisions, postInventoryStocktake } from '@/lib/server/repositories/inventory'
+import {
+  ensureInventoryLocationAccess,
+  fetchOpenTransferRequestsForLocation,
+  fetchStoreRevisions,
+  postInventoryStocktake,
+} from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -192,10 +197,22 @@ export async function POST(request: Request) {
     }
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action || body.action !== 'createRevision') return json({ error: 'invalid-action' }, 400)
-    await ensureInventoryLocationAccess(supabase as any, String(body.payload.location_id || '').trim(), inventoryScope)
+    const locationId = String(body.payload.location_id || '').trim()
+    await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+    const openTransfers = await fetchOpenTransferRequestsForLocation(supabase as any, locationId, inventoryScope)
+    if (openTransfers.length > 0) {
+      return json(
+        {
+          error: 'inventory-stocktake-open-transfers',
+          message: 'Есть заявки склад ↔ витрина в пути. Сначала выдайте и подтвердите получение товара, затем проводите ревизию.',
+          requests: openTransfers.map((row: any) => ({ id: row.id, status: row.status, created_at: row.created_at })),
+        },
+        409,
+      )
+    }
 
     const result = await postInventoryStocktake(supabase as any, {
-      location_id: String(body.payload.location_id || '').trim(),
+      location_id: locationId,
       counted_at: body.payload.counted_at,
       comment: body.payload.comment || null,
       created_by: actorUserId,

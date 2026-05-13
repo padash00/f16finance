@@ -12,6 +12,7 @@ import {
   ensureInventoryRequestAccess,
   createInventorySupplier,
   decideInventoryRequest,
+  fetchOpenTransferRequestsForLocation,
   fetchInventoryOverview,
   postInventoryStocktake,
   postInventoryReceipt,
@@ -616,6 +617,17 @@ export async function POST(request: Request) {
       if (!countedAt) return json({ error: 'stocktake-date-required' }, 400)
       if (items.length === 0) return json({ error: 'stocktake-items-required' }, 400)
       await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+      const openTransfers = await fetchOpenTransferRequestsForLocation(supabase as any, locationId, inventoryScope)
+      if (openTransfers.length > 0) {
+        return json(
+          {
+            error: 'inventory-stocktake-open-transfers',
+            message: 'Есть заявки склад ↔ витрина в пути. Сначала выдайте и подтвердите получение товара, затем проводите ревизию.',
+            requests: openTransfers.map((row: any) => ({ id: row.id, status: row.status, created_at: row.created_at })),
+          },
+          409,
+        )
+      }
 
       const normalizedItems = items
         .map((item) => ({

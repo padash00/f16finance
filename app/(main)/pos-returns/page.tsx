@@ -15,6 +15,8 @@ type SaleItem = {
   id: string
   item_id: string
   quantity: number
+  returned_qty?: number
+  returnable_qty?: number
   unit_price: number
   total_price: number
   inventory_items: { name: string } | null
@@ -116,14 +118,19 @@ export default function PosReturnsPage() {
       setSale(foundSale)
 
       // Build return items list
-      const items: ReturnItem[] = (foundSale.items || []).map((item) => ({
-        item_id: item.item_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        name: item.inventory_items?.name || item.item_id,
-        maxQty: item.quantity,
-        selected: false,
-      }))
+      const items: ReturnItem[] = (foundSale.items || [])
+        .map((item) => {
+          const maxQty = Math.max(0, Number(item.returnable_qty ?? item.quantity ?? 0))
+          return {
+            item_id: item.item_id,
+            quantity: maxQty,
+            unit_price: item.unit_price,
+            name: item.inventory_items?.name || item.item_id,
+            maxQty,
+            selected: false,
+          }
+        })
+        .filter((item) => item.maxQty > 0)
       setReturnItems(items)
     } catch (err: any) {
       setSearchError(err?.message || 'Не удалось найти чек')
@@ -352,7 +359,7 @@ export default function PosReturnsPage() {
             <CardContent>
               {returnItems.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  Нет товаров в чеке
+                  Все товары по этому чеку уже возвращены
                 </p>
               ) : (
                 <div className="space-y-2">

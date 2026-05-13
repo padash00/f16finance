@@ -54,10 +54,12 @@ type InventoryRequest = {
   created_by: string | null
   approved_by: string | null
   issued_by: string | null
+  received_by: string | null
   received_qty_confirmed: number | null
   created_by_staff?: { id: string; full_name: string | null; role: string | null } | null
   approved_by_staff?: { id: string; full_name: string | null; role: string | null } | null
   issued_by_staff?: { id: string; full_name: string | null; role: string | null } | null
+  received_by_staff?: { id: string; full_name: string | null; role: string | null } | null
   company?: { id: string; name: string; code: string | null } | null
   source_location?: InventoryLocation | null
   target_location?: InventoryLocation | null
@@ -101,10 +103,12 @@ function normalizeRequest(raw: any): InventoryRequest {
     created_by: raw?.created_by ? String(raw.created_by) : null,
     approved_by: raw?.approved_by ? String(raw.approved_by) : null,
     issued_by: raw?.issued_by ? String(raw.issued_by) : null,
+    received_by: raw?.received_by ? String(raw.received_by) : null,
     received_qty_confirmed: raw?.received_qty_confirmed == null ? null : Number(raw.received_qty_confirmed || 0),
     created_by_staff: firstOrSelf(raw?.created_by_staff),
     approved_by_staff: firstOrSelf(raw?.approved_by_staff),
     issued_by_staff: firstOrSelf(raw?.issued_by_staff),
+    received_by_staff: firstOrSelf(raw?.received_by_staff),
     company: firstOrSelf(raw?.company),
     source_location: firstOrSelf(raw?.source_location),
     target_location: firstOrSelf(raw?.target_location),
@@ -134,7 +138,7 @@ function requestTimeline(request: InventoryRequest) {
     { key: 'created', label: 'Создана', at: request.created_at, by: actorLabel(request.created_by_staff, request.created_by) },
     { key: 'approved', label: 'Одобрена', at: request.approved_at, by: actorLabel(request.approved_by_staff, request.approved_by) },
     { key: 'issued', label: 'Выдана', at: request.issued_at, by: actorLabel(request.issued_by_staff, request.issued_by) },
-    { key: 'received', label: 'Получена', at: request.received_at, by: '—' },
+    { key: 'received', label: 'Получена', at: request.received_at, by: actorLabel(request.received_by_staff, request.received_by) },
   ]
 }
 
@@ -302,6 +306,7 @@ function StoreRequestsPageContent() {
           actorLabel(request.created_by_staff, request.created_by),
           actorLabel(request.approved_by_staff, request.approved_by),
           actorLabel(request.issued_by_staff, request.issued_by),
+          actorLabel(request.received_by_staff, request.received_by),
         ].join(' ').toLowerCase()
         if (!actorText.includes(actorQ)) return false
       }

@@ -172,6 +172,31 @@ export async function ensureInventoryLocationAccess(
   throw new Error('forbidden-location')
 }
 
+export async function fetchOpenTransferRequestsForLocation(
+  supabase: AnySupabase,
+  locationId: string,
+  scope?: InventoryScope,
+) {
+  const normalizedLocationId = String(locationId || '').trim()
+  if (!normalizedLocationId) return []
+
+  const { data, error } = await supabase
+    .from('inventory_requests')
+    .select('id, status, created_at, source_location_id, target_location_id, requesting_company_id, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type, company_id, organization_id), target_location:target_location_id(id, name, code, location_type, company_id, organization_id)')
+    .in('status', ['approved_full', 'approved_partial', 'issued'])
+    .or(`source_location_id.eq.${normalizedLocationId},target_location_id.eq.${normalizedLocationId}`)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (error) throw error
+  return filterByCompanyScope(mapNestedRows(data || []), scope, (row: any) => [
+    row.requesting_company_id,
+    row.company?.id,
+    row.source_location?.company_id,
+    row.target_location?.company_id,
+  ])
+}
+
 export async function ensureInventoryRequestAccess(
   supabase: AnySupabase,
   requestId: string,
@@ -194,7 +219,7 @@ export async function ensureInventoryRequestAccess(
 export async function fetchInventoryRequests(supabase: AnySupabase, scope?: InventoryScope) {
   const { data, error } = await supabase
     .from('inventory_requests')
-    .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, issued_by, issued_at, received_at, received_qty_confirmed, created_at, updated_at, source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
+    .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, issued_by, issued_at, received_by, received_at, received_qty_confirmed, created_at, updated_at, source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
     .order('created_at', { ascending: false })
     .limit(100)
 

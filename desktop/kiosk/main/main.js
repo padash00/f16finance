@@ -178,7 +178,11 @@ async function postHeartbeat(status) {
     const fetchTimeout = setTimeout(() => controller.abort(), 15000)
     const res = await fetch(cfg.heartbeatUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-kiosk-secret': cfg.clientSecret },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-kiosk-secret': cfg.clientSecret,
+        'x-kiosk-device-token': cfg.deviceToken,
+      },
       body: JSON.stringify(body),
       signal: controller.signal,
     })
@@ -879,6 +883,7 @@ function setupIpc() {
       clientSecret: cfg.clientSecret,
       deviceToken: cfg.deviceToken,
       stationCode: cfg.stationCode,
+      stationId: cfg.stationId || knownStationId || '',
     }
   })
 

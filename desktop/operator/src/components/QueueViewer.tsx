@@ -13,8 +13,13 @@ interface Props {
 
 const TYPE_LABELS: Record<string, string> = {
   shift_report: 'Отчёт смены',
+  close_shift: 'Закрытие смены',
   create_debt: 'Создать долг',
   delete_debt: 'Удалить долг',
+  inventory_sale: 'Продажа POS',
+  inventory_return: 'Возврат POS',
+  inventory_request: 'Заявка на товар',
+  checklist_run: 'Чек-лист',
 }
 
 export default function QueueViewer({ open, onClose }: Props) {

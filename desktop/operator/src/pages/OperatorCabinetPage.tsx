@@ -6,6 +6,7 @@ import {
   CreditCard,
   FileText,
   LogOut,
+  MessageSquare,
   Search,
   RefreshCw,
   ShieldCheck,
@@ -25,6 +26,7 @@ import type {
   DebtItem,
   OperatorSession,
   OperatorTask,
+  OperatorTaskComment,
   PointKnowledgeArticle,
   PointKnowledgeContext,
 } from '@/types'
@@ -39,6 +41,7 @@ interface Props {
 }
 
 type CabinetTab = 'knowledge' | 'shifts' | 'tasks' | 'debts' | 'profile'
+type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
 
 type ShiftRow = {
   id: string
@@ -142,6 +145,9 @@ export default function OperatorCabinetPage({
   const [shifts, setShifts] = useState<ShiftRow[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [tasks, setTasks] = useState<OperatorTask[]>([])
+  const [taskComments, setTaskComments] = useState<OperatorTaskComment[]>([])
+  const [taskNotes, setTaskNotes] = useState<Record<string, string>>({})
+  const [taskActionLoading, setTaskActionLoading] = useState<string | null>(null)
   const [knowledge, setKnowledge] = useState<PointKnowledgeContext | null>(null)
   const [knowledgeQuery, setKnowledgeQuery] = useState('')
   const [confirmingArticleId, setConfirmingArticleId] = useState<string | null>(null)
@@ -191,12 +197,19 @@ export default function OperatorCabinetPage({
 
     if (tasksResult.status === 'fulfilled') {
       setTasks(tasksResult.value.tasks || [])
+      setTaskComments(tasksResult.value.comments || [])
     } else {
       try {
         const cached = localStorage.getItem(CACHE_KEY)
-        if (cached) setTasks(JSON.parse(cached).tasks || [])
-        else setTasks([])
-      } catch { setTasks([]) }
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          setTasks(parsed.tasks || [])
+          setTaskComments(parsed.taskComments || [])
+        } else {
+          setTasks([])
+          setTaskComments([])
+        }
+      } catch { setTasks([]); setTaskComments([]) }
       nextErrors.tasks = tasksResult.reason instanceof Error ? tasksResult.reason.message : 'Не удалось загрузить задачи'
     }
 
@@ -216,6 +229,7 @@ export default function OperatorCabinetPage({
           shifts: normalizeShiftRows(cabinetResult.value.shifts || [], session.company.name),
           debts: cabinetResult.value.debts || [],
           tasks: tasksResult.value.tasks || [],
+          taskComments: tasksResult.value.comments || [],
           savedAt: Date.now(),
         }))
       } catch { /* storage full */ }
@@ -257,6 +271,15 @@ export default function OperatorCabinetPage({
   const totalShiftRevenue = filteredShifts.reduce((sum, row) => sum + row.total, 0)
   const totalDebt = filteredDebts.filter((item) => item.status === 'active').reduce((sum, row) => sum + row.total_amount, 0)
   const activeTasks = tasks.filter((task) => !['done', 'archived'].includes(task.status)).length
+  const taskCommentsByTask = useMemo(() => {
+    const map = new Map<string, OperatorTaskComment[]>()
+    for (const comment of taskComments) {
+      const list = map.get(comment.task_id) || []
+      list.push(comment)
+      map.set(comment.task_id, list)
+    }
+    return map
+  }, [taskComments])
   const pendingConfirmations = knowledge?.pending_confirmations || []
   const pendingConfirmationIds = useMemo(
     () => new Set(pendingConfirmations.map((article) => article.id)),
@@ -296,6 +319,47 @@ export default function OperatorCabinetPage({
       setError(err instanceof Error ? err.message : 'Не удалось подтвердить ознакомление')
     } finally {
       setConfirmingArticleId(null)
+    }
+  }
+
+  async function handleTaskResponse(taskId: string, response: TaskResponse) {
+    setTaskActionLoading(`${taskId}:${response}`)
+    setError(null)
+    try {
+      const result = await api.respondPointOperatorTask(config, session, taskId, response, taskNotes[taskId] || null)
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                status: result.status,
+                completed_at: result.status === 'done' ? new Date().toISOString() : task.completed_at,
+              }
+            : task,
+        ),
+      )
+      setTaskNotes((current) => ({ ...current, [taskId]: '' }))
+      await load()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось обновить задачу')
+    } finally {
+      setTaskActionLoading(null)
+    }
+  }
+
+  async function handleTaskComment(taskId: string) {
+    const content = String(taskNotes[taskId] || '').trim()
+    if (!content) return
+    setTaskActionLoading(`${taskId}:comment`)
+    setError(null)
+    try {
+      await api.addPointOperatorTaskComment(config, session, taskId, content)
+      setTaskNotes((current) => ({ ...current, [taskId]: '' }))
+      await load()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось добавить комментарий')
+    } finally {
+      setTaskActionLoading(null)
     }
   }
 
@@ -535,26 +599,109 @@ export default function OperatorCabinetPage({
                   {tasks.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Сейчас задач нет.</div>
                   ) : (
-                    tasks.map((task) => (
-                      <div key={task.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium">#{task.task_number} · {task.title}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {task.company_name || 'Без точки'}
-                              {task.due_date ? ` · дедлайн ${formatDate(task.due_date)}` : ''}
+                    tasks.map((task) => {
+                      const comments = taskCommentsByTask.get(task.id) || []
+                      const isClosed = ['done', 'archived'].includes(task.status)
+                      return (
+                        <div key={task.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium">#{task.task_number} · {task.title}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {task.company_name || 'Без точки'}
+                                {task.due_date ? ` · дедлайн ${formatDate(task.due_date)}` : ''}
+                              </div>
+                              {task.description ? <div className="pt-1 text-sm text-muted-foreground">{task.description}</div> : null}
                             </div>
-                            {task.description ? <div className="pt-1 text-sm text-muted-foreground">{task.description}</div> : null}
+                            <div className="flex flex-col items-end gap-2">
+                              <Badge variant={task.status === 'done' ? 'success' : task.status === 'in_progress' ? 'warning' : 'secondary'}>
+                                {taskStatusLabel(task.status)}
+                              </Badge>
+                              <div className="text-xs text-muted-foreground">{taskPriorityLabel(task.priority)}</div>
+                            </div>
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge variant={task.status === 'done' ? 'success' : task.status === 'in_progress' ? 'warning' : 'secondary'}>
-                              {taskStatusLabel(task.status)}
-                            </Badge>
-                            <div className="text-xs text-muted-foreground">{taskPriorityLabel(task.priority)}</div>
-                          </div>
+
+                          {comments.length > 0 ? (
+                            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                              {comments.slice(-3).map((comment) => (
+                                <div key={`${comment.task_id}:${comment.created_at}:${comment.content.slice(0, 12)}`} className="rounded-lg bg-white/[0.04] px-3 py-2">
+                                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                    <MessageSquare className="h-3 w-3" />
+                                    {comment.author_name} · {formatDate(comment.created_at)}
+                                  </div>
+                                  <div className="mt-1 text-xs text-foreground/80">{comment.content}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {!isClosed ? (
+                            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                              <textarea
+                                value={taskNotes[task.id] || ''}
+                                onChange={(event) => setTaskNotes((current) => ({ ...current, [task.id]: event.target.value }))}
+                                placeholder="Комментарий к задаче..."
+                                rows={2}
+                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                {task.status !== 'in_progress' ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!!taskActionLoading}
+                                    onClick={() => void handleTaskResponse(task.id, 'accept')}
+                                  >
+                                    {taskActionLoading === `${task.id}:accept` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                                    В работу
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!!taskActionLoading}
+                                  onClick={() => void handleTaskResponse(task.id, 'need_info')}
+                                >
+                                  {taskActionLoading === `${task.id}:need_info` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                                  Нужны детали
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!!taskActionLoading}
+                                  onClick={() => void handleTaskResponse(task.id, 'already_done')}
+                                >
+                                  {taskActionLoading === `${task.id}:already_done` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                                  Уже сделано
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={!!taskActionLoading}
+                                  onClick={() => void handleTaskResponse(task.id, 'complete')}
+                                >
+                                  {taskActionLoading === `${task.id}:complete` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-2 h-3.5 w-3.5" />}
+                                  Готово
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={!!taskActionLoading || !String(taskNotes[task.id] || '').trim()}
+                                  onClick={() => void handleTaskComment(task.id)}
+                                >
+                                  {taskActionLoading === `${task.id}:comment` ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="mr-2 h-3.5 w-3.5" />}
+                                  Комментарий
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </CardContent>
               </Card>

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await admin
     .from('arena_tariffs')
-    .select('id, name, duration_min, price, description, tariff_type')
+    .select('id, name, duration_minutes, price, description, tariff_type')
     .eq('point_project_id', station.point_project_id)
     .eq('is_active', true)
     .order('price')
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     (data ?? []).map((t: any) => ({
       id: t.id,
       name: t.name,
-      durationMin: t.duration_min,
+      durationMin: t.duration_minutes,
       price: Number(t.price),
       description: t.description ?? null,
     })),

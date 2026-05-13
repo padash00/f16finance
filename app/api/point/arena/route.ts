@@ -3,6 +3,7 @@ import { arenaExtensionMinutesFromPayment } from '@/lib/core/arena-extension-min
 import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
 import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -67,7 +68,7 @@ export async function GET(request: Request) {
       const { data: historySessions, error: histErr } = await withCo(
         supabase
           .from('arena_sessions')
-          .select('id, station_id, tariff_id, started_at, ends_at, ended_at, amount, cash_amount, kaspi_amount, payment_method, discount_percent, status, operator_id, arena_stations!station_id(name), arena_tariffs!tariff_id(name)')
+          .select('id, station_id, tariff_id, shift_id, started_at, ends_at, ended_at, amount, cash_amount, kaspi_amount, refund_amount, refund_cash_amount, refund_kaspi_amount, refund_at, payment_method, discount_percent, status, operator_id, arena_stations!station_id(name), arena_tariffs!tariff_id(name)')
           .eq('point_project_id', projectId)
           .gte('started_at', fromIso)
           .lt('started_at', toIso)
@@ -205,6 +206,23 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
 
+    let openShiftId: string | null = null
+    if (body.action === 'startSession' || body.action === 'extendSession') {
+      if (!companyId) {
+        return json({ error: 'point-company-required', message: 'Не удалось определить точку.' }, 400)
+      }
+      openShiftId = await requireCurrentOpenShiftId(supabase, companyId)
+      if (!openShiftId) {
+        return json(
+          {
+            error: 'point-shift-no-open',
+            message: 'Сначала откройте смену и укажите старт кассы.',
+          },
+          409,
+        )
+      }
+    }
+
     // ─── START SESSION ────────────────────────────────────────────────────────
     if (body.action === 'startSession') {
       const {
@@ -296,6 +314,7 @@ export async function POST(request: Request) {
         .insert({
           point_project_id: projectId,
           company_id: companyId,
+          shift_id: openShiftId,
           station_id: stationId,
           tariff_id: tariffId,
           operator_id: operatorId || null,
@@ -320,6 +339,7 @@ export async function POST(request: Request) {
             date: new Date().toISOString().slice(0, 10),
             company_id: companyId || null,
             operator_id: operatorId || null,
+            shift_id: openShiftId,
             shift: getCurrentShift(),
             zone: 'pc',
             cash_amount: finalCash,
@@ -385,7 +405,7 @@ export async function POST(request: Request) {
       // Fetch session to calculate refund
       const { data: sess, error: fetchErr } = await supabase
         .from('arena_sessions')
-        .select('started_at, ends_at, amount, cash_amount, kaspi_amount, station_id, payment_method')
+        .select('started_at, ends_at, amount, cash_amount, kaspi_amount, station_id, operator_id, payment_method, shift_id')
         .eq('id', sessionId)
         .eq('point_project_id', projectId)
         .single()
@@ -404,12 +424,49 @@ export async function POST(request: Request) {
       const nowIso = now.toISOString()
       const { data: updSess, error: updateError } = await supabase
         .from('arena_sessions')
-        .update({ status: 'completed', ended_at: nowIso })
+        .update({
+          status: 'completed',
+          ended_at: nowIso,
+          refund_amount: refundAmount,
+          refund_cash_amount: refundCash,
+          refund_kaspi_amount: refundKaspi,
+          refund_at: nowIso,
+        })
         .eq('id', sessionId)
         .eq('point_project_id', projectId)
         .select()
         .single()
       if (updateError) throw updateError
+
+      if (!deferIncomes && refundAmount > 0) {
+        const { data: refundStationRow } = await supabase
+          .from('arena_stations')
+          .select('name')
+          .eq('id', (sess as any).station_id)
+          .maybeSingle()
+        const refundStationName = (refundStationRow as any)?.name || (sess as any).station_id
+        const { error: refundIncomeError } = await supabase.from('incomes').insert({
+          date: nowIso.slice(0, 10),
+          company_id: companyId,
+          operator_id: (sess as any).operator_id || null,
+          shift_id: (sess as any).shift_id || null,
+          shift: getCurrentShift(),
+          zone: 'pc',
+          cash_amount: -refundCash,
+          kaspi_amount: -refundKaspi,
+          online_amount: 0,
+          card_amount: 0,
+          comment: `Арена возврат: ${refundStationName}`,
+          source: 'arena-refund',
+        })
+        if (refundIncomeError) {
+          await writeSystemErrorLogSafe({
+            scope: 'server',
+            area: 'api/point/arena:endSessionWithRefund:incomeInsert',
+            message: refundIncomeError.message || 'Refund income insert failed',
+          })
+        }
+      }
 
       notified5minMap.delete(sessionId)
       const refundStationId = (sess as any)?.station_id as string | undefined
@@ -436,11 +493,20 @@ export async function POST(request: Request) {
 
       const { data: current, error: fetchError } = await supabase
         .from('arena_sessions')
-        .select('ends_at, amount, cash_amount, kaspi_amount, station_id, operator_id, tariff_id')
+        .select('ends_at, amount, cash_amount, kaspi_amount, station_id, operator_id, tariff_id, shift_id')
         .eq('id', sessionId)
         .eq('point_project_id', projectId)
         .single()
       if (fetchError || !current) return json({ error: 'session-not-found' }, 404)
+      if ((current as any).shift_id && (current as any).shift_id !== openShiftId) {
+        return json(
+          {
+            error: 'arena-session-shift-closed',
+            message: 'Эта сессия открыта в другой смене. Закройте её без продления или обратитесь к администратору.',
+          },
+          409,
+        )
+      }
 
       const currentEndsAt = new Date((current as any).ends_at)
       const baseTime = currentEndsAt > new Date() ? currentEndsAt : new Date()
@@ -561,6 +627,7 @@ export async function POST(request: Request) {
           amount: (Number((current as any).amount) || 0) + extPrice,
           cash_amount: prevCash + extCash,
           kaspi_amount: prevKaspi + extKaspi,
+          shift_id: (current as any).shift_id || openShiftId,
         })
         .eq('id', sessionId)
         .select()
@@ -580,6 +647,7 @@ export async function POST(request: Request) {
           date: new Date().toISOString().slice(0, 10),
           company_id: companyId,
           operator_id: (current as any).operator_id || null,
+          shift_id: (current as any).shift_id || openShiftId,
           shift: getCurrentShift(),
           zone: 'pc',
           cash_amount: extCash,

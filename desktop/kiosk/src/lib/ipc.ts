@@ -11,6 +11,7 @@ declare global {
       setup: {
         load: () => Promise<Record<string, string>>
         save: (payload: Record<string, string>) => Promise<{ ok: boolean; error?: string }>
+        clearConfig: () => Promise<{ ok: boolean; error?: string }>
       }
       getConfig: () => Promise<KioskConfig>
       startSessionLocal: (payload: {
@@ -38,5 +39,6 @@ export const ipc = {
   setup: {
     load: () => window.kioskApi.setup.load(),
     save: (payload: Record<string, string>) => window.kioskApi.setup.save(payload),
+    clearConfig: () => window.kioskApi.setup.clearConfig(),
   },
 }

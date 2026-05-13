@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     const actorIds = Array.from(
       new Set(
         (requests || [])
-          .flatMap((r: any) => [r.created_by, r.approved_by, r.issued_by])
+          .flatMap((r: any) => [r.created_by, r.approved_by, r.issued_by, r.received_by])
           .map((v: any) => String(v || '').trim())
           .filter(Boolean),
       ),
@@ -400,6 +400,7 @@ export async function GET(request: Request) {
             : null) ||
           (r.approved_at && !r.approved_by ? currentUserFallback : null),
         issued_by_staff: r.issued_by ? actorById[String(r.issued_by)] || null : null,
+        received_by_staff: r.received_by ? actorById[String(r.received_by)] || null : null,
       }
     })
 

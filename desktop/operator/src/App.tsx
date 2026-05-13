@@ -348,12 +348,14 @@ export default function App() {
       seenTaskIdsRef.current = null
       return
     }
+    const currentConfig = config
+    const currentSession = session
 
     let cancelled = false
 
     async function pollTasks() {
       try {
-        const payload = await api.getPointOperatorTasks(config, session)
+        const payload = await api.getPointOperatorTasks(currentConfig, currentSession)
         if (cancelled) return
 
         const activeTasks = (payload.tasks || []).filter((task) => isTaskOpen(task.status))

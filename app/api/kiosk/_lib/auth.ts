@@ -18,6 +18,7 @@ export async function resolveStation(req: NextRequest) {
   const deviceToken = req.headers.get('x-kiosk-device-token')?.trim() || ''
 
   if (!secret) return { error: 'missing-secret', status: 401 } as const
+  if (!deviceToken) return { error: 'missing-device-token', status: 401 } as const
 
   const { data: station, error } = await admin
     .from('arena_stations')
@@ -29,11 +30,12 @@ export async function resolveStation(req: NextRequest) {
   if (error) return { error: 'db-error', status: 500 } as const
   if (!station) return { error: 'unauthorized', status: 401 } as const
 
-  // Проверяем deviceToken если он привязан
-  if (station.device_token_hash && deviceToken) {
-    if (sha256(deviceToken) !== station.device_token_hash) {
-      return { error: 'device-token-mismatch', status: 401 } as const
-    }
+  if (!station.device_token_hash) {
+    return { error: 'device-not-bound', status: 409 } as const
+  }
+
+  if (sha256(deviceToken) !== station.device_token_hash) {
+    return { error: 'device-token-mismatch', status: 401 } as const
   }
 
   return { station }

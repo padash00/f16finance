@@ -46,6 +46,11 @@ export default function App() {
     return ipc.onState((state) => setKioskState(state))
   }, [])
 
+  useEffect(() => {
+    if (!kioskState?.stationId || !config || config.stationId) return
+    setConfig({ ...config, stationId: kioskState.stationId })
+  }, [kioskState?.stationId, config])
+
   // Авто-обновление: слушаем уведомление о новой версии
   useEffect(() => {
     if (isSetupMode || !window.kioskApi.onUpdateAvailable) return

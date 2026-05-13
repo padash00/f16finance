@@ -100,6 +100,7 @@ function StartSessionModal({
   station,
   tariffs,
   zoneId,
+  cashlessName,
   onConfirm,
   onCancel,
   loading,
@@ -107,6 +108,7 @@ function StartSessionModal({
   station: ArenaStation
   tariffs: ArenaTariff[]
   zoneId: string | null
+  cashlessName: string
   onConfirm: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number, discountPct: number) => void
   onCancel: () => void
   loading: boolean
@@ -230,7 +232,7 @@ function StartSessionModal({
               />
             </div>
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName} ₸</p>
+              <p className="mb-1 text-xs text-muted-foreground">{cashlessName} ₸</p>
               <input
                 type="number"
                 min="0"
@@ -271,9 +273,11 @@ function ManageSessionModal({
   zoneId: _zoneId,
   onExtend,
   onEnd,
+  onEndWithRefund,
   onTech,
   onClose,
   loading,
+  cashlessName,
 }: {
   station: ArenaStation
   session: ArenaSession
@@ -286,6 +290,7 @@ function ManageSessionModal({
   onTech: () => void
   onClose: () => void
   loading: boolean
+  cashlessName: string
 }) {
   const [mode, setMode] = useState<'view' | 'extend'>('view')
 
@@ -427,7 +432,7 @@ function ManageSessionModal({
                       <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
                     </div>
                     <div>
-                      <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName} ₸</p>
+                      <p className="mb-1 text-xs text-muted-foreground">{cashlessName} ₸</p>
                       <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
                     </div>
                   </div>
@@ -571,6 +576,7 @@ function MassZoneStartModal({
   zone,
   tariffs,
   freeCount,
+  cashlessName,
   onConfirm,
   onCancel,
   loading,
@@ -578,6 +584,7 @@ function MassZoneStartModal({
   zone: ArenaZone
   tariffs: ArenaTariff[]
   freeCount: number
+  cashlessName: string
   onConfirm: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
   onCancel: () => void
   loading: boolean
@@ -660,7 +667,7 @@ function MassZoneStartModal({
               <input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <p className="mb-1 text-xs text-muted-foreground">{cashLabels.providerName} ₸</p>
+              <p className="mb-1 text-xs text-muted-foreground">{cashlessName} ₸</p>
               <input type="number" min="0" value={kaspiAmt} onChange={e => setKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
             </div>
           </div>
@@ -918,7 +925,13 @@ function DecoIcon({ type, width, height, label, rotation }: { type: string; widt
 
 // ─── Today Income Bar ─────────────────────────────────────────────────────────
 
-function TodayIncomeBar({ todayIncome }: { todayIncome: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] } }) {
+function TodayIncomeBar({
+  todayIncome,
+  cashlessName,
+}: {
+  todayIncome: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] }
+  cashlessName: string
+}) {
   const total = todayIncome.cash + todayIncome.kaspi
   if (total === 0 && todayIncome.rows.length === 0) return null
   return (
@@ -935,7 +948,7 @@ function TodayIncomeBar({ todayIncome }: { todayIncome: { cash: number; kaspi: n
         )}
         {todayIncome.kaspi > 0 && (
           <span className="flex items-center gap-1 text-muted-foreground">
-            <span className="text-xs">📱</span> {cashLabels.providerName}: <span className="font-semibold text-foreground">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
+            <span className="text-xs">📱</span> {cashlessName}: <span className="font-semibold text-foreground">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
           </span>
         )}
       </div>
@@ -1618,7 +1631,7 @@ export default function ArenaPage({
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸
               </span>
             </div>
-            <TodayIncomeBar todayIncome={todayIncome} />
+            <TodayIncomeBar todayIncome={todayIncome} cashlessName={cashLabels.providerName} />
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -1702,7 +1715,7 @@ export default function ArenaPage({
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸ за сессии
               </span>
             </div>
-            <TodayIncomeBar todayIncome={todayIncome} />
+            <TodayIncomeBar todayIncome={todayIncome} cashlessName={cashLabels.providerName} />
           </div>
         )}
       </main>
@@ -1713,6 +1726,7 @@ export default function ArenaPage({
           station={startTarget}
           tariffs={tariffs}
           zoneId={startTarget.zone_id}
+          cashlessName={cashLabels.providerName}
           onConfirm={handleStart}
           onCancel={() => setStartTarget(null)}
           loading={actionLoading}
@@ -1733,6 +1747,7 @@ export default function ArenaPage({
           onTech={() => setTechTarget(manageTarget.station)}
           onClose={() => setManageTarget(null)}
           loading={actionLoading}
+          cashlessName={cashLabels.providerName}
         />
       )}
 
@@ -1752,6 +1767,7 @@ export default function ArenaPage({
           zone={massStartTarget}
           tariffs={tariffs}
           freeCount={stations.filter(s => s.zone_id === massStartTarget.id && s.is_active && !sessions.find(sess => sess.station_id === s.id)).length}
+          cashlessName={cashLabels.providerName}
           onConfirm={(tariffId, payMethod, cashAmt, kaspiAmt) => handleMassStart(massStartTarget.id, tariffId, payMethod, cashAmt, kaspiAmt)}
           onCancel={() => setMassStartTarget(null)}
           loading={actionLoading}
@@ -1770,6 +1786,7 @@ export default function ArenaPage({
           session={session}
           stations={stations}
           tariffs={tariffs}
+          cashlessName={cashLabels.providerName}
           onClose={() => setShowHistory(false)}
         />
       )}
@@ -1914,12 +1931,14 @@ function SessionHistoryModal({
   session,
   stations,
   tariffs,
+  cashlessName,
   onClose,
 }: {
   config: AppConfig
   session: OperatorSession
   stations: ArenaStation[]
   tariffs: ArenaTariff[]
+  cashlessName: string
   onClose: () => void
 }) {
   const today = new Date().toISOString().slice(0, 10)
@@ -2083,7 +2102,7 @@ function SessionHistoryModal({
             <span className="text-muted-foreground">{rows.length} сессий</span>
             <div className="flex gap-4">
               {totalCash > 0 && <span className="text-muted-foreground">Нал: <span className="font-medium text-foreground">{totalCash.toLocaleString('ru-RU')} ₸</span></span>}
-              {totalKaspi > 0 && <span className="text-muted-foreground">{cashLabels.providerName}: <span className="font-medium text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</span></span>}
+              {totalKaspi > 0 && <span className="text-muted-foreground">{cashlessName}: <span className="font-medium text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</span></span>}
               <span className="font-semibold">Итого: {totalAmount.toLocaleString('ru-RU')} ₸</span>
             </div>
           </div>
@@ -2092,4 +2111,3 @@ function SessionHistoryModal({
     </div>
   )
 }
-

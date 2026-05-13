@@ -30,7 +30,7 @@ import { useCashlessLabels } from '@/lib/use-cashless-labels'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
-import { syncQueue, getPendingCount, queueShiftReport } from '@/lib/offline'
+import { syncQueue, getPendingCount, queueClosePointShift, queueShiftReport } from '@/lib/offline'
 import QueueViewer from '@/components/QueueViewer'
 import type { OpenShiftInfo } from '@/lib/api'
 import type {
@@ -518,6 +518,40 @@ export default function ShiftPage({
     return anyQueued ? 'queued' : 'success'
   }
 
+  function buildCloseShiftPayload(fullForm: ShiftForm) {
+    return {
+      shift_id: activeOpenShift?.id || null,
+      closing_cash: vCash + vCoins,
+      closing_kaspi: isNightKaspiSplit
+        ? parseMoney(fullForm.kaspi_before_midnight) + parseMoney(fullForm.kaspi_pos)
+        : parseMoney(fullForm.kaspi_pos),
+      kaspi_before_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_before_midnight) : 0,
+      kaspi_after_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_pos) : 0,
+      closed_by: session.operator.operator_id || null,
+      closing_notes: form.comment || null,
+    }
+  }
+
+  async function closeShiftAfterReport(
+    payload: ReturnType<typeof buildCloseShiftPayload>,
+    reportResult: 'success' | 'queued',
+  ): Promise<'success' | 'queued'> {
+    if (reportResult === 'queued') {
+      await queueClosePointShift(payload, session.company.id)
+      return 'queued'
+    }
+
+    try {
+      await api.closePointShift(config, payload, session.company.id)
+      return 'success'
+    } catch (closeError) {
+      const status = (closeError as Error & { status?: number }).status
+      if (status && status < 500) throw closeError
+      await queueClosePointShift(payload, session.company.id)
+      return 'queued'
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError(null)
@@ -582,25 +616,13 @@ export default function ShiftPage({
         wipon: String(vWipon),
       }
       const sendResult = await sendOne(fullForm)
-      if (sendResult === 'success' || sendResult === 'queued') {
-        // Auto-close the point shift with financial totals for /shifts/reports
-        await api.closePointShift(config, {
-          shift_id: activeOpenShift?.id || null,
-          closing_cash: vCash + vCoins,
-          closing_kaspi: isNightKaspiSplit
-            ? parseMoney(fullForm.kaspi_before_midnight) + parseMoney(fullForm.kaspi_pos)
-            : parseMoney(fullForm.kaspi_pos),
-          kaspi_before_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_before_midnight) : 0,
-          kaspi_after_midnight: isNightKaspiSplit ? parseMoney(fullForm.kaspi_pos) : 0,
-          closed_by: session.operator.operator_id || null,
-          closing_notes: form.comment || null,
-        }, session.company.id)
-        resetForm()
-        onLogout()
-      } else {
+      const closeResult = await closeShiftAfterReport(buildCloseShiftPayload(fullForm), sendResult)
+      if (sendResult === 'queued' || closeResult === 'queued') {
         setPendingCount(await getPendingCount())
-        setResult(sendResult)
+        setResult('queued')
       }
+      resetForm()
+      onLogout()
     } catch (confirmError) {
       const message = confirmError instanceof Error ? confirmError.message : 'Не удалось отправить отчёт'
       setError(message)
@@ -640,12 +662,9 @@ export default function ShiftPage({
       ]
 
       const sendResult = await sendSplit(fullForm, entries)
+      await closeShiftAfterReport(buildCloseShiftPayload(fullForm), sendResult)
       resetForm()
       onLogout()
-      if (sendResult !== 'success' && sendResult !== 'queued') {
-        setPendingCount(await getPendingCount())
-        setResult(sendResult)
-      }
     } catch (confirmError) {
       const message = confirmError instanceof Error ? confirmError.message : 'Не удалось отправить отчёт'
       setError(message)
@@ -665,12 +684,9 @@ export default function ShiftPage({
         kaspi_before_midnight: '',
       }
       const sendResult = await sendOne(fullForm)
+      await closeShiftAfterReport(buildCloseShiftPayload(fullForm), sendResult)
       resetForm()
       onLogout()
-      if (sendResult !== 'success' && sendResult !== 'queued') {
-        setPendingCount(await getPendingCount())
-        setResult(sendResult)
-      }
     } catch (confirmError) {
       const message = confirmError instanceof Error ? confirmError.message : 'Не удалось отправить отчёт'
       setError(message)

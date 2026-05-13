@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 
@@ -14,59 +15,95 @@ export async function GET(request: Request) {
 
     const supabase = createAdminSupabaseClient()
     const today = new Date().toISOString().split('T')[0]
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const allowedCompanyIds = companyScope.allowedCompanyIds
+
+    if (allowedCompanyIds !== null && allowedCompanyIds.length === 0) {
+      return json({
+        ok: true,
+        data: {
+          companies: [],
+          locations: [],
+          items: [],
+          customers: [],
+          discounts: [],
+          loyalty_config: null,
+        },
+      })
+    }
+
+    let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    let locationsQuery = supabase
+      .from('inventory_locations')
+      .select('id, name, company_id, location_type')
+      .eq('location_type', 'point_display')
+      .eq('is_active', true)
+      .order('name')
+    let itemsQuery = supabase
+      .from('inventory_items')
+      .select('id, name, barcode, sale_price, unit, organization_id, category:category_id(id, name)')
+      .eq('is_active', true)
+      .order('name')
+    let customersQuery = supabase
+      .from('customers')
+      .select('id, name, phone, card_number, loyalty_points, company_id')
+      .order('name')
+
+    if (allowedCompanyIds !== null) {
+      companiesQuery = companiesQuery.in('id', allowedCompanyIds)
+      locationsQuery = locationsQuery.in('company_id', allowedCompanyIds)
+      customersQuery = customersQuery.in('company_id', allowedCompanyIds)
+    }
+
+    if (access.activeOrganization?.id && !access.isSuperAdmin) {
+      itemsQuery = itemsQuery.or(`organization_id.eq.${access.activeOrganization.id},organization_id.is.null`)
+    }
 
     const [
       { data: companies, error: companiesError },
       { data: locations, error: locationsError },
-      { data: allLocations, error: allLocationsError },
       { data: items, error: itemsError },
-      { data: balances, error: balancesError },
       { data: customers, error: customersError },
       { data: discounts, error: discountsError },
-      { data: loyaltyConfig, error: loyaltyConfigError },
     ] = await Promise.all([
-      supabase.from('companies').select('id, name, code').order('name'),
-      supabase
-        .from('inventory_locations')
-        .select('id, name, company_id, location_type')
-        .eq('location_type', 'point_display')
-        .eq('is_active', true)
-        .order('name'),
-      supabase
-        .from('inventory_locations')
-        .select('id, company_id, location_type')
-        .in('location_type', ['catalog_total', 'warehouse'])
-        .eq('is_active', true),
-      supabase
-        .from('inventory_items')
-        .select('id, name, barcode, sale_price, unit, category:category_id(id, name)')
-        .eq('is_active', true)
-        .order('name'),
-      supabase.from('inventory_balances').select('item_id, location_id, quantity'),
-      supabase.from('customers').select('id, name, phone, card_number, loyalty_points').order('name'),
+      companiesQuery,
+      locationsQuery,
+      itemsQuery,
+      customersQuery,
       supabase
         .from('discounts')
-        .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to')
+        .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
         .eq('is_active', true),
-      supabase.from('loyalty_config').select('*').limit(1).maybeSingle(),
     ])
 
     if (companiesError) throw companiesError
     if (locationsError) throw locationsError
-    if (allLocationsError) throw allLocationsError
     if (itemsError) throw itemsError
-    if (balancesError) throw balancesError
     if (customersError) throw customersError
     if (discountsError) throw discountsError
-    if (loyaltyConfigError) throw loyaltyConfigError
 
     // v2: showcase читается напрямую из point_display.
     // pdLocIds — все активные локации витрин
     const pdLocIds = new Set((locations || []).map((l) => String(l.id)))
+    const { data: balances, error: balancesError } =
+      pdLocIds.size > 0
+        ? await supabase
+            .from('inventory_balances')
+            .select('item_id, location_id, quantity')
+            .in('location_id', Array.from(pdLocIds))
+        : { data: [], error: null }
+    if (balancesError) throw balancesError
 
-    // Маппинг point_display location_id → company_id
-    const pdToCompany = new Map<string, string>()
-    for (const l of locations || []) pdToCompany.set(l.id, l.company_id)
+    const loyaltyCompanyId = String(
+      (locations || [])[0]?.company_id || (companies || [])[0]?.id || '',
+    ).trim()
+    const { data: loyaltyConfig, error: loyaltyConfigError } = loyaltyCompanyId
+      ? await supabase.from('loyalty_config').select('*').eq('company_id', loyaltyCompanyId).maybeSingle()
+      : { data: null, error: null }
+    if (loyaltyConfigError) throw loyaltyConfigError
 
     const balanceMap = new Map<string, number>()
     const locationBalanceMap = new Map<string, Record<string, number>>()
@@ -100,6 +137,7 @@ export async function GET(request: Request) {
     const activeDiscounts = (discounts || []).filter((d: any) => {
       if (d.valid_from && d.valid_from > today) return false
       if (d.valid_to && d.valid_to < today) return false
+      if (allowedCompanyIds !== null && d.company_id && !allowedCompanyIds.includes(String(d.company_id))) return false
       return true
     }).map((d: any) => ({
       id: d.id,

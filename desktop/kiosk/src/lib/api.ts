@@ -35,8 +35,8 @@ async function request<T>(
 }
 
 function authed(cfg: KioskConfig, clientToken: string) {
-  return (method: string, path: string, body?: unknown) =>
-    request(cfg, method, path, body, { 'x-kiosk-client-token': clientToken })
+  return <T>(method: string, path: string, body?: unknown) =>
+    request<T>(cfg, method, path, body, { 'x-kiosk-client-token': clientToken })
 }
 
 // ── Тема станции ─────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export async function clientLogin(
 // ── Профиль ───────────────────────────────────────────────────────────────────
 export async function fetchProfile(cfg: KioskConfig, clientToken: string): Promise<ClientSession> {
   const req = authed(cfg, clientToken)
-  return req('GET', '/client/profile')
+  return req<ClientSession>('GET', '/client/profile')
 }
 
 export async function updateProfile(
@@ -75,7 +75,7 @@ export async function updateProfile(
   data: { displayName?: string; avatarUrl?: string },
 ): Promise<{ ok: boolean }> {
   const req = authed(cfg, clientToken)
-  return req('PATCH', '/client/profile', data)
+  return req<{ ok: boolean }>('PATCH', '/client/profile', data)
 }
 
 export async function changePassword(
@@ -85,7 +85,7 @@ export async function changePassword(
   newPassword: string,
 ): Promise<{ ok: boolean }> {
   const req = authed(cfg, clientToken)
-  return req('POST', '/client/change-password', { oldPassword, newPassword })
+  return req<{ ok: boolean }>('POST', '/client/change-password', { oldPassword, newPassword })
 }
 
 // ── Покупка тарифа ────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ export async function buyTariff(
   cfg: KioskConfig,
   clientToken: string,
   tariffId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; sessionId: string; durationMin: number; endsAt: string; newBalance: number; error?: string }> {
   const req = authed(cfg, clientToken)
-  return req('POST', '/client/buy-tariff', { tariffId })
+  return req<{ ok: boolean; sessionId: string; durationMin: number; endsAt: string; newBalance: number; error?: string }>('POST', '/client/buy-tariff', { tariffId })
 }

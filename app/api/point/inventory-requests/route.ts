@@ -17,6 +17,9 @@ type Body = {
       comment?: string | null
     }>
   }
+} | {
+  action: 'receiveRequest'
+  requestId?: string | null
 }
 
 function json(data: unknown, status = 200) {
@@ -123,7 +126,7 @@ export async function GET(request: Request) {
         supabase
           .from('inventory_requests')
           .select(
-            'id, status, comment, decision_comment, created_at, approved_at, items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))',
+            'id, status, comment, decision_comment, created_at, approved_at, issued_at, received_at, items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))',
           )
           .eq('requesting_company_id', device.company_id)
           .order('created_at', { ascending: false })
@@ -187,7 +190,52 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => null)) as Body | null
-    if (body?.action !== 'createRequest') return json({ error: 'invalid-action' }, 400)
+    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+
+    if (body.action === 'receiveRequest') {
+      const requestId = String(body.requestId || '').trim()
+      if (!requestId) return json({ error: 'request-id-required' }, 400)
+
+      const actor = await resolveActor({ request, supabase, companyId: device.company_id })
+      const { data: req, error: reqError } = await supabase
+        .from('inventory_requests')
+        .select('id, status, requesting_company_id, target_location_id')
+        .eq('id', requestId)
+        .eq('requesting_company_id', device.company_id)
+        .maybeSingle()
+
+      if (reqError) throw reqError
+      if (!req?.id) return json({ error: 'inventory-request-not-found' }, 404)
+      if (req.status === 'received') return json({ ok: true, data: { status: 'received', idempotent: true } })
+      if (req.status !== 'issued') return json({ error: 'inventory-request-not-issued' }, 409)
+
+      const { targetLocation } = await resolvePointInventoryContext(supabase, device.company_id)
+      if (String(req.target_location_id || '') !== String(targetLocation.id || '')) {
+        return json({ error: 'inventory-request-target-mismatch' }, 403)
+      }
+
+      const { error: rpcErr } = await supabase.rpc('inventory_receive_request', {
+        p_request_id: requestId,
+        p_actor_user_id: actor.actorUserId,
+      })
+      if (rpcErr) throw rpcErr
+
+      await writeAuditLog(supabase, {
+        actorUserId: actor.actorUserId,
+        entityType: 'point-inventory-request',
+        entityId: requestId,
+        action: 'receive',
+        payload: {
+          point_device_id: device.id,
+          company_id: device.company_id,
+          operator_id: actor.operatorId,
+        },
+      })
+
+      return json({ ok: true, data: { status: 'received' } })
+    }
+
+    if (body.action !== 'createRequest') return json({ error: 'invalid-action' }, 400)
 
     const { sourceLocation, targetLocation } = await resolvePointInventoryContext(supabase, device.company_id)
     const actor = await resolveActor({ request, supabase, companyId: device.company_id })
