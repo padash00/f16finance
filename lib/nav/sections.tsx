@@ -142,6 +142,7 @@ export const navSections: NavSection[] = [
       { href: '/pos-returns', label: 'Возврат товара', icon: RotateCcw, note: 'Оформление возврата по чеку' },
       { href: '/customers', label: 'Клиенты', icon: Users2, note: 'Карточки покупателей и лояльность' },
       { href: '/discounts', label: 'Скидки и промокоды', icon: Tags, note: 'Управление скидками и промо' },
+      { href: '/store/receipt-settings', label: 'Реквизиты чека ККМ', icon: Receipt, note: 'Налогоплательщик, ККМ, ОФД, НДС — приказ МФ РК №626', isNew: true },
     ],
   },
   {
