@@ -1,777 +1,556 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Card } from '@/components/ui/card'
+import { ChevronLeft, ChevronRight, Loader2, Lock, Plus, RefreshCw, Target, Trash2 } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
-import { useIncome } from '@/hooks/use-income'
-import { useExpenses } from '@/hooks/use-expenses'
-import {
-  CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  Lightbulb,
-  Loader2,
-  Save,
-  Sparkles,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
-  Wand2,
-  Zap,
-} from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { isAbortError } from '@/lib/is-abort-error'
 
-const money = (v: number) => `${(Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
-const moneyShort = (v: number) => {
-  const abs = Math.abs(v)
-  const sign = v < 0 ? '-' : ''
-  if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + ' млн'
-  if (abs >= 1_000) return sign + Math.round(abs / 1_000) + ' тыс'
-  return sign + Math.round(abs).toLocaleString('ru-RU')
+const MONTH_LABELS_RU = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+]
+
+const METRICS: { value: Metric; label: string; unit: string }[] = [
+  { value: 'revenue', label: 'Выручка', unit: '₸' },
+  { value: 'profit', label: 'Прибыль', unit: '₸' },
+  { value: 'checks', label: 'Число чеков', unit: 'шт' },
+  { value: 'avg_check', label: 'Средний чек', unit: '₸' },
+  { value: 'margin', label: 'Маржа', unit: '%' },
+]
+
+const PERIOD_LABELS: Record<PeriodKind, string> = {
+  year: 'Год',
+  h1: 'I полугодие',
+  h2: 'II полугодие',
+  month: 'Месяц',
 }
 
-const currentMonthISO = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-const monthStart = (m: string) => `${m}-01`
-const monthEnd = (m: string) => {
-  const d = new Date(`${m}-01T12:00:00`)
-  d.setMonth(d.getMonth() + 1, 0)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-const monthLabel = (m: string) => new Date(`${m}-01T12:00:00`).toLocaleString('ru-RU', { month: 'long', year: 'numeric' })
-const monthShort = (m: string) => new Date(`${m}-01T12:00:00`).toLocaleString('ru-RU', { month: 'short', year: '2-digit' })
-const shiftMonth = (m: string, offset: number) => {
-  const [y, mo] = m.split('-').map(Number)
-  const d = new Date(y, mo - 1 + offset, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-const daysInMonth = (m: string) => {
-  const d = new Date(`${m}-01T12:00:00`)
-  d.setMonth(d.getMonth() + 1, 0)
-  return d.getDate()
-}
+type Metric = 'revenue' | 'profit' | 'checks' | 'avg_check' | 'margin'
+type PeriodKind = 'year' | 'h1' | 'h2' | 'month'
 
-type Goal = { id: string; period: string; target_income: number; target_expense: number; note: string | null }
 type Company = { id: string; name: string; code?: string | null }
 
-const SQL_SCRIPT = `create table if not exists goals (
-  id uuid primary key default gen_random_uuid(),
-  period text not null unique,
-  target_income numeric default 0,
-  target_expense numeric default 0,
-  note text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);`
-
-function ProgressCard({
-  label,
-  icon: Icon,
-  actual,
-  target,
-  forecast,
-  daysLeft,
-  isExpense = false,
-  isCurrentMonth = false,
-}: {
-  label: string
-  icon: any
-  actual: number
-  target: number
-  forecast: number | null
-  daysLeft: number | null
-  isExpense?: boolean
-  isCurrentMonth?: boolean
-}) {
-  const hasTarget = target > 0
-  const pct = hasTarget ? Math.round((actual / target) * 100) : 0
-  // Для расходов лучше когда меньше плана, для остального — больше
-  const onTrack = isExpense ? actual <= target : actual >= target
-  const closeToTarget = hasTarget && (isExpense ? actual / target < 0.9 : actual / target > 0.9)
-  const accent = !hasTarget
-    ? { bar: 'bg-slate-500/40', text: 'text-muted-foreground', border: 'border-border' }
-    : onTrack && pct >= 100
-      ? { bar: 'bg-emerald-500', text: 'text-emerald-300', border: 'border-emerald-500/30' }
-      : closeToTarget
-        ? { bar: 'bg-cyan-500', text: 'text-cyan-300', border: 'border-cyan-500/30' }
-        : isExpense && pct > 100
-          ? { bar: 'bg-rose-500', text: 'text-rose-300', border: 'border-rose-500/30' }
-          : { bar: 'bg-amber-500', text: 'text-amber-300', border: 'border-amber-500/30' }
-
-  const forecastPct = hasTarget && forecast != null ? Math.round((forecast / target) * 100) : null
-  const remainder = hasTarget ? Math.max(0, target - actual) : 0
-  const requiredDaily = isCurrentMonth && daysLeft && daysLeft > 0 ? remainder / daysLeft : null
-
-  return (
-    <Card className={`border ${accent.border} bg-card p-4`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon className={`h-4 w-4 ${accent.text}`} />
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-        </div>
-        {hasTarget && (
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${accent.text} bg-white/[0.04] border border-white/10`}>
-            {pct}%
-          </span>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <p className={`text-xl font-bold ${accent.text} tabular-nums`}>{money(actual)}</p>
-        {hasTarget ? (
-          <p className="text-xs text-muted-foreground">
-            план <span className="text-foreground font-medium tabular-nums">{moneyShort(target)}</span>
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground/60">цель не задана</p>
-        )}
-      </div>
-
-      {hasTarget && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-          <div className={`h-full ${accent.bar} transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
-        </div>
-      )}
-
-      {/* Прогноз / темп — только для текущего месяца с целью */}
-      {isCurrentMonth && hasTarget && forecast != null ? (
-        <div className="mt-3 pt-3 border-t border-border/50 space-y-1">
-          <div className="flex justify-between items-baseline text-[11px]">
-            <span className="text-muted-foreground flex items-center gap-1">
-              <Zap className="h-3 w-3" />Прогноз
-            </span>
-            <span className={`tabular-nums font-medium ${forecastPct && (isExpense ? forecastPct <= 100 : forecastPct >= 100) ? 'text-emerald-300' : 'text-amber-300'}`}>
-              {moneyShort(forecast)}{forecastPct != null ? ` (${forecastPct}%)` : ''}
-            </span>
-          </div>
-          {requiredDaily != null && !isExpense ? (
-            <div className="flex justify-between items-baseline text-[11px]">
-              <span className="text-muted-foreground">Нужно/день</span>
-              <span className="text-foreground tabular-nums">{moneyShort(requiredDaily)}</span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </Card>
-  )
+type Plan = {
+  id: string
+  company_id: string | null
+  kind: string
+  period_kind: PeriodKind | null
+  metric: Metric | null
+  target_amount: number
+  period_start: string
+  period_end: string
+  fact_value: number
+  achievement_pct: number
+  is_closed: boolean
 }
 
-function VarianceTable({ goals, companyId }: { goals: Goal[]; companyId: string }) {
-  const [actuals, setActuals] = useState<Record<string, { income: number; expense: number }>>({})
-  const [loading, setLoading] = useState(false)
+type ApiResponse = {
+  ok: boolean
+  data?: { year: number; companies: Company[]; plans: Plan[] }
+  error?: string
+}
 
-  useEffect(() => {
-    const sorted = [...goals].sort((a, b) => b.period.localeCompare(a.period)).slice(0, 6)
-    if (sorted.length === 0) return
-    setLoading(true)
-    Promise.all(
-      sorted.map(async (g) => {
-        const start = `${g.period}-01`
-        const d = new Date(`${g.period}-01T12:00:00`)
-        d.setMonth(d.getMonth() + 1, 0)
-        const end = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-        const fetchAll = async (base: string) => {
-          let rows: any[] = []
-          let page = 0
-          const PAGE = 500
-          while (true) {
-            const r = await fetch(`${base}&page_size=${PAGE}&page=${page}`).then((r) => r.json())
-            const chunk: any[] = r.data ?? []
-            rows = rows.concat(chunk)
-            if (chunk.length < PAGE) break
-            page++
-          }
-          return rows
-        }
-        const companyParam = companyId !== 'all' ? `&company_id=${encodeURIComponent(companyId)}` : ''
-        const [incRows, expRows] = await Promise.all([
-          fetchAll(`/api/admin/incomes?from=${start}&to=${end}${companyParam}`),
-          fetchAll(`/api/admin/expenses?from=${start}&to=${end}${companyParam}`),
-        ])
-        const income = incRows.reduce(
-          (s: number, r: any) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0),
-          0,
-        )
-        const expense = expRows.reduce((s: number, r: any) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0), 0)
-        return [g.period, { income, expense }] as const
-      }),
-    )
-      .then((results) => {
-        setActuals(Object.fromEntries(results))
-      })
-      .finally(() => setLoading(false))
-  }, [goals, companyId])
+const fmt = (v: number) => Math.round(v).toLocaleString('ru-RU')
 
-  const sorted = [...goals].sort((a, b) => b.period.localeCompare(a.period)).slice(0, 6).reverse()
-  const maxAbs = useMemo(() => {
-    let m = 0
-    for (const g of sorted) {
-      const a = actuals[g.period]
-      const planProfit = g.target_income - g.target_expense
-      const actProfit = a ? a.income - a.expense : 0
-      m = Math.max(m, Math.abs(planProfit), Math.abs(actProfit), g.target_income, a?.income || 0)
-    }
-    return m
-  }, [sorted, actuals])
+function metricUnit(m: Metric | null) {
+  return METRICS.find((x) => x.value === m)?.unit || ''
+}
 
-  if (sorted.length === 0) return null
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">Прибыль: план vs факт</p>
-        {loading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-      </div>
-
-      {/* Mini-bars sparkline */}
-      <div className="mb-5 grid grid-cols-6 gap-1.5">
-        {sorted.map((g) => {
-          const a = actuals[g.period]
-          const planProfit = g.target_income - g.target_expense
-          const actProfit = a ? a.income - a.expense : null
-          const planH = maxAbs > 0 ? (Math.abs(planProfit) / maxAbs) * 100 : 0
-          const actH = maxAbs > 0 && actProfit != null ? (Math.abs(actProfit) / maxAbs) * 100 : 0
-          const beat = actProfit != null && actProfit >= planProfit
-          return (
-            <div key={g.period} className="flex flex-col items-center gap-1">
-              <div className="relative h-24 w-full flex items-end justify-center gap-0.5 rounded-md bg-white/[0.02] p-1">
-                <div
-                  className="w-1/2 rounded-sm bg-slate-500/40 transition-all"
-                  style={{ height: `${planH}%` }}
-                  title={`План: ${moneyShort(planProfit)}`}
-                />
-                <div
-                  className={`w-1/2 rounded-sm transition-all ${actProfit == null ? 'bg-slate-700' : beat ? 'bg-emerald-500/80' : 'bg-rose-500/70'}`}
-                  style={{ height: `${actH}%` }}
-                  title={actProfit != null ? `Факт: ${moneyShort(actProfit)}` : '...'}
-                />
-              </div>
-              <span className="text-[10px] text-muted-foreground tabular-nums">{monthShort(g.period)}</span>
-              {actProfit != null && (
-                <span className={`text-[10px] tabular-nums font-medium ${beat ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {beat ? '✓' : '−'}{moneyShort(Math.abs(actProfit - planProfit))}
-                </span>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th className="py-2 pr-3 font-medium">Месяц</th>
-              <th className="py-2 pr-3 text-right font-medium">План выр.</th>
-              <th className="py-2 pr-3 text-right font-medium">Факт выр.</th>
-              <th className="py-2 pr-3 text-right font-medium">План расх.</th>
-              <th className="py-2 pr-3 text-right font-medium">Факт расх.</th>
-              <th className="py-2 pr-3 text-right font-medium">План приб.</th>
-              <th className="py-2 text-right font-medium">Факт приб.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...sorted].reverse().map((g) => {
-              const a = actuals[g.period]
-              const planProfit = g.target_income - g.target_expense
-              const actProfit = a ? a.income - a.expense : null
-              const profitBeat = actProfit != null && actProfit >= planProfit
-              return (
-                <tr key={g.period} className="border-b border-border/40 hover:bg-white/[0.02]">
-                  <td className="py-2 pr-3 font-medium text-foreground whitespace-nowrap">{monthShort(g.period)}</td>
-                  <td className="py-2 pr-3 text-right text-muted-foreground tabular-nums">{moneyShort(g.target_income)}</td>
-                  <td className="py-2 pr-3 text-right text-emerald-400 tabular-nums">{a ? moneyShort(a.income) : '…'}</td>
-                  <td className="py-2 pr-3 text-right text-muted-foreground tabular-nums">{moneyShort(g.target_expense)}</td>
-                  <td className="py-2 pr-3 text-right text-rose-400 tabular-nums">{a ? moneyShort(a.expense) : '…'}</td>
-                  <td className="py-2 pr-3 text-right text-muted-foreground tabular-nums">{moneyShort(planProfit)}</td>
-                  <td className={`py-2 text-right font-semibold tabular-nums ${actProfit == null ? 'text-muted-foreground' : profitBeat ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {actProfit != null ? moneyShort(actProfit) : '…'}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
+function metricLabel(m: Metric | null) {
+  return METRICS.find((x) => x.value === m)?.label || m || ''
 }
 
 export default function GoalsPage() {
-  const [month, setMonth] = useState(currentMonthISO)
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [companyId, setCompanyId] = useState<string>('all')
-  const [tableExists, setTableExists] = useState<boolean | null>(null)
+  const currentYear = new Date().getFullYear()
+  const [year, setYear] = useState(currentYear)
+  const [tab, setTab] = useState<PeriodKind>('month')
+  const [data, setData] = useState<ApiResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [form, setForm] = useState({
+    period_kind: 'month' as PeriodKind,
+    month_idx: new Date().getMonth(),
+    metric: 'revenue' as Metric,
+    company_id: 'all' as string,
+    target_amount: '',
+  })
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [draft, setDraft] = useState({ target_income: '', target_expense: '', note: '' })
-  const [copied, setCopied] = useState(false)
 
-  const today = new Date()
-  const currentMonth = currentMonthISO()
-  const isCurrentMonth = month === currentMonth
-  const totalDays = daysInMonth(month)
-  const dayOfMonth = isCurrentMonth ? today.getDate() : totalDays
-  const daysLeft = isCurrentMonth ? Math.max(0, totalDays - dayOfMonth) : 0
-
-  const dateFrom = useMemo(() => monthStart(month), [month])
-  const dateTo = useMemo(() => monthEnd(month), [month])
-
-  const { rows: incomeRows } = useIncome({
-    from: dateFrom,
-    to: dateTo,
-    companyId: companyId !== 'all' ? companyId : undefined,
-    fetchAll: true,
-    pageSize: 1000,
-  })
-  const { rows: expenseRows } = useExpenses({
-    from: dateFrom,
-    to: dateTo,
-    companyId: companyId !== 'all' ? companyId : undefined,
-    fetchAll: true,
-    pageSize: 1000,
-  })
-
-  // Прошлый месяц — для подсказки и копирования цели
-  const prevMonth = shiftMonth(month, -1)
-  const { rows: prevIncomeRows } = useIncome({
-    from: monthStart(prevMonth),
-    to: monthEnd(prevMonth),
-    companyId: companyId !== 'all' ? companyId : undefined,
-    fetchAll: true,
-    pageSize: 1000,
-  })
-  const { rows: prevExpenseRows } = useExpenses({
-    from: monthStart(prevMonth),
-    to: monthEnd(prevMonth),
-    companyId: companyId !== 'all' ? companyId : undefined,
-    fetchAll: true,
-    pageSize: 1000,
-  })
-
-  const actuals = useMemo(() => {
-    const income = incomeRows.reduce(
-      (s, r) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0),
-      0,
-    )
-    const expense = expenseRows.reduce((s, r) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0), 0)
-    return { income, expense, profit: income - expense }
-  }, [incomeRows, expenseRows])
-
-  const prevActuals = useMemo(() => {
-    const income = prevIncomeRows.reduce(
-      (s, r) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0),
-      0,
-    )
-    const expense = prevExpenseRows.reduce((s, r) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0), 0)
-    return { income, expense, profit: income - expense }
-  }, [prevIncomeRows, prevExpenseRows])
-
-  const currentGoal = useMemo(() => goals.find((g) => g.period === month) ?? null, [goals, month])
-  const prevGoal = useMemo(() => goals.find((g) => g.period === prevMonth) ?? null, [goals, prevMonth])
-
-  // Прогноз на конец месяца (только для текущего месяца)
-  const forecast = useMemo(() => {
-    if (!isCurrentMonth || dayOfMonth === 0) return null
-    const passed = dayOfMonth
-    const factor = totalDays / passed
-    return {
-      income: actuals.income * factor,
-      expense: actuals.expense * factor,
-      profit: actuals.profit * factor,
-    }
-  }, [isCurrentMonth, actuals, dayOfMonth, totalDays])
-
-  useEffect(() => {
-    setLoading(true)
-    fetch('/api/goals')
-      .then((r) => r.json())
-      .then((data) => {
-        setTableExists(data.tableExists !== false)
-        setGoals(data.data ?? [])
-      })
-      .catch(() => setTableExists(false))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    fetch('/api/admin/companies', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null).then((json) => ({ ok: r.ok, json })))
-      .then(({ ok, json }) => {
-        if (ok && Array.isArray(json?.data)) setCompanies(json.data as Company[])
-      })
-      .catch(() => setCompanies([]))
-  }, [])
-
-  useEffect(() => {
-    setDraft({
-      target_income: currentGoal?.target_income ? String(currentGoal.target_income) : '',
-      target_expense: currentGoal?.target_expense ? String(currentGoal.target_expense) : '',
-      note: currentGoal?.note ?? '',
-    })
-  }, [currentGoal, month])
-
-  const handleSave = async () => {
-    setSaving(true)
+  const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
+    const soft = Boolean(opts?.soft)
+    if (soft) setRefreshing(true)
+    else setLoading(true)
+    setError(null)
     try {
-      const res = await fetch('/api/goals', {
+      const response = await fetch(`/api/admin/kpi-plans?year=${year}`, { cache: 'no-store', signal })
+      const json = (await response.json().catch(() => null)) as ApiResponse | null
+      if (signal?.aborted) return
+      if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить планы')
+      setData(json.data)
+    } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return
+      if (!soft) setData(null)
+      setError(err?.message || 'Не удалось загрузить')
+    } finally {
+      if (!signal?.aborted) {
+        if (soft) setRefreshing(false)
+        else setLoading(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    const ac = new AbortController()
+    void load(ac.signal)
+    return () => ac.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year])
+
+  const companies = data?.companies || []
+  const plans = data?.plans || []
+
+  const filteredPlans = useMemo(
+    () => plans.filter((p) => p.period_kind === tab),
+    [plans, tab],
+  )
+
+  const monthGroups = useMemo(() => {
+    const map = new Map<number, Plan[]>()
+    for (const p of filteredPlans) {
+      const mIdx = parseInt(p.period_start.slice(5, 7), 10) - 1
+      if (Number.isFinite(mIdx)) {
+        const list = map.get(mIdx) || []
+        list.push(p)
+        map.set(mIdx, list)
+      }
+    }
+    return map
+  }, [filteredPlans])
+
+  const groupedByCompanyMetric = useMemo(() => {
+    const map: Record<string, Record<Metric, Plan[]>> = {}
+    for (const p of filteredPlans) {
+      if (!p.metric) continue
+      const key = p.company_id || '__org__'
+      map[key] = map[key] || ({} as Record<Metric, Plan[]>)
+      const arr = map[key][p.metric] || []
+      arr.push(p)
+      map[key][p.metric] = arr
+    }
+    return map
+  }, [filteredPlans])
+
+  const summary = useMemo(() => {
+    const byMetric: Record<Metric, { plan: number; fact: number; count: number }> = {
+      revenue: { plan: 0, fact: 0, count: 0 },
+      profit: { plan: 0, fact: 0, count: 0 },
+      checks: { plan: 0, fact: 0, count: 0 },
+      avg_check: { plan: 0, fact: 0, count: 0 },
+      margin: { plan: 0, fact: 0, count: 0 },
+    }
+    for (const p of filteredPlans) {
+      if (!p.metric) continue
+      if (p.company_id) continue // только общеорганизационные
+      byMetric[p.metric].plan += Number(p.target_amount || 0)
+      byMetric[p.metric].fact += Number(p.fact_value || 0)
+      byMetric[p.metric].count += 1
+    }
+    return byMetric
+  }, [filteredPlans])
+
+  const handleAddPlan = async () => {
+    const target = Number(String(form.target_amount).replace(/\s/g, '').replace(',', '.'))
+    if (!Number.isFinite(target) || target <= 0) {
+      setError('Введите цель больше 0')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch('/api/admin/kpi-plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          period: month,
-          target_income: Number(draft.target_income.replace(',', '.') || 0),
-          target_expense: Number(draft.target_expense.replace(',', '.') || 0),
-          note: draft.note || null,
+          year,
+          period_kind: form.period_kind,
+          month_idx: form.period_kind === 'month' ? form.month_idx : undefined,
+          metric: form.metric,
+          company_id: form.company_id === 'all' ? null : form.company_id,
+          target_amount: target,
         }),
       })
-      const data = await res.json()
-      if (data.data) {
-        setGoals((prev) => {
-          const filtered = prev.filter((g) => g.period !== month)
-          return [...filtered, data.data].sort((a, b) => b.period.localeCompare(a.period))
-        })
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2000)
-      }
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить')
+      setSuccess('План сохранён')
+      setTimeout(() => setSuccess(null), 2000)
+      setDialogOpen(false)
+      setForm((f) => ({ ...f, target_amount: '' }))
+      await load(undefined, { soft: true })
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось сохранить')
     } finally {
       setSaving(false)
     }
   }
 
-  // Авто-подстановки
-  const suggestFromPrev10pct = () => {
-    if (!prevActuals.income && !prevActuals.expense) return
-    setDraft({
-      target_income: String(Math.round(prevActuals.income * 1.1)),
-      target_expense: String(Math.round(prevActuals.expense * 1.05)),
-      note: draft.note,
-    })
+  const handleDelete = async (planId: string) => {
+    if (!window.confirm('Удалить план?')) return
+    try {
+      const response = await fetch(`/api/admin/kpi-plans?id=${encodeURIComponent(planId)}`, { method: 'DELETE' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить')
+      await load(undefined, { soft: true })
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось удалить')
+    }
   }
-  const suggestCopyPrevGoal = () => {
-    if (!prevGoal) return
-    setDraft({
-      target_income: String(prevGoal.target_income),
-      target_expense: String(prevGoal.target_expense),
-      note: draft.note,
-    })
-  }
-
-  const monthPills = useMemo(() => {
-    return [-3, -2, -1, 0, 1, 2].map((offset) => shiftMonth(month, offset))
-  }, [month])
-
-  const targetIncome = currentGoal?.target_income ?? 0
-  const targetExpense = currentGoal?.target_expense ?? 0
-  const targetProfit = targetIncome - targetExpense
-  const hasAnyGoal = targetIncome > 0 || targetExpense > 0
-  const allMet = hasAnyGoal && actuals.income >= targetIncome && actuals.expense <= targetExpense
 
   return (
     <div className="app-page-wide space-y-6">
-      {/* ═══ HEADER ═══ */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <Target className="h-7 w-7 text-teal-400" />
-            Цели и план
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Плановые показатели по выручке, расходам и прибыли. Прогноз — на основе текущего темпа.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setMonth((m) => shiftMonth(m, -1))}
-            className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card text-sm">
-            <CalendarDays className="w-4 h-4 text-teal-400" />
-            <span className="text-foreground font-medium capitalize">{monthLabel(month)}</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
+            <Target className="h-5 w-5 text-blue-300" />
           </div>
-          <button
-            onClick={() => setMonth((m) => shiftMonth(m, 1))}
-            className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <select
-            value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
-            className="ml-1 px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground min-w-[180px]"
-          >
-            <option value="all">Все компании</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold">Цели и план</h1>
+            <p className="truncate text-xs text-muted-foreground">План vs факт по периодам и точкам</p>
+          </div>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+            <Button size="sm" variant="ghost" onClick={() => setYear((y) => y - 1)} className="h-8 w-8 p-0" disabled={loading}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="px-3 text-sm font-medium tabular-nums">{year}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))}
+              className="h-8 w-8 p-0"
+              disabled={loading || year >= currentYear + 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+          <Button size="sm" onClick={() => setDialogOpen(true)} className="h-9 gap-1.5 bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-3.5 w-3.5" />
+            Новый план
+          </Button>
         </div>
       </div>
 
-      {/* SQL setup card */}
-      {tableExists === false && (
-        <Card className="p-5 border-amber-500/30 bg-amber-500/5">
-          <div className="flex items-center gap-2 mb-3">
-            <Target className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-amber-300">Требуется настройка базы данных</h2>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3">Выполни этот SQL в Supabase → SQL Editor:</p>
-          <div className="relative">
-            <pre className="bg-black/40 border border-border rounded-xl p-4 text-xs text-foreground overflow-x-auto">{SQL_SCRIPT}</pre>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(SQL_SCRIPT)
-                setCopied(true)
-                setTimeout(() => setCopied(false), 2000)
-              }}
-              className="absolute top-2 right-2 px-2 py-1 text-xs bg-white/10 hover:bg-white/15 text-foreground rounded-lg transition-colors"
-            >
-              {copied ? '✓ Скопировано' : 'Копировать'}
-            </button>
+      {error ? (
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
+      ) : null}
+      {success ? (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div>
+      ) : null}
+
+      <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+        {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setTab(p)}
+            className={`rounded-md px-3 py-1.5 transition ${tab === p ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            {PERIOD_LABELS[p]}
+          </button>
+        ))}
+      </div>
+
+      {loading && !data ? (
+        <Card className="border-white/10 bg-card/70 p-8">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Грузим планы за {year}…
           </div>
         </Card>
-      )}
-
-      {loading && goals.length === 0 ? (
-        <Card className="border-border bg-card p-12 text-center text-muted-foreground animate-pulse">Загружаем данные…</Card>
-      ) : tableExists !== false ? (
+      ) : (
         <>
-          {/* ═══ MONTH PILLS ═══ */}
-          <div className="flex flex-wrap gap-2">
-            {monthPills.map((m) => {
-              const isActive = m === month
-              const isPast = m < currentMonth
-              const isFuture = m > currentMonth
-              const g = goals.find((x) => x.period === m)
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {METRICS.map((m) => {
+              const row = summary[m.value]
+              const pct = row.plan > 0 ? Math.round((row.fact / row.plan) * 1000) / 10 : 0
+              const positive = pct >= 100
               return (
-                <button
-                  key={m}
-                  onClick={() => setMonth(m)}
-                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all ${
-                    isActive
-                      ? 'border-teal-500/40 bg-teal-500/10 text-teal-200 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]'
-                      : 'border-border bg-card text-muted-foreground hover:border-teal-500/30 hover:text-foreground'
-                  }`}
+                <Card
+                  key={m.value}
+                  className={`border p-3 ${row.count > 0 ? (positive ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-amber-500/30 bg-amber-500/[0.05]') : 'border-white/10 bg-white/[0.03]'}`}
                 >
-                  <span className="font-medium capitalize">{monthShort(m)}</span>
-                  {g && (g.target_income > 0 || g.target_expense > 0) ? (
-                    <span className="h-1.5 w-1.5 rounded-full bg-teal-400" title="Цель задана" />
-                  ) : isPast ? (
-                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" title="Цель не задана" />
-                  ) : isFuture ? (
-                    <span className="text-[10px] text-muted-foreground/60">план</span>
-                  ) : null}
-                </button>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{m.label}</p>
+                  {row.count > 0 ? (
+                    <>
+                      <p className="mt-1 text-base font-semibold tabular-nums">
+                        {fmt(row.fact)} <span className="text-xs text-muted-foreground">/ {fmt(row.plan)} {m.unit}</span>
+                      </p>
+                      <p className={`mt-0.5 text-xs ${positive ? 'text-emerald-300' : 'text-amber-300'}`}>
+                        {pct}%{positive ? ' ✓' : ''}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted-foreground">План не задан</p>
+                  )}
+                </Card>
               )
             })}
           </div>
 
-          {/* ═══ ACHIEVEMENT BANNER ═══ */}
-          {allMet && (
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-              <div className="shrink-0 rounded-lg bg-emerald-500/20 p-2 text-emerald-300">
-                <CheckCircle2 className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-emerald-200">Цели выполнены полностью!</p>
-                <p className="text-xs text-emerald-300/80">{monthLabel(month)} — выручка ↑ {money(targetIncome)}, расходы ↓ {money(targetExpense)}.</p>
-              </div>
-            </div>
+          {tab === 'month' ? (
+            <MonthsView year={year} monthGroups={monthGroups} companies={companies} onDelete={handleDelete} />
+          ) : (
+            <PeriodsView groupedByCompanyMetric={groupedByCompanyMetric} companies={companies} onDelete={handleDelete} />
           )}
 
-          {/* ═══ 3 PROGRESS CARDS ═══ */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <ProgressCard
-              label="Выручка"
-              icon={TrendingUp}
-              actual={actuals.income}
-              target={targetIncome}
-              forecast={forecast?.income ?? null}
-              daysLeft={daysLeft}
-              isCurrentMonth={isCurrentMonth}
-            />
-            <ProgressCard
-              label="Расходы"
-              icon={TrendingDown}
-              actual={actuals.expense}
-              target={targetExpense}
-              forecast={forecast?.expense ?? null}
-              daysLeft={daysLeft}
-              isExpense
-              isCurrentMonth={isCurrentMonth}
-            />
-            <ProgressCard
-              label="Прибыль"
-              icon={Wallet}
-              actual={actuals.profit}
-              target={targetProfit}
-              forecast={forecast?.profit ?? null}
-              daysLeft={daysLeft}
-              isCurrentMonth={isCurrentMonth}
-            />
-          </div>
+          {filteredPlans.length === 0 ? (
+            <Card className="border-dashed border-white/10 bg-card/40 p-8 text-center text-sm text-muted-foreground">
+              На {PERIOD_LABELS[tab].toLowerCase()} планов пока нет. Нажми «Новый план».
+            </Card>
+          ) : null}
+        </>
+      )}
 
-          {/* ═══ INSIGHT строка ═══ */}
-          {isCurrentMonth && hasAnyGoal && forecast && (
-            <div className="flex items-start gap-3 rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-4 py-3">
-              <div className="shrink-0 rounded-lg bg-cyan-500/15 p-1.5 text-cyan-300">
-                <Lightbulb className="h-4 w-4" />
-              </div>
-              <div className="flex-1 text-sm text-cyan-100/90 space-y-1">
-                <p>
-                  <span className="text-foreground font-medium">{daysLeft}</span> дней до конца месяца
-                  · день <span className="text-foreground">{dayOfMonth}</span> из {totalDays}.
-                </p>
-                {targetIncome > 0 && (() => {
-                  const required = (targetIncome - actuals.income) / Math.max(1, daysLeft)
-                  const currentRate = actuals.income / Math.max(1, dayOfMonth)
-                  const onTrack = currentRate >= required || daysLeft === 0
-                  return (
-                    <p>
-                      Чтобы выполнить план по выручке — нужно <span className="text-foreground font-medium">{moneyShort(Math.max(0, required))}</span>/день. Сейчас зарабатываешь <span className={onTrack ? 'text-emerald-300' : 'text-amber-300'}>{moneyShort(currentRate)}</span>/день.
-                    </p>
-                  )
-                })()}
-              </div>
-            </div>
-          )}
-
-          {/* ═══ EDIT FORM ═══ */}
-          <Card className="border-border bg-card p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-teal-400" />
-                Цели на {monthLabel(month)}
-              </h2>
-              <div className="flex items-center gap-2">
-                {prevGoal && (prevGoal.target_income > 0 || prevGoal.target_expense > 0) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={suggestCopyPrevGoal}
-                    className="h-8 text-xs"
-                  >
-                    <Copy className="h-3 w-3 mr-1" />
-                    Скопировать прошлую цель
-                  </Button>
-                )}
-                {(prevActuals.income > 0 || prevActuals.expense > 0) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={suggestFromPrev10pct}
-                    className="h-8 text-xs"
-                  >
-                    <Wand2 className="h-3 w-3 mr-1" />
-                    +10% от факта прошлого
-                  </Button>
-                )}
-              </div>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Новый план</DialogTitle>
+            <DialogDescription>Задай цель по KPI на выбранный период.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Период</Label>
+              <Select value={form.period_kind} onValueChange={(v) => setForm((f) => ({ ...f, period_kind: v as PeriodKind }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="year">Год</SelectItem>
+                  <SelectItem value="h1">I полугодие</SelectItem>
+                  <SelectItem value="h2">II полугодие</SelectItem>
+                  <SelectItem value="month">Месяц</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {(prevActuals.income > 0 || prevActuals.expense > 0) && (
-              <div className="mb-4 rounded-lg border border-border bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span className="font-medium text-foreground">Прошлый месяц ({monthShort(prevMonth)}):</span>
-                <span>выручка <span className="text-emerald-300 tabular-nums">{moneyShort(prevActuals.income)}</span></span>
-                <span>расходы <span className="text-rose-300 tabular-nums">{moneyShort(prevActuals.expense)}</span></span>
-                <span>прибыль <span className={`tabular-nums ${prevActuals.profit >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{moneyShort(prevActuals.profit)}</span></span>
+            {form.period_kind === 'month' ? (
+              <div className="space-y-1.5">
+                <Label>Месяц</Label>
+                <Select value={String(form.month_idx)} onValueChange={(v) => setForm((f) => ({ ...f, month_idx: Number(v) }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MONTH_LABELS_RU.map((m, idx) => (
+                      <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+            ) : null}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">Плановая выручка</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={draft.target_income}
-                    onChange={(e) => setDraft((d) => ({ ...d, target_income: e.target.value }))}
-                    placeholder="0"
-                    className="w-full px-3 py-2.5 pr-12 bg-input border border-border rounded-lg text-sm text-foreground outline-none focus:border-teal-500/50"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₸</span>
-                </div>
-                {draft.target_income && Number(draft.target_income) > 0 && (
-                  <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">= {moneyShort(Number(draft.target_income))}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">Плановые расходы</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={draft.target_expense}
-                    onChange={(e) => setDraft((d) => ({ ...d, target_expense: e.target.value }))}
-                    placeholder="0"
-                    className="w-full px-3 py-2.5 pr-12 bg-input border border-border rounded-lg text-sm text-foreground outline-none focus:border-teal-500/50"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₸</span>
-                </div>
-                {draft.target_expense && Number(draft.target_expense) > 0 && (
-                  <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">= {moneyShort(Number(draft.target_expense))}</p>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <Label>KPI</Label>
+              <Select value={form.metric} onValueChange={(v) => setForm((f) => ({ ...f, metric: v as Metric }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {METRICS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label} ({m.unit})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Расчётная плановая прибыль */}
-            {(Number(draft.target_income) > 0 || Number(draft.target_expense) > 0) && (
-              <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] px-3 py-2 text-xs flex items-center justify-between">
-                <span className="text-muted-foreground">Расчётная плановая прибыль:</span>
-                <span className={`font-semibold tabular-nums ${Number(draft.target_income) - Number(draft.target_expense) >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>
-                  {moneyShort(Number(draft.target_income) - Number(draft.target_expense))}
-                </span>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label>Точка</Label>
+              <Select value={form.company_id} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Общий по организации</SelectItem>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <div className="mt-4">
-              <label className="block text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">Заметка</label>
-              <textarea
-                value={draft.note}
-                onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
-                placeholder="напр.: рост из-за открытия новой зоны, акция на Каспи..."
-                rows={2}
-                className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground outline-none focus:border-teal-500/50 resize-none"
+            <div className="space-y-1.5">
+              <Label>Цель ({METRICS.find((m) => m.value === form.metric)?.unit})</Label>
+              <Input
+                value={form.target_amount}
+                onChange={(e) => setForm((f) => ({ ...f, target_amount: e.target.value }))}
+                placeholder="0"
+                inputMode="numeric"
               />
             </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button onClick={handleAddPlan} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Сохранить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
 
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                {saved ? 'Сохранено!' : 'Сохранить цели'}
-              </button>
-              {currentGoal?.note && !draft.note && (
-                <span className="text-xs text-muted-foreground">Заметка: {currentGoal.note}</span>
-              )}
+function MonthsView({
+  year,
+  monthGroups,
+  companies,
+  onDelete,
+}: {
+  year: number
+  monthGroups: Map<number, Plan[]>
+  companies: Company[]
+  onDelete: (id: string) => void
+}) {
+  return (
+    <Card className="border-white/10 bg-card/70 overflow-hidden p-0">
+      <div className="border-b border-white/10 px-5 py-3">
+        <h2 className="text-sm font-semibold">Планы по месяцам · {year}</h2>
+      </div>
+      <div className="divide-y divide-white/[0.04]">
+        {MONTH_LABELS_RU.map((mLabel, idx) => {
+          const plans = monthGroups.get(idx) || []
+          if (plans.length === 0) {
+            return (
+              <div key={idx} className="flex items-center justify-between px-5 py-3 text-sm">
+                <span className="font-medium">{mLabel}</span>
+                <span className="text-muted-foreground">План не задан</span>
+              </div>
+            )
+          }
+          return (
+            <div key={idx} className="px-5 py-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{mLabel}</span>
+                {plans[0]?.is_closed ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] text-slate-300">
+                    <Lock className="h-3 w-3" /> Закрыт
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                    Открыт
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {plans.map((p) => (
+                  <PlanRow key={p.id} plan={p} companies={companies} onDelete={onDelete} />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+function PeriodsView({
+  groupedByCompanyMetric,
+  companies,
+  onDelete,
+}: {
+  groupedByCompanyMetric: Record<string, Record<Metric, Plan[]>>
+  companies: Company[]
+  onDelete: (id: string) => void
+}) {
+  const keys = Object.keys(groupedByCompanyMetric)
+  return (
+    <div className="space-y-4">
+      {keys.map((key) => {
+        const company = key === '__org__' ? null : companies.find((c) => c.id === key)
+        const title = company ? company.name : 'Общий план по организации'
+        const metricMap = groupedByCompanyMetric[key]
+        const allPlans: Plan[] = Object.values(metricMap).flat()
+        return (
+          <Card key={key} className="border-white/10 bg-card/70 p-5">
+            <h2 className="mb-3 text-sm font-semibold">{title}</h2>
+            <div className="space-y-1.5">
+              {allPlans.map((p) => (
+                <PlanRow key={p.id} plan={p} companies={companies} onDelete={onDelete} />
+              ))}
             </div>
           </Card>
+        )
+      })}
+    </div>
+  )
+}
 
-          {/* ═══ VARIANCE HISTORY ═══ */}
-          {goals.filter((g) => g.target_income > 0 || g.target_expense > 0).length > 0 && (
-            <Card className="border-border bg-card p-5">
-              <VarianceTable
-                goals={goals.filter((g) => g.target_income > 0 || g.target_expense > 0)}
-                companyId={companyId}
-              />
-            </Card>
-          )}
-        </>
-      ) : null}
+function PlanRow({
+  plan,
+  companies,
+  onDelete,
+}: {
+  plan: Plan
+  companies: Company[]
+  onDelete: (id: string) => void
+}) {
+  const target = Number(plan.target_amount || 0)
+  const fact = Number(plan.fact_value || 0)
+  const pct = target > 0 ? Math.round((fact / target) * 1000) / 10 : 0
+  const positive = pct >= 100
+  const company = plan.company_id ? companies.find((c) => c.id === plan.company_id) : null
+  const unit = metricUnit(plan.metric)
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_120px_36px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{metricLabel(plan.metric)}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {company ? company.name : 'Общий'}
+          {plan.is_closed ? ' · закрыт' : ''}
+        </p>
+      </div>
+      <div className="text-right tabular-nums">
+        <p className="text-xs text-muted-foreground">План</p>
+        <p className="font-semibold">{fmt(target)} {unit}</p>
+      </div>
+      <div className="text-right tabular-nums">
+        <p className="text-xs text-muted-foreground">Факт</p>
+        <p className={`font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
+          {fmt(fact)} {unit}
+        </p>
+      </div>
+      <div>
+        <div className="flex items-center justify-end gap-2 tabular-nums">
+          <span className={`text-sm font-semibold ${positive ? 'text-emerald-300' : pct > 0 ? 'text-amber-300' : 'text-muted-foreground'}`}>
+            {pct}%
+          </span>
+        </div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div
+            className={`h-full transition-all ${positive ? 'bg-emerald-500' : 'bg-amber-500'}`}
+            style={{ width: `${Math.min(100, pct)}%` }}
+          />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => onDelete(plan.id)}
+          className="grid h-8 w-8 place-items-center rounded-lg text-rose-400 transition hover:bg-rose-500/10"
+          title="Удалить план"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   )
 }
