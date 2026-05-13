@@ -97,11 +97,17 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const requestedCompanyId = (url.searchParams.get('company_id') || '').trim() || null
 
-    const companyScope = await resolveCompanyScope({
+    // Для списка точек в дропдауне нужны ВСЕ доступные компании, поэтому
+    // resolveCompanyScope вызываем БЕЗ requestedCompanyId. Конкретную точку
+    // проверим отдельно ниже.
+    const allCompaniesScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
-      requestedCompanyId: requestedCompanyId || undefined,
     })
+
+    if (requestedCompanyId && allCompaniesScope.allowedCompanyIds !== null && !allCompaniesScope.allowedCompanyIds.includes(requestedCompanyId)) {
+      return json({ error: 'Точка вне доступа' }, 403)
+    }
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
@@ -110,8 +116,8 @@ export async function GET(request: Request) {
       .select('id, name, code, organization_id')
       .order('name', { ascending: true })
 
-    if (companyScope.allowedCompanyIds !== null) {
-      companiesQuery = companiesQuery.in('id', companyScope.allowedCompanyIds)
+    if (allCompaniesScope.allowedCompanyIds !== null) {
+      companiesQuery = companiesQuery.in('id', allCompaniesScope.allowedCompanyIds)
     }
 
     const { data: companies, error: companiesError } = await companiesQuery
