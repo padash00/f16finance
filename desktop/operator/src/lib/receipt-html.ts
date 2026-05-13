@@ -27,6 +27,13 @@ export type SaleReceiptPreview = {
   // Подгружаются с сервера и кэшируются локально. Если null — печатается старый
   // шаблон без обязательных реквизитов (нелегально с 01.01.2026).
   receiptSettings?: PointReceiptSettings | null
+  // Признак возврата: чек печатается как «ВОЗВРАТ ПРИХОДА» со ссылкой
+  // на оригинальный чек (originalSaleId / originalSaleDate).
+  isReturn?: boolean
+  originalSaleId?: string | null
+  originalSaleDate?: string | null
+  originalSaleTime?: string | null
+  refundReason?: string | null
   lines: Array<{
     name: string
     quantity: number
@@ -109,11 +116,27 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
     ? `<div class="muted" style="margin-top:8px;">${escapeHtml(rs.receipt_footer_text)}</div>`
     : '<div class="muted" style="margin-top:6px;">Сохраните чек до выхода</div><div class="muted" style="margin-top:4px;">Возврат: 14 дней</div>'
 
+  const isReturn = !!preview.isReturn
+  const docTitle = isReturn ? 'ВОЗВРАТ ПРИХОДА' : 'ЧЕК ПРИХОДА'
+  const docTitleColor = isReturn ? '#b91c1c' : '#000'
+  const totalLabel = isReturn ? 'К возврату' : 'К оплате'
+  const thanksText = isReturn ? 'ВОЗВРАТ ОФОРМЛЕН' : 'СПАСИБО ЗА ПОКУПКУ!'
+
+  // Блок ссылки на оригинальный чек — обязателен для возврата
+  const originalRefBlock = isReturn
+    ? `<div style="margin-top:6px;font-size:12px;padding:6px;border:1px solid #000;">
+         <div><strong>Возврат к чеку:</strong></div>
+         ${preview.originalSaleId ? `<div>№ ${escapeHtml(preview.originalSaleId.slice(-6))}</div>` : ''}
+         ${preview.originalSaleDate ? `<div class="muted">${escapeHtml(preview.originalSaleDate)}${preview.originalSaleTime ? ` ${escapeHtml(preview.originalSaleTime)}` : ''}</div>` : ''}
+         ${preview.refundReason ? `<div class="muted" style="margin-top:4px;">Причина: ${escapeHtml(preview.refundReason)}</div>` : ''}
+       </div>`
+    : ''
+
   return `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>Чек ${escapeHtml(preview.saleId?.slice(-6) || '')}</title>
+    <title>${escapeHtml(docTitle)} ${escapeHtml(preview.saleId?.slice(-6) || '')}</title>
     <style>
       @page { size: 80mm auto; margin: 4mm; }
       * { box-sizing: border-box; }
@@ -123,6 +146,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       .muted { color: #4b5563; font-size: 12px; }
       .line { border-top: 1px dashed #000; margin: 8px 0; }
       .header-title { font-weight: 800; font-size: 22px; letter-spacing: 1px; }
+      .doc-type { font-weight: 800; font-size: 16px; letter-spacing: 2px; margin-top: 6px; padding: 4px 6px; border: 2px solid ${docTitleColor}; color: ${docTitleColor}; display: inline-block; }
       .header-sub { font-size: 13px; margin-top: 2px; }
       .meta { font-size: 12px; margin-top: 6px; }
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -131,7 +155,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       .item-qty-price { font-size: 12px; color: #4b5563; padding-bottom: 4px; border-bottom: 1px dotted #d1d5db; }
       .summary-row { display: flex; justify-content: space-between; font-size: 14px; padding: 2px 0; }
       .summary-row.discount { color: #dc2626; }
-      .total-block { background: #000; color: #fff; padding: 8px 10px; margin: 8px 0 4px; border-radius: 4px; }
+      .total-block { background: ${docTitleColor}; color: #fff; padding: 8px 10px; margin: 8px 0 4px; border-radius: 4px; }
       .total-row { display: flex; justify-content: space-between; align-items: baseline; }
       .total-label { font-size: 14px; font-weight: 600; }
       .total-value { font-size: 22px; font-weight: 800; }
@@ -147,7 +171,8 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
     <div class="wrap">
       <div class="center">
         <div class="header-title">ORDA POINT</div>
-        <div class="header-sub">${escapeHtml(preview.companyName)}</div>
+        <div class="doc-type">${escapeHtml(docTitle)}</div>
+        <div class="header-sub" style="margin-top:6px;">${escapeHtml(preview.companyName)}</div>
         <div class="muted">${escapeHtml(preview.locationName)}</div>
         ${taxPayerBlock}
         ${kkmBlock}
@@ -156,9 +181,10 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       <div class="meta">
         <div><strong>Дата:</strong> ${escapeHtml(preview.saleDate)} ${escapeHtml(preview.saleTime)}</div>
         <div><strong>Смена:</strong> ${escapeHtml(formatShiftLabel(preview.shift))}</div>
-        <div><strong>Чек №:</strong> ${escapeHtml(preview.saleId?.slice(-6) || 'новый')}</div>
+        <div><strong>${isReturn ? 'Возврат' : 'Чек'} №:</strong> ${escapeHtml(preview.saleId?.slice(-6) || 'новый')}</div>
         <div><strong>Оператор:</strong> ${escapeHtml(preview.operatorName)}</div>
       </div>
+      ${originalRefBlock}
       <div class="line"></div>
       <table>
         <tbody>${preview.lines
@@ -193,7 +219,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       }
       <div class="total-block">
         <div class="total-row">
-          <span class="total-label">К оплате</span>
+          <span class="total-label">${escapeHtml(totalLabel)}</span>
           <span class="total-value">${escapeHtml(formatMoney(preview.totalAmount))} ₸</span>
         </div>
       </div>
@@ -218,7 +244,7 @@ export function buildReceiptHtml(preview: SaleReceiptPreview) {
       ${commentBlock}
       ${ofdBlock}
       <div class="footer center">
-        <div class="thanks">СПАСИБО ЗА ПОКУПКУ!</div>
+        <div class="thanks">${escapeHtml(thanksText)}</div>
         <div class="fiscal">ФП: ${fiscalSign}</div>
         <div class="placeholder-note">фискализация: тестовый режим</div>
         ${footerExtra}

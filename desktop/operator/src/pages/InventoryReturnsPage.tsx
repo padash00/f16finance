@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Loader2,
   LogOut,
   Minus,
   Plus,
+  Printer,
   RefreshCw,
   RotateCcw,
   Search,
+  X,
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import * as api from '@/lib/api'
+import {
+  buildReceiptHtmlForPreview,
+  printReceiptFromIframe,
+  type SaleReceiptPreview,
+} from '@/lib/receipt-html'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
 import { formatDate, formatMoney, localRef } from '@/lib/utils'
@@ -21,6 +28,7 @@ import type {
   BootstrapData,
   OperatorSession,
   PointInventoryReturnContext,
+  PointReceiptSettings,
 } from '@/types'
 
 interface Props {
@@ -79,6 +87,20 @@ export default function InventoryReturnsPage({
   const [search, setSearch] = useState('')
   const [comment, setComment] = useState('')
   const [cart, setCart] = useState<ReturnLine[]>([])
+  const [receiptSettings, setReceiptSettings] = useState<PointReceiptSettings | null>(null)
+  const [lastReceipt, setLastReceipt] = useState<SaleReceiptPreview | null>(null)
+  const receiptIframeRef = useRef<HTMLIFrameElement | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const settings = await api.getPointReceiptSettings(config, session.company.id)
+      if (!cancelled) setReceiptSettings(settings)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [config, session.company.id])
 
   async function load(preserveSaleId?: string) {
     setLoading(true)
@@ -276,7 +298,8 @@ export default function InventoryReturnsPage({
 
     setSaving(true)
     try {
-      await api.createPointInventoryReturn(config, session, {
+      const returnRef = localRef()
+      const result = await api.createPointInventoryReturn(config, session, {
         sale_id: selectedSale.id,
         return_date: runtimeShift.date,
         shift: runtimeShift.shift,
@@ -286,14 +309,52 @@ export default function InventoryReturnsPage({
         kaspi_before_midnight_amount: refund.kaspiBeforeMidnightAmount,
         kaspi_after_midnight_amount: refund.kaspiAfterMidnightAmount,
         comment: comment.trim() || null,
-        local_ref: localRef(),
+        local_ref: returnRef,
         items: cartDetailed.map((line) => ({
           item_id: String(line.saleLine.item?.id || ''),
           quantity: line.quantity,
           unit_price: line.unit_price,
         })),
       })
-      toastSuccess('Возврат сохранён по выбранному чеку продажи')
+
+      // Preview чека возврата согласно приказу №626 — отдельный фискальный чек
+      // «возврат прихода» со ссылкой на оригинальный чек.
+      const nowTs = new Date()
+      const originalSoldAt = selectedSale.sold_at ? new Date(selectedSale.sold_at) : null
+      const returnPreview: SaleReceiptPreview = {
+        saleId: (result as any)?.return_id || returnRef,
+        saleDate: nowTs.toLocaleDateString('ru-RU'),
+        saleTime: nowTs.toLocaleTimeString('ru-RU'),
+        shift: runtimeShift.shift,
+        paymentMethod: refund.paymentMethod,
+        cashAmount: refund.cashAmount,
+        kaspiAmount: refund.kaspiAmount,
+        totalAmount: refund.totalAmount,
+        subtotal: refund.totalAmount,
+        discountAmount: 0,
+        loyaltyDiscountAmount: 0,
+        customer: null,
+        comment: comment.trim() || null,
+        operatorName,
+        companyName: session.company?.name || '',
+        locationName: (context as any)?.location?.name || '',
+        receiptSettings,
+        isReturn: true,
+        originalSaleId: selectedSale.id,
+        originalSaleDate: originalSoldAt ? originalSoldAt.toLocaleDateString('ru-RU') : null,
+        originalSaleTime: originalSoldAt ? originalSoldAt.toLocaleTimeString('ru-RU') : null,
+        refundReason: comment.trim() || null,
+        lines: cartDetailed.map((line) => ({
+          name: line.saleLine.item?.name || 'Товар',
+          quantity: line.quantity,
+          unit_price: line.unit_price,
+          total: line.quantity * line.unit_price,
+          unit: line.saleLine.item?.unit || null,
+        })),
+      }
+      setLastReceipt(returnPreview)
+
+      toastSuccess('Возврат оформлен — чек ниже')
       setComment('')
       await load(selectedSale.id)
     } catch (err: any) {
@@ -547,6 +608,54 @@ export default function InventoryReturnsPage({
           </form>
         </div>
       </div>
+
+      {/* Чек возврата (preview + печать) */}
+      {lastReceipt ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3 sm:p-4"
+          onClick={() => setLastReceipt(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-slate-900"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-5 py-4 dark:border-rose-900/40 dark:bg-rose-950/30">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-rose-500 text-white">
+                  <RotateCcw className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-rose-700 dark:text-rose-300">Возврат оформлен</p>
+                  <p className="text-xs text-rose-600/80 dark:text-rose-400/70">
+                    Возврат к чеку #{lastReceipt.originalSaleId?.slice(-6) || '—'} · {formatMoney(lastReceipt.totalAmount)} ₸
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => printReceiptFromIframe(receiptIframeRef.current)}
+                  className="bg-rose-600 hover:bg-rose-700"
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Печать
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setLastReceipt(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden bg-slate-100 dark:bg-slate-800">
+              <iframe
+                ref={receiptIframeRef}
+                title="Чек возврата"
+                srcDoc={buildReceiptHtmlForPreview(lastReceipt)}
+                className="h-full w-full border-0 bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
