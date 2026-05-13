@@ -134,6 +134,9 @@ export default function StoreRevisionsPage() {
   const scanInputRef = useRef<HTMLInputElement | null>(null)
   const scanFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scanHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const [linesFilter, setLinesFilter] = useState<'all' | 'mismatch'>('all')
+  const [hasDraft, setHasDraft] = useState(false)
 
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
     const soft = Boolean(opts?.soft)
@@ -215,6 +218,170 @@ export default function StoreRevisionsPage() {
     return () => window.clearTimeout(id)
   }, [formSheetOpen, locationId])
 
+  // ── Черновик ревизии в localStorage ───────────────────────────────────────
+  // Ключ: revision-draft:${locationId}:${countedAt}.
+  // Сохраняется при каждом изменении lines/comment, очищается после успешного провода.
+  function draftKey(loc: string, date: string) {
+    return `revision-draft:${loc}:${date}`
+  }
+
+  type RevisionDraft = {
+    lines: RevisionLine[]
+    comment: string
+    savedAt: string
+  }
+
+  useEffect(() => {
+    if (!formSheetOpen || !locationId || !countedAt) {
+      setHasDraft(false)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(draftKey(locationId, countedAt))
+      setHasDraft(!!raw)
+    } catch {
+      setHasDraft(false)
+    }
+  }, [formSheetOpen, locationId, countedAt])
+
+  useEffect(() => {
+    if (!formSheetOpen || !locationId || !countedAt) return
+    if (lines.length === 0 && !comment) return
+    try {
+      const payload: RevisionDraft = {
+        lines,
+        comment,
+        savedAt: new Date().toISOString(),
+      }
+      window.localStorage.setItem(draftKey(locationId, countedAt), JSON.stringify(payload))
+      setHasDraft(true)
+    } catch {
+      /* localStorage может быть забит — пропускаем */
+    }
+  }, [lines, comment, locationId, countedAt, formSheetOpen])
+
+  function loadDraft() {
+    if (!locationId || !countedAt) return
+    try {
+      const raw = window.localStorage.getItem(draftKey(locationId, countedAt))
+      if (!raw) return
+      const parsed = JSON.parse(raw) as RevisionDraft
+      if (Array.isArray(parsed.lines)) setLines(parsed.lines)
+      if (typeof parsed.comment === 'string') setComment(parsed.comment)
+    } catch {
+      /* поврежденный черновик — игнорируем */
+    }
+  }
+
+  function dropDraft() {
+    if (!locationId || !countedAt) return
+    try {
+      window.localStorage.removeItem(draftKey(locationId, countedAt))
+    } catch {
+      /* ignore */
+    }
+    setHasDraft(false)
+  }
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  function printRevision(revision: InventoryRevision) {
+    const items = revision.items || []
+    const counts = {
+      rows: items.length,
+      shortage: items.reduce((s, i) => s + (Number(i.delta_qty || 0) < 0 ? Math.abs(Number(i.delta_qty || 0)) : 0), 0),
+      surplus: items.reduce((s, i) => s + (Number(i.delta_qty || 0) > 0 ? Number(i.delta_qty || 0) : 0), 0),
+      saleAmount: items.reduce(
+        (s, i) => s + Math.abs(Number(i.delta_qty || 0)) * Number(i.item?.sale_price || 0),
+        0,
+      ),
+      purchaseAmount: items.reduce(
+        (s, i) => s + Math.abs(Number(i.delta_qty || 0)) * Number(i.item?.default_purchase_price || 0),
+        0,
+      ),
+    }
+    const tableRows = items
+      .map((item) => {
+        const delta = Number(item.delta_qty || 0)
+        const deltaStr = delta === 0 ? '0' : `${delta > 0 ? '+' : ''}${formatQty(delta)}`
+        const deltaColor = delta === 0 ? '#475569' : delta > 0 ? '#047857' : '#b91c1c'
+        return `<tr>
+          <td>${escapeHtml(item.item?.name || 'Товар')}</td>
+          <td style="font-family:monospace;color:#64748b">${escapeHtml(item.item?.barcode || '—')}</td>
+          <td style="text-align:right">${formatQty(Number(item.expected_qty || 0))}</td>
+          <td style="text-align:right">${formatQty(Number(item.actual_qty || 0))}</td>
+          <td style="text-align:right;color:${deltaColor};font-weight:600">${deltaStr}</td>
+          <td style="color:#64748b">${escapeHtml(item.comment || '')}</td>
+        </tr>`
+      })
+      .join('')
+
+    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8" />
+      <title>Акт ревизии ${escapeHtml(formatDate(revision.counted_at))}</title>
+      <style>
+        @page { size: A4; margin: 16mm; }
+        body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#0f172a; }
+        h1 { font-size: 18px; margin: 0 0 4px 0; }
+        .muted { color:#64748b; font-size:12px; }
+        .meta { margin: 12px 0 18px 0; font-size: 13px; line-height: 1.5; }
+        table { width:100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+        thead th { background:#f8fafc; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color:#475569; }
+        .summary { margin-top: 18px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px; }
+        .summary .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; }
+        .signature { margin-top: 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; font-size: 12px; }
+        .signature .line { margin-top: 32px; border-top: 1px solid #94a3b8; padding-top: 4px; color: #64748b; }
+      </style></head>
+      <body>
+        <h1>Акт ревизии</h1>
+        <div class="muted">${escapeHtml(formatDate(revision.counted_at))} · ${escapeHtml(revision.location?.company?.name || revision.location?.name || 'Локация')}</div>
+        <div class="meta">
+          <div><strong>Провёл:</strong> ${escapeHtml(actorLabel(revision.created_by_staff, revision.created_by || null))}</div>
+          ${revision.comment ? `<div><strong>Комментарий:</strong> ${escapeHtml(revision.comment)}</div>` : ''}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Товар</th>
+              <th>Штрихкод</th>
+              <th style="text-align:right">Система</th>
+              <th style="text-align:right">Факт</th>
+              <th style="text-align:right">Δ</th>
+              <th>Комментарий</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8">Позиций нет</td></tr>'}</tbody>
+        </table>
+        <div class="summary">
+          <div class="card"><div class="muted">Позиций</div><div><strong>${counts.rows}</strong></div></div>
+          <div class="card"><div class="muted">Недостача</div><div style="color:#b91c1c"><strong>−${formatQty(counts.shortage)}</strong></div></div>
+          <div class="card"><div class="muted">Излишек</div><div style="color:#047857"><strong>+${formatQty(counts.surplus)}</strong></div></div>
+          <div class="card"><div class="muted">Ущерб по продаже / закупке</div><div><strong>${Math.round(counts.saleAmount).toLocaleString('ru-RU')} ₸</strong> · ${Math.round(counts.purchaseAmount).toLocaleString('ru-RU')} ₸</div></div>
+        </div>
+        <div class="signature">
+          <div><div class="line">Подпись провёдшего</div></div>
+          <div><div class="line">Подпись принимающего</div></div>
+        </div>
+        <script>window.addEventListener('load', () => { setTimeout(() => window.print(), 100); });</script>
+      </body></html>`
+
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (!w) {
+      window.alert('Не удалось открыть окно печати — разрешите всплывающие окна для этого сайта.')
+      return
+    }
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  }
+
   useEffect(() => {
     return () => {
       if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current)
@@ -222,16 +389,44 @@ export default function StoreRevisionsPage() {
     }
   }, [])
 
+  function playScanBeep(kind: 'ok' | 'error') {
+    try {
+      let ctx = audioCtxRef.current
+      if (!ctx) {
+        const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext
+        if (!Ctor) return
+        ctx = new Ctor()
+        audioCtxRef.current = ctx
+      }
+      if (!ctx) return
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = kind === 'ok' ? 880 : 220
+      gain.gain.value = 0.06
+      osc.connect(gain).connect(ctx.destination)
+      const now = ctx.currentTime
+      gain.gain.setValueAtTime(0.06, now)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
+      osc.start(now)
+      osc.stop(now + 0.18)
+    } catch {
+      /* звук опционален */
+    }
+  }
+
   const flashScanError = (message: string) => {
     if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current)
     setScanFeedback({ kind: 'error', message })
     scanFeedbackTimer.current = setTimeout(() => setScanFeedback(null), 2000)
+    playScanBeep('error')
   }
 
   const flashScanOk = (payload: { itemName: string; prevQty: number; newQty: number; delta: number }) => {
     if (scanFeedbackTimer.current) clearTimeout(scanFeedbackTimer.current)
     setScanFeedback({ kind: 'ok', ...payload })
     scanFeedbackTimer.current = setTimeout(() => setScanFeedback(null), 1800)
+    playScanBeep('ok')
   }
 
   const highlightScan = (itemId: string) => {
@@ -334,6 +529,7 @@ export default function StoreRevisionsPage() {
       setComment('')
       setLines([])
       setSuccess('Ревизия проведена, расхождения записаны')
+      dropDraft()
       await load(undefined, { soft: true })
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести ревизию')
@@ -626,6 +822,20 @@ export default function StoreRevisionsPage() {
               <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Кто проверял и что важно зафиксировать" rows={2} />
             </div>
 
+            {hasDraft && lines.length === 0 && (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <span>Найден сохранённый черновик по этой локации и дате.</span>
+                <div className="ml-auto flex gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={loadDraft}>
+                    Продолжить
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={dropDraft}>
+                    Начать заново
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
               <span>
                 Локация: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
@@ -636,6 +846,45 @@ export default function StoreRevisionsPage() {
                 {selectedBalances.length ? ` / ${selectedBalances.length}` : ''}
               </span>
             </div>
+
+            {/* Прогресс-бар */}
+            {selectedBalances.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <span>Прогресс</span>
+                  <span>
+                    {Math.min(100, Math.round((lines.length / Math.max(1, selectedBalances.length)) * 100))}%
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full border border-white/10 bg-white/[0.03]">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.min(100, (lines.length / Math.max(1, selectedBalances.length)) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Фильтры строк */}
+            {lines.length > 0 && (
+              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+                {(['all', 'mismatch'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setLinesFilter(f)}
+                    className={`rounded-md px-3 py-1.5 transition ${linesFilter === f ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {f === 'all' ? `Все · ${lines.length}` : `Расхождения · ${lines.filter((l) => {
+                      const exp = Number(selectedBalances.find((b) => b.item_id === l.item_id)?.quantity || 0)
+                      return parseQty(l.actual_qty) - exp !== 0
+                    }).length}`}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div
               className={`space-y-2 rounded-2xl border p-3 transition ${
@@ -699,6 +948,7 @@ export default function StoreRevisionsPage() {
                 const expectedQty = Number(selectedBalances.find((item) => item.item_id === line.item_id)?.quantity || 0)
                 const actualQty = parseQty(line.actual_qty)
                 const deltaQty = actualQty - expectedQty
+                if (linesFilter === 'mismatch' && deltaQty === 0) return null
                 const lineItem = line.item_id
                   ? itemById.get(line.item_id) || balanceItemById.get(line.item_id) || null
                   : null
@@ -822,13 +1072,25 @@ export default function StoreRevisionsPage() {
 
       <Dialog open={revisionDetailsOpen} onOpenChange={setRevisionDetailsOpen}>
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-white/10 p-5 text-left">
-            <DialogTitle>Детали ревизии</DialogTitle>
-            <DialogDescription>
-              {selectedRevision
-                ? `${formatDate(selectedRevision.counted_at)} · ${selectedRevision.location?.company?.name || selectedRevision.location?.name || 'Локация'}`
-                : 'Проведенный акт ревизии'}
-            </DialogDescription>
+          <DialogHeader className="flex flex-row items-start justify-between gap-3 border-b border-white/10 p-5 text-left">
+            <div className="space-y-1">
+              <DialogTitle>Детали ревизии</DialogTitle>
+              <DialogDescription>
+                {selectedRevision
+                  ? `${formatDate(selectedRevision.counted_at)} · ${selectedRevision.location?.company?.name || selectedRevision.location?.name || 'Локация'}`
+                  : 'Проведенный акт ревизии'}
+              </DialogDescription>
+            </div>
+            {selectedRevision ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => printRevision(selectedRevision)}
+              >
+                Печать / PDF
+              </Button>
+            ) : null}
           </DialogHeader>
           <div className="flex-1 overflow-auto p-5">
             {!selectedRevision ? (
