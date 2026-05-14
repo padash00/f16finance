@@ -53,6 +53,7 @@ type Body = {
       quantity: number
       unit_cost: number
       sale_price?: number
+      is_bonus?: boolean
       comment?: string | null
       invoice_name?: string | null
     }>
@@ -563,7 +564,9 @@ export async function POST(request: Request) {
         ? body.payload.items.map((item) => ({
             item_id: String(item.item_id || '').trim(),
             quantity: normalizeQty(item.quantity),
-            unit_cost: normalizeUnitCost(item.unit_cost),
+            // Бонус: себестоимость 0 (RPC всё равно обнулит, но и тут чистим).
+            unit_cost: item.is_bonus ? 0 : normalizeUnitCost(item.unit_cost),
+            is_bonus: Boolean(item.is_bonus),
             comment: item.comment || null,
           }))
         : [],
@@ -703,6 +706,8 @@ export async function POST(request: Request) {
         const rawName = String(line.invoice_name || '').trim()
         const itemId = String(line.item_id || '').trim()
         if (!rawName || !itemId) continue
+        // Бонусные строки не учим — у них цена 0, иначе AI решит что товар бесплатный.
+        if (line.is_bonus) continue
         aliasUpserts.push({
           invoice_name: rawName,
           item_id: itemId,
@@ -727,9 +732,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // Always update sale/default purchase prices globally from receipt lines
+    // Always update sale/default purchase prices globally from receipt lines.
+    // Бонусные строки пропускаем — иначе default_purchase_price затрётся нулём.
     if (Array.isArray(body.payload.items)) {
       const updatesRaw = body.payload.items
+        .filter((item) => !item.is_bonus)
         .map((item) => ({
           item_id: String(item.item_id || '').trim(),
           unit_cost: normalizeUnitCost(item.unit_cost),

@@ -75,6 +75,7 @@ type InventoryReceipt = {
     quantity: number
     unit_cost: number
     total_cost: number
+    is_bonus?: boolean
     item?: { id: string; name: string; barcode: string; unit?: string | null } | null
   }>
 }
@@ -101,6 +102,7 @@ type InventoryReceiptDraft = {
       quantity?: number | string
       unit_cost?: number | string
       sale_price?: number | string
+      is_bonus?: boolean
       comment?: string | null
     }>
   }
@@ -129,6 +131,7 @@ type ReceiptLine = {
   sale_price: string
   markup_percent: string
   comment: string
+  is_bonus?: boolean
   invoice_name?: string
   last_unit_cost?: number | null
 }
@@ -251,6 +254,7 @@ const emptyLine = (): ReceiptLine => ({
   sale_price: '',
   markup_percent: '',
   comment: '',
+  is_bonus: false,
 })
 
 function calcMarkupPercent(unitCostRaw: string, salePriceRaw: string) {
@@ -453,7 +457,8 @@ export default function StoreReceiptsPage() {
   }, [])
 
   const receiptTotal = useMemo(() => {
-    return lines.reduce((sum, line) => sum + parseQty(line.quantity) * parseUnitCost(line.unit_cost), 0)
+    // Бонусные строки в сумму накладной не идут — товар получен бесплатно.
+    return lines.reduce((sum, line) => sum + (line.is_bonus ? 0 : parseQty(line.quantity) * parseUnitCost(line.unit_cost)), 0)
   }, [lines])
 
   const quickMatches = useMemo(() => {
@@ -576,8 +581,9 @@ export default function StoreReceiptsPage() {
       .map((line) => ({
         item_id: line.item_id,
         quantity: parseQty(line.quantity),
-        unit_cost: parseUnitCost(line.unit_cost),
+        unit_cost: line.is_bonus ? 0 : parseUnitCost(line.unit_cost),
         sale_price: parseMoney(line.sale_price),
+        is_bonus: Boolean(line.is_bonus),
         comment: line.comment.trim() || null,
         invoice_name: line.invoice_name?.trim() || null,
       }))
@@ -688,8 +694,9 @@ export default function StoreReceiptsPage() {
       .map((line) => ({
         item_id: line.item_id,
         quantity: parseQty(line.quantity),
-        unit_cost: parseUnitCost(line.unit_cost),
+        unit_cost: line.is_bonus ? 0 : parseUnitCost(line.unit_cost),
         sale_price: parseMoney(line.sale_price),
+        is_bonus: Boolean(line.is_bonus),
         comment: line.comment.trim() || null,
       }))
       .filter((line) => line.item_id)
@@ -766,14 +773,18 @@ export default function StoreReceiptsPage() {
       setSupplierBinIin('')
     }
     const mappedLines = items.length > 0
-      ? items.map((item) => ({
-          item_id: String(item.item_id || ''),
-          quantity: String(item.quantity ?? ''),
-          unit_cost: String(item.unit_cost ?? ''),
-          sale_price: String(item.sale_price ?? ''),
-          markup_percent: calcMarkupPercent(String(item.unit_cost ?? ''), String(item.sale_price ?? '')),
-          comment: String(item.comment || ''),
-        }))
+      ? items.map((item) => {
+          const isBonus = Boolean((item as any).is_bonus)
+          return {
+            item_id: String(item.item_id || ''),
+            quantity: String(item.quantity ?? ''),
+            unit_cost: isBonus ? '0' : String(item.unit_cost ?? ''),
+            sale_price: String(item.sale_price ?? ''),
+            markup_percent: isBonus ? '' : calcMarkupPercent(String(item.unit_cost ?? ''), String(item.sale_price ?? '')),
+            comment: String(item.comment || ''),
+            is_bonus: isBonus,
+          }
+        })
       : [emptyLine()]
     setLines(mappedLines)
     setFormSheetOpen(true)
@@ -1798,11 +1809,16 @@ export default function StoreReceiptsPage() {
                             return {
                               ...item,
                               item_id: value.startsWith('__empty__') ? '' : value,
-                              unit_cost: selectedItem ? String(selectedItem.default_purchase_price || '') : item.unit_cost,
+                              // Для бонусной строки цену закупа держим 0 независимо от каталога.
+                              unit_cost: item.is_bonus
+                                ? '0'
+                                : selectedItem ? String(selectedItem.default_purchase_price || '') : item.unit_cost,
                               sale_price: selectedItem ? String(selectedItem.sale_price || '') : item.sale_price,
-                              markup_percent: selectedItem
-                                ? calcMarkupPercent(String(selectedItem.default_purchase_price || ''), String(selectedItem.sale_price || ''))
-                                : item.markup_percent,
+                              markup_percent: item.is_bonus
+                                ? ''
+                                : selectedItem
+                                  ? calcMarkupPercent(String(selectedItem.default_purchase_price || ''), String(selectedItem.sale_price || ''))
+                                  : item.markup_percent,
                             }
                           }),
                         )
@@ -1836,7 +1852,8 @@ export default function StoreReceiptsPage() {
                     <Label>Цена закупа</Label>
                     <Input
                       inputMode="decimal"
-                      value={line.unit_cost}
+                      value={line.is_bonus ? '0' : line.unit_cost}
+                      readOnly={line.is_bonus}
                       onChange={(event) =>
                         setLines((current) =>
                           current.map((item, itemIndex) =>
@@ -1851,8 +1868,33 @@ export default function StoreReceiptsPage() {
                         )
                       }
                       placeholder="499,6757"
+                      className={line.is_bonus ? 'opacity-50' : undefined}
                     />
-                    {(() => {
+                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={!!line.is_bonus}
+                        onChange={(event) =>
+                          setLines((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? {
+                                    ...item,
+                                    is_bonus: event.target.checked,
+                                    unit_cost: event.target.checked ? '0' : item.unit_cost,
+                                    markup_percent: event.target.checked ? '' : item.markup_percent,
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="h-3.5 w-3.5 accent-emerald-500"
+                      />
+                      <span className={line.is_bonus ? 'font-medium text-emerald-300' : 'text-muted-foreground'}>
+                        Бонус (подарок поставщика)
+                      </span>
+                    </label>
+                    {!line.is_bonus && (() => {
                       if (!line.last_unit_cost || line.last_unit_cost <= 0) return null
                       const current = parseUnitCost(line.unit_cost)
                       if (current <= 0) return null
@@ -1898,7 +1940,8 @@ export default function StoreReceiptsPage() {
                     <Label>Наценка %</Label>
                     <Input
                       inputMode="decimal"
-                      value={line.markup_percent}
+                      value={line.is_bonus ? '' : line.markup_percent}
+                      readOnly={line.is_bonus}
                       onChange={(event) =>
                         setLines((current) =>
                           current.map((item, itemIndex) => {
@@ -1914,7 +1957,8 @@ export default function StoreReceiptsPage() {
                           }),
                         )
                       }
-                      placeholder="0"
+                      placeholder={line.is_bonus ? '—' : '0'}
+                      className={line.is_bonus ? 'opacity-50' : undefined}
                     />
                   </div>
 
@@ -2024,12 +2068,19 @@ export default function StoreReceiptsPage() {
                       {(selectedReceipt.items || []).map((item) => (
                         <tr key={item.id} className="border-t border-white/[0.06]">
                           <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
-                            <span className="block truncate">{item.item?.name || 'Товар'}</span>
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="block truncate">{item.item?.name || 'Товар'}</span>
+                              {item.is_bonus ? (
+                                <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                                  Бонус
+                                </span>
+                              ) : null}
+                            </span>
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
                           <td className="px-3 py-2 text-right">{formatQty(Number(item.quantity || 0))}</td>
-                          <td className="px-3 py-2 text-right">{formatUnitCost(Number(item.unit_cost || 0))}</td>
-                          <td className="px-3 py-2 text-right">{formatMoney(Number(item.total_cost || 0))}</td>
+                          <td className="px-3 py-2 text-right">{item.is_bonus ? '—' : formatUnitCost(Number(item.unit_cost || 0))}</td>
+                          <td className="px-3 py-2 text-right">{item.is_bonus ? '0' : formatMoney(Number(item.total_cost || 0))}</td>
                         </tr>
                       ))}
                     </tbody>

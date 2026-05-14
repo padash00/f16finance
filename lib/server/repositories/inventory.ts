@@ -361,7 +361,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
     ),
     supabase
       .from('inventory_receipts')
-      .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, kind, cancelled_at, cancel_reason, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, supplier_id, received_at, invoice_number, invoice_file_url, comment, total_amount, status, kind, cancelled_at, cancel_reason, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name, bin_iin, organization_name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, is_bonus, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(60),
   ])
@@ -920,7 +920,7 @@ export async function postInventoryReceipt(
     invoice_file_url?: string | null
     comment?: string | null
     created_by?: string | null
-    items: Array<{ item_id: string; quantity: number; unit_cost: number; comment?: string | null }>
+    items: Array<{ item_id: string; quantity: number; unit_cost: number; is_bonus?: boolean; comment?: string | null }>
   },
 ) {
   const { data, error } = await supabase.rpc('inventory_post_receipt', {
