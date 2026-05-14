@@ -139,6 +139,14 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'valuation',
+        path: '/valuation',
+        label: 'Оценка бизнеса',
+        capabilities: [
+          { id: 'valuation.view', label: 'Просмотр оценки бизнеса', severity: 'low' },
+        ],
+      },
+      {
         id: 'kaspi-terminal',
         path: '/kaspi-terminal',
         label: 'безналичный терминал',
