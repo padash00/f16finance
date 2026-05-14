@@ -780,14 +780,52 @@ export async function POST(request: Request) {
         .in('item_id', itemIds)
       if (balErr) throw balErr
 
-      // Delete all items
+      // Пробуем удалить все товары. Если у части есть история движений —
+      // FK заблокирует весь delete. В этом случае удаляем только товары
+      // без истории, а остальные переводим в архив (is_active=false).
       const { error: delErr } = await supabase
         .from('inventory_items')
         .delete()
         .eq('organization_id', orgId)
-      if (delErr) throw delErr
+      if (delErr) {
+        const code = String((delErr as any)?.code || '')
+        const isFk = code === '23503' || String(delErr.message || '').toLowerCase().includes('foreign key')
+        if (!isFk) throw delErr
 
-      return json({ ok: true, data: { deleted: itemIds.length } })
+        // Находим товары, на которые есть ссылки в inventory_movements.
+        const { data: referenced, error: refErr } = await supabase
+          .from('inventory_movements')
+          .select('item_id')
+          .in('item_id', itemIds)
+        if (refErr) throw refErr
+        const referencedIds = new Set<string>((referenced || []).map((r: any) => String(r.item_id)))
+        const deletableIds = itemIds.filter((id) => !referencedIds.has(id))
+        const archiveIds = itemIds.filter((id) => referencedIds.has(id))
+
+        if (deletableIds.length > 0) {
+          const { error: hardErr } = await supabase
+            .from('inventory_items')
+            .delete()
+            .in('id', deletableIds)
+          if (hardErr) throw hardErr
+        }
+        if (archiveIds.length > 0) {
+          const { error: archErr } = await supabase
+            .from('inventory_items')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .in('id', archiveIds)
+          if (archErr) throw archErr
+        }
+        return json({
+          ok: true,
+          data: { deleted: deletableIds.length, archived: archiveIds.length },
+          message: archiveIds.length > 0
+            ? `Удалено полностью: ${deletableIds.length}. Перенесено в архив (есть история движений): ${archiveIds.length}.`
+            : undefined,
+        })
+      }
+
+      return json({ ok: true, data: { deleted: itemIds.length, archived: 0 } })
     }
 
     // -----------------------------------------------------------------------
@@ -866,10 +904,28 @@ export async function POST(request: Request) {
         return json({ error: 'Нельзя удалить товар с ненулевым остатком' }, 400)
       }
 
+      // Пробуем жёсткое удаление. Если у товара есть история (движения,
+      // приёмки, продажи) — FK не даст удалить. В этом случае переводим
+      // товар в архив (is_active=false): история сохраняется, товар
+      // пропадает из активных списков.
       const { error: deleteError } = await supabase.from('inventory_items').delete().eq('id', itemId)
-      if (deleteError) throw deleteError
+      if (deleteError) {
+        const code = String((deleteError as any)?.code || '')
+        const isFk = code === '23503' || String(deleteError.message || '').toLowerCase().includes('foreign key')
+        if (!isFk) throw deleteError
+        const { error: archiveError } = await supabase
+          .from('inventory_items')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('id', itemId)
+        if (archiveError) throw archiveError
+        return json({
+          ok: true,
+          data: { archived: true },
+          message: 'У товара есть история движений — он перенесён в архив (скрыт из списков), а не удалён полностью. История сохранена.',
+        })
+      }
 
-      return json({ ok: true })
+      return json({ ok: true, data: { archived: false } })
     }
 
     // -----------------------------------------------------------------------
