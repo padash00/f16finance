@@ -29,7 +29,7 @@ export async function GET(
 
     let supplierQuery: any = supabase
       .from('inventory_suppliers')
-      .select('id, name, organization_name, bin_iin, contact_name, phone, notes, organization_id, preferred_expense_category_id, created_at')
+      .select('id, name, organization_name, bin_iin, contact_name, phone, notes, sales_rep_name, sales_rep_phone, lead_time_days, organization_id, preferred_expense_category_id, created_at')
       .eq('id', id)
       .limit(1)
     if (!access.isSuperAdmin && access.activeOrganization?.id) {
@@ -75,6 +75,37 @@ export async function GET(
     const debts = debtsRes.data || []
     const aliases = aliasesRes.data || []
 
+    // Товары, закреплённые за этим поставщиком, с текущим остатком (сумма по всем локациям).
+    const { data: productRows, error: productsError } = await supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, default_purchase_price, low_stock_threshold, is_active')
+      .eq('primary_supplier_id', id)
+      .order('name', { ascending: true })
+    if (productsError) throw productsError
+    const productItemIds = (productRows || []).map((p: any) => p.id)
+    const stockByItem = new Map<string, number>()
+    if (productItemIds.length > 0) {
+      const { data: balanceRows, error: balanceError } = await supabase
+        .from('inventory_balances')
+        .select('item_id, quantity')
+        .in('item_id', productItemIds)
+      if (balanceError) throw balanceError
+      for (const row of (balanceRows || []) as any[]) {
+        const key = String(row.item_id)
+        stockByItem.set(key, (stockByItem.get(key) || 0) + Number(row.quantity || 0))
+      }
+    }
+    const products = (productRows || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      barcode: p.barcode,
+      unit: p.unit,
+      default_purchase_price: Number(p.default_purchase_price || 0),
+      low_stock_threshold: p.low_stock_threshold != null ? Number(p.low_stock_threshold) : null,
+      is_active: p.is_active !== false,
+      stock: stockByItem.get(String(p.id)) || 0,
+    }))
+
     const totalSpend = receipts.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0)
     const openDebtsSum = debts
       .filter((d: any) => d.status === 'open')
@@ -100,12 +131,14 @@ export async function GET(
         receipts,
         debts,
         aliases,
+        products,
         stats: {
           totalSpend,
           openDebtsSum,
           openDebtsCount: debts.filter((d: any) => d.status === 'open').length,
           receiptsCount: receipts.length,
           aliasesCount: aliases.length,
+          productsCount: products.length,
           avgDaysToPay,
         },
       },

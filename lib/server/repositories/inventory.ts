@@ -629,6 +629,9 @@ export async function createInventorySupplier(
     contact_name?: string | null
     phone?: string | null
     notes?: string | null
+    sales_rep_name?: string | null
+    sales_rep_phone?: string | null
+    lead_time_days?: number | null
   },
   scope?: InventoryScope,
 ) {
@@ -643,6 +646,11 @@ export async function createInventorySupplier(
         contact_name: payload.contact_name?.trim() || null,
         phone: payload.phone?.trim() || null,
         notes: payload.notes?.trim() || null,
+        sales_rep_name: payload.sales_rep_name?.trim() || null,
+        sales_rep_phone: payload.sales_rep_phone?.trim() || null,
+        lead_time_days: payload.lead_time_days != null && Number.isFinite(payload.lead_time_days)
+          ? Math.max(0, Math.round(payload.lead_time_days))
+          : 3,
       },
     ])
     .select('*')
@@ -850,6 +858,9 @@ export async function updateInventorySupplier(
     contact_name?: string | null
     phone?: string | null
     notes?: string | null
+    sales_rep_name?: string | null
+    sales_rep_phone?: string | null
+    lead_time_days?: number | null
   },
   scope?: InventoryScope,
 ) {
@@ -862,6 +873,11 @@ export async function updateInventorySupplier(
       contact_name: payload.contact_name?.trim() || null,
       phone: payload.phone?.trim() || null,
       notes: payload.notes?.trim() || null,
+      sales_rep_name: payload.sales_rep_name?.trim() || null,
+      sales_rep_phone: payload.sales_rep_phone?.trim() || null,
+      lead_time_days: payload.lead_time_days != null && Number.isFinite(payload.lead_time_days)
+        ? Math.max(0, Math.round(payload.lead_time_days))
+        : 3,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)

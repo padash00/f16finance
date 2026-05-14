@@ -40,9 +40,14 @@ type SupplierBody = {
   action: 'createSupplier'
   payload: {
     name: string
+    bin_iin?: string | null
+    organization_name?: string | null
     contact_name?: string | null
     phone?: string | null
     notes?: string | null
+    sales_rep_name?: string | null
+    sales_rep_phone?: string | null
+    lead_time_days?: number | null
   }
 }
 
@@ -148,7 +153,17 @@ type UpdateCategoryBody = {
 type UpdateSupplierBody = {
   action: 'updateSupplier'
   id: string
-  payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null }
+  payload: {
+    name: string
+    bin_iin?: string | null
+    organization_name?: string | null
+    contact_name?: string | null
+    phone?: string | null
+    notes?: string | null
+    sales_rep_name?: string | null
+    sales_rep_phone?: string | null
+    lead_time_days?: number | null
+  }
 }
 
 type UpdateItemBody = {
@@ -341,9 +356,14 @@ export async function POST(request: Request) {
 
       const supplier = await createInventorySupplier(supabase as any, {
         name,
+        bin_iin: body.payload?.bin_iin || null,
+        organization_name: body.payload?.organization_name || null,
         contact_name: body.payload?.contact_name || null,
         phone: body.payload?.phone || null,
         notes: body.payload?.notes || null,
+        sales_rep_name: body.payload?.sales_rep_name || null,
+        sales_rep_phone: body.payload?.sales_rep_phone || null,
+        lead_time_days: body.payload?.lead_time_days ?? null,
       }, inventoryScope)
 
       await writeAuditLog(supabase as any, {
@@ -682,9 +702,14 @@ export async function POST(request: Request) {
       if (!name) return json({ error: 'supplier-name-required' }, 400)
       const supplier = await updateInventorySupplier(supabase as any, id, {
         name,
+        bin_iin: (body as UpdateSupplierBody).payload?.bin_iin || null,
+        organization_name: (body as UpdateSupplierBody).payload?.organization_name || null,
         contact_name: (body as UpdateSupplierBody).payload?.contact_name || null,
         phone: (body as UpdateSupplierBody).payload?.phone || null,
         notes: (body as UpdateSupplierBody).payload?.notes || null,
+        sales_rep_name: (body as UpdateSupplierBody).payload?.sales_rep_name || null,
+        sales_rep_phone: (body as UpdateSupplierBody).payload?.sales_rep_phone || null,
+        lead_time_days: (body as UpdateSupplierBody).payload?.lead_time_days ?? null,
       }, inventoryScope)
       await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-supplier', entityId: id, action: 'update', payload: supplier })
       return json({ ok: true, data: supplier })

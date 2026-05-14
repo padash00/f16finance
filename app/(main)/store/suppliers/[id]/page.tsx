@@ -21,8 +21,22 @@ type Supplier = {
   contact_name: string | null
   phone: string | null
   notes: string | null
+  sales_rep_name: string | null
+  sales_rep_phone: string | null
+  lead_time_days: number | null
   preferred_expense_category_id: string | null
   preferred_expense_category_name: string | null
+}
+
+type Product = {
+  id: string
+  name: string
+  barcode: string
+  unit: string | null
+  default_purchase_price: number
+  low_stock_threshold: number | null
+  is_active: boolean
+  stock: number
 }
 
 type ReceiptLite = {
@@ -64,6 +78,7 @@ type Stats = {
   openDebtsCount: number
   receiptsCount: number
   aliasesCount: number
+  productsCount: number
   avgDaysToPay: number | null
 }
 
@@ -82,15 +97,30 @@ export default function SupplierCardPage() {
   const params = useParams()
   const supplierId = String((params as any)?.id || '')
 
-  const [tab, setTab] = useState<'overview' | 'receipts' | 'debts' | 'aliases'>('overview')
+  const [tab, setTab] = useState<'overview' | 'products' | 'receipts' | 'debts' | 'aliases'>('overview')
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [receipts, setReceipts] = useState<ReceiptLite[]>([])
   const [debts, setDebts] = useState<Debt[]>([])
   const [aliases, setAliases] = useState<Alias[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Форма настроек поставщика
+  const [editForm, setEditForm] = useState({
+    name: '',
+    organization_name: '',
+    bin_iin: '',
+    contact_name: '',
+    phone: '',
+    sales_rep_name: '',
+    sales_rep_phone: '',
+    lead_time_days: '3',
+    notes: '',
+  })
+  const [savingSupplier, setSavingSupplier] = useState(false)
 
   // Add-alias form state
   const [addAliasOpen, setAddAliasOpen] = useState(false)
@@ -108,11 +138,24 @@ export default function SupplierCardPage() {
       const response = await fetch(`/api/admin/store/suppliers/${supplierId}`, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить поставщика')
-      setSupplier(json.data.supplier)
+      const s = json.data.supplier as Supplier
+      setSupplier(s)
       setReceipts(json.data.receipts || [])
       setDebts(json.data.debts || [])
       setAliases(json.data.aliases || [])
+      setProducts(json.data.products || [])
       setStats(json.data.stats || null)
+      setEditForm({
+        name: s.name || '',
+        organization_name: s.organization_name || '',
+        bin_iin: s.bin_iin || '',
+        contact_name: s.contact_name || '',
+        phone: s.phone || '',
+        sales_rep_name: s.sales_rep_name || '',
+        sales_rep_phone: s.sales_rep_phone || '',
+        lead_time_days: String(s.lead_time_days ?? 3),
+        notes: s.notes || '',
+      })
     } catch (err: any) {
       setError(err?.message || 'Ошибка загрузки')
     } finally {
@@ -196,6 +239,45 @@ export default function SupplierCardPage() {
     }
   }
 
+  const saveSupplier = async () => {
+    if (!editForm.name.trim()) {
+      setError('Введите название поставщика')
+      return
+    }
+    setSavingSupplier(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch('/api/admin/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateSupplier',
+          id: supplierId,
+          payload: {
+            name: editForm.name.trim(),
+            organization_name: editForm.organization_name.trim() || null,
+            bin_iin: editForm.bin_iin.trim() || null,
+            contact_name: editForm.contact_name.trim() || null,
+            phone: editForm.phone.trim() || null,
+            sales_rep_name: editForm.sales_rep_name.trim() || null,
+            sales_rep_phone: editForm.sales_rep_phone.trim() || null,
+            lead_time_days: editForm.lead_time_days ? Number(editForm.lead_time_days) : 3,
+            notes: editForm.notes.trim() || null,
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить')
+      setSuccess('Настройки поставщика сохранены')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка сохранения')
+    } finally {
+      setSavingSupplier(false)
+    }
+  }
+
   const openDebts = useMemo(() => debts.filter((d) => d.status === 'open'), [debts])
 
   if (loading) {
@@ -235,6 +317,9 @@ export default function SupplierCardPage() {
             {supplier.bin_iin ? <span>БИН/ИИН: <span className="font-mono">{supplier.bin_iin}</span></span> : null}
             {supplier.contact_name ? <span>Контакт: {supplier.contact_name}</span> : null}
             {supplier.phone ? <span>Тел: {supplier.phone}</span> : null}
+            {supplier.sales_rep_name ? <span>Торгпред: {supplier.sales_rep_name}</span> : null}
+            {supplier.sales_rep_phone ? <span>WhatsApp: {supplier.sales_rep_phone}</span> : null}
+            <span>Срок поставки: {supplier.lead_time_days ?? 3} дн</span>
             {supplier.preferred_expense_category_name ? (
               <span>COGS-категория: {supplier.preferred_expense_category_name}</span>
             ) : null}
@@ -270,25 +355,135 @@ export default function SupplierCardPage() {
         </div>
       ) : null}
 
-      <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
-        <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')} icon={<Building2 className="w-4 h-4" />} label="Обзор" />
+      <div className="flex flex-wrap gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+        <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')} icon={<Building2 className="w-4 h-4" />} label="Настройки" />
+        <TabBtn active={tab === 'products'} onClick={() => setTab('products')} icon={<Tag className="w-4 h-4" />} label={`Товары (${products.length})`} />
         <TabBtn active={tab === 'receipts'} onClick={() => setTab('receipts')} icon={<Receipt className="w-4 h-4" />} label={`Накладные (${receipts.length})`} />
         <TabBtn active={tab === 'debts'} onClick={() => setTab('debts')} icon={<Wallet className="w-4 h-4" />} label={`Долги (${openDebts.length}/${debts.length})`} />
         <TabBtn active={tab === 'aliases'} onClick={() => setTab('aliases')} icon={<Tag className="w-4 h-4" />} label={`Алиасы (${aliases.length})`} />
       </div>
 
       {tab === 'overview' ? (
-        <Card className="p-4 bg-gray-900/60 border-gray-800 text-sm space-y-2">
-          <p className="text-muted-foreground">
-            Здесь сводная информация о поставщике. Открытые долги и накладные перейдите по соответствующим вкладкам.
-          </p>
-          {supplier.notes ? (
-            <div>
-              <p className="text-[11px] uppercase text-muted-foreground">Заметки</p>
-              <p className="mt-1">{supplier.notes}</p>
+        <Card className="p-5 bg-gray-900/60 border-gray-800 space-y-4 max-w-3xl">
+          <div>
+            <h2 className="text-lg font-semibold">Настройки поставщика</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Реквизиты, торговый представитель и срок поставки. Эти данные используются для авто-заявок и отправки в WhatsApp.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Название поставщика *</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} placeholder="Coca-Cola Алматы" />
             </div>
-          ) : null}
+            <div className="space-y-1.5">
+              <Label>Название организации</Label>
+              <Input value={editForm.organization_name} onChange={(e) => setEditForm((f) => ({ ...f, organization_name: e.target.value }))} placeholder="ТОО «...»" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>БИН/ИИН</Label>
+              <Input value={editForm.bin_iin} onChange={(e) => setEditForm((f) => ({ ...f, bin_iin: e.target.value }))} placeholder="123456789012" inputMode="numeric" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Срок поставки, дней</Label>
+              <Input value={editForm.lead_time_days} onChange={(e) => setEditForm((f) => ({ ...f, lead_time_days: e.target.value.replace(/\D/g, '') }))} placeholder="3" inputMode="numeric" />
+            </div>
+          </div>
+
+          <div className="border-t border-white/10 pt-4 space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-emerald-300/80 font-medium">Торговый представитель</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Имя торгпреда</Label>
+                <Input value={editForm.sales_rep_name} onChange={(e) => setEditForm((f) => ({ ...f, sales_rep_name: e.target.value }))} placeholder="Айдос" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>WhatsApp-номер торгпреда</Label>
+                <Input value={editForm.sales_rep_phone} onChange={(e) => setEditForm((f) => ({ ...f, sales_rep_phone: e.target.value }))} placeholder="+7 701 234 56 78" inputMode="tel" />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              На этот номер будут уходить заявки на закуп через WhatsApp (Этап 5).
+            </p>
+          </div>
+
+          <div className="border-t border-white/10 pt-4 grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Контактное лицо (общее)</Label>
+              <Input value={editForm.contact_name} onChange={(e) => setEditForm((f) => ({ ...f, contact_name: e.target.value }))} placeholder="Бухгалтер, менеджер..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Телефон (общий)</Label>
+              <Input value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+7 ..." inputMode="tel" />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Заметки</Label>
+              <Input value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Любые заметки о поставщике" />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={saveSupplier} disabled={savingSupplier}>
+              {savingSupplier ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Сохраняю...</> : 'Сохранить настройки'}
+            </Button>
+          </div>
         </Card>
+      ) : null}
+
+      {tab === 'products' ? (
+        products.length === 0 ? (
+          <Card className="p-6 text-sm text-muted-foreground text-center">
+            За этим поставщиком пока не закреплено товаров. Товар закрепляется автоматически при проведении приёмки от этого поставщика.
+          </Card>
+        ) : (
+          <Card className="bg-gray-900/60 border-gray-800 overflow-hidden">
+            <div className="p-3 border-b border-white/10 text-xs text-muted-foreground">
+              Товары закрепляются автоматически при приёмке. Остаток — сумма по всем складам и витринам.
+            </div>
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-white/[0.03] text-xs text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="px-3 py-2 font-normal">Товар</th>
+                    <th className="px-3 py-2 font-normal">Штрихкод</th>
+                    <th className="px-3 py-2 text-right font-normal">Остаток</th>
+                    <th className="px-3 py-2 text-right font-normal">Порог</th>
+                    <th className="px-3 py-2 text-right font-normal">Цена закупа</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p) => {
+                    const low = p.low_stock_threshold != null && p.stock <= p.low_stock_threshold
+                    return (
+                      <tr key={p.id} className="border-t border-white/[0.06]">
+                        <td className="px-3 py-2">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span className="block truncate">{p.name}</span>
+                            {!p.is_active ? (
+                              <span className="shrink-0 rounded-full border border-gray-500/30 bg-gray-500/10 px-1.5 py-0.5 text-[10px] text-gray-300">архив</span>
+                            ) : null}
+                            {low ? (
+                              <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">мало</span>
+                            ) : null}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{p.barcode || '—'}</td>
+                        <td className={`px-3 py-2 text-right tabular-nums ${low ? 'text-amber-300 font-semibold' : ''}`}>
+                          {p.stock} {p.unit || 'шт'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                          {p.low_stock_threshold != null ? p.low_stock_threshold : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney(p.default_purchase_price)} ₸</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
       ) : null}
 
       {tab === 'receipts' ? (
