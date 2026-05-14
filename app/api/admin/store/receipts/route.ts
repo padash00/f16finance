@@ -20,14 +20,6 @@ function canManageStore(access: {
   return access.isSuperAdmin || !!access.staffRole
 }
 
-// Capability checks выше уже отсеивают; здесь — любой staff
-function canPostInventory(access: {
-  isSuperAdmin: boolean
-  staffRole: string
-}) {
-  return access.isSuperAdmin || !!access.staffRole
-}
-
 type Body = {
   action: 'createReceipt' | 'saveDraft' | 'deleteDraft' | 'cancelReceipt' | 'createPosting'
   payload?: {
@@ -286,12 +278,9 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createPosting') {
-      if (!canPostInventory(access)) {
-        return json(
-          { error: 'forbidden', message: 'Оприходование разрешено только владельцу или суперадминистратору' },
-          403,
-        )
-      }
+      // Доступ управляется системой прав (страница «Доступы» → путь «Оприходование»).
+      const denied = await requireCapability(access, 'store-postings.create')
+      if (denied) return denied as any
       const posting = body.posting
       if (!posting) return json({ error: 'posting-required' }, 400)
       const locationId = String(posting.location_id || '').trim()

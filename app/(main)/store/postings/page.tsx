@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type Item = {
   id: string
@@ -70,6 +71,7 @@ function parseNum(v: string) {
 }
 
 export default function StorePostingsPage() {
+  const { can, isSuperAdmin, isLoading: capsLoading } = useCapabilities()
   const [role, setRole] = useState<SessionRole | null>(null)
   const [roleLoading, setRoleLoading] = useState(true)
 
@@ -110,7 +112,8 @@ export default function StorePostingsPage() {
     return () => { cancelled = true }
   }, [])
 
-  const allowed = !!(role?.isSuperAdmin || role?.staffRole === 'owner')
+  // Доступ управляется системой прав (страница access), а не жёсткой ролью.
+  const allowed = isSuperAdmin || can('store-postings.create') || can('store-postings.view')
 
   const load = async () => {
     setLoading(true)
@@ -217,7 +220,7 @@ export default function StorePostingsPage() {
     }
   }
 
-  if (roleLoading) {
+  if (roleLoading || capsLoading) {
     return (
       <div className="app-page-wide space-y-6">
         <p className="text-sm text-muted-foreground">Загрузка…</p>
@@ -234,10 +237,10 @@ export default function StorePostingsPage() {
             <div>
               <h2 className="text-base font-semibold text-rose-200">Доступ ограничен</h2>
               <p className="mt-1 text-sm text-rose-200/80">
-                Оприходование разрешено только владельцу и суперадминистратору. Текущая роль: <strong>{role?.roleLabel || '—'}</strong>.
+                У вашей роли нет доступа к оприходованию. Текущая роль: <strong>{role?.roleLabel || '—'}</strong>.
               </p>
               <p className="mt-2 text-xs text-rose-300/70">
-                Если нужно добавить остаток — обратитесь к владельцу или используйте «Приёмку» с поставщиком.
+                Доступ выдаётся на странице «Доступы»: включите путь «Оприходование» для нужной роли.
               </p>
             </div>
           </CardContent>
