@@ -84,27 +84,59 @@ export async function GET(
     if (productsError) throw productsError
     const productItemIds = (productRows || []).map((p: any) => p.id)
     const stockByItem = new Map<string, number>()
+    const consumptionByItem = new Map<string, number>()
     if (productItemIds.length > 0) {
-      const { data: balanceRows, error: balanceError } = await supabase
-        .from('inventory_balances')
-        .select('item_id, quantity')
-        .in('item_id', productItemIds)
-      if (balanceError) throw balanceError
-      for (const row of (balanceRows || []) as any[]) {
+      const [balanceRes, consumptionRes] = await Promise.all([
+        supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .in('item_id', productItemIds),
+        supabase
+          .from('inventory_consumption_rates')
+          .select('item_id, avg_daily_consumption')
+          .in('item_id', productItemIds),
+      ])
+      if (balanceRes.error) throw balanceRes.error
+      if (consumptionRes.error) throw consumptionRes.error
+      for (const row of (balanceRes.data || []) as any[]) {
         const key = String(row.item_id)
         stockByItem.set(key, (stockByItem.get(key) || 0) + Number(row.quantity || 0))
       }
+      for (const row of (consumptionRes.data || []) as any[]) {
+        consumptionByItem.set(String(row.item_id), Number(row.avg_daily_consumption || 0))
+      }
     }
-    const products = (productRows || []).map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      barcode: p.barcode,
-      unit: p.unit,
-      default_purchase_price: Number(p.default_purchase_price || 0),
-      low_stock_threshold: p.low_stock_threshold != null ? Number(p.low_stock_threshold) : null,
-      is_active: p.is_active !== false,
-      stock: stockByItem.get(String(p.id)) || 0,
-    }))
+
+    // Умный порог = расход/день × срок поставки × 1.5 (страховой запас).
+    // Ручной low_stock_threshold, если задан, имеет приоритет.
+    const leadTimeDays = Number((supplier as any).lead_time_days ?? 3) || 3
+    const SAFETY_FACTOR = 1.5
+    const products = (productRows || []).map((p: any) => {
+      const stock = stockByItem.get(String(p.id)) || 0
+      const avgDaily = consumptionByItem.get(String(p.id)) || 0
+      const manualThreshold = p.low_stock_threshold != null ? Number(p.low_stock_threshold) : null
+      const smartThreshold = Math.round(avgDaily * leadTimeDays * SAFETY_FACTOR)
+      const effectiveThreshold = manualThreshold != null ? manualThreshold : smartThreshold
+      const needsReorder = effectiveThreshold > 0 && stock <= effectiveThreshold
+      // Дозаказ до 2× порога — после поставки запас комфортный.
+      const suggestedQty = needsReorder ? Math.max(0, Math.round(effectiveThreshold * 2 - stock)) : 0
+      return {
+        id: p.id,
+        name: p.name,
+        barcode: p.barcode,
+        unit: p.unit,
+        default_purchase_price: Number(p.default_purchase_price || 0),
+        low_stock_threshold: manualThreshold,
+        is_active: p.is_active !== false,
+        stock,
+        avg_daily_consumption: Math.round(avgDaily * 100) / 100,
+        smart_threshold: smartThreshold,
+        effective_threshold: effectiveThreshold,
+        threshold_source: manualThreshold != null ? 'manual' : 'smart',
+        needs_reorder: needsReorder,
+        suggested_qty: suggestedQty,
+      }
+    })
 
     const totalSpend = receipts.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0)
     const openDebtsSum = debts
@@ -139,6 +171,7 @@ export async function GET(
           receiptsCount: receipts.length,
           aliasesCount: aliases.length,
           productsCount: products.length,
+          reorderCount: products.filter((p) => p.needs_reorder).length,
           avgDaysToPay,
         },
       },

@@ -37,6 +37,12 @@ type Product = {
   low_stock_threshold: number | null
   is_active: boolean
   stock: number
+  avg_daily_consumption: number
+  smart_threshold: number
+  effective_threshold: number
+  threshold_source: 'manual' | 'smart'
+  needs_reorder: boolean
+  suggested_qty: number
 }
 
 type ReceiptLite = {
@@ -79,6 +85,7 @@ type Stats = {
   receiptsCount: number
   aliasesCount: number
   productsCount: number
+  reorderCount: number
   avgDaysToPay: number | null
 }
 
@@ -439,46 +446,60 @@ export default function SupplierCardPage() {
         ) : (
           <Card className="bg-gray-900/60 border-gray-800 overflow-hidden">
             <div className="p-3 border-b border-white/10 text-xs text-muted-foreground">
-              Товары закрепляются автоматически при приёмке. Остаток — сумма по всем складам и витринам.
+              Умный порог = расход/день × срок поставки ({supplier.lead_time_days ?? 3} дн) × 1.5.
+              {stats && stats.reorderCount > 0 ? (
+                <span className="ml-1 text-amber-300 font-medium">Пора заказывать: {stats.reorderCount}.</span>
+              ) : (
+                <span className="ml-1 text-emerald-300">Всё в норме.</span>
+              )}
             </div>
             <div className="overflow-auto">
               <table className="w-full text-sm">
                 <thead className="bg-white/[0.03] text-xs text-muted-foreground">
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>
-                    <th className="px-3 py-2 font-normal">Штрихкод</th>
                     <th className="px-3 py-2 text-right font-normal">Остаток</th>
+                    <th className="px-3 py-2 text-right font-normal">Расход/день</th>
                     <th className="px-3 py-2 text-right font-normal">Порог</th>
-                    <th className="px-3 py-2 text-right font-normal">Цена закупа</th>
+                    <th className="px-3 py-2 text-right font-normal">Дозаказать</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((p) => {
-                    const low = p.low_stock_threshold != null && p.stock <= p.low_stock_threshold
-                    return (
-                      <tr key={p.id} className="border-t border-white/[0.06]">
-                        <td className="px-3 py-2">
-                          <span className="flex items-center gap-2 min-w-0">
-                            <span className="block truncate">{p.name}</span>
-                            {!p.is_active ? (
-                              <span className="shrink-0 rounded-full border border-gray-500/30 bg-gray-500/10 px-1.5 py-0.5 text-[10px] text-gray-300">архив</span>
-                            ) : null}
-                            {low ? (
-                              <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">мало</span>
-                            ) : null}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{p.barcode || '—'}</td>
-                        <td className={`px-3 py-2 text-right tabular-nums ${low ? 'text-amber-300 font-semibold' : ''}`}>
-                          {p.stock} {p.unit || 'шт'}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                          {p.low_stock_threshold != null ? p.low_stock_threshold : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney(p.default_purchase_price)} ₸</td>
-                      </tr>
-                    )
-                  })}
+                  {products.map((p) => (
+                    <tr key={p.id} className={`border-t border-white/[0.06] ${p.needs_reorder ? 'bg-amber-500/[0.04]' : ''}`}>
+                      <td className="px-3 py-2">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="block truncate">{p.name}</span>
+                          {!p.is_active ? (
+                            <span className="shrink-0 rounded-full border border-gray-500/30 bg-gray-500/10 px-1.5 py-0.5 text-[10px] text-gray-300">архив</span>
+                          ) : null}
+                          {p.needs_reorder ? (
+                            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">пора заказывать</span>
+                          ) : null}
+                        </span>
+                        <span className="block font-mono text-[10px] text-muted-foreground mt-0.5">{p.barcode || '—'}</span>
+                      </td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${p.needs_reorder ? 'text-amber-300 font-semibold' : ''}`}>
+                        {p.stock} {p.unit || 'шт'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                        {p.avg_daily_consumption > 0 ? `${p.avg_daily_consumption}/дн` : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        <span>{p.effective_threshold || '—'}</span>
+                        <span className={`ml-1 text-[10px] ${p.threshold_source === 'manual' ? 'text-sky-300' : 'text-violet-300'}`}>
+                          {p.threshold_source === 'manual' ? 'ручной' : 'умный'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {p.needs_reorder && p.suggested_qty > 0 ? (
+                          <span className="font-semibold text-amber-200">+{p.suggested_qty} {p.unit || 'шт'}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
