@@ -147,6 +147,15 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'simulation',
+        path: '/simulation',
+        label: 'Симуляция выручки',
+        capabilities: [
+          { id: 'simulation.view', label: 'Просмотр симуляции', severity: 'low' },
+          { id: 'simulation.edit', label: 'Редактирование зон и тарифов', severity: 'medium' },
+        ],
+      },
+      {
         id: 'kaspi-terminal',
         path: '/kaspi-terminal',
         label: 'безналичный терминал',
