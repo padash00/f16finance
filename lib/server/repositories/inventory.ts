@@ -438,7 +438,7 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_writeoffs')
-      .select('id, location_id, written_at, reason, comment, total_amount, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, written_at, reason, comment, total_amount, status, cancelled_at, cancel_reason, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(80),
   ])

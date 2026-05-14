@@ -54,6 +54,9 @@ type InventoryWriteoff = {
   reason: string
   comment: string | null
   total_amount: number
+  status?: 'posted' | 'cancelled'
+  cancelled_at?: string | null
+  cancel_reason?: string | null
   location?: InventoryLocation | null
   items?: Array<{
     id: string
@@ -132,6 +135,7 @@ export default function StoreWriteoffsPage() {
   const [writeoffSearch, setWriteoffSearch] = useState('')
   const [selectedWriteoff, setSelectedWriteoff] = useState<InventoryWriteoff | null>(null)
   const [writeoffDetailsOpen, setWriteoffDetailsOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
     const soft = Boolean(opts?.soft)
@@ -318,6 +322,37 @@ export default function StoreWriteoffsPage() {
     }
   }
 
+  const cancelWriteoff = async (writeoff: InventoryWriteoff) => {
+    const reasonInput = window.prompt(
+      'Отмена списания вернёт товар на остаток. Причина отмены (необязательно):',
+    )
+    if (reasonInput === null) return
+    setCancelling(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch('/api/admin/store/writeoffs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancelWriteoff',
+          writeoff_id: writeoff.id,
+          cancel_reason: reasonInput.trim() || null,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось отменить списание')
+      setSuccess('Списание отменено, товар возвращён на остаток')
+      setWriteoffDetailsOpen(false)
+      setSelectedWriteoff(null)
+      await load(undefined, { soft: true })
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось отменить списание')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   const saveTemplate = () => {
     const name = templateName.trim()
     if (!name) return setError('Введите название шаблона')
@@ -387,7 +422,9 @@ export default function StoreWriteoffsPage() {
   }, [data?.writeoffs, writeoffSearch])
 
   const totalWriteoffsAmount = useMemo(() => {
-    return (data?.writeoffs || []).reduce((s, w) => s + Number(w.total_amount || 0), 0)
+    return (data?.writeoffs || [])
+      .filter((w) => w.status !== 'cancelled')
+      .reduce((s, w) => s + Number(w.total_amount || 0), 0)
   }, [data?.writeoffs])
 
   return (
@@ -534,7 +571,14 @@ export default function StoreWriteoffsPage() {
                     <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <p className="truncate text-sm font-medium">{writeoff.reason || '—'}</p>
+                          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                            <span className="truncate">{writeoff.reason || '—'}</span>
+                            {writeoff.status === 'cancelled' ? (
+                              <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                                отменено
+                              </span>
+                            ) : null}
+                          </p>
                         </TooltipTrigger>
                         <TooltipContent side="top" align="start" className="max-w-md">
                           {writeoff.reason || '—'}
@@ -781,6 +825,13 @@ export default function StoreWriteoffsPage() {
               <p className="text-sm text-muted-foreground">Документ не выбран.</p>
             ) : (
               <div className="space-y-4">
+                {selectedWriteoff.status === 'cancelled' ? (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                    Списание отменено{selectedWriteoff.cancelled_at ? ` · ${formatDate(selectedWriteoff.cancelled_at)}` : ''}.
+                    Товар возвращён на остаток.
+                    {selectedWriteoff.cancel_reason ? <span> Причина: {selectedWriteoff.cancel_reason}</span> : null}
+                  </div>
+                ) : null}
                 <div className="text-sm text-muted-foreground">
                   Причина: <span className="text-foreground">{selectedWriteoff.reason || '—'}</span>
                   {selectedWriteoff.comment ? (
@@ -816,6 +867,20 @@ export default function StoreWriteoffsPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {selectedWriteoff.status !== 'cancelled' ? (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      className="border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
+                      disabled={cancelling}
+                      onClick={() => void cancelWriteoff(selectedWriteoff)}
+                    >
+                      {cancelling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArchiveX className="mr-2 h-4 w-4" />}
+                      Отменить списание
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

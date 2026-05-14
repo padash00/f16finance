@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { ensureInventoryLocationAccess, fetchStoreWriteoffs, postInventoryWriteoff } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -19,8 +20,8 @@ function canManageStore(access: {
 }
 
 type Body = {
-  action: 'createWriteoff'
-  payload: {
+  action: 'createWriteoff' | 'cancelWriteoff'
+  payload?: {
     location_id: string
     written_at: string
     reason: string
@@ -31,6 +32,8 @@ type Body = {
       comment?: string | null
     }>
   }
+  writeoff_id?: string
+  cancel_reason?: string | null
 }
 
 function normalizeMoney(value: unknown) {
@@ -101,7 +104,57 @@ export async function POST(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const body = (await request.json().catch(() => null)) as Body | null
-    if (!body?.action || body.action !== 'createWriteoff') return json({ error: 'invalid-action' }, 400)
+    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+
+    // ── Отмена списания: возвращаем товар на локацию, акт → cancelled ──────
+    if (body.action === 'cancelWriteoff') {
+      const writeoffId = String(body.writeoff_id || '').trim()
+      if (!writeoffId) return json({ error: 'writeoff-id-required' }, 400)
+      const reason = String(body.cancel_reason || '').trim() || null
+
+      const { data: writeoffRow, error: writeoffErr } = await supabase
+        .from('inventory_writeoffs')
+        .select('id, status, location_id, written_at, reason, total_amount')
+        .eq('id', writeoffId)
+        .maybeSingle()
+      if (writeoffErr) throw writeoffErr
+      if (!writeoffRow) return json({ error: 'Списание не найдено' }, 404)
+      await ensureInventoryLocationAccess(supabase as any, String(writeoffRow.location_id), inventoryScope)
+
+      const { error: rpcErr } = await supabase.rpc('inventory_cancel_writeoff', {
+        p_writeoff_id: writeoffId,
+        p_reason: reason,
+        p_actor_user_id: actorUserId,
+      })
+      if (rpcErr) {
+        const msg = String(rpcErr.message || '')
+        if (msg.includes('inventory-writeoff-already-cancelled')) {
+          return json({ error: 'Списание уже отменено' }, 409)
+        }
+        if (msg.includes('inventory-writeoff-not-found')) {
+          return json({ error: 'Списание не найдено' }, 404)
+        }
+        throw rpcErr
+      }
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-writeoff',
+        entityId: writeoffId,
+        action: 'cancel',
+        payload: {
+          reason,
+          location_id: writeoffRow.location_id,
+          written_at: writeoffRow.written_at,
+          total_amount: writeoffRow.total_amount,
+        },
+      })
+
+      return json({ ok: true })
+    }
+
+    if (body.action !== 'createWriteoff') return json({ error: 'invalid-action' }, 400)
+    if (!body.payload) return json({ error: 'payload-required' }, 400)
     await ensureInventoryLocationAccess(supabase as any, String(body.payload.location_id || '').trim(), inventoryScope)
 
     const result = await postInventoryWriteoff(supabase as any, {
@@ -134,6 +187,6 @@ export async function POST(request: Request) {
       area: 'api/admin/store/writeoffs.POST',
       message: error?.message || 'Store writeoffs POST error',
     })
-    return json({ error: error?.message || 'Не удалось провести списание' }, 500)
+    return json({ error: humanizeDbError(error, 'Не удалось выполнить операцию со списанием') }, 500)
   }
 }
