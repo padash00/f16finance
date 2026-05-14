@@ -329,7 +329,7 @@ function buildSeries(params: {
 export default function GoalsPage() {
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(currentYear)
-  const [tab, setTab] = useState<PeriodKind>('month')
+  const [tab, setTab] = useState<PeriodKind>('year')
   const [data, setData] = useState<ApiResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
