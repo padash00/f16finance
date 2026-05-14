@@ -125,6 +125,7 @@ export const navSections: NavSection[] = [
       { href: '/store/showcase', label: 'Витрина', icon: Store, note: 'Остатки на витрине, заявки на пополнение' },
       { href: '/store/catalog', label: 'Каталог', icon: Tags, note: 'Товары, категории и поставщики' },
       { href: '/store/suppliers', label: 'Поставщики', icon: Building2, note: 'Карточки, накладные, обученные алиасы AI', isNew: true },
+      { href: '/store/purchase-orders', label: 'Заявки поставщикам', icon: ClipboardList, note: 'Заказы на закуп — авто по остаткам и вручную', isNew: true },
       { href: '/store/receipts', label: 'Приемка', icon: PackagePlus, note: 'Документы прихода на склад' },
       { href: '/store/postings', label: 'Оприходование', icon: PackagePlus, note: 'Без поставщика — корректировки и излишки' },
       { href: '/store/billing', label: 'Долги и накладные', icon: Wallet, note: 'Долги поставщикам и история накладных' },

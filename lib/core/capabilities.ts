@@ -357,6 +357,16 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'store-purchase-orders',
+        path: '/store/purchase-orders',
+        label: 'Заявки поставщикам',
+        capabilities: [
+          ...crud('store-purchase-orders', { delete: false }),
+          { id: 'store-purchase-orders.send', label: 'Отправить заявку поставщику', severity: 'medium' },
+          { id: 'store-purchase-orders.cancel', label: 'Отменить заявку поставщику', severity: 'medium' },
+        ],
+      },
+      {
         id: 'store-receipt-settings',
         path: '/store/receipt-settings',
         label: 'Реквизиты чека ККМ',
