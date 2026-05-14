@@ -33,6 +33,10 @@
       "schedule": "0 7 * * 1"
     },
     {
+      "path": "/api/cron/auto-purchase-orders",
+      "schedule": "30 6 * * *"
+    },
+    {
       "path": "/api/cron/smart-insights",
       "schedule": "0 5 * * *"
     },
