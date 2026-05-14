@@ -306,7 +306,7 @@ export default function SupplierCardPage() {
   }
 
   return (
-    <div className="app-page max-w-[1400px] space-y-5">
+    <div className="app-page max-w-[1600px] space-y-5">
       <Link href="/store/suppliers" className="inline-flex items-center text-sm text-emerald-300 hover:text-emerald-200">
         <ArrowLeft className="w-4 h-4 mr-1" /> К списку поставщиков
       </Link>

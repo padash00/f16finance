@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardList, Loader2, Plus, Trash2, X } from 'lucide-react'
+import { ClipboardList, Loader2, MessageCircle, Plus, Trash2, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -196,6 +196,31 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  const buildWhatsAppText = (d: OrderDetail) => {
+    const supplierName = d.supplier?.organization_name || d.supplier?.name || 'Поставщик'
+    const today = new Date().toLocaleDateString('ru-RU')
+    const lines = (d.items || []).map((it, i) => {
+      const unit = it.item?.unit || 'шт'
+      return `${i + 1}. ${it.item?.name || 'Товар'} — ${it.suggested_qty} ${unit}`
+    })
+    let text = `Заявка на закуп\n${supplierName}\nДата: ${today}\n\n${lines.join('\n')}`
+    if (d.comment) text += `\n\nКомментарий: ${d.comment}`
+    return text
+  }
+
+  const sendWhatsApp = async () => {
+    if (!detail) return
+    const phone = (detail.supplier?.sales_rep_phone || '').replace(/\D/g, '')
+    if (!phone) {
+      setError('У поставщика не указан WhatsApp торгпреда — заполните в карточке поставщика')
+      return
+    }
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsAppText(detail))}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+    // Полу-авто: открыли чат с готовым текстом → помечаем заявку отправленной.
+    await changeStatus('sent')
+  }
+
   const changeStatus = async (next: OrderStatus, cancelReason?: string) => {
     if (!detail) return
     setStatusBusy(true)
@@ -225,7 +250,7 @@ export default function PurchaseOrdersPage() {
   }, [orders])
 
   return (
-    <div className="app-page max-w-[1200px] space-y-5">
+    <div className="app-page max-w-[1600px] space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shrink-0">
@@ -448,10 +473,19 @@ export default function PurchaseOrdersPage() {
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               {detail.status === 'draft' ? (
-                <Button onClick={() => void changeStatus('sent')} disabled={statusBusy}>
-                  {statusBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                  Отметить «Отправлена»
-                </Button>
+                <>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => void sendWhatsApp()}
+                    disabled={statusBusy}
+                  >
+                    {statusBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <MessageCircle className="w-4 h-4 mr-1" />}
+                    Отправить в WhatsApp
+                  </Button>
+                  <Button variant="outline" onClick={() => void changeStatus('sent')} disabled={statusBusy}>
+                    Просто отметить «Отправлена»
+                  </Button>
+                </>
               ) : null}
               {detail.status === 'sent' ? (
                 <Button onClick={() => void changeStatus('received')} disabled={statusBusy}>
