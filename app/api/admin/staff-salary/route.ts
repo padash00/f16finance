@@ -72,7 +72,6 @@ export async function GET(req: Request) {
       supabase
         .from('staff')
         .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active')
-        .eq('is_active', true)
         .order('full_name'),
       supabase
         .from('staff_adjustments')
@@ -116,19 +115,21 @@ export async function GET(req: Request) {
     if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
     if (expensesRes.error) throw expensesRes.error
 
-    const baseStaff = (staffRes.data ?? []).map((row: any) => ({
-      ...row,
-      source_type: 'staff',
-    }))
-    const staffIdSet = new Set(baseStaff.map((row: any) => String(row.id)))
+    // Все staff (вкл. архивных) — для матчинга operator↔staff, чтобы уволенный
+    // сотрудник не «воскресал» как виртуальный из operators.is_admin_staff.
+    const allStaffRows = (staffRes.data ?? []) as any[]
+    const baseStaff = allStaffRows
+      .filter((row) => row.is_active !== false)
+      .map((row) => ({ ...row, source_type: 'staff' }))
+    const staffIdSet = new Set(allStaffRows.map((row) => String(row.id)))
     const staffByTelegram = new Map<string, string>()
     const staffByName = new Map<string, string>()
-    for (const row of baseStaff) {
-      const staffId = String((row as any).id)
-      const telegram = String((row as any).telegram_chat_id || '').trim()
+    for (const row of allStaffRows) {
+      const staffId = String(row.id)
+      const telegram = String(row.telegram_chat_id || '').trim()
       if (telegram) staffByTelegram.set(telegram, staffId)
-      const fullNameKey = normalizePersonName((row as any).full_name || '')
-      const shortNameKey = normalizePersonName((row as any).short_name || '')
+      const fullNameKey = normalizePersonName(row.full_name || '')
+      const shortNameKey = normalizePersonName(row.short_name || '')
       if (fullNameKey) staffByName.set(fullNameKey, staffId)
       if (shortNameKey) staffByName.set(shortNameKey, staffId)
     }
