@@ -20,13 +20,273 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+// ── Каталог компонентов (модели и цены под РК, 2026) ──────────────────────
+type CatalogItem = { name: string; price: number }
+const COMPONENT_CATALOG: Array<{ key: string; label: string; items: CatalogItem[] }> = [
+  {
+    key: 'cpu',
+    label: 'Процессор',
+    items: [
+      { name: 'Intel Core i9-14900K', price: 280_000 },
+      { name: 'Intel Core i7-14700KF', price: 200_000 },
+      { name: 'Intel Core i7-13700KF', price: 180_000 },
+      { name: 'Intel Core i5-13600KF', price: 130_000 },
+      { name: 'Intel Core i5-12400F', price: 80_000 },
+      { name: 'AMD Ryzen 9 7950X', price: 320_000 },
+      { name: 'AMD Ryzen 9 7900X', price: 220_000 },
+      { name: 'AMD Ryzen 7 7700X', price: 170_000 },
+      { name: 'AMD Ryzen 5 7600X', price: 120_000 },
+      { name: 'AMD Ryzen 5 7600', price: 110_000 },
+      { name: 'AMD Ryzen 5 5600', price: 70_000 },
+    ],
+  },
+  {
+    key: 'gpu',
+    label: 'Видеокарта',
+    items: [
+      { name: 'NVIDIA RTX 4090 24GB', price: 750_000 },
+      { name: 'NVIDIA RTX 4080 Super 16GB', price: 500_000 },
+      { name: 'NVIDIA RTX 4070 Ti Super 16GB', price: 380_000 },
+      { name: 'NVIDIA RTX 4070 Super 12GB', price: 320_000 },
+      { name: 'NVIDIA RTX 4070 12GB', price: 250_000 },
+      { name: 'NVIDIA RTX 4060 Ti 8GB', price: 200_000 },
+      { name: 'NVIDIA RTX 4060 8GB', price: 170_000 },
+      { name: 'NVIDIA RTX 3060 12GB', price: 130_000 },
+      { name: 'AMD RX 7900 XTX 24GB', price: 480_000 },
+      { name: 'AMD RX 7800 XT 16GB', price: 320_000 },
+      { name: 'AMD RX 7700 XT 12GB', price: 230_000 },
+      { name: 'AMD RX 7600 8GB', price: 150_000 },
+    ],
+  },
+  {
+    key: 'ram',
+    label: 'Оперативная память',
+    items: [
+      { name: 'Kingston Fury 64GB DDR5 6000MHz', price: 130_000 },
+      { name: 'G.Skill Trident Z 32GB DDR5 6400MHz', price: 80_000 },
+      { name: 'Kingston Fury 32GB DDR5 6000MHz', price: 70_000 },
+      { name: 'Corsair Vengeance 32GB DDR5 5200MHz', price: 65_000 },
+      { name: 'Kingston Fury 16GB DDR5 6000MHz', price: 35_000 },
+      { name: 'Corsair Vengeance 32GB DDR4 3600MHz', price: 50_000 },
+      { name: 'Kingston Fury 32GB DDR4 3200MHz', price: 45_000 },
+      { name: 'Corsair Vengeance 16GB DDR4 3200MHz', price: 25_000 },
+    ],
+  },
+  {
+    key: 'motherboard',
+    label: 'Материнская плата',
+    items: [
+      { name: 'ASUS ROG Maximus Z790 Hero', price: 280_000 },
+      { name: 'ASUS ROG Strix Z790-A', price: 180_000 },
+      { name: 'MSI MPG Z790 Edge', price: 160_000 },
+      { name: 'Gigabyte Z790 AORUS Elite', price: 150_000 },
+      { name: 'MSI MAG B760M Mortar', price: 80_000 },
+      { name: 'ASUS Prime B760-PLUS', price: 70_000 },
+      { name: 'Gigabyte B660 DS3H', price: 40_000 },
+      { name: 'ASUS ROG Strix X670E-E (AM5)', price: 230_000 },
+      { name: 'ASUS Prime X670-P (AM5)', price: 130_000 },
+      { name: 'MSI B650M PRO (AM5)', price: 90_000 },
+      { name: 'Gigabyte B550 AORUS Elite (AM4)', price: 60_000 },
+    ],
+  },
+  {
+    key: 'ssd',
+    label: 'Накопитель SSD',
+    items: [
+      { name: 'Samsung 990 PRO 2TB NVMe Gen4', price: 90_000 },
+      { name: 'Samsung 990 PRO 1TB NVMe Gen4', price: 50_000 },
+      { name: 'Kingston KC3000 2TB NVMe Gen4', price: 75_000 },
+      { name: 'Kingston KC3000 1TB NVMe Gen4', price: 32_000 },
+      { name: 'WD Black SN850X 1TB NVMe', price: 45_000 },
+      { name: 'Samsung 980 1TB NVMe', price: 35_000 },
+      { name: 'Crucial P3 1TB NVMe', price: 28_000 },
+      { name: 'WD Blue 500GB NVMe', price: 18_000 },
+    ],
+  },
+  {
+    key: 'psu',
+    label: 'Блок питания',
+    items: [
+      { name: 'Corsair RM1000x 1000W Gold', price: 110_000 },
+      { name: 'Corsair RM850e 850W Gold', price: 75_000 },
+      { name: 'Seasonic Focus GX-850 850W Gold', price: 80_000 },
+      { name: 'Corsair RM750x 750W Gold', price: 60_000 },
+      { name: 'be quiet! Pure Power 750W Gold', price: 55_000 },
+      { name: 'be quiet! Pure Power 650W Bronze', price: 45_000 },
+      { name: 'Cooler Master MWE 650W Bronze', price: 35_000 },
+      { name: 'DeepCool PK750D 750W Bronze', price: 35_000 },
+    ],
+  },
+  {
+    key: 'case',
+    label: 'Корпус',
+    items: [
+      { name: 'Lian Li O11 Dynamic EVO', price: 95_000 },
+      { name: 'NZXT H7 Flow', price: 60_000 },
+      { name: 'Fractal Design Meshify 2', price: 70_000 },
+      { name: 'Corsair 4000D Airflow', price: 45_000 },
+      { name: 'be quiet! Pure Base 500DX', price: 50_000 },
+      { name: 'Cougar MX410-G', price: 25_000 },
+      { name: 'DeepCool MATREXX 50', price: 22_000 },
+      { name: 'AeroCool Cylon', price: 18_000 },
+    ],
+  },
+  {
+    key: 'cooling',
+    label: 'Охлаждение CPU',
+    items: [
+      { name: 'NZXT Kraken X73 360мм AIO', price: 110_000 },
+      { name: 'NZXT Kraken X63 280мм AIO', price: 75_000 },
+      { name: 'Arctic Liquid Freezer II 240мм', price: 55_000 },
+      { name: 'be quiet! Dark Rock Pro 4 (воздух)', price: 45_000 },
+      { name: 'DeepCool AK620 (воздух)', price: 35_000 },
+      { name: 'Noctua NH-U12S redux (воздух)', price: 30_000 },
+      { name: 'ID-COOLING SE-224-XT (воздух)', price: 18_000 },
+    ],
+  },
+  {
+    key: 'monitor',
+    label: 'Монитор',
+    items: [
+      { name: 'LG UltraGear 27" 240Hz IPS', price: 220_000 },
+      { name: 'Samsung Odyssey G7 27" 240Hz', price: 200_000 },
+      { name: 'ASUS TUF VG279QM 27" 280Hz', price: 180_000 },
+      { name: 'LG 27GP750 27" 165Hz IPS', price: 130_000 },
+      { name: 'AOC C27G2Z 27" 240Hz VA', price: 110_000 },
+      { name: 'Samsung Odyssey G5 27" 144Hz', price: 90_000 },
+      { name: 'MSI G2422 24" 170Hz', price: 80_000 },
+      { name: 'AOC 24G2 24" 144Hz IPS', price: 75_000 },
+      { name: 'Samsung 24" 75Hz (бюджет)', price: 45_000 },
+    ],
+  },
+  {
+    key: 'peripherals',
+    label: 'Периферия',
+    items: [
+      { name: 'Logitech G Pro X Superlight 2 (мышь)', price: 65_000 },
+      { name: 'Razer DeathAdder V3 Pro (мышь)', price: 60_000 },
+      { name: 'Logitech G502 HERO (мышь)', price: 35_000 },
+      { name: 'Razer Basilisk V3 (мышь)', price: 35_000 },
+      { name: 'A4Tech Bloody (мышь начальная)', price: 12_000 },
+      { name: 'Logitech G Pro X TKL Mechanical (клава)', price: 70_000 },
+      { name: 'Razer BlackWidow V4 (клава)', price: 65_000 },
+      { name: 'HyperX Alloy Origins Core (клава)', price: 45_000 },
+      { name: 'Logitech G413 SE (клава)', price: 30_000 },
+      { name: 'A4Tech Bloody B188N (клава начальная)', price: 12_000 },
+      { name: 'HyperX Cloud III (гарнитура)', price: 50_000 },
+      { name: 'Logitech G Pro X (гарнитура)', price: 60_000 },
+      { name: 'SteelSeries Arctis Nova 7 (гарнитура)', price: 80_000 },
+      { name: 'HyperX Cloud II (гарнитура)', price: 45_000 },
+      { name: 'Razer BlackShark V2 X (гарнитура)', price: 35_000 },
+      { name: 'Коврик XL игровой', price: 8_000 },
+    ],
+  },
+]
+
+function findCatalogItem(value: string): CatalogItem | null {
+  const [groupKey, idxStr] = value.split('|')
+  const group = COMPONENT_CATALOG.find((g) => g.key === groupKey)
+  const idx = Number(idxStr)
+  if (!group || !Number.isFinite(idx)) return null
+  return group.items[idx] || null
+}
+
+// ── Каталог CAPEX (мебель/оборудование зала) ──────────────────────────────
+const CAPEX_CATALOG: Array<{ key: string; label: string; items: CatalogItem[] }> = [
+  {
+    key: 'chair',
+    label: 'Кресло',
+    items: [
+      { name: 'Кресло DXRacer Master', price: 220_000 },
+      { name: 'Кресло AKRacing Core EX', price: 180_000 },
+      { name: 'Кресло Cougar Armor Titan Pro', price: 160_000 },
+      { name: 'Кресло GT Racing GT099', price: 90_000 },
+      { name: 'Кресло ARGON HERO', price: 80_000 },
+      { name: 'Кресло Mealux Y-318 (детское/эконом)', price: 50_000 },
+      { name: 'Кресло бюджетное игровое (Китай)', price: 40_000 },
+    ],
+  },
+  {
+    key: 'desk',
+    label: 'Стол',
+    items: [
+      { name: 'Игровой стол Pro Stream с подъёмом', price: 80_000 },
+      { name: 'Игровой стол L-form (угловой)', price: 65_000 },
+      { name: 'Игровой стол Cougar Mars Pro', price: 55_000 },
+      { name: 'Стол игровой стандарт', price: 40_000 },
+      { name: 'Стол простой с перегородкой', price: 30_000 },
+    ],
+  },
+  {
+    key: 'ac',
+    label: 'Кондиционер',
+    items: [
+      { name: 'Кондиционер LG 24000 BTU инверторный', price: 380_000 },
+      { name: 'Кондиционер Samsung 18000 BTU', price: 300_000 },
+      { name: 'Кондиционер Haier 12000 BTU', price: 200_000 },
+      { name: 'Кондиционер Midea 12000 BTU', price: 170_000 },
+    ],
+  },
+  {
+    key: 'network',
+    label: 'Сетевое оборудование',
+    items: [
+      { name: 'Mikrotik hAP ax3 (роутер)', price: 80_000 },
+      { name: 'Mikrotik CRS328 (свитч 24 порта)', price: 280_000 },
+      { name: 'TP-Link Archer AX73 (роутер бытовой)', price: 70_000 },
+      { name: 'TP-Link TL-SG1024 (свитч 24 порта)', price: 130_000 },
+      { name: 'Кабели UTP кат.6 (за 100м)', price: 25_000 },
+    ],
+  },
+  {
+    key: 'security',
+    label: 'Видеонаблюдение',
+    items: [
+      { name: 'Hikvision комплект 8 камер + регистратор', price: 450_000 },
+      { name: 'Hikvision комплект 4 камеры + регистратор', price: 280_000 },
+      { name: 'Бюджетный комплект 8 камер (Китай)', price: 250_000 },
+      { name: 'Бюджетный комплект 4 камеры (Китай)', price: 150_000 },
+    ],
+  },
+  {
+    key: 'pos',
+    label: 'Касса / POS',
+    items: [
+      { name: 'POS-терминал Webkassa + принтер чеков + сканер', price: 280_000 },
+      { name: 'Термопринтер чеков Xprinter', price: 45_000 },
+      { name: 'Сканер штрихкодов', price: 30_000 },
+      { name: 'Денежный ящик', price: 25_000 },
+    ],
+  },
+  {
+    key: 'misc',
+    label: 'Прочее',
+    items: [
+      { name: 'Барная стойка / ресепшн', price: 400_000 },
+      { name: 'Холодильник для бара', price: 250_000 },
+      { name: 'Микроволновка', price: 60_000 },
+      { name: 'Чайник электрический', price: 15_000 },
+      { name: 'Стеллажи и полки', price: 80_000 },
+      { name: 'Освещение (LED-ленты, светильники)', price: 200_000 },
+    ],
+  },
+]
+
+function findCapexCatalogItem(value: string): CatalogItem | null {
+  const [groupKey, idxStr] = value.split('|')
+  const group = CAPEX_CATALOG.find((g) => g.key === groupKey)
+  const idx = Number(idxStr)
+  if (!group || !Number.isFinite(idx)) return null
+  return group.items[idx] || null
+}
 
 const num = (v: string | number) => {
   const x = Number(String(v).replace(',', '.'))
@@ -695,11 +955,42 @@ export default function BranchPlanPage() {
 
                 {/* Компоненты */}
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-[10px] text-muted-foreground">Компоненты</Label>
-                    <Button size="sm" variant="ghost" onClick={() => setDraft((d) => ({ ...d, pc_configs: d.pc_configs.map((x) => x.id === c.id ? { ...x, components: [...x.components, { id: uid(), name: '', price: 0 }] } : x) }))}>
-                      <Plus className="mr-1 h-3.5 w-3.5" /> Компонент
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value=""
+                        onValueChange={(v) => {
+                          const item = findCatalogItem(v)
+                          if (!item) return
+                          setDraft((d) => ({
+                            ...d,
+                            pc_configs: d.pc_configs.map((x) => x.id === c.id
+                              ? { ...x, components: [...x.components, { id: uid(), name: item.name, price: item.price }] }
+                              : x),
+                          }))
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-56">
+                          <SelectValue placeholder="+ Из каталога..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COMPONENT_CATALOG.map((group) => (
+                            <SelectGroup key={group.key}>
+                              <SelectLabel>{group.label}</SelectLabel>
+                              {group.items.map((item, i) => (
+                                <SelectItem key={i} value={`${group.key}|${i}`}>
+                                  {item.name} · {formatMoney(item.price)} ₸
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="ghost" onClick={() => setDraft((d) => ({ ...d, pc_configs: d.pc_configs.map((x) => x.id === c.id ? { ...x, components: [...x.components, { id: uid(), name: '', price: 0 }] } : x) }))}>
+                        <Plus className="mr-1 h-3.5 w-3.5" /> Свой
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                     {c.components.map((cp) => (
@@ -736,14 +1027,43 @@ export default function BranchPlanPage() {
 
       {/* ── ПРОЧИЕ ВЛОЖЕНИЯ ──────────────────────────────────────────────────── */}
       <Card className="border-white/10 bg-white/[0.02] p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Прочие стартовые вложения</h2>
             <p className="text-[11px] text-muted-foreground">Мебель, периферия, ремонт, депозит, оборудование зала.</p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setDraft((d) => ({ ...d, capex: [...d.capex, { id: uid(), name: '', unit_price: 0, quantity: 1 }] }))}>
-            <Plus className="mr-1 h-4 w-4" /> Строка
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select
+              value=""
+              onValueChange={(v) => {
+                const item = findCapexCatalogItem(v)
+                if (!item) return
+                setDraft((d) => ({
+                  ...d,
+                  capex: [...d.capex, { id: uid(), name: item.name, unit_price: item.price, quantity: 1 }],
+                }))
+              }}
+            >
+              <SelectTrigger className="h-9 w-56">
+                <SelectValue placeholder="+ Из каталога..." />
+              </SelectTrigger>
+              <SelectContent>
+                {CAPEX_CATALOG.map((group) => (
+                  <SelectGroup key={group.key}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.items.map((item, i) => (
+                      <SelectItem key={i} value={`${group.key}|${i}`}>
+                        {item.name} · {formatMoney(item.price)} ₸
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => setDraft((d) => ({ ...d, capex: [...d.capex, { id: uid(), name: '', unit_price: 0, quantity: 1 }] }))}>
+              <Plus className="mr-1 h-4 w-4" /> Свой
+            </Button>
+          </div>
         </div>
         <div className="mt-3 space-y-2">
           {draft.capex.map((r, idx) => (
