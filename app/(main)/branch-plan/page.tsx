@@ -250,14 +250,14 @@ export default function BranchPlanPage() {
 
   if (loading) {
     return (
-      <div className="app-page-wide flex items-center justify-center py-24">
+      <div className="app-page max-w-[1600px] flex items-center justify-center py-24">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   return (
-    <div className="app-page-wide relative space-y-6">
+    <div className="app-page max-w-[1600px] relative space-y-6">
       <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
 
       {/* Header */}
