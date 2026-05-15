@@ -443,6 +443,19 @@ function mergeDraft(d: Partial<Draft>): Draft {
   }
 }
 
+function draftSnapshot(d: Draft): string {
+  return JSON.stringify({
+    name: d.name,
+    pc_configs: d.pc_configs,
+    capex: d.capex,
+    tariffs: d.tariffs,
+    zones: d.zones,
+    opex: d.opex,
+    scenarios: d.scenarios,
+    ramp_up: d.ramp_up,
+  })
+}
+
 export default function BranchPlanPage() {
   const [drafts, setDrafts] = useState<DraftListItem[]>([])
   const [draft, setDraft] = useState<Draft>(defaultDraft)
@@ -450,6 +463,37 @@ export default function BranchPlanPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [savedSnapshot, setSavedSnapshot] = useState<string>(() => draftSnapshot(defaultDraft()))
+
+  // Dirty-флаг: текущее состояние отличается от последнего сохранённого/загруженного.
+  const currentSnapshot = useMemo(() => draftSnapshot(draft), [draft])
+  const dirty = currentSnapshot !== savedSnapshot
+
+  // Предупреждение перед закрытием/перезагрузкой страницы при несохранённых изменениях.
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
+  const loadDraft = async (id: string) => {
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/branch-plan?id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить черновик')
+      const d = json.data.draft
+      const loaded = mergeDraft({ id: d.id, name: d.name, ...(d.payload || {}) })
+      setDraft(loaded)
+      setSavedSnapshot(draftSnapshot(loaded))
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка')
+    }
+  }
 
   const loadList = async () => {
     setLoading(true)
@@ -458,7 +502,13 @@ export default function BranchPlanPage() {
       const res = await fetch('/api/admin/branch-plan', { cache: 'no-store' })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить')
-      setDrafts(json.data?.drafts || [])
+      const list = (json.data?.drafts || []) as DraftListItem[]
+      setDrafts(list)
+      // Авто-загрузка последнего сохранённого черновика, чтобы перезагрузка
+      // страницы не сбрасывала правки на дефолтный шаблон.
+      if (list.length > 0 && list[0]?.id && !draft.id) {
+        await loadDraft(list[0].id)
+      }
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     } finally {
@@ -468,20 +518,8 @@ export default function BranchPlanPage() {
 
   useEffect(() => {
     void loadList()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const loadDraft = async (id: string) => {
-    setError(null)
-    try {
-      const res = await fetch(`/api/admin/branch-plan?id=${encodeURIComponent(id)}`, { cache: 'no-store' })
-      const json = await res.json().catch(() => null)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить черновик')
-      const d = json.data.draft
-      setDraft(mergeDraft({ id: d.id, name: d.name, ...(d.payload || {}) }))
-    } catch (err: any) {
-      setError(err?.message || 'Ошибка')
-    }
-  }
 
   const saveDraft = async () => {
     setSaving(true)
@@ -508,10 +546,19 @@ export default function BranchPlanPage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить')
-      setDraft((d) => ({ ...d, id: json.data?.id || d.id }))
+      setDraft((d) => {
+        const next = { ...d, id: json.data?.id || d.id }
+        setSavedSnapshot(draftSnapshot(next))
+        return next
+      })
       setSuccess('Сохранено')
       setTimeout(() => setSuccess(null), 2200)
-      await loadList()
+      // Обновляем список без авто-загрузки (у нас уже свежее состояние).
+      try {
+        const listRes = await fetch('/api/admin/branch-plan', { cache: 'no-store' })
+        const listJson = await listRes.json().catch(() => null)
+        if (listRes.ok && listJson?.ok) setDrafts(listJson.data?.drafts || [])
+      } catch { /* not critical */ }
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
     } finally {
@@ -530,7 +577,9 @@ export default function BranchPlanPage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить')
-      setDraft(defaultDraft())
+      const fresh = defaultDraft()
+      setDraft(fresh)
+      setSavedSnapshot(draftSnapshot(fresh))
       await loadList()
     } catch (err: any) {
       setError(err?.message || 'Ошибка')
@@ -678,7 +727,15 @@ export default function BranchPlanPage() {
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {drafts.length > 0 ? (
-            <Select value={draft.id || '__new__'} onValueChange={(v) => v === '__new__' ? setDraft(defaultDraft()) : void loadDraft(v)}>
+            <Select value={draft.id || '__new__'} onValueChange={(v) => {
+              if (v === '__new__') {
+                const fresh = defaultDraft()
+                setDraft(fresh)
+                setSavedSnapshot(draftSnapshot(fresh))
+              } else {
+                void loadDraft(v)
+              }
+            }}>
               <SelectTrigger className="w-56"><SelectValue placeholder="Черновик" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__new__">+ Новый черновик</SelectItem>
@@ -688,8 +745,13 @@ export default function BranchPlanPage() {
               </SelectContent>
             </Select>
           ) : null}
+          {dirty ? (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
+              Есть несохранённые изменения
+            </span>
+          ) : null}
           <button
-            onClick={() => { setDraft(defaultDraft()); void loadList() }}
+            onClick={() => { const fresh = defaultDraft(); setDraft(fresh); setSavedSnapshot(draftSnapshot(fresh)); void loadList() }}
             className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
             title="Обновить"
           >
