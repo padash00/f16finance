@@ -61,7 +61,15 @@ export async function GET(req: Request) {
       area: 'api/admin/branch-plan.GET',
       message: error?.message || 'error',
     })
-    return json({ error: humanizeDbError(error, 'Не удалось загрузить финмодель') }, 500)
+    return json({
+      error: humanizeDbError(error, 'Не удалось загрузить финмодель'),
+      debug: {
+        code: String(error?.code || ''),
+        message: String(error?.message || ''),
+        details: String(error?.details || ''),
+        hint: String(error?.hint || ''),
+      },
+    }, 500)
   }
 }
 
