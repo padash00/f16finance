@@ -156,6 +156,15 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
+        id: 'branch-plan',
+        path: '/branch-plan',
+        label: 'Финмодель новой точки',
+        capabilities: [
+          { id: 'branch-plan.view', label: 'Просмотр финмодели', severity: 'low' },
+          { id: 'branch-plan.edit', label: 'Редактирование/сохранение', severity: 'medium' },
+        ],
+      },
+      {
         id: 'kaspi-terminal',
         path: '/kaspi-terminal',
         label: 'безналичный терминал',

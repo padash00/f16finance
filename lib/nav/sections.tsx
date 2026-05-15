@@ -93,6 +93,7 @@ export const navSections: NavSection[] = [
       { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Движение денег и баланс', badge: 'AI', badgeColor: 'blue', isNew: true },
       { href: '/profitability', label: 'ОПиУ и EBITDA', icon: Calculator, note: 'Полная прибыль и комиссии POS' },
       { href: '/valuation', label: 'Оценка бизнеса', icon: Landmark, note: 'EBITDA × мультипликатор для инвестора', badge: 'new', badgeColor: 'blue', isNew: true },
+      { href: '/branch-plan', label: 'Финмодель новой точки', icon: Building2, note: 'CAPEX, OPEX, выручка, окупаемость', badge: 'new', badgeColor: 'blue', isNew: true },
       { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
       { href: '/analytics', label: 'Аналитика доходов', icon: BarChart3, note: 'Сравнение точек и тренды' },
     ],
