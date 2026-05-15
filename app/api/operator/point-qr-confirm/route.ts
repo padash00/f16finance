@@ -41,7 +41,6 @@ export async function POST(request: Request) {
       .from('point_qr_login_challenges')
       .select('id, status, expires_at, point_project_id')
       .eq('nonce', nonce)
-      .eq('status', 'pending')
       .maybeSingle()
 
     if (fetchError) throw fetchError
@@ -49,9 +48,18 @@ export async function POST(request: Request) {
       return json({ error: 'invalid-or-used-code' }, 404)
     }
 
-    if (new Date(row.expires_at as string).getTime() <= Date.now()) {
-      await admin.from('point_qr_login_challenges').update({ status: 'expired' }).eq('id', row.id)
+    // Различаем «истёк» и «уже использован» — UX-сигнал для оператора.
+    if (row.status === 'expired' || new Date(row.expires_at as string).getTime() <= Date.now()) {
+      if (row.status !== 'expired') {
+        await admin.from('point_qr_login_challenges').update({ status: 'expired' }).eq('id', row.id)
+      }
       return json({ error: 'code-expired' }, 410)
+    }
+    if (row.status === 'approved' || row.status === 'consumed') {
+      return json({ error: 'code-already-used' }, 409)
+    }
+    if (row.status !== 'pending') {
+      return json({ error: 'invalid-or-used-code' }, 404)
     }
 
     const project = await loadPointProjectContext(String(row.point_project_id))

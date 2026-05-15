@@ -7,7 +7,7 @@ import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
-const CHALLENGE_TTL_MS = 3 * 60_000
+const CHALLENGE_TTL_MS = 10 * 60_000
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
