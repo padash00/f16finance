@@ -288,10 +288,12 @@ export async function POST(req: Request) {
         staffId: body.staffId,
       })
 
-      const { error } = await supabase
+      const { data: toggledStaff, error } = await supabase
         .from('staff')
         .update({ is_active: body.is_active })
         .eq('id', body.staffId)
+        .select('id, email, user_id')
+        .single()
 
       if (error) throw error
 
@@ -302,6 +304,61 @@ export async function POST(req: Request) {
           .eq('organization_id', activeOrganizationId)
           .eq('staff_id', body.staffId)
         if (membershipError) throw membershipError
+      }
+
+      // При архивировании отзываем активные сессии Supabase Auth и гасим
+      // operator_auth, иначе уволенный продолжает заходить со старой сессии
+      // (и через operator-аккаунт, если он был привязан).
+      if (!body.is_active) {
+        let staffUserId: string | null = (toggledStaff as any)?.user_id || null
+        const staffEmail: string | null = (toggledStaff as any)?.email || null
+
+        if (!staffUserId && staffEmail) {
+          try {
+            const usersResp = await (supabase as any).auth.admin.listUsers({ page: 1, perPage: 1000 })
+            const match = usersResp?.data?.users?.find(
+              (u: any) => String(u.email || '').toLowerCase() === staffEmail.toLowerCase(),
+            )
+            if (match?.id) staffUserId = String(match.id)
+          } catch { /* not critical */ }
+        }
+
+        if (staffUserId) {
+          try { await (supabase as any).auth.admin.signOut(staffUserId, 'global') } catch { /* not critical */ }
+        }
+
+        // Отзываем operator_auth по связи operator_staff_links.staff_id → operator_id
+        try {
+          const { data: links } = await supabase
+            .from('operator_staff_links')
+            .select('operator_id')
+            .eq('staff_id', body.staffId)
+          const opIds = (links || []).map((r: any) => String(r.operator_id)).filter(Boolean)
+          if (opIds.length) {
+            const { data: opAuthRows } = await supabase
+              .from('operator_auth')
+              .update({ is_active: false })
+              .in('operator_id', opIds)
+              .select('user_id')
+            for (const row of (opAuthRows || []) as any[]) {
+              if (row?.user_id) {
+                try { await (supabase as any).auth.admin.signOut(String(row.user_id), 'global') } catch { /* not critical */ }
+              }
+            }
+          }
+        } catch { /* not critical */ }
+      } else {
+        // Восстановление: оживляем operator_auth, чтобы оператор снова мог логиниться
+        try {
+          const { data: links } = await supabase
+            .from('operator_staff_links')
+            .select('operator_id')
+            .eq('staff_id', body.staffId)
+          const opIds = (links || []).map((r: any) => String(r.operator_id)).filter(Boolean)
+          if (opIds.length) {
+            await supabase.from('operator_auth').update({ is_active: true }).in('operator_id', opIds)
+          }
+        } catch { /* not critical */ }
       }
 
       await writeAuditLog(supabase, {
