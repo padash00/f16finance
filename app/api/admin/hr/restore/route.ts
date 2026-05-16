@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         staffId: id,
       })
 
-      const { error } = await supabase
+      const { data: staffRow, error } = await supabase
         .from('staff')
         .update({
           is_active: true,
@@ -61,6 +61,8 @@ export async function POST(req: Request) {
           dismissed_by: null,
         })
         .eq('id', id)
+        .select('id, user_id')
+        .single()
 
       if (error) throw error
 
@@ -70,6 +72,14 @@ export async function POST(req: Request) {
           .update({ status: 'active' })
           .eq('organization_id', activeOrganizationId)
           .eq('staff_id', id)
+      }
+
+      // Снимаем бан с auth.user, если он был наложен при увольнении
+      const staffUserId = (staffRow as any)?.user_id
+      if (staffUserId) {
+        try {
+          await (supabase as any).auth.admin.updateUserById(staffUserId, { ban_duration: 'none' })
+        } catch { /* not critical */ }
       }
     } else {
       await ensureOrganizationOperatorAccess({
@@ -92,10 +102,20 @@ export async function POST(req: Request) {
 
       if (error) throw error
 
-      await supabase
+      const { data: opAuthRows } = await supabase
         .from('operator_auth')
         .update({ is_active: true })
         .eq('operator_id', id)
+        .select('user_id')
+
+      // Снимаем бан с auth.user оператора
+      for (const row of (opAuthRows || []) as any[]) {
+        if (row?.user_id) {
+          try {
+            await (supabase as any).auth.admin.updateUserById(String(row.user_id), { ban_duration: 'none' })
+          } catch { /* not critical */ }
+        }
+      }
 
       // Возвращаем назначения активными при восстановлении
       await supabase

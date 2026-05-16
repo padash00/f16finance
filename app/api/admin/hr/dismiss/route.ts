@@ -111,9 +111,15 @@ export async function POST(req: Request) {
           .eq('staff_id', id)
       }
 
-      // Принудительно завершаем активные сессии Supabase Auth
+      // Полная блокировка: ban + завершение всех сессий, чтобы уволенный
+      // не мог зайти даже с правильным паролем.
       const staffUserId = (staffRow as any)?.user_id
       if (staffUserId) {
+        try {
+          await (supabase as any).auth.admin.updateUserById(staffUserId, { ban_duration: '876000h' })
+        } catch {
+          // не падаем
+        }
         try {
           await (supabase as any).auth.admin.signOut(staffUserId, 'global')
         } catch {
@@ -162,9 +168,14 @@ export async function POST(req: Request) {
         .update({ is_active: false })
         .eq('operator_id', id)
 
-      // Принудительно завершаем сессию Supabase Auth
+      // Полная блокировка оператора: ban + signOut
       const opUserId = (opAuthRow as any)?.user_id
       if (opUserId) {
+        try {
+          await (supabase as any).auth.admin.updateUserById(opUserId, { ban_duration: '876000h' })
+        } catch {
+          // не падаем
+        }
         try {
           await (supabase as any).auth.admin.signOut(opUserId, 'global')
         } catch {

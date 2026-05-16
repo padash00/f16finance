@@ -324,6 +324,11 @@ export async function POST(req: Request) {
         }
 
         if (staffUserId) {
+          // Полная блокировка: ban на 100 лет → /login сразу отклоняет даже
+          // с правильным паролем. signOut закрывает текущие токены.
+          try {
+            await (supabase as any).auth.admin.updateUserById(staffUserId, { ban_duration: '876000h' })
+          } catch { /* not critical */ }
           try { await (supabase as any).auth.admin.signOut(staffUserId, 'global') } catch { /* not critical */ }
         }
 
@@ -342,13 +347,32 @@ export async function POST(req: Request) {
               .select('user_id')
             for (const row of (opAuthRows || []) as any[]) {
               if (row?.user_id) {
+                try {
+                  await (supabase as any).auth.admin.updateUserById(String(row.user_id), { ban_duration: '876000h' })
+                } catch { /* not critical */ }
                 try { await (supabase as any).auth.admin.signOut(String(row.user_id), 'global') } catch { /* not critical */ }
               }
             }
           }
         } catch { /* not critical */ }
       } else {
-        // Восстановление: оживляем operator_auth, чтобы оператор снова мог логиниться
+        // Восстановление: снимаем бан с auth.user, оживляем operator_auth
+        let staffUserId: string | null = (toggledStaff as any)?.user_id || null
+        const staffEmail: string | null = (toggledStaff as any)?.email || null
+        if (!staffUserId && staffEmail) {
+          try {
+            const usersResp = await (supabase as any).auth.admin.listUsers({ page: 1, perPage: 1000 })
+            const match = usersResp?.data?.users?.find(
+              (u: any) => String(u.email || '').toLowerCase() === staffEmail.toLowerCase(),
+            )
+            if (match?.id) staffUserId = String(match.id)
+          } catch { /* not critical */ }
+        }
+        if (staffUserId) {
+          try {
+            await (supabase as any).auth.admin.updateUserById(staffUserId, { ban_duration: 'none' })
+          } catch { /* not critical */ }
+        }
         try {
           const { data: links } = await supabase
             .from('operator_staff_links')
@@ -356,7 +380,18 @@ export async function POST(req: Request) {
             .eq('staff_id', body.staffId)
           const opIds = (links || []).map((r: any) => String(r.operator_id)).filter(Boolean)
           if (opIds.length) {
-            await supabase.from('operator_auth').update({ is_active: true }).in('operator_id', opIds)
+            const { data: opAuthRows } = await supabase
+              .from('operator_auth')
+              .update({ is_active: true })
+              .in('operator_id', opIds)
+              .select('user_id')
+            for (const row of (opAuthRows || []) as any[]) {
+              if (row?.user_id) {
+                try {
+                  await (supabase as any).auth.admin.updateUserById(String(row.user_id), { ban_duration: 'none' })
+                } catch { /* not critical */ }
+              }
+            }
           }
         } catch { /* not critical */ }
       }
