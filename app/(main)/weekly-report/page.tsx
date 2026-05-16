@@ -721,6 +721,30 @@ function WeeklyReportContent() {
   })
   const { operators } = useOperators()
 
+  // Смены за период — для сверки физического остатка кассы (нал/каспи).
+  type ShiftRow = { company_id: string; opened_at: string; closed_at: string | null; opening_cash: number | null; closing_cash: number | null; closing_kaspi: number | null }
+  const [shifts, setShifts] = useState<ShiftRow[]>([])
+  useEffect(() => {
+    const ac = new AbortController()
+    const url = `/api/admin/shifts/reports?status=closed&date_from=${startDate}&date_to=${endDate}&limit=500`
+    fetch(url, { signal: ac.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((body) => {
+        const list = (body?.data || body || []) as any[]
+        const rows: ShiftRow[] = (Array.isArray(list) ? list : []).map((s) => ({
+          company_id: String(s.company_id || ''),
+          opened_at: String(s.opened_at || ''),
+          closed_at: s.closed_at ? String(s.closed_at) : null,
+          opening_cash: typeof s.opening_cash === 'number' ? s.opening_cash : Number(s.opening_cash) || null,
+          closing_cash: typeof s.closing_cash === 'number' ? s.closing_cash : Number(s.closing_cash) || null,
+          closing_kaspi: typeof s.closing_kaspi === 'number' ? s.closing_kaspi : Number(s.closing_kaspi) || null,
+        })).filter((r) => r.company_id)
+        setShifts(rows)
+      })
+      .catch(() => { /* not critical */ })
+    return () => ac.abort()
+  }, [startDate, endDate])
+
   const loading = companiesLoading || incomeLoading || expenseLoading
   const error = companiesError || incomeError || expenseError || null
 
@@ -1508,6 +1532,98 @@ function WeeklyReportContent() {
       { label: 'Доля безнала в доходах', current: null as any, prev: null as any, change: `${totals.metrics.nonCashShare.toFixed(1)}%` },
     ])
 
+    // ─── ГЛАВНЫЙ ЛИСТ: Точки — итог недели + сверка кассы ──────────────────────
+    // Зарабатывает/тратит каждая точка → сальдо нал/безнал → сверка с физ. кассой.
+    const allCos = [...activeCompanies, ...companies.filter((c) => c.id === extraCompanyId)]
+    const openingByCo = new Map<string, number>()
+    const closingCashByCo = new Map<string, number>()
+    const closingKaspiByCo = new Map<string, number>()
+    const earliestOpenedByCo = new Map<string, string>()
+    const latestClosedByCo = new Map<string, string>()
+    for (const s of shifts) {
+      const cid = String(s.company_id)
+      if (!cid) continue
+      const openedAt = s.opened_at
+      const closedAt = s.closed_at
+      if (openedAt && (!earliestOpenedByCo.has(cid) || openedAt < earliestOpenedByCo.get(cid)!)) {
+        earliestOpenedByCo.set(cid, openedAt)
+        if (s.opening_cash != null) openingByCo.set(cid, Number(s.opening_cash))
+      }
+      if (closedAt && (!latestClosedByCo.has(cid) || closedAt > latestClosedByCo.get(cid)!)) {
+        latestClosedByCo.set(cid, closedAt)
+        if (s.closing_cash != null) closingCashByCo.set(cid, Number(s.closing_cash))
+        if (s.closing_kaspi != null) closingKaspiByCo.set(cid, Number(s.closing_kaspi))
+      }
+    }
+
+    const branchRows: any[] = []
+    for (const c of allCos) {
+      const sc = totals.statsByCompany[c.id]
+      if (!sc) continue
+      const opening = openingByCo.get(String(c.id)) ?? 0
+      const physCash = closingCashByCo.has(String(c.id)) ? Number(closingCashByCo.get(String(c.id))) : null
+      const physKaspi = closingKaspiByCo.has(String(c.id)) ? Number(closingKaspiByCo.get(String(c.id))) : null
+      const expectedCash = opening + sc.netCash // ожидаемая физическая касса нал на конец периода
+      const diffCash = physCash != null ? physCash - expectedCash : null
+      const diffKaspi = physKaspi != null ? physKaspi - sc.netNonCash : null
+      branchRows.push({
+        name: c.name,
+        cash: sc.cash, kaspi: sc.kaspi, online: sc.online, card: sc.card, total: sc.total,
+        expenseCash: sc.expenseCash, expenseKaspi: sc.expenseKaspi, expenseTotal: sc.expenseTotal,
+        profit: sc.profit,
+        netCash: sc.netCash, netNonCash: sc.netNonCash,
+        opening,
+        physCash,
+        physKaspi,
+        diffCash,
+        diffKaspi,
+      })
+    }
+    const branchTotInit = { cash: 0, kaspi: 0, online: 0, card: 0, total: 0, expenseCash: 0, expenseKaspi: 0, expenseTotal: 0, profit: 0, netCash: 0, netNonCash: 0, opening: 0, physCash: 0, physKaspi: 0, diffCash: 0, diffKaspi: 0 }
+    const branchTot = branchRows.reduce((acc: any, r: any) => ({
+      cash: acc.cash + (r.cash || 0),
+      kaspi: acc.kaspi + (r.kaspi || 0),
+      online: acc.online + (r.online || 0),
+      card: acc.card + (r.card || 0),
+      total: acc.total + (r.total || 0),
+      expenseCash: acc.expenseCash + (r.expenseCash || 0),
+      expenseKaspi: acc.expenseKaspi + (r.expenseKaspi || 0),
+      expenseTotal: acc.expenseTotal + (r.expenseTotal || 0),
+      profit: acc.profit + (r.profit || 0),
+      netCash: acc.netCash + (r.netCash || 0),
+      netNonCash: acc.netNonCash + (r.netNonCash || 0),
+      opening: acc.opening + (r.opening || 0),
+      physCash: acc.physCash + (r.physCash || 0),
+      physKaspi: acc.physKaspi + (r.physKaspi || 0),
+      diffCash: acc.diffCash + (r.diffCash || 0),
+      diffKaspi: acc.diffKaspi + (r.diffKaspi || 0),
+    }), branchTotInit)
+    branchRows.push({ _isTotals: true, name: 'ИТОГО', ...branchTot })
+    buildStyledSheet(wb, 'Точки — итог недели', 'Заработали / потратили + сверка кассы', `Период: ${period}`, [
+      { header: 'Точка', key: 'name', width: 22, type: 'text' },
+      // Доходы
+      { header: 'Доход нал', key: 'cash', width: 14, type: 'money' },
+      { header: `Доход ${cashLabels.providerName}`, key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Доход Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Доход Карта', key: 'card', width: 14, type: 'money' },
+      { header: 'ВСЕГО ДОХОД', key: 'total', width: 16, type: 'money' },
+      // Расходы
+      { header: 'Расход нал', key: 'expenseCash', width: 14, type: 'money' },
+      { header: `Расход ${cashLabels.providerName}`, key: 'expenseKaspi', width: 14, type: 'money' },
+      { header: 'ВСЕГО РАСХОД', key: 'expenseTotal', width: 16, type: 'money' },
+      // Прибыль
+      { header: 'Прибыль', key: 'profit', width: 14, type: 'money' },
+      // Сальдо
+      { header: 'Сальдо нал', key: 'netCash', width: 14, type: 'money' },
+      { header: 'Сальдо безнал', key: 'netNonCash', width: 14, type: 'money' },
+      // Сверка с физ. кассой
+      { header: 'Открытие нал', key: 'opening', width: 14, type: 'money' },
+      { header: 'Касса нал (факт)', key: 'physCash', width: 16, type: 'money' },
+      { header: `Касса ${cashLabels.providerName} (факт)`, key: 'physKaspi', width: 16, type: 'money' },
+      { header: 'Расхождение нал', key: 'diffCash', width: 16, type: 'money' },
+      { header: 'Расхождение безнал', key: 'diffKaspi', width: 17, type: 'money' },
+    ], branchRows)
+
     // ─── Денежный поток: кто/кому/куда ─────────────────────────────────────────
     const inWeek = (iso: string) => iso >= startDate && iso <= endDate
     const companyNameById = new Map<string, string>(companies.map((c) => [String(c.id), c.name]))
@@ -1707,31 +1823,6 @@ function WeeklyReportContent() {
       { header: 'Сальдо безнал', key: 'netNonCash', width: 15, type: 'money' },
     ], dailyRows)
 
-    // ─── Лист 3: По точкам ────────────────────────────────────────────────────
-    const allCos = [...activeCompanies, ...companies.filter(c => c.id === extraCompanyId)]
-    const companyRows: any[] = []
-    for (const c of allCos) {
-      const sc = totals.statsByCompany[c.id]
-      if (!sc) continue
-      companyRows.push({ name: c.name, cash: sc.cash, kaspi: sc.kaspi, online: sc.online, card: sc.card, total: sc.total, expenseCash: sc.expenseCash, expenseKaspi: sc.expenseKaspi, expenseTotal: sc.expenseTotal, netCash: sc.netCash, netNonCash: sc.netNonCash, profit: sc.profit })
-    }
-    const totByComp = companyRows.reduce((acc, r) => ({ cash: acc.cash + r.cash, kaspi: acc.kaspi + r.kaspi, online: acc.online + r.online, card: acc.card + r.card, total: acc.total + r.total, expenseCash: acc.expenseCash + r.expenseCash, expenseKaspi: acc.expenseKaspi + r.expenseKaspi, expenseTotal: acc.expenseTotal + r.expenseTotal, netCash: acc.netCash + r.netCash, netNonCash: acc.netNonCash + r.netNonCash, profit: acc.profit + r.profit }), { cash: 0, kaspi: 0, online: 0, card: 0, total: 0, expenseCash: 0, expenseKaspi: 0, expenseTotal: 0, netCash: 0, netNonCash: 0, profit: 0 })
-    companyRows.push({ _isTotals: true, name: 'ИТОГО', ...totByComp })
-    buildStyledSheet(wb, 'По точкам', 'Детализация по точкам', `Период: ${period}`, [
-      { header: 'Точка', key: 'name', width: 22, type: 'text' },
-      { header: 'Доход нал', key: 'cash', width: 15, type: 'money' },
-      { header: `Доход ${cashLabels.providerName}`, key: 'kaspi', width: 15, type: 'money' },
-      { header: 'Доход Online', key: 'online', width: 15, type: 'money' },
-      { header: 'Доход Карта', key: 'card', width: 15, type: 'money' },
-      { header: 'Итого доход', key: 'total', width: 16, type: 'money' },
-      { header: 'Расход нал', key: 'expenseCash', width: 15, type: 'money' },
-      { header: `Расход ${cashLabels.providerName}`, key: 'expenseKaspi', width: 15, type: 'money' },
-      { header: 'Итого расход', key: 'expenseTotal', width: 16, type: 'money' },
-      { header: 'Сальдо нал', key: 'netCash', width: 15, type: 'money' },
-      { header: 'Сальдо безнал', key: 'netNonCash', width: 15, type: 'money' },
-      { header: 'Прибыль', key: 'profit', width: 15, type: 'money' },
-    ], companyRows)
-
     // ─── Лист 4: Расходы по категориям ───────────────────────────────────────
     const expRows: any[] = totals.expenseCategories.map((cat) => ({
       name: cat.name,
@@ -1761,7 +1852,7 @@ function WeeklyReportContent() {
 
     await downloadWorkbook(wb, `Orda_Недельный_отчёт_${startDate}_${endDate}.xlsx`)
     showToast('Excel отчёт скачан', 'success')
-  }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast, incomeRows, expenseRows, operators, cashLabels])
+  }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast, incomeRows, expenseRows, operators, cashLabels, shifts])
 
   const handleGenerateAiReport = useCallback(async () => {
     aiReportAbortRef.current?.abort()
