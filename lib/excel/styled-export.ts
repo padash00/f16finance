@@ -667,7 +667,7 @@ export function buildStyledSheet(
             cell.value = typeof rawVal === 'number' ? rawVal : null
           }
           if (col.type === 'money') {
-            cell.numFmt = '#,##0 ₸'
+            cell.numFmt = '_-* #,##0_-" ₸";[Red]_-* -#,##0_-" ₸";_-* "—"??_-" ₸";_-@_-'
           } else {
             cell.numFmt = '#,##0'
           }
@@ -686,7 +686,7 @@ export function buildStyledSheet(
         const s = dataStyle(dataRowIdx, false, col.align || (col.type === 'money' || col.type === 'number' || col.type === 'percent' ? 'right' : 'left'))
         if (col.type === 'money') {
           cell.value = typeof rawVal === 'number' ? rawVal : null
-          cell.numFmt = '#,##0 ₸'
+          cell.numFmt = '_-* #,##0_-" ₸";[Red]_-* -#,##0_-" ₸";_-* "—"??_-" ₸";_-@_-'
           if (typeof rawVal === 'number' && rawVal < 0) {
             s.font = { ...s.font, color: { argb: argbOf(COLORS.negative) } }
           } else if (typeof rawVal === 'number' && rawVal > 0 && col.key.toLowerCase().includes('profit')) {

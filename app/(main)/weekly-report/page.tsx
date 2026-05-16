@@ -1508,6 +1508,180 @@ function WeeklyReportContent() {
       { label: 'Доля безнала в доходах', current: null as any, prev: null as any, change: `${totals.metrics.nonCashShare.toFixed(1)}%` },
     ])
 
+    // ─── Денежный поток: кто/кому/куда ─────────────────────────────────────────
+    const inWeek = (iso: string) => iso >= startDate && iso <= endDate
+    const companyNameById = new Map<string, string>(companies.map((c) => [String(c.id), c.name]))
+    const operatorNameById = new Map<string, string>()
+    for (const op of operators) {
+      const profile = Array.isArray((op as any).operator_profiles) ? (op as any).operator_profiles[0] : null
+      const name = String(profile?.full_name || op.name || '').trim()
+      if (op.id && name) operatorNameById.set(String(op.id), name)
+    }
+
+    const weekIncomes = incomeRows
+      .filter((r) => inWeek(r.date))
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+    const weekExpenses = expenseRows
+      .filter((r) => inWeek(r.date))
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    // ─── Лист: Приходы — детально ───────────────────────────────────────────
+    const incomeDetailRows: any[] = []
+    let incCashSum = 0, incKaspiSum = 0, incOnlineSum = 0, incCardSum = 0, incTotalSum = 0
+    for (const r of weekIncomes) {
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const online = Number(r.online_amount || 0)
+      const card = Number(r.card_amount || 0)
+      const total = cash + kaspi + online + card
+      if (total === 0) continue
+      incCashSum += cash; incKaspiSum += kaspi; incOnlineSum += online; incCardSum += card; incTotalSum += total
+      incomeDetailRows.push({
+        date: r.date,
+        company: companyNameById.get(String(r.company_id)) || '—',
+        operator: operatorNameById.get(String(r.operator_id || '')) || (r.operator_id ? '—' : 'Без оператора'),
+        shift: r.shift === 'day' ? 'День' : r.shift === 'night' ? 'Ночь' : '',
+        zone: r.zone || '',
+        cash, kaspi, online, card, total,
+        comment: r.comment || '',
+      })
+    }
+    incomeDetailRows.push({ _isTotals: true, date: 'ИТОГО', company: '', operator: '', shift: '', zone: '', cash: incCashSum, kaspi: incKaspiSum, online: incOnlineSum, card: incCardSum, total: incTotalSum, comment: '' })
+    buildStyledSheet(wb, 'Приходы — детально', 'Все поступления (кому/откуда)', `Период: ${period}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Точка', key: 'company', width: 20, type: 'text' },
+      { header: 'Оператор', key: 'operator', width: 24, type: 'text' },
+      { header: 'Смена', key: 'shift', width: 8, type: 'text' },
+      { header: 'Зона', key: 'zone', width: 14, type: 'text' },
+      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Карта', key: 'card', width: 14, type: 'money' },
+      { header: 'Итого', key: 'total', width: 16, type: 'money' },
+      { header: 'Комментарий', key: 'comment', width: 32, type: 'text' },
+    ], incomeDetailRows)
+
+    // ─── Лист: Расходы — детально ───────────────────────────────────────────
+    const expenseDetailRows: any[] = []
+    let expCashSum = 0, expKaspiSum = 0, expTotalSum = 0
+    for (const r of weekExpenses) {
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const total = cash + kaspi
+      if (total === 0) continue
+      expCashSum += cash; expKaspiSum += kaspi; expTotalSum += total
+      const payee = (r.one_off_payee || '').trim() || (r.comment || '').trim() || '—'
+      const statusLabel =
+        r.status === 'approved' ? 'Одобр' :
+        r.status === 'pending_approval' ? 'Ожид' :
+        r.status === 'declined' ? 'Откл' :
+        r.status === 'confirmed' ? 'Подтв' : ''
+      expenseDetailRows.push({
+        date: r.date,
+        company: companyNameById.get(String(r.company_id)) || '—',
+        category: r.category || '—',
+        payee,
+        cash, kaspi, total,
+        status: statusLabel,
+      })
+    }
+    expenseDetailRows.push({ _isTotals: true, date: 'ИТОГО', company: '', category: '', payee: '', cash: expCashSum, kaspi: expKaspiSum, total: expTotalSum, status: '' })
+    buildStyledSheet(wb, 'Расходы — детально', 'Все расходы (куда и сколько)', `Период: ${period}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Точка', key: 'company', width: 20, type: 'text' },
+      { header: 'Категория', key: 'category', width: 22, type: 'text' },
+      { header: 'Кому / комментарий', key: 'payee', width: 40, type: 'text' },
+      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Итого', key: 'total', width: 16, type: 'money' },
+      { header: 'Статус', key: 'status', width: 10, type: 'text' },
+    ], expenseDetailRows)
+
+    // ─── Лист: Кому платили (агрегаты по получателям) ───────────────────────
+    type PayeeAggr = { name: string; cash: number; kaspi: number; total: number; count: number; companies: Set<string>; categories: Set<string> }
+    const payeeMap = new Map<string, PayeeAggr>()
+    for (const r of weekExpenses) {
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const total = cash + kaspi
+      if (total === 0) continue
+      const rawKey = (r.one_off_payee || '').trim() || (r.comment || '').trim() || `[${r.category || 'без категории'}]`
+      const key = rawKey.toLowerCase()
+      const cName = companyNameById.get(String(r.company_id)) || '—'
+      const cat = r.category || '—'
+      const existing = payeeMap.get(key)
+      if (existing) {
+        existing.cash += cash; existing.kaspi += kaspi; existing.total += total; existing.count += 1
+        existing.companies.add(cName); existing.categories.add(cat)
+      } else {
+        payeeMap.set(key, { name: rawKey, cash, kaspi, total, count: 1, companies: new Set([cName]), categories: new Set([cat]) })
+      }
+    }
+    const payeeRows: any[] = Array.from(payeeMap.values())
+      .sort((a, b) => b.total - a.total)
+      .map((p) => ({
+        payee: p.name, count: p.count, cash: p.cash, kaspi: p.kaspi, total: p.total,
+        companies: Array.from(p.companies).join(', '),
+        categories: Array.from(p.categories).join(', '),
+      }))
+    const payeeTot = payeeRows.reduce((a, r) => ({ cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, total: a.total + r.total, count: a.count + r.count }), { cash: 0, kaspi: 0, total: 0, count: 0 })
+    payeeRows.push({ _isTotals: true, payee: 'ИТОГО', count: payeeTot.count, cash: payeeTot.cash, kaspi: payeeTot.kaspi, total: payeeTot.total, companies: '', categories: '' })
+    buildStyledSheet(wb, 'Кому платили', 'Получатели расходов за период', `Период: ${period}`, [
+      { header: 'Получатель / комментарий', key: 'payee', width: 40, type: 'text' },
+      { header: 'Платежей', key: 'count', width: 11, type: 'number' },
+      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Сумма', key: 'total', width: 16, type: 'money' },
+      { header: 'Точки', key: 'companies', width: 30, type: 'text' },
+      { header: 'Категории', key: 'categories', width: 28, type: 'text' },
+    ], payeeRows)
+
+    // ─── Лист: Кто принёс (агрегаты по операторам) ──────────────────────────
+    type OpAggr = { name: string; cash: number; kaspi: number; online: number; card: number; total: number; shifts: number; companies: Set<string> }
+    const opMap = new Map<string, OpAggr>()
+    for (const r of weekIncomes) {
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const online = Number(r.online_amount || 0)
+      const card = Number(r.card_amount || 0)
+      const total = cash + kaspi + online + card
+      if (total === 0) continue
+      const opId = String(r.operator_id || '')
+      const key = opId || '__none__'
+      const cName = companyNameById.get(String(r.company_id)) || '—'
+      const existing = opMap.get(key)
+      if (existing) {
+        existing.cash += cash; existing.kaspi += kaspi; existing.online += online; existing.card += card; existing.total += total
+        existing.shifts += 1
+        existing.companies.add(cName)
+      } else {
+        opMap.set(key, {
+          name: operatorNameById.get(opId) || (opId ? `Оператор ${opId.slice(0, 6)}` : 'Без оператора'),
+          cash, kaspi, online, card, total, shifts: 1, companies: new Set([cName]),
+        })
+      }
+    }
+    const opRows: any[] = Array.from(opMap.values())
+      .sort((a, b) => b.total - a.total)
+      .map((o) => ({
+        operator: o.name, shifts: o.shifts, cash: o.cash, kaspi: o.kaspi, online: o.online, card: o.card, total: o.total,
+        companies: Array.from(o.companies).join(', '),
+      }))
+    const opTot = opRows.reduce((a, r) => ({ cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, total: a.total + r.total, shifts: a.shifts + r.shifts }), { cash: 0, kaspi: 0, online: 0, card: 0, total: 0, shifts: 0 })
+    opRows.push({ _isTotals: true, operator: 'ИТОГО', shifts: opTot.shifts, cash: opTot.cash, kaspi: opTot.kaspi, online: opTot.online, card: opTot.card, total: opTot.total, companies: '' })
+    buildStyledSheet(wb, 'Кто принёс', 'Доходы по операторам', `Период: ${period}`, [
+      { header: 'Оператор', key: 'operator', width: 28, type: 'text' },
+      { header: 'Смен', key: 'shifts', width: 8, type: 'number' },
+      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
+      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Карта', key: 'card', width: 14, type: 'money' },
+      { header: 'Итого', key: 'total', width: 16, type: 'money' },
+      { header: 'Точки', key: 'companies', width: 30, type: 'text' },
+    ], opRows)
+
     // ─── Лист 2: По дням ──────────────────────────────────────────────────────
     let totD = 0, totK = 0, totO = 0, totC = 0, totInc = 0, totEC = 0, totEK = 0, totExp = 0, totPr = 0, totNC = 0, totNN = 0
     const dailyRows = totals.dailyData.map((d, i) => {
@@ -1584,219 +1758,6 @@ function WeeklyReportContent() {
       { header: '% от расходов', key: 'pctExpense', width: 16, type: 'percent' },
       { header: '% от выручки', key: 'pctIncome', width: 16, type: 'percent' },
     ], expRows)
-
-    // ─── Лист 5: Расходы по точкам ───────────────────────────────────────────
-    const catByCompRows: any[] = []
-    for (const c of allCos) {
-      const sc = totals.statsByCompany[c.id]
-      if (!sc || Object.keys(sc.expenseByCategory).length === 0) continue
-      catByCompRows.push({ _isSection: true, _sectionLabel: c.name })
-      const cats = Object.entries(sc.expenseByCategory)
-        .map(([cat, sp]) => ({ cat, cash: sp.cash, kaspi: sp.kaspi, total: sp.cash + sp.kaspi }))
-        .sort((a, b) => b.total - a.total)
-      for (const row of cats) {
-        const pct = sc.expenseTotal > 0 ? row.total / sc.expenseTotal * 100 : 0
-        catByCompRows.push({
-          company: c.name,
-          category: row.cat,
-          amountCash: row.cash,
-          amountKaspi: row.kaspi,
-          amount: row.total,
-          pct,
-        })
-      }
-      catByCompRows.push({
-        _isTotals: true,
-        company: c.name,
-        category: 'ИТОГО',
-        amountCash: sc.expenseCash,
-        amountKaspi: sc.expenseKaspi,
-        amount: sc.expenseTotal,
-        pct: 100,
-      })
-    }
-    buildStyledSheet(wb, 'Расходы по точкам', 'Расходы по категориям по точкам', `Период: ${period}`, [
-      { header: 'Точка', key: 'company', width: 22, type: 'text' },
-      { header: 'Категория', key: 'category', width: 30, type: 'text' },
-      { header: 'Нал', key: 'amountCash', width: 14, type: 'money' },
-      { header: cashLabels.providerName, key: 'amountKaspi', width: 14, type: 'money' },
-      { header: 'Всего', key: 'amount', width: 16, type: 'money' },
-      { header: '% в точке', key: 'pct', width: 14, type: 'percent' },
-    ], catByCompRows)
-
-    // ─── Денежный поток: детальные листы для понимания «кому/куда» ────────────
-    const inWeek = (iso: string) => iso >= startDate && iso <= endDate
-    const companyNameById = new Map<string, string>(companies.map((c) => [String(c.id), c.name]))
-    const operatorNameById = new Map<string, string>()
-    for (const op of operators) {
-      const profile = Array.isArray((op as any).operator_profiles) ? (op as any).operator_profiles[0] : null
-      const name = String(profile?.full_name || op.name || '').trim()
-      if (op.id && name) operatorNameById.set(String(op.id), name)
-    }
-
-    const weekIncomes = incomeRows
-      .filter((r) => inWeek(r.date))
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
-    const weekExpenses = expenseRows
-      .filter((r) => inWeek(r.date))
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
-
-    // ─── Лист: Приходы — детально ───────────────────────────────────────────
-    const incomeDetailRows: any[] = []
-    let incCashSum = 0, incKaspiSum = 0, incOnlineSum = 0, incCardSum = 0, incTotalSum = 0
-    for (const r of weekIncomes) {
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const online = Number(r.online_amount || 0)
-      const card = Number(r.card_amount || 0)
-      const total = cash + kaspi + online + card
-      if (total === 0) continue
-      incCashSum += cash; incKaspiSum += kaspi; incOnlineSum += online; incCardSum += card; incTotalSum += total
-      incomeDetailRows.push({
-        date: r.date,
-        company: companyNameById.get(String(r.company_id)) || '—',
-        operator: operatorNameById.get(String(r.operator_id || '')) || (r.operator_id ? '—' : 'Без оператора'),
-        shift: r.shift === 'day' ? 'День' : r.shift === 'night' ? 'Ночь' : '',
-        zone: r.zone || '',
-        cash, kaspi, online, card, total,
-        comment: r.comment || '',
-      })
-    }
-    incomeDetailRows.push({ _isTotals: true, date: 'ИТОГО', company: '', operator: '', shift: '', zone: '', cash: incCashSum, kaspi: incKaspiSum, online: incOnlineSum, card: incCardSum, total: incTotalSum, comment: '' })
-    buildStyledSheet(wb, 'Приходы — детально', 'Все поступления (кому/откуда)', `Период: ${period}`, [
-      { header: 'Дата', key: 'date', width: 12, type: 'text' },
-      { header: 'Точка', key: 'company', width: 20, type: 'text' },
-      { header: 'Оператор', key: 'operator', width: 24, type: 'text' },
-      { header: 'Смена', key: 'shift', width: 8, type: 'text' },
-      { header: 'Зона', key: 'zone', width: 14, type: 'text' },
-      { header: 'Нал', key: 'cash', width: 13, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 13, type: 'money' },
-      { header: 'Online', key: 'online', width: 13, type: 'money' },
-      { header: 'Карта', key: 'card', width: 13, type: 'money' },
-      { header: 'Итого', key: 'total', width: 14, type: 'money' },
-      { header: 'Комментарий', key: 'comment', width: 32, type: 'text' },
-    ], incomeDetailRows)
-
-    // ─── Лист: Расходы — детально ───────────────────────────────────────────
-    const expenseDetailRows: any[] = []
-    let expCashSum = 0, expKaspiSum = 0, expTotalSum = 0
-    for (const r of weekExpenses) {
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const total = cash + kaspi
-      if (total === 0) continue
-      expCashSum += cash; expKaspiSum += kaspi; expTotalSum += total
-      const payee = (r.one_off_payee || '').trim() || (r.comment || '').trim() || '—'
-      const statusLabel =
-        r.status === 'approved' ? 'Одобр' :
-        r.status === 'pending_approval' ? 'Ожид' :
-        r.status === 'declined' ? 'Откл' :
-        r.status === 'confirmed' ? 'Подтв' : ''
-      expenseDetailRows.push({
-        date: r.date,
-        company: companyNameById.get(String(r.company_id)) || '—',
-        category: r.category || '—',
-        payee,
-        cash, kaspi, total,
-        status: statusLabel,
-      })
-    }
-    expenseDetailRows.push({ _isTotals: true, date: 'ИТОГО', company: '', category: '', payee: '', cash: expCashSum, kaspi: expKaspiSum, total: expTotalSum, status: '' })
-    buildStyledSheet(wb, 'Расходы — детально', 'Все расходы (куда и сколько)', `Период: ${period}`, [
-      { header: 'Дата', key: 'date', width: 12, type: 'text' },
-      { header: 'Точка', key: 'company', width: 20, type: 'text' },
-      { header: 'Категория', key: 'category', width: 22, type: 'text' },
-      { header: 'Кому / комментарий', key: 'payee', width: 40, type: 'text' },
-      { header: 'Нал', key: 'cash', width: 13, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 13, type: 'money' },
-      { header: 'Итого', key: 'total', width: 14, type: 'money' },
-      { header: 'Статус', key: 'status', width: 10, type: 'text' },
-    ], expenseDetailRows)
-
-    // ─── Лист: Кому платили (агрегаты по получателям) ───────────────────────
-    type PayeeAggr = { name: string; cash: number; kaspi: number; total: number; count: number; companies: Set<string>; categories: Set<string> }
-    const payeeMap = new Map<string, PayeeAggr>()
-    for (const r of weekExpenses) {
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const total = cash + kaspi
-      if (total === 0) continue
-      const rawKey = (r.one_off_payee || '').trim() || (r.comment || '').trim() || `[${r.category || 'без категории'}]`
-      const key = rawKey.toLowerCase()
-      const cName = companyNameById.get(String(r.company_id)) || '—'
-      const cat = r.category || '—'
-      const existing = payeeMap.get(key)
-      if (existing) {
-        existing.cash += cash; existing.kaspi += kaspi; existing.total += total; existing.count += 1
-        existing.companies.add(cName); existing.categories.add(cat)
-      } else {
-        payeeMap.set(key, { name: rawKey, cash, kaspi, total, count: 1, companies: new Set([cName]), categories: new Set([cat]) })
-      }
-    }
-    const payeeRows: any[] = Array.from(payeeMap.values())
-      .sort((a, b) => b.total - a.total)
-      .map((p) => ({
-        payee: p.name, count: p.count, cash: p.cash, kaspi: p.kaspi, total: p.total,
-        companies: Array.from(p.companies).join(', '),
-        categories: Array.from(p.categories).join(', '),
-      }))
-    const payeeTot = payeeRows.reduce((a, r) => ({ cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, total: a.total + r.total, count: a.count + r.count }), { cash: 0, kaspi: 0, total: 0, count: 0 })
-    payeeRows.push({ _isTotals: true, payee: 'ИТОГО', count: payeeTot.count, cash: payeeTot.cash, kaspi: payeeTot.kaspi, total: payeeTot.total, companies: '', categories: '' })
-    buildStyledSheet(wb, 'Кому платили', 'Получатели расходов за период', `Период: ${period}`, [
-      { header: 'Получатель / комментарий', key: 'payee', width: 40, type: 'text' },
-      { header: 'Платежей', key: 'count', width: 11, type: 'number' },
-      { header: 'Нал', key: 'cash', width: 13, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 13, type: 'money' },
-      { header: 'Сумма', key: 'total', width: 14, type: 'money' },
-      { header: 'Точки', key: 'companies', width: 30, type: 'text' },
-      { header: 'Категории', key: 'categories', width: 28, type: 'text' },
-    ], payeeRows)
-
-    // ─── Лист: Кто принёс (агрегаты по операторам) ──────────────────────────
-    type OpAggr = { name: string; cash: number; kaspi: number; online: number; card: number; total: number; shifts: number; companies: Set<string> }
-    const opMap = new Map<string, OpAggr>()
-    for (const r of weekIncomes) {
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const online = Number(r.online_amount || 0)
-      const card = Number(r.card_amount || 0)
-      const total = cash + kaspi + online + card
-      if (total === 0) continue
-      const opId = String(r.operator_id || '')
-      const key = opId || '__none__'
-      const cName = companyNameById.get(String(r.company_id)) || '—'
-      const existing = opMap.get(key)
-      if (existing) {
-        existing.cash += cash; existing.kaspi += kaspi; existing.online += online; existing.card += card; existing.total += total
-        existing.shifts += 1
-        existing.companies.add(cName)
-      } else {
-        opMap.set(key, {
-          name: operatorNameById.get(opId) || (opId ? `Оператор ${opId.slice(0, 6)}` : 'Без оператора'),
-          cash, kaspi, online, card, total, shifts: 1, companies: new Set([cName]),
-        })
-      }
-    }
-    const opRows: any[] = Array.from(opMap.values())
-      .sort((a, b) => b.total - a.total)
-      .map((o) => ({
-        operator: o.name, shifts: o.shifts, cash: o.cash, kaspi: o.kaspi, online: o.online, card: o.card, total: o.total,
-        companies: Array.from(o.companies).join(', '),
-      }))
-    const opTot = opRows.reduce((a, r) => ({ cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, total: a.total + r.total, shifts: a.shifts + r.shifts }), { cash: 0, kaspi: 0, online: 0, card: 0, total: 0, shifts: 0 })
-    opRows.push({ _isTotals: true, operator: 'ИТОГО', shifts: opTot.shifts, cash: opTot.cash, kaspi: opTot.kaspi, online: opTot.online, card: opTot.card, total: opTot.total, companies: '' })
-    buildStyledSheet(wb, 'Кто принёс', 'Доходы по операторам', `Период: ${period}`, [
-      { header: 'Оператор', key: 'operator', width: 28, type: 'text' },
-      { header: 'Смен', key: 'shifts', width: 8, type: 'number' },
-      { header: 'Нал', key: 'cash', width: 13, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 13, type: 'money' },
-      { header: 'Online', key: 'online', width: 13, type: 'money' },
-      { header: 'Карта', key: 'card', width: 13, type: 'money' },
-      { header: 'Итого', key: 'total', width: 14, type: 'money' },
-      { header: 'Точки', key: 'companies', width: 30, type: 'text' },
-    ], opRows)
 
     await downloadWorkbook(wb, `Orda_Недельный_отчёт_${startDate}_${endDate}.xlsx`)
     showToast('Excel отчёт скачан', 'success')
