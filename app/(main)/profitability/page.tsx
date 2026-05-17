@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
+import { useCompanies } from '@/hooks/use-companies'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
 import { ArrowDown, ArrowUp, BarChart2, Calculator, CalendarDays, ChevronDown, ChevronUp, Info, Landmark, Lightbulb, Save, Settings2, Sparkles, Target, TrendingUp, Wallet } from 'lucide-react'
 
-type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }
-type ExpenseRow = { date: string; category: string | null; cash_amount: number | null; kaspi_amount: number | null }
+type IncomeRow = { date: string; company_id: string; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }
+type ExpenseRow = { date: string; company_id: string; category: string | null; cash_amount: number | null; kaspi_amount: number | null }
 type ExpenseCategoryRow = { name: string; accounting_group: FinancialGroup | null }
 type KaspiDailyDay = { date: string; total: number; isPrecise: boolean; warning: string | null }
 type KaspiDailyPayload = { monthly?: Record<string, number>; days?: KaspiDailyDay[]; splitCompanyIds?: string[] }
@@ -70,6 +71,7 @@ export default function ProfitabilityPage() {
   const cashLabels = useCashlessLabels()
   const { can } = useCapabilities()
   const canEdit = can('profitability.edit')
+  const { companies } = useCompanies()
 
   const defaults = useMemo(closedMonthDefaults, [])
   const [monthFrom, setMonthFrom] = useState(defaults.from)
@@ -435,6 +437,103 @@ export default function ProfitabilityPage() {
     if (!prev) return null
     return ((curr - prev) / Math.abs(prev)) * 100
   }
+
+  // ───── Разрез ОПиУ по точкам (для выбранного месяца) ─────────────────────────
+  // Журнальные расходы по company_id берём напрямую; ручные оверрайды (POS-
+  // комиссия, ФОТ, налоги, амортизация, прочее) разносим пропорционально доле
+  // выручки точки в общей выручке месяца.
+  const byCompany = useMemo(() => {
+    if (!selected) return [] as Array<any>
+    type Agg = {
+      company_id: string; name: string
+      revenue: number; cashRevenue: number; cashlessRevenue: number
+      cogs: number; operating: number
+      posComJ: number; payrollJ: number; payrollTaxJ: number; incomeTaxJ: number
+      depreciationJ: number; financialJ: number; nonOpJ: number
+    }
+    const aggs = new Map<string, Agg>()
+    for (const c of companies) {
+      aggs.set(String(c.id), {
+        company_id: String(c.id), name: c.name,
+        revenue: 0, cashRevenue: 0, cashlessRevenue: 0,
+        cogs: 0, operating: 0,
+        posComJ: 0, payrollJ: 0, payrollTaxJ: 0, incomeTaxJ: 0,
+        depreciationJ: 0, financialJ: 0, nonOpJ: 0,
+      })
+    }
+    for (const row of incomes) {
+      if (!row.date.startsWith(selected.month)) continue
+      const a = aggs.get(String(row.company_id || ''))
+      if (!a) continue
+      const cash = Number(row.cash_amount || 0)
+      const kaspi = Number(row.kaspi_amount || 0)
+      const online = Number(row.online_amount || 0)
+      const card = Number(row.card_amount || 0)
+      a.cashRevenue += cash
+      a.cashlessRevenue += kaspi + online + card
+      a.revenue += cash + kaspi + online + card
+    }
+    for (const row of expenses) {
+      if (!row.date.startsWith(selected.month)) continue
+      const a = aggs.get(String(row.company_id || ''))
+      if (!a) continue
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0)
+      const norm = String(row.category || '').trim().toLowerCase()
+      const group = resolveFinancialGroup(row.category, expenseCategories[norm] || null)
+      if (group === 'cogs') a.cogs += amount
+      else if (group === 'pos_commission') a.posComJ += amount
+      else if (group === 'payroll' || group === 'payroll_advance') a.payrollJ += amount
+      else if (group === 'payroll_tax') a.payrollTaxJ += amount
+      else if (group === 'income_tax') a.incomeTaxJ += amount
+      else if (group === 'financial_expenses') a.financialJ += amount
+      else if (group === 'non_operating') a.nonOpJ += amount
+      else if (group === 'depreciation') a.depreciationJ += amount
+      else if (group === 'capex' || group === 'profit_distribution') { /* вне P&L */ }
+      else a.operating += amount
+    }
+    const sumRevenue = Array.from(aggs.values()).reduce((s, a) => s + a.revenue, 0)
+    // Манульные оверрайды: если значение совокупное (selected.X) больше «журнального» — это override.
+    // Для каждого компонента используем effective из selected; если он отличается от sum по точкам — разносим разницу пропорционально.
+    const usePosManual = selected.manualPosCommission > 0
+    const usePayrollManual = selected.payrollManual > 0
+    const usePayrollTaxManual = selected.payrollTaxesManual > 0
+    const useIncomeTaxManual = selected.incomeTaxManual > 0
+    const useDepreciationManual = selected.depreciationManual > 0
+    return Array.from(aggs.values())
+      .filter((a) => a.revenue > 0 || a.cogs > 0 || a.operating > 0 || a.payrollJ > 0)
+      .map((a) => {
+        const share = sumRevenue > 0 ? a.revenue / sumRevenue : 0
+        // Амортизация и «прочее операционное» — только из manual, разносим целиком по share
+        const amortization = Number(selected.amortization || 0) * share
+        const otherOperating = Number(selected.otherOperating || 0) * share
+        // Остальное: либо manual×share, либо журнал на точке
+        const posCom = usePosManual ? Number(selected.posCommission || 0) * share : a.posComJ
+        const payroll = usePayrollManual ? Number(selected.payroll || 0) * share : a.payrollJ
+        const payrollTaxes = usePayrollTaxManual ? Number(selected.payrollTaxes || 0) * share : a.payrollTaxJ
+        const incomeTax = useIncomeTaxManual ? Number(selected.incomeTax || 0) * share : a.incomeTaxJ
+        const depreciation = useDepreciationManual ? Number(selected.depreciation || 0) * share : a.depreciationJ
+        const cogs = a.cogs
+        const grossProfit = a.revenue - cogs
+        const ebitda = grossProfit - a.operating - posCom - payroll - payrollTaxes - otherOperating
+        const operatingProfit = ebitda - depreciation - amortization
+        const ebt = operatingProfit - a.financialJ
+        const netProfit = ebt - incomeTax - a.nonOpJ
+        const margin = a.revenue > 0 ? (netProfit / a.revenue) * 100 : 0
+        const ebitdaMarginCo = a.revenue > 0 ? (ebitda / a.revenue) * 100 : 0
+        return {
+          company_id: a.company_id,
+          name: a.name,
+          share,
+          revenue: a.revenue, cashRevenue: a.cashRevenue, cashlessRevenue: a.cashlessRevenue,
+          cogs, operating: a.operating, posCom, payroll, payrollTaxes, otherOperating,
+          ebitda, ebitdaMargin: ebitdaMarginCo,
+          depreciation, amortization, operatingProfit,
+          financialExpenses: a.financialJ, ebt,
+          incomeTax, nonOperating: a.nonOpJ, netProfit, margin,
+        }
+      })
+      .sort((a, b) => b.netProfit - a.netProfit)
+  }, [selected, companies, incomes, expenses, expenseCategories])
 
   // Топ-5 категорий расходов выбранного месяца
   const topCategoriesSelected = useMemo(() => {
@@ -821,6 +920,86 @@ export default function ProfitabilityPage() {
                   </tbody>
                 </table>
               </div>
+            </Card>
+          )}
+
+          {/* ═══ BY COMPANY (распределение ОПиУ по точкам за месяц) ═══ */}
+          {byCompany.length > 0 && (
+            <Card className="border-border bg-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Landmark className="h-4 w-4 text-emerald-400" />
+                    Распределение по точкам — {selected.label}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">Журнальные расходы — фактические; ручные оверрайды (POS, ФОТ, налоги, амортизация) разнесены пропорционально доле выручки точки</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1100px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="px-3 py-2.5">Точка</th>
+                      <th className="px-3 py-2.5 text-right">Выручка</th>
+                      <th className="px-3 py-2.5 text-right">Доля</th>
+                      <th className="px-3 py-2.5 text-right">COGS</th>
+                      <th className="px-3 py-2.5 text-right">Опер.</th>
+                      <th className="px-3 py-2.5 text-right">POS</th>
+                      <th className="px-3 py-2.5 text-right">ФОТ+нал.</th>
+                      <th className="px-3 py-2.5 text-right">EBITDA</th>
+                      <th className="px-3 py-2.5 text-right">Чистая</th>
+                      <th className="px-3 py-2.5 text-right">Маржа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byCompany.map((c) => (
+                      <tr key={c.company_id} className="border-b border-border/50 hover:bg-white/[0.03]">
+                        <td className="px-3 py-2.5 font-medium text-foreground">{c.name}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{money(c.revenue)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{(c.share * 100).toFixed(1)}%</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.cogs)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.operating)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.posCom)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.payroll + c.payrollTaxes)}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${c.ebitda >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{money(c.ebitda)}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${c.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(c.netProfit)}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${c.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{c.margin >= 0 ? '+' : ''}{c.margin.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                    {(() => {
+                      const t = byCompany.reduce((acc, c) => ({
+                        revenue: acc.revenue + c.revenue,
+                        cogs: acc.cogs + c.cogs,
+                        operating: acc.operating + c.operating,
+                        posCom: acc.posCom + c.posCom,
+                        payroll: acc.payroll + c.payroll,
+                        payrollTaxes: acc.payrollTaxes + c.payrollTaxes,
+                        ebitda: acc.ebitda + c.ebitda,
+                        netProfit: acc.netProfit + c.netProfit,
+                      }), { revenue: 0, cogs: 0, operating: 0, posCom: 0, payroll: 0, payrollTaxes: 0, ebitda: 0, netProfit: 0 })
+                      const margin = t.revenue ? (t.netProfit / t.revenue) * 100 : 0
+                      return (
+                        <tr className="border-t-2 border-emerald-500/20 bg-emerald-500/5 font-medium">
+                          <td className="px-3 py-2.5 text-foreground">ИТОГО</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-foreground">{money(t.revenue)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">100%</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.cogs)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.operating)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.posCom)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.payroll + t.payrollTaxes)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums ${t.ebitda >= 0 ? 'text-cyan-200' : 'text-rose-300'}`}>{money(t.ebitda)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${t.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-300'}`}>{money(t.netProfit)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
+                        </tr>
+                      )
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-[11px] text-muted-foreground/70">
+                <Info className="inline h-3 w-3 mr-1" />
+                «ИТОГО» по точкам может отличаться от верхнего KPI: ручные оверрайды разнесены пропорционально, в журнале возможен мусор без company_id или дни вне периода.
+              </p>
             </Card>
           )}
 
