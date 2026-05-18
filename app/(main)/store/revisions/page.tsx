@@ -435,20 +435,7 @@ export default function StoreRevisionsPage() {
     scanHighlightTimer.current = setTimeout(() => setRecentScanItemId(null), 1200)
   }
 
-  const handleScan = () => {
-    const barcode = scanInput.trim()
-    if (!barcode) return
-    if (!locationId) {
-      flashScanError('Сначала выберите локацию')
-      setScanInput('')
-      return
-    }
-    const found = itemByBarcode.get(barcode)
-    if (!found) {
-      flashScanError(`Штрихкод ${barcode} не найден в каталоге`)
-      setScanInput('')
-      return
-    }
+  const addItemByScan = (found: InventoryItem) => {
     const expectedQty = Number(selectedBalances.find((b) => b.item_id === found.id)?.quantity || 0)
     const existingIndex = lines.findIndex((line) => line.item_id === found.id)
     if (existingIndex === -1) {
@@ -474,6 +461,42 @@ export default function StoreRevisionsPage() {
     setScanInput('')
     scanInputRef.current?.focus()
   }
+
+  const handleScan = () => {
+    const barcode = scanInput.trim()
+    if (!barcode) return
+    if (!locationId) {
+      flashScanError('Сначала выберите локацию')
+      setScanInput('')
+      return
+    }
+    const found = itemByBarcode.get(barcode)
+    if (!found) {
+      flashScanError(`Штрихкод ${barcode} не найден в каталоге`)
+      setScanInput('')
+      return
+    }
+    addItemByScan(found)
+  }
+
+  // Подсказки: товары, штрихкод которых ОКАНЧИВАЕТСЯ на введённое (приоритет)
+  // или содержит введённое. Показываем при вводе ≥2 символов, лимит 8.
+  const barcodeSuggestions = useMemo(() => {
+    const query = scanInput.trim()
+    if (query.length < 2) return [] as InventoryItem[]
+    // Если точное совпадение есть — не показываем подсказки (handleScan добавит).
+    if (itemByBarcode.has(query)) return [] as InventoryItem[]
+    const endsWith: InventoryItem[] = []
+    const contains: InventoryItem[] = []
+    for (const item of data?.items || []) {
+      const bc = String(item.barcode || '').trim()
+      if (!bc || bc === query) continue
+      if (bc.endsWith(query)) endsWith.push(item)
+      else if (bc.includes(query)) contains.push(item)
+      if (endsWith.length >= 8) break
+    }
+    return [...endsWith, ...contains].slice(0, 8)
+  }, [scanInput, data?.items, itemByBarcode])
 
   const totals = useMemo(() => {
     const rows = lines
@@ -941,6 +964,44 @@ export default function StoreRevisionsPage() {
                   </span>
                 )}
               </div>
+              {locationId && barcodeSuggestions.length > 0 ? (
+                <div className="mt-1 rounded-xl border border-cyan-500/20 bg-white/[0.02] p-1.5">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Похожие штрихкоды ({barcodeSuggestions.length})
+                  </div>
+                  <div className="max-h-64 space-y-1 overflow-y-auto">
+                    {barcodeSuggestions.map((item) => {
+                      const bc = String(item.barcode || '')
+                      const query = scanInput.trim()
+                      const idx = bc.lastIndexOf(query)
+                      const before = idx >= 0 ? bc.slice(0, idx) : bc
+                      const match = idx >= 0 ? bc.slice(idx, idx + query.length) : ''
+                      const after = idx >= 0 ? bc.slice(idx + query.length) : ''
+                      const balance = Number(selectedBalances.find((b) => b.item_id === item.id)?.quantity || 0)
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => addItemByScan(item)}
+                          className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-cyan-500/10"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm text-foreground">{item.name}</div>
+                            <div className="font-mono text-[11px] text-muted-foreground">
+                              {before}
+                              <span className="rounded bg-cyan-500/25 px-0.5 text-cyan-100">{match}</span>
+                              {after}
+                            </div>
+                          </div>
+                          <div className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-muted-foreground">
+                            остаток {formatQty(balance)}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-3">
