@@ -9,7 +9,7 @@
     "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "vite build",
     "dist": "vite build && electron-builder",
-    "release": "vite build && electron-builder --publish always",
+    "release": "vite build && electron-builder --win --publish always",
     "preview": "vite preview"
   },
   "repository": {
