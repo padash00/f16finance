@@ -367,6 +367,24 @@ export default function InventorySalesPage({
     }
   }
 
+  // Sync-кнопка для кассира: подтягивает свежие остатки витрины после ревизии
+  // или перемещения со склада. С toast-фидбеком чтобы было понятно «сработало».
+  async function handleManualSync() {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.getPointInventorySales(config, session)
+      setContext(data)
+      void saveSalesContextCache(data)
+      const itemsCount = Array.isArray((data as any)?.items) ? (data as any).items.length : 0
+      toastSuccess(`Синхронизировано · ${itemsCount} товаров`)
+    } catch (err: any) {
+      toastError(err?.message || 'Не удалось синхронизировать витрину')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -877,12 +895,26 @@ export default function InventorySalesPage({
                 Быстрый режим: сканируйте штрихкод или найдите товар, полный каталог скрыт.
               </p>
             </div>
-            {onSwitchToScanner ? (
-              <Button type="button" size="sm" variant="outline" onClick={onSwitchToScanner} className="h-8 shrink-0 gap-2">
-                <ScanLine className="h-3.5 w-3.5" />
-                Сканер
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleManualSync()}
+                disabled={loading}
+                className="h-8 gap-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                title="Подтянуть свежие остатки с сервера (после ревизии или перемещения со склада)"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Синхронизирую…' : 'Синхронизировать'}
               </Button>
-            ) : null}
+              {onSwitchToScanner ? (
+                <Button type="button" size="sm" variant="outline" onClick={onSwitchToScanner} className="h-8 gap-2">
+                  <ScanLine className="h-3.5 w-3.5" />
+                  Сканер
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {/* Search + quick filters */}
