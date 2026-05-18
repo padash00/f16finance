@@ -266,6 +266,25 @@ export default function InventorySalesPageMinimal({
     }
   }
 
+  // Manual sync с toast-фидбеком — кассир жмёт после ревизии/перемещения,
+  // чтобы тут же увидеть свежие остатки (не ждать 30-сек авто-синк).
+  async function handleManualSync() {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.getPointInventorySales(config, session)
+      setContext(data)
+      setLoyaltyConfig((data as any).loyalty_config || null)
+      void saveSalesContextCache(data)
+      const itemsCount = Array.isArray((data as any)?.items) ? (data as any).items.length : 0
+      toastSuccess(`Синхронизировано · ${itemsCount} товаров`)
+    } catch (err: any) {
+      toastError(err?.message || 'Не удалось синхронизировать витрину')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Provider-aware лейблы (Kaspi/Halyk/Безналичный) для UI
   const cashLabels = useCashlessLabels(session)
 
@@ -944,8 +963,16 @@ export default function InventorySalesPageMinimal({
             onCabinet={onOpenCabinet}
           />
           <SyncIndicator status={syncStatus} lastSyncedAt={lastSyncedAt} />
-          <Button variant="ghost" size="sm" onClick={() => void load(false)} disabled={loading} className="h-8 w-8 p-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleManualSync()}
+            disabled={loading}
+            className="h-8 gap-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+            title="Подтянуть свежие остатки с сервера (после ревизии или перемещения со склада)"
+          >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{loading ? 'Синхронизирую…' : 'Синхронизировать'}</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowPreferences(true)} className="h-8 w-8 p-0" title="Настройки">
             <Settings className="h-4 w-4" />
