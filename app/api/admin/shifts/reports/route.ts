@@ -69,56 +69,67 @@ export async function GET(request: Request) {
     const shiftsWithoutOperator = shifts.filter((s) => !s.operator || !s.operator.id)
     if (shiftsWithoutOperator.length > 0) {
       const shiftIds = shiftsWithoutOperator.map((s) => s.id)
+      const firstOperatorIdByShift = new Map<string, string>()
 
-      // Способ A: через shift_id в продажах
+      // Способ A: одной выборкой — без вложенного join, только operator_id
       const { data: salesByShift } = await supabase
         .from('point_sales')
-        .select('shift_id, operator_id, sold_at, operator:operators!operator_id(id, full_name, short_name)')
+        .select('shift_id, operator_id, sold_at')
         .in('shift_id', shiftIds)
         .not('operator_id', 'is', null)
         .order('sold_at', { ascending: true })
 
-      const firstOperatorByShift = new Map<string, any>()
       for (const row of salesByShift || []) {
         const sid = String((row as any).shift_id || '')
-        if (!sid) continue
-        if (!firstOperatorByShift.has(sid)) {
-          const op = (row as any).operator
-          const opObj = Array.isArray(op) ? op[0] : op
-          if (opObj) firstOperatorByShift.set(sid, opObj)
+        const opId = (row as any).operator_id
+        if (!sid || !opId) continue
+        if (!firstOperatorIdByShift.has(sid)) firstOperatorIdByShift.set(sid, String(opId))
+      }
+
+      // Способ B: для оставшихся — параллельно через company_id + временное окно
+      const stillMissing = shiftsWithoutOperator.filter(
+        (s) => !firstOperatorIdByShift.has(s.id) && s.company_id && s.opened_at,
+      )
+      if (stillMissing.length > 0) {
+        const fallback = await Promise.all(
+          stillMissing.map((s) =>
+            supabase
+              .from('point_sales')
+              .select('operator_id')
+              .eq('company_id', s.company_id)
+              .gte('sold_at', s.opened_at)
+              .lte('sold_at', s.closed_at || new Date().toISOString())
+              .not('operator_id', 'is', null)
+              .order('sold_at', { ascending: true })
+              .limit(1)
+              .maybeSingle()
+              .then((res) => ({ shiftId: s.id, opId: (res?.data as any)?.operator_id || null })),
+          ),
+        )
+        for (const r of fallback) {
+          if (r.opId) firstOperatorIdByShift.set(r.shiftId, String(r.opId))
         }
       }
 
-      // Способ B: для смен где Способ A не дал — пробуем по company_id + временному окну смены
-      for (const s of shiftsWithoutOperator) {
-        if (firstOperatorByShift.has(s.id)) continue
-        if (!s.company_id || !s.opened_at) continue
-        const { data: salesByTime } = await supabase
-          .from('point_sales')
-          .select('operator_id, sold_at, operator:operators!operator_id(id, full_name, short_name)')
-          .eq('company_id', s.company_id)
-          .gte('sold_at', s.opened_at)
-          .lte('sold_at', s.closed_at || new Date().toISOString())
-          .not('operator_id', 'is', null)
-          .order('sold_at', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        if (salesByTime && (salesByTime as any).operator) {
-          const op = (salesByTime as any).operator
-          const opObj = Array.isArray(op) ? op[0] : op
-          if (opObj) firstOperatorByShift.set(s.id, opObj)
-        }
-      }
-
-      for (const s of shifts) {
-        if ((!s.operator || !s.operator.id) && firstOperatorByShift.has(s.id)) {
-          const op = firstOperatorByShift.get(s.id)
-          s.operator = {
-            id: op.id,
-            full_name: op.full_name,
-            short_name: op.short_name,
+      // Одной выборкой подтянуть имена операторов
+      const operatorIds = Array.from(new Set(Array.from(firstOperatorIdByShift.values())))
+      if (operatorIds.length > 0) {
+        const { data: opsData } = await supabase
+          .from('operators')
+          .select('id, full_name, short_name')
+          .in('id', operatorIds)
+        const operatorById = new Map<string, any>(
+          (opsData || []).map((o: any) => [String(o.id), o]),
+        )
+        for (const s of shifts) {
+          if (s.operator && s.operator.id) continue
+          const opId = firstOperatorIdByShift.get(s.id)
+          if (!opId) continue
+          const op = operatorById.get(opId)
+          if (op) {
+            s.operator = { id: op.id, full_name: op.full_name, short_name: op.short_name }
+            s.operator_source = 'sales'
           }
-          s.operator_source = 'sales'
         }
       }
     }

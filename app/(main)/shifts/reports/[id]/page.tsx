@@ -57,6 +57,7 @@ type SaleItem = {
   quantity: number
   unit_price: number
   total_price: number
+  universal_name: string | null
   item: { id: string; name: string } | null
 }
 
@@ -619,7 +620,7 @@ export default function ShiftReportDetailPage({
                     sales.map((s) => {
                       const composition = (s.items || [])
                         .map((it) => {
-                          const name = it.item?.name || 'Без названия'
+                          const name = it.item?.name || it.universal_name || 'Без названия'
                           const qty = Number(it.quantity || 0)
                           return qty > 1 ? `${name}×${qty}` : name
                         })
