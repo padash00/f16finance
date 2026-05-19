@@ -61,14 +61,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       supabase
         .from('point_sales')
         .select(
-          'id, sale_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, sold_at, source',
+          `id, sale_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, sold_at, source,
+           discount_amount, loyalty_points_earned, loyalty_points_spent, loyalty_discount_amount,
+           operator:operators!operator_id ( id, full_name, short_name ),
+           customer:customer_id ( id, name ),
+           items:point_sale_items ( id, quantity, unit_price, total_price, item:inventory_items ( id, name ) )`,
         )
         .eq('shift_id', id)
         .order('sold_at', { ascending: false }),
       supabase
         .from('point_returns')
         .select(
-          'id, return_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, returned_at, source',
+          `id, return_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, returned_at, source,
+           items:point_return_items ( id, quantity, unit_price, item:inventory_items ( id, name ) )`,
         )
         .eq('shift_id', id)
         .order('returned_at', { ascending: false }),

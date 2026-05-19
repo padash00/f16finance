@@ -52,6 +52,14 @@ type ShiftDetail = {
   closer?: { id: string; full_name: string; short_name: string | null } | null
 }
 
+type SaleItem = {
+  id: string
+  quantity: number
+  unit_price: number
+  total_price: number
+  item: { id: string; name: string } | null
+}
+
 type Sale = {
   id: string
   sale_date: string
@@ -63,6 +71,20 @@ type Sale = {
   comment: string | null
   sold_at: string
   source: string
+  discount_amount: number | null
+  loyalty_points_earned: number | null
+  loyalty_points_spent: number | null
+  loyalty_discount_amount: number | null
+  operator: { id: string; full_name: string; short_name: string | null } | null
+  customer: { id: string; name: string | null } | null
+  items: SaleItem[] | null
+}
+
+type ReturnItem = {
+  id: string
+  quantity: number
+  unit_price: number
+  item: { id: string; name: string } | null
 }
 
 type Return = {
@@ -76,6 +98,7 @@ type Return = {
   comment: string | null
   returned_at: string
   source: string
+  items: ReturnItem[] | null
 }
 
 type Incident = {
@@ -574,9 +597,13 @@ export default function ShiftReportDetailPage({
                 <thead className="bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-3 py-2">Время</th>
+                    <th className="px-3 py-2">Состав</th>
+                    <th className="px-3 py-2">Оператор</th>
+                    <th className="px-3 py-2">Клиент</th>
                     <th className="px-3 py-2">Оплата</th>
                     <th className="px-3 py-2 text-right">Cash</th>
                     <th className="px-3 py-2 text-right">Безналичный</th>
+                    <th className="px-3 py-2 text-right">Скидка</th>
                     <th className="px-3 py-2 text-right">Итого</th>
                     <th className="px-3 py-2">Комментарий</th>
                   </tr>
@@ -584,27 +611,60 @@ export default function ShiftReportDetailPage({
                 <tbody className="divide-y divide-white/5">
                   {sales.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-slate-400">
+                      <td colSpan={10} className="px-3 py-4 text-center text-slate-400">
                         Нет продаж
                       </td>
                     </tr>
                   ) : (
-                    sales.map((s) => (
-                      <tr key={s.id} className="hover:bg-white/5">
-                        <td className="px-3 py-2 text-slate-300">{fmtDateTime(s.sold_at)}</td>
-                        <td className="px-3 py-2 text-slate-300">{s.payment_method}</td>
-                        <td className="px-3 py-2 text-right text-slate-200">
-                          {fmtMoney(s.cash_amount)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-200">
-                          {fmtMoney(s.kaspi_amount)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-emerald-300">
-                          {fmtMoney(s.total_amount)}
-                        </td>
-                        <td className="px-3 py-2 text-slate-400">{s.comment || '—'}</td>
-                      </tr>
-                    ))
+                    sales.map((s) => {
+                      const composition = (s.items || [])
+                        .map((it) => {
+                          const name = it.item?.name || 'Без названия'
+                          const qty = Number(it.quantity || 0)
+                          return qty > 1 ? `${name}×${qty}` : name
+                        })
+                        .join(', ')
+                      const discount =
+                        Number(s.discount_amount || 0) + Number(s.loyalty_discount_amount || 0)
+                      return (
+                        <tr key={s.id} className="hover:bg-white/5">
+                          <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
+                          <td className="px-3 py-2 text-slate-300 max-w-[280px]">
+                            {composition || <span className="text-slate-500">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">
+                            {s.operator?.short_name || s.operator?.full_name || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">
+                            {s.customer?.name || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-slate-300">{s.payment_method}</td>
+                          <td className="px-3 py-2 text-right text-slate-200">
+                            {fmtMoney(s.cash_amount)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-200">
+                            {fmtMoney(s.kaspi_amount)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-amber-300">
+                            {discount > 0 ? fmtMoney(discount) : '—'}
+                            {Number(s.loyalty_points_spent || 0) > 0 && (
+                              <div className="text-[10px] text-slate-500">
+                                −{Number(s.loyalty_points_spent)} б.
+                              </div>
+                            )}
+                            {Number(s.loyalty_points_earned || 0) > 0 && (
+                              <div className="text-[10px] text-emerald-400/70">
+                                +{Number(s.loyalty_points_earned)} б.
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-emerald-300">
+                            {fmtMoney(s.total_amount)}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">{s.comment || '—'}</td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -620,6 +680,7 @@ export default function ShiftReportDetailPage({
                 <thead className="bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-3 py-2">Время</th>
+                    <th className="px-3 py-2">Состав</th>
                     <th className="px-3 py-2">Оплата</th>
                     <th className="px-3 py-2 text-right">Cash</th>
                     <th className="px-3 py-2 text-right">Безналичный</th>
@@ -630,27 +691,39 @@ export default function ShiftReportDetailPage({
                 <tbody className="divide-y divide-white/5">
                   {returns.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-slate-400">
+                      <td colSpan={7} className="px-3 py-4 text-center text-slate-400">
                         Нет возвратов
                       </td>
                     </tr>
                   ) : (
-                    returns.map((r) => (
-                      <tr key={r.id} className="hover:bg-white/5">
-                        <td className="px-3 py-2 text-slate-300">{fmtDateTime(r.returned_at)}</td>
-                        <td className="px-3 py-2 text-slate-300">{r.payment_method}</td>
-                        <td className="px-3 py-2 text-right text-slate-200">
-                          {fmtMoney(r.cash_amount)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-200">
-                          {fmtMoney(r.kaspi_amount)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-rose-300">
-                          {fmtMoney(r.total_amount)}
-                        </td>
-                        <td className="px-3 py-2 text-slate-400">{r.comment || '—'}</td>
-                      </tr>
-                    ))
+                    returns.map((r) => {
+                      const composition = (r.items || [])
+                        .map((it) => {
+                          const name = it.item?.name || 'Без названия'
+                          const qty = Number(it.quantity || 0)
+                          return qty > 1 ? `${name}×${qty}` : name
+                        })
+                        .join(', ')
+                      return (
+                        <tr key={r.id} className="hover:bg-white/5">
+                          <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtDateTime(r.returned_at)}</td>
+                          <td className="px-3 py-2 text-slate-300 max-w-[280px]">
+                            {composition || <span className="text-slate-500">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-slate-300">{r.payment_method}</td>
+                          <td className="px-3 py-2 text-right text-slate-200">
+                            {fmtMoney(r.cash_amount)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-200">
+                            {fmtMoney(r.kaspi_amount)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-rose-300">
+                            {fmtMoney(r.total_amount)}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">{r.comment || '—'}</td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
