@@ -27,15 +27,26 @@ export async function GET(request: Request) {
     const companyId = device.company_id
     if (!companyId) return json({ catalog: null, tariffs: null, prices: null, serverTime: new Date().toISOString() })
 
+    // inventory_items скоупится по organization_id, а не company_id —
+    // подтягиваем org_id из company перед основным батчем.
+    const { data: companyRow } = await supabase
+      .from('companies')
+      .select('organization_id')
+      .eq('id', companyId)
+      .maybeSingle()
+    const organizationId = (companyRow as any)?.organization_id || null
+
     // Параллельно тянем maxUpdatedAt по ключевым таблицам
     const [itemsRes, balancesRes, tariffsRes, salesRes] = await Promise.all([
-      supabase
-        .from('inventory_items')
-        .select('updated_at')
-        .eq('company_id', companyId)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      organizationId
+        ? supabase
+            .from('inventory_items')
+            .select('updated_at')
+            .eq('organization_id', organizationId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
       supabase
         .from('inventory_balances')
         .select('updated_at, location:location_id!inner(company_id)')
