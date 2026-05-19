@@ -56,9 +56,9 @@ export async function GET(request: Request) {
         .maybeSingle(),
       supabase
         .from('arena_tariffs')
-        .select('updated_at')
+        .select('created_at')
         .eq('company_id', companyId)
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
       supabase
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
     return json({
       catalogVersion: itemsRes.data?.updated_at || null,
       balancesVersion: balancesRes.data?.updated_at || null,
-      tariffsVersion: tariffsRes.data?.updated_at || null,
+      tariffsVersion: (tariffsRes.data as any)?.created_at || null,
       lastSaleVersion: salesRes.data?.created_at || null,
       pendingMessages: pendingMessages || [],
       serverTime: new Date().toISOString(),
