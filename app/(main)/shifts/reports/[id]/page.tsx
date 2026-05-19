@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useMemo, useState } from 'react'
+import { Fragment, use, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -10,13 +10,18 @@ import {
   ArrowLeft,
   CalendarRange,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Circle,
   Coins,
   ExternalLink,
+  FileDown,
   Loader2,
+  Package,
   Printer,
   Receipt as ReceiptIcon,
   RefreshCw,
+  Search,
   ShieldAlert,
   Sparkles,
   StickyNote,
@@ -28,6 +33,7 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
 type ShiftDetail = {
   id: string
@@ -233,6 +239,156 @@ export default function ShiftReportDetailPage({
   useModalEscape(!!adminAction, () => { if (!adminBusy) setAdminAction(null) })
   useModalEscape(showZReport, () => setShowZReport(false))
 
+  const [salesSearch, setSalesSearch] = useState('')
+  const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set())
+  const toggleSaleExpand = (saleId: string) => {
+    setExpandedSales((prev) => {
+      const next = new Set(prev)
+      if (next.has(saleId)) next.delete(saleId)
+      else next.add(saleId)
+      return next
+    })
+  }
+
+  const itemName = (it: SaleItem | ReturnItem) =>
+    (it as any).item?.name || (it as any).universal_name || 'Без названия'
+
+  const filteredSales = useMemo(() => {
+    const q = salesSearch.trim().toLowerCase()
+    if (!q) return sales
+    return sales.filter((s) => {
+      if ((s.payment_method || '').toLowerCase().includes(q)) return true
+      if ((s.customer?.name || '').toLowerCase().includes(q)) return true
+      if ((s.operator?.full_name || s.operator?.short_name || '').toLowerCase().includes(q))
+        return true
+      if ((s.comment || '').toLowerCase().includes(q)) return true
+      if ((s.items || []).some((it) => itemName(it).toLowerCase().includes(q))) return true
+      return false
+    })
+  }, [sales, salesSearch])
+
+  const topItems = useMemo(() => {
+    const map = new Map<string, { name: string; qty: number; amount: number }>()
+    for (const s of sales) {
+      for (const it of s.items || []) {
+        const name = itemName(it)
+        const cur = map.get(name) || { name, qty: 0, amount: 0 }
+        cur.qty += Number(it.quantity || 0)
+        cur.amount += Number(it.total_price || 0)
+        map.set(name, cur)
+      }
+    }
+    return Array.from(map.values())
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+  }, [sales])
+
+  async function exportExcel() {
+    if (!shift) return
+    const wb = createWorkbook()
+    const dateOpen = new Date(shift.opened_at).toLocaleDateString('ru-RU')
+    const dateClose = shift.closed_at
+      ? new Date(shift.closed_at).toLocaleDateString('ru-RU')
+      : '—'
+    const subtitle = `${shift.company?.name || '—'} • ${SHIFT_TYPE_LABEL[shift.shift_type] || shift.shift_type}`
+    const info = `Период: ${dateOpen} → ${dateClose} | Чеков: ${sales.length} | Возвратов: ${returns.length}`
+
+    buildStyledSheet(
+      wb,
+      'Продажи',
+      subtitle,
+      info,
+      [
+        { header: 'Время', key: 'time', width: 18, type: 'text' },
+        { header: 'Состав', key: 'composition', width: 50, type: 'text' },
+        { header: 'Оператор', key: 'operator', width: 22, type: 'text' },
+        { header: 'Клиент', key: 'customer', width: 22, type: 'text' },
+        { header: 'Оплата', key: 'payment', width: 14, type: 'text' },
+        { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
+        { header: 'Безналичный', key: 'kaspi', width: 14, type: 'money' },
+        { header: 'Скидка', key: 'discount', width: 12, type: 'money' },
+        { header: 'Итого', key: 'total', width: 14, type: 'money' },
+        { header: 'Комментарий', key: 'comment', width: 28, type: 'text' },
+      ],
+      sales.map((s) => ({
+        time: fmtDateTime(s.sold_at),
+        composition: (s.items || [])
+          .map((it) => {
+            const name = itemName(it)
+            return Number(it.quantity || 0) > 1 ? `${name}×${it.quantity}` : name
+          })
+          .join(', '),
+        operator: s.operator?.short_name || s.operator?.full_name || '',
+        customer: s.customer?.name || '',
+        payment: s.payment_method,
+        cash: Number(s.cash_amount || 0),
+        kaspi: Number(s.kaspi_amount || 0),
+        discount:
+          Number(s.discount_amount || 0) + Number(s.loyalty_discount_amount || 0),
+        total: Number(s.total_amount || 0),
+        comment: s.comment || '',
+      })),
+    )
+
+    if (returns.length > 0) {
+      buildStyledSheet(
+        wb,
+        'Возвраты',
+        subtitle,
+        `Возвратов: ${returns.length}`,
+        [
+          { header: 'Время', key: 'time', width: 18, type: 'text' },
+          { header: 'Состав', key: 'composition', width: 50, type: 'text' },
+          { header: 'Оплата', key: 'payment', width: 14, type: 'text' },
+          { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
+          { header: 'Безналичный', key: 'kaspi', width: 14, type: 'money' },
+          { header: 'Итого', key: 'total', width: 14, type: 'money' },
+          { header: 'Комментарий', key: 'comment', width: 28, type: 'text' },
+        ],
+        returns.map((r) => ({
+          time: fmtDateTime(r.returned_at),
+          composition: (r.items || [])
+            .map((it) => {
+              const name = itemName(it)
+              return Number(it.quantity || 0) > 1 ? `${name}×${it.quantity}` : name
+            })
+            .join(', '),
+          payment: r.payment_method,
+          cash: Number(r.cash_amount || 0),
+          kaspi: Number(r.kaspi_amount || 0),
+          total: Number(r.total_amount || 0),
+          comment: r.comment || '',
+        })),
+      )
+    }
+
+    if (topItems.length > 0) {
+      buildStyledSheet(
+        wb,
+        'Топ товаров',
+        subtitle,
+        `Топ ${topItems.length} по выручке`,
+        [
+          { header: '#', key: 'rank', width: 6, type: 'number', align: 'right' },
+          { header: 'Товар', key: 'name', width: 40, type: 'text' },
+          { header: 'Кол-во', key: 'qty', width: 12, type: 'number', align: 'right' },
+          { header: 'Сумма', key: 'amount', width: 16, type: 'money' },
+        ],
+        topItems.map((t, i) => ({
+          rank: i + 1,
+          name: t.name,
+          qty: t.qty,
+          amount: t.amount,
+        })),
+      )
+    }
+
+    const dateForFile =
+      (shift.closed_at || shift.opened_at).slice(0, 10) || new Date().toISOString().slice(0, 10)
+    const companyCode = shift.company?.code || shift.company?.name || 'shift'
+    await downloadWorkbook(wb, `shift_${companyCode}_${dateForFile}.xlsx`)
+  }
+
   const load = async () => {
     setLoading(true)
     setError(null)
@@ -280,6 +436,12 @@ export default function ShiftReportDetailPage({
               <Button variant="outline" size="sm" onClick={() => setShowZReport(true)}>
                 <ReceiptIcon className="h-4 w-4" />
                 Z-отчёт
+              </Button>
+            )}
+            {shift && (
+              <Button variant="outline" size="sm" onClick={exportExcel}>
+                <FileDown className="h-4 w-4" />
+                Excel
               </Button>
             )}
             {shift && shift.status === 'open' && canCloseForce && (
@@ -589,14 +751,54 @@ export default function ShiftReportDetailPage({
             </div>
           </Card>
 
+          {topItems.length > 0 && (
+            <Card className="overflow-hidden border-white/10">
+              <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+                <Package className="h-4 w-4 text-emerald-400" />
+                Топ товаров за смену
+                <span className="ml-auto text-xs text-slate-400">по выручке</span>
+              </div>
+              <div className="grid gap-px bg-white/5 sm:grid-cols-2">
+                {topItems.map((t, i) => (
+                  <div
+                    key={t.name}
+                    className="flex items-center gap-3 bg-slate-950 px-4 py-2 text-sm"
+                  >
+                    <span className="w-5 text-right text-xs text-slate-500">{i + 1}</span>
+                    <span className="flex-1 truncate text-slate-200">{t.name}</span>
+                    <span className="text-xs text-slate-400 tabular-nums">×{t.qty}</span>
+                    <span className="w-24 text-right text-emerald-300 tabular-nums">
+                      {fmtMoney(t.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           <Card className="overflow-hidden border-white/10">
-            <div className="border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
-              Продажи • {sales.length}
+            <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+              <span>
+                Продажи • {filteredSales.length}
+                {filteredSales.length !== sales.length && (
+                  <span className="text-slate-400"> из {sales.length}</span>
+                )}
+              </span>
+              <div className="ml-auto relative">
+                <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={salesSearch}
+                  onChange={(e) => setSalesSearch(e.target.value)}
+                  placeholder="Поиск по товару, клиенту, оператору…"
+                  className="h-8 w-72 rounded-md border border-white/10 bg-white/[0.03] pl-7 pr-2 text-xs text-slate-200 outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="w-6 px-2 py-2"></th>
                     <th className="px-3 py-2">Время</th>
                     <th className="px-3 py-2">Состав</th>
                     <th className="px-3 py-2">Оператор</th>
@@ -610,60 +812,113 @@ export default function ShiftReportDetailPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {sales.length === 0 ? (
+                  {filteredSales.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-3 py-4 text-center text-slate-400">
-                        Нет продаж
+                      <td colSpan={11} className="px-3 py-4 text-center text-slate-400">
+                        {sales.length === 0 ? 'Нет продаж' : 'Ничего не найдено'}
                       </td>
                     </tr>
                   ) : (
-                    sales.map((s) => {
-                      const composition = (s.items || [])
+                    filteredSales.map((s) => {
+                      const items = s.items || []
+                      const composition = items
                         .map((it) => {
-                          const name = it.item?.name || it.universal_name || 'Без названия'
+                          const name = itemName(it)
                           const qty = Number(it.quantity || 0)
                           return qty > 1 ? `${name}×${qty}` : name
                         })
                         .join(', ')
                       const discount =
                         Number(s.discount_amount || 0) + Number(s.loyalty_discount_amount || 0)
+                      const isExpanded = expandedSales.has(s.id)
+                      const hasItems = items.length > 0
                       return (
-                        <tr key={s.id} className="hover:bg-white/5">
-                          <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
-                          <td className="px-3 py-2 text-slate-300 max-w-[280px]">
-                            {composition || <span className="text-slate-500">—</span>}
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {s.operator?.short_name || s.operator?.full_name || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {s.customer?.name || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-slate-300">{s.payment_method}</td>
-                          <td className="px-3 py-2 text-right text-slate-200">
-                            {fmtMoney(s.cash_amount)}
-                          </td>
-                          <td className="px-3 py-2 text-right text-slate-200">
-                            {fmtMoney(s.kaspi_amount)}
-                          </td>
-                          <td className="px-3 py-2 text-right text-amber-300">
-                            {discount > 0 ? fmtMoney(discount) : '—'}
-                            {Number(s.loyalty_points_spent || 0) > 0 && (
-                              <div className="text-[10px] text-slate-500">
-                                −{Number(s.loyalty_points_spent)} б.
-                              </div>
-                            )}
-                            {Number(s.loyalty_points_earned || 0) > 0 && (
-                              <div className="text-[10px] text-emerald-400/70">
-                                +{Number(s.loyalty_points_earned)} б.
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right text-emerald-300">
-                            {fmtMoney(s.total_amount)}
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">{s.comment || '—'}</td>
-                        </tr>
+                        <Fragment key={s.id}>
+                          <tr
+                            className={`hover:bg-white/5 ${hasItems ? 'cursor-pointer' : ''}`}
+                            onClick={() => hasItems && toggleSaleExpand(s.id)}
+                          >
+                            <td className="px-2 py-2 text-slate-500">
+                              {hasItems ? (
+                                isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
+                            <td className="px-3 py-2 text-slate-300 max-w-[280px] truncate">
+                              {composition || <span className="text-slate-500">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-slate-400">
+                              {s.operator?.short_name || s.operator?.full_name || '—'}
+                            </td>
+                            <td className="px-3 py-2 text-slate-400">
+                              {s.customer?.name || '—'}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300">{s.payment_method}</td>
+                            <td className="px-3 py-2 text-right text-slate-200">
+                              {fmtMoney(s.cash_amount)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-200">
+                              {fmtMoney(s.kaspi_amount)}
+                            </td>
+                            <td className="px-3 py-2 text-right text-amber-300">
+                              {discount > 0 ? fmtMoney(discount) : '—'}
+                              {Number(s.loyalty_points_spent || 0) > 0 && (
+                                <div className="text-[10px] text-slate-500">
+                                  −{Number(s.loyalty_points_spent)} б.
+                                </div>
+                              )}
+                              {Number(s.loyalty_points_earned || 0) > 0 && (
+                                <div className="text-[10px] text-emerald-400/70">
+                                  +{Number(s.loyalty_points_earned)} б.
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right text-emerald-300">
+                              {fmtMoney(s.total_amount)}
+                            </td>
+                            <td className="px-3 py-2 text-slate-400">{s.comment || '—'}</td>
+                          </tr>
+                          {isExpanded && hasItems && (
+                            <tr className="bg-white/[0.02]">
+                              <td></td>
+                              <td colSpan={10} className="px-4 py-3">
+                                <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
+                                  <div className="mb-2 text-[10px] uppercase tracking-wider text-slate-500">
+                                    Позиции чека ({items.length})
+                                  </div>
+                                  <div className="grid gap-1 text-xs">
+                                    {items.map((it) => {
+                                      const qty = Number(it.quantity || 0)
+                                      const total = Number(it.total_price || 0)
+                                      const unit = Number(it.unit_price || 0)
+                                      return (
+                                        <div
+                                          key={it.id}
+                                          className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-white/5 py-1 last:border-0"
+                                        >
+                                          <span className="text-slate-200">{itemName(it)}</span>
+                                          <span className="text-slate-500 tabular-nums">
+                                            ×{qty}
+                                          </span>
+                                          <span className="text-slate-500 tabular-nums">
+                                            {fmtMoney(unit)}
+                                          </span>
+                                          <span className="w-24 text-right text-emerald-300 tabular-nums">
+                                            {fmtMoney(total)}
+                                          </span>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })
                   )}
