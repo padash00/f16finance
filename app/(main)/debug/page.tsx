@@ -381,18 +381,18 @@ export default function DebugPage() {
     const startedAt = Date.now()
 
     // session (только для отображения)
-    supabase.auth.getSession().then(({ data }) => {
-      setAuthEmail(data.session?.user.email || null)
+    supabase.auth.getSession().then((res: any) => {
+      setAuthEmail(res?.data?.session?.user?.email || null)
     })
 
     // storage
-    const storagePromise = supabase.storage.listBuckets().then(({ data, error }) => {
-      if (error) {
-        setBucketsError(error.message)
+    const storagePromise = supabase.storage.listBuckets().then((res: any) => {
+      if (res?.error) {
+        setBucketsError(res.error.message)
         setBuckets([])
       } else {
         setBuckets(
-          (data || []).map((b: any) => ({
+          (res?.data || []).map((b: any) => ({
             name: b.name,
             public: !!b.public,
           })),
@@ -416,23 +416,23 @@ export default function DebugPage() {
     // sanity metrics
     const sanityPromise = Promise.all(
       SANITY_QUERIES.map(async (q) => {
-        const { data, error } = await supabase
+        const res: any = await supabase
           .from(q.table)
           .select(q.column)
           .order(q.column, { ascending: false })
           .limit(1)
           .maybeSingle()
-        if (error) {
+        if (res?.error) {
           return {
             key: q.key,
             label: q.label,
             ts: null,
             ageMin: null,
             warnAfterMin: q.warnAfterMin,
-            error: error.message,
+            error: res.error.message as string,
           }
         }
-        const ts = (data as any)?.[q.column] || null
+        const ts = (res?.data?.[q.column] as string | null) || null
         return {
           key: q.key,
           label: q.label,
@@ -442,7 +442,7 @@ export default function DebugPage() {
           error: null,
         }
       }),
-    ).then(setSanity)
+    ).then((rows) => setSanity(rows as SanityRow[]))
 
     // tables — батчами по 8, estimated count
     setTableResults((prev) =>
@@ -454,21 +454,21 @@ export default function DebugPage() {
     const results = await batchRun(flat, 8, async (t) => {
       const t0 = Date.now()
       try {
-        const { count, error } = await supabase
+        const res: any = await supabase
           .from(t.name)
           .select('*', { count: 'estimated', head: true })
         const ms = Date.now() - t0
-        if (error) {
+        if (res?.error) {
           return {
             name: t.name,
             group: t.group,
-            status: classifyTableError(error as any),
+            status: classifyTableError(res.error),
             count: null,
-            error: error.message,
+            error: res.error.message as string,
             ms,
           } as TableResult
         }
-        const c = count ?? 0
+        const c = (res?.count as number | null) ?? 0
         return {
           name: t.name,
           group: t.group,
