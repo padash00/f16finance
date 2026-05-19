@@ -62,7 +62,7 @@ export async function GET(request: Request) {
         .limit(1)
         .maybeSingle(),
       supabase
-        .from('point_inventory_sales')
+        .from('point_sales')
         .select('created_at')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })

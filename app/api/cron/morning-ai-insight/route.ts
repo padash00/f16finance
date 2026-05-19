@@ -89,7 +89,7 @@ async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseCl
     if (shifts && shifts.length > 0) {
       const shiftIds = (shifts as any[]).map((s) => s.id)
       const { data: sales } = await supabase
-        .from('point_inventory_sales')
+        .from('point_sales')
         .select('shift_id, total_amount')
         .in('shift_id', shiftIds)
       const byShift = new Map<string, { count: number; sum: number }>()
@@ -115,7 +115,7 @@ async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseCl
 
     // Топ продуктов за вчера
     const { data: saleItems } = await supabase
-      .from('point_inventory_sale_items')
+      .from('point_sale_items')
       .select('quantity, item:item_id(name), sale:sale_id!inner(sale_date)')
       .eq('sale.sale_date', yesterday)
       .limit(500)
