@@ -61,19 +61,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       supabase
         .from('point_sales')
         .select(
-          `id, sale_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, sold_at, source,
-           discount_amount, loyalty_points_earned, loyalty_points_spent, loyalty_discount_amount,
-           operator:operators!operator_id ( id, full_name, short_name ),
-           customer:customer_id ( id, name ),
-           items:point_sale_items ( id, quantity, unit_price, total_price, universal_name, item:item_id ( id, name ) )`,
+          'id, sale_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, sold_at, source, operator_id, customer_id, discount_amount, loyalty_points_earned, loyalty_points_spent, loyalty_discount_amount',
         )
         .eq('shift_id', id)
         .order('sold_at', { ascending: false }),
       supabase
         .from('point_returns')
         .select(
-          `id, return_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, returned_at, source,
-           items:point_return_items ( id, quantity, unit_price, item:item_id ( id, name ) )`,
+          'id, return_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, returned_at, source',
         )
         .eq('shift_id', id)
         .order('returned_at', { ascending: false }),
@@ -125,6 +120,115 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       if (inc.kind === 'bonus') bonusesTotal += Number(inc.bonus_amount || 0)
     }
 
+    // Логируем ошибки выборок (нужно для отладки — раньше падали молча)
+    if (salesRes.error) console.error('[shift-detail] sales error', salesRes.error)
+    if (returnsRes.error) console.error('[shift-detail] returns error', returnsRes.error)
+
+    const salesRows = (salesRes.data || []) as any[]
+    const returnsRows = (returnsRes.data || []) as any[]
+    const saleIds = salesRows.map((s) => s.id)
+    const returnIds = returnsRows.map((r) => r.id)
+    const operatorIds = Array.from(
+      new Set(salesRows.map((s) => s.operator_id).filter(Boolean) as string[]),
+    )
+    const customerIds = Array.from(
+      new Set(salesRows.map((s) => s.customer_id).filter(Boolean) as string[]),
+    )
+
+    const [
+      saleItemsRes,
+      returnItemsRes,
+      operatorsRes,
+      customersRes,
+    ] = await Promise.all([
+      saleIds.length
+        ? supabase
+            .from('point_sale_items')
+            .select('id, sale_id, item_id, quantity, unit_price, total_price, universal_name')
+            .in('sale_id', saleIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      returnIds.length
+        ? supabase
+            .from('point_return_items')
+            .select('id, return_id, item_id, quantity, unit_price')
+            .in('return_id', returnIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      operatorIds.length
+        ? supabase
+            .from('operators')
+            .select('id, full_name, short_name')
+            .in('id', operatorIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      customerIds.length
+        ? supabase.from('customers').select('id, name').in('id', customerIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+    ])
+
+    if ((saleItemsRes as any).error) console.error('[shift-detail] sale items', (saleItemsRes as any).error)
+    if ((returnItemsRes as any).error) console.error('[shift-detail] return items', (returnItemsRes as any).error)
+
+    // Имена товаров по item_id
+    const allItemIds = Array.from(
+      new Set([
+        ...((saleItemsRes.data || []) as any[]).map((it) => it.item_id).filter(Boolean),
+        ...((returnItemsRes.data || []) as any[]).map((it) => it.item_id).filter(Boolean),
+      ]),
+    ) as string[]
+    const itemsByIdRes = allItemIds.length
+      ? await supabase.from('inventory_items').select('id, name').in('id', allItemIds)
+      : { data: [] as any[], error: null }
+    const itemNameById = new Map<string, string>(
+      ((itemsByIdRes.data || []) as any[]).map((it) => [String(it.id), String(it.name || '')]),
+    )
+
+    const operatorById = new Map<string, any>(
+      ((operatorsRes.data || []) as any[]).map((o) => [String(o.id), o]),
+    )
+    const customerById = new Map<string, any>(
+      ((customersRes.data || []) as any[]).map((c) => [String(c.id), c]),
+    )
+
+    // Группируем позиции по продаже/возврату
+    const saleItemsBySale = new Map<string, any[]>()
+    for (const it of (saleItemsRes.data || []) as any[]) {
+      const sid = String(it.sale_id)
+      const name = it.item_id ? itemNameById.get(String(it.item_id)) : null
+      const arr = saleItemsBySale.get(sid) || []
+      arr.push({
+        id: it.id,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        total_price: it.total_price,
+        universal_name: it.universal_name || null,
+        item: name ? { id: it.item_id, name } : null,
+      })
+      saleItemsBySale.set(sid, arr)
+    }
+    const returnItemsByReturn = new Map<string, any[]>()
+    for (const it of (returnItemsRes.data || []) as any[]) {
+      const rid = String(it.return_id)
+      const name = it.item_id ? itemNameById.get(String(it.item_id)) : null
+      const arr = returnItemsByReturn.get(rid) || []
+      arr.push({
+        id: it.id,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        item: name ? { id: it.item_id, name } : null,
+      })
+      returnItemsByReturn.set(rid, arr)
+    }
+
+    const sales = salesRows.map((s) => ({
+      ...s,
+      operator: s.operator_id ? operatorById.get(String(s.operator_id)) || null : null,
+      customer: s.customer_id ? customerById.get(String(s.customer_id)) || null : null,
+      items: saleItemsBySale.get(String(s.id)) || [],
+    }))
+    const returns = returnsRows.map((r) => ({
+      ...r,
+      items: returnItemsByReturn.get(String(r.id)) || [],
+    }))
+
     // Fallback: если staff-оператор смены пустой, подтягиваем из первой продажи
     const shiftWithOperator = shift as any
     if (!shiftWithOperator.operator || !shiftWithOperator.operator.id) {
@@ -154,8 +258,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ok: true,
       data: {
         shift: shiftWithOperator,
-        sales: salesRes.data || [],
-        returns: returnsRes.data || [],
+        sales,
+        returns,
         checklist_runs: runsRes.data || [],
         incidents,
         incidents_summary: {
