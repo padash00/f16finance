@@ -817,31 +817,54 @@ function MigrationsCard({
             <div className="space-y-2 text-xs">
               {migrations.pending.length > 0 && (
                 <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-rose-300">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-rose-300">
                     Не применены ({migrations.pending.length})
+                    <button
+                      onClick={() =>
+                        navigator.clipboard.writeText(migrations.pending.join('\n'))
+                      }
+                      className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-400 hover:bg-white/5 hover:text-white"
+                    >
+                      копировать список
+                    </button>
                   </div>
-                  <div className="max-h-[120px] space-y-0.5 overflow-y-auto pr-1">
+                  <div className="max-h-[240px] space-y-0.5 overflow-y-auto pr-1">
                     {migrations.pending.map((m) => (
                       <div
                         key={m}
-                        className="font-mono text-[11px] text-rose-200/80 truncate"
+                        title={m}
+                        className="break-all rounded bg-rose-500/5 px-2 py-1 font-mono text-[11px] leading-snug text-rose-200/90"
                       >
-                        {m}
+                        {m}.sql
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-500">
+                    Файлы лежат в <span className="font-mono">supabase/migrations/</span>.
+                    Применить: открой SQL Editor в Supabase Dashboard и выполни содержимое
+                    каждого файла по очереди в порядке по дате.
                   </div>
                 </div>
               )}
               {migrations.extra.length > 0 && (
                 <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-amber-300">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-amber-300">
                     В БД, но нет файла ({migrations.extra.length})
+                    <button
+                      onClick={() =>
+                        navigator.clipboard.writeText(migrations.extra.join('\n'))
+                      }
+                      className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-400 hover:bg-white/5 hover:text-white"
+                    >
+                      копировать
+                    </button>
                   </div>
-                  <div className="max-h-[80px] space-y-0.5 overflow-y-auto pr-1">
+                  <div className="max-h-[160px] space-y-0.5 overflow-y-auto pr-1">
                     {migrations.extra.map((m) => (
                       <div
                         key={m}
-                        className="font-mono text-[11px] text-amber-200/80 truncate"
+                        title={m}
+                        className="break-all rounded bg-amber-500/5 px-2 py-1 font-mono text-[11px] leading-snug text-amber-200/90"
                       >
                         {m}
                       </div>
