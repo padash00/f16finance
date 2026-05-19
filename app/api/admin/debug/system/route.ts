@@ -62,7 +62,13 @@ export async function GET(request: Request) {
       if (error) throw error
       appliedMigrations = (data || []).map((r: any) => String(r.version))
     } catch (e: any) {
-      migrationsError = e?.message || 'не удалось прочитать supabase_migrations.schema_migrations'
+      const msg = String(e?.message || '')
+      if (msg.includes('not exist') || (e as any)?.code === '42P01' || (e as any)?.code === 'PGRST205') {
+        migrationsError =
+          'Таблица supabase_migrations.schema_migrations не существует. Она создаётся при применении миграций через `supabase db push` (CLI). Если применяешь миграции вручную через SQL Editor — drift невозможно посчитать автоматически.'
+      } else {
+        migrationsError = msg || 'не удалось прочитать supabase_migrations.schema_migrations'
+      }
     }
 
     const appliedSet = new Set(appliedMigrations)

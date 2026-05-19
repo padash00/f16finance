@@ -527,12 +527,12 @@ export default function DebugPage() {
         severity: 'error',
         text: `Таблиц с ошибками: ${stats.error}.`,
       })
-    if (migrations && migrations.pending.length > 0)
+    if (migrations && !migrations.error && migrations.pending.length > 0)
       out.push({
         severity: 'error',
         text: `Миграций не применено: ${migrations.pending.length}.`,
       })
-    if (migrations && migrations.extra.length > 0)
+    if (migrations && !migrations.error && migrations.extra.length > 0)
       out.push({
         severity: 'warn',
         text: `В БД лишние миграции (нет файла): ${migrations.extra.length}.`,
@@ -788,7 +788,14 @@ function MigrationsCard({
           <div className="text-xs text-slate-500">Нет данных</div>
         )
       ) : migrations.error ? (
-        <div className="text-xs text-amber-300">{migrations.error}</div>
+        <div className="space-y-2">
+          <div className="text-xs text-slate-400">
+            Файлов миграций: <span className="text-white">{migrations.file_count}</span>
+          </div>
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.05] p-2.5 text-[11px] leading-relaxed text-amber-200/80">
+            {migrations.error}
+          </div>
+        </div>
       ) : (
         <>
           <div className="mb-3 grid grid-cols-2 gap-2 text-center text-xs">
