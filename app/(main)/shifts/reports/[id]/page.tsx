@@ -201,6 +201,17 @@ const SHIFT_TYPE_LABEL: Record<string, string> = {
   custom: 'Нестандарт',
 }
 
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: 'Наличные',
+  kaspi: 'Безналичный',
+  card: 'Карта',
+  online: 'Онлайн',
+  mixed: 'Смешанная',
+}
+
+const paymentLabel = (m: string | null | undefined) =>
+  PAYMENT_METHOD_LABEL[String(m || '').toLowerCase()] || m || '—'
+
 function fmtMoney(value: number | null | undefined) {
   return Number(value || 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 }
@@ -256,6 +267,7 @@ export default function ShiftReportDetailPage({
     if (!q) return sales
     return sales.filter((s) => {
       if ((s.payment_method || '').toLowerCase().includes(q)) return true
+      if (paymentLabel(s.payment_method).toLowerCase().includes(q)) return true
       if ((s.customer?.name || '').toLowerCase().includes(q)) return true
       if ((s.operator?.full_name || s.operator?.short_name || '').toLowerCase().includes(q))
         return true
@@ -318,7 +330,7 @@ export default function ShiftReportDetailPage({
           .join(', '),
         operator: s.operator?.short_name || s.operator?.full_name || '',
         customer: s.customer?.name || '',
-        payment: s.payment_method,
+        payment: paymentLabel(s.payment_method),
         cash: Number(s.cash_amount || 0),
         kaspi: Number(s.kaspi_amount || 0),
         discount:
@@ -351,7 +363,7 @@ export default function ShiftReportDetailPage({
               return Number(it.quantity || 0) > 1 ? `${name}×${it.quantity}` : name
             })
             .join(', '),
-          payment: r.payment_method,
+          payment: paymentLabel(r.payment_method),
           cash: Number(r.cash_amount || 0),
           kaspi: Number(r.kaspi_amount || 0),
           total: Number(r.total_amount || 0),
@@ -802,7 +814,7 @@ export default function ShiftReportDetailPage({
                             <td className="px-3 py-2 text-slate-400">
                               {s.customer?.name || '—'}
                             </td>
-                            <td className="px-3 py-2 text-slate-300">{s.payment_method}</td>
+                            <td className="px-3 py-2 text-slate-300">{paymentLabel(s.payment_method)}</td>
                             <td className="px-3 py-2 text-right text-slate-200">
                               {fmtMoney(s.cash_amount)}
                             </td>
@@ -911,7 +923,7 @@ export default function ShiftReportDetailPage({
                           <td className="px-3 py-2 text-slate-300 max-w-[280px]">
                             {composition || <span className="text-slate-500">—</span>}
                           </td>
-                          <td className="px-3 py-2 text-slate-300">{r.payment_method}</td>
+                          <td className="px-3 py-2 text-slate-300">{paymentLabel(r.payment_method)}</td>
                           <td className="px-3 py-2 text-right text-slate-200">
                             {fmtMoney(r.cash_amount)}
                           </td>
