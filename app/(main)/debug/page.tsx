@@ -8,23 +8,22 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
   Clock,
   Database,
-  FileText,
   HardDrive,
   Key,
   Loader2,
   RefreshCw,
   Search,
   Server,
+  Timer,
   XCircle,
   Zap,
 } from 'lucide-react'
 
 // ────────────────────────────────────────────────────────────────────────────
-//  Полный реестр таблиц по доменам.
-//  При добавлении новой миграции — добавить таблицу сюда.
+//  Реестр таблиц по доменам.
 // ────────────────────────────────────────────────────────────────────────────
 type TableGroup = { title: string; tables: string[] }
 
@@ -217,11 +216,18 @@ const TABLE_GROUPS: TableGroup[] = [
 
 const ALL_TABLES = TABLE_GROUPS.flatMap((g) => g.tables)
 
-const API_ENDPOINTS: Array<{ label: string; url: string; expect: number[] }> = [
-  { label: 'Admin health', url: '/api/admin/health', expect: [200, 401] },
-  { label: 'Point bootstrap', url: '/api/point/bootstrap', expect: [200, 401, 405] },
-  { label: 'Point login', url: '/api/point/login', expect: [401, 405] },
-  { label: 'Kiosk health', url: '/api/kiosk/health', expect: [200, 401, 404] },
+// Sanity-метрики: последние записи по ключевым таблицам.
+const SANITY_QUERIES: Array<{
+  key: string
+  label: string
+  table: string
+  column: string
+  warnAfterMin: number
+}> = [
+  { key: 'sale', label: 'Последняя продажа', table: 'point_sales', column: 'sold_at', warnAfterMin: 60 * 12 },
+  { key: 'shift', label: 'Последняя смена', table: 'point_shifts', column: 'opened_at', warnAfterMin: 60 * 24 },
+  { key: 'login', label: 'Последняя активность', table: 'audit_log', column: 'created_at', warnAfterMin: 60 * 12 },
+  { key: 'incident', label: 'Последний инцидент', table: 'incidents', column: 'occurred_at', warnAfterMin: 60 * 24 * 30 },
 ]
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -239,37 +245,36 @@ type TableResult = {
   ms: number | null
 }
 
-type BucketInfo = {
-  name: string
-  public: boolean
-  created_at: string | null
+type BucketInfo = { name: string; public: boolean }
+
+type CronInfo = {
+  path: string
+  schedule: string
+  last_run_at: string | null
 }
 
-type EndpointResult = {
+type MigrationInfo = {
+  applied_count: number
+  file_count: number
+  pending: string[]
+  extra: string[]
+  error: string | null
+}
+
+type SanityRow = {
+  key: string
   label: string
-  url: string
-  status: 'pending' | 'ok' | 'unexpected' | 'error'
-  code: number | null
-  ms: number | null
-  message?: string
+  ts: string | null
+  ageMin: number | null
+  warnAfterMin: number
+  error: string | null
 }
-
-type AuthInfo = {
-  isAuthed: boolean
-  email: string | null
-  userId: string | null
-  expiresAt: string | null
-} | null
 
 // ────────────────────────────────────────────────────────────────────────────
 //  Утилиты
 // ────────────────────────────────────────────────────────────────────────────
 
-async function batchRun<T, R>(
-  items: T[],
-  size: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
+async function batchRun<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = []
   for (let i = 0; i < items.length; i += size) {
     const chunk = items.slice(i, i + size)
@@ -280,8 +285,7 @@ async function batchRun<T, R>(
 }
 
 function fmtCount(n: number | null) {
-  if (n === null) return '—'
-  return n.toLocaleString('ru-RU')
+  return n === null ? '—' : n.toLocaleString('ru-RU')
 }
 
 function classifyTableError(err: { code?: string; message?: string } | null): TableStatus {
@@ -292,6 +296,33 @@ function classifyTableError(err: { code?: string; message?: string } | null): Ta
     return 'missing'
   }
   return 'error'
+}
+
+function fmtRelative(iso: string | null): string {
+  if (!iso) return 'нет данных'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return 'в будущем'
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'только что'
+  if (min < 60) return `${min} мин назад`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} ч назад`
+  const d = Math.floor(hr / 24)
+  return `${d} дн назад`
+}
+
+function ageMin(iso: string | null): number | null {
+  if (!iso) return null
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+}
+
+const CRON_SCHEDULE_LABEL: Record<string, string> = {
+  '0 * * * *': 'каждый час',
+  '*/5 * * * *': 'каждые 5 мин',
+}
+
+function fmtCronSchedule(s: string) {
+  return CRON_SCHEDULE_LABEL[s] || s
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -313,114 +344,114 @@ export default function DebugPage() {
   )
   const [buckets, setBuckets] = useState<BucketInfo[] | null>(null)
   const [bucketsError, setBucketsError] = useState<string | null>(null)
-  const [endpoints, setEndpoints] = useState<EndpointResult[]>(
-    API_ENDPOINTS.map((e) => ({
-      label: e.label,
-      url: e.url,
-      status: 'pending' as const,
-      code: null,
-      ms: null,
+  const [crons, setCrons] = useState<CronInfo[] | null>(null)
+  const [migrations, setMigrations] = useState<MigrationInfo | null>(null)
+  const [systemError, setSystemError] = useState<string | null>(null)
+  const [sanity, setSanity] = useState<SanityRow[]>(
+    SANITY_QUERIES.map((q) => ({
+      key: q.key,
+      label: q.label,
+      ts: null,
+      ageMin: null,
+      warnAfterMin: q.warnAfterMin,
+      error: null,
     })),
   )
-  const [auth, setAuth] = useState<AuthInfo>(null)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [env, setEnv] = useState({
-    url: '',
-    urlExists: false,
-    keyExists: false,
-  })
+  const [authEmail, setAuthEmail] = useState<string | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'ok' | 'missing' | 'error' | 'empty'>('all')
   const [lastRun, setLastRun] = useState<number | null>(null)
   const [totalMs, setTotalMs] = useState<number | null>(null)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [showDetails, setShowDetails] = useState(false)
+
+  const toggleGroup = (title: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(title)) next.delete(title)
+      else next.add(title)
+      return next
+    })
+  }
 
   const runAll = async () => {
     setLoading(true)
     const startedAt = Date.now()
 
-    // env vars (на клиенте видны только NEXT_PUBLIC_*)
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    setEnv({ url, urlExists: !!url, keyExists: !!key })
-
-    // auth — параллельно с остальным
-    const authPromise = supabase.auth
-      .getSession()
-      .then(({ data, error }) => {
-        if (error) {
-          setAuthError(error.message)
-          setAuth(null)
-        } else if (data.session) {
-          setAuth({
-            isAuthed: true,
-            email: data.session.user.email || null,
-            userId: data.session.user.id,
-            expiresAt: data.session.expires_at
-              ? new Date(data.session.expires_at * 1000).toLocaleString('ru-RU')
-              : null,
-          })
-        } else {
-          setAuth({ isAuthed: false, email: null, userId: null, expiresAt: null })
-        }
-      })
-      .catch((e) => setAuthError(e?.message || 'auth error'))
+    // session (только для отображения)
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthEmail(data.session?.user.email || null)
+    })
 
     // storage
-    const storagePromise = supabase.storage
-      .listBuckets()
-      .then(({ data, error }) => {
-        if (error) {
-          setBucketsError(error.message)
-          setBuckets([])
-        } else {
-          setBuckets(
-            (data || []).map((b: any) => ({
-              name: b.name,
-              public: !!b.public,
-              created_at: b.created_at || null,
-            })),
-          )
-        }
-      })
-      .catch((e) => {
-        setBucketsError(e?.message || 'storage error')
+    const storagePromise = supabase.storage.listBuckets().then(({ data, error }) => {
+      if (error) {
+        setBucketsError(error.message)
         setBuckets([])
-      })
+      } else {
+        setBuckets(
+          (data || []).map((b: any) => ({
+            name: b.name,
+            public: !!b.public,
+          })),
+        )
+      }
+    })
 
-    // endpoints
-    const endpointPromise = Promise.all(
-      API_ENDPOINTS.map(async (e) => {
-        const t0 = Date.now()
-        try {
-          const res = await fetch(e.url, { credentials: 'include' })
-          const ms = Date.now() - t0
-          const status: EndpointResult['status'] = e.expect.includes(res.status)
-            ? 'ok'
-            : 'unexpected'
-          return { label: e.label, url: e.url, status, code: res.status, ms }
-        } catch (err: any) {
+    // system info (cron + migrations)
+    const systemPromise = fetch('/api/admin/debug/system', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) {
+          setSystemError(`HTTP ${res.status}`)
+          return
+        }
+        const json = await res.json()
+        setCrons(json.data?.crons || [])
+        setMigrations(json.data?.migrations || null)
+      })
+      .catch((e) => setSystemError(e?.message || 'system error'))
+
+    // sanity metrics
+    const sanityPromise = Promise.all(
+      SANITY_QUERIES.map(async (q) => {
+        const { data, error } = await supabase
+          .from(q.table)
+          .select(q.column)
+          .order(q.column, { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (error) {
           return {
-            label: e.label,
-            url: e.url,
-            status: 'error' as const,
-            code: null,
-            ms: Date.now() - t0,
-            message: err?.message || 'network error',
+            key: q.key,
+            label: q.label,
+            ts: null,
+            ageMin: null,
+            warnAfterMin: q.warnAfterMin,
+            error: error.message,
           }
         }
+        const ts = (data as any)?.[q.column] || null
+        return {
+          key: q.key,
+          label: q.label,
+          ts,
+          ageMin: ageMin(ts),
+          warnAfterMin: q.warnAfterMin,
+          error: null,
+        }
       }),
-    ).then(setEndpoints)
+    ).then(setSanity)
 
-    // tables — батчами по 8 параллельно, оценочный count
+    // tables — батчами по 8, estimated count
     setTableResults((prev) =>
       prev.map((r) => ({ ...r, status: 'pending', count: null, error: null, ms: null })),
     )
-    const flatTables: Array<{ name: string; group: string }> = TABLE_GROUPS.flatMap((g) =>
+    const flat = TABLE_GROUPS.flatMap((g) =>
       g.tables.map((t) => ({ name: t, group: g.title })),
     )
-    const results = await batchRun(flatTables, 8, async (t) => {
+    const results = await batchRun(flat, 8, async (t) => {
       const t0 = Date.now()
       try {
         const { count, error } = await supabase
@@ -428,11 +459,10 @@ export default function DebugPage() {
           .select('*', { count: 'estimated', head: true })
         const ms = Date.now() - t0
         if (error) {
-          const status = classifyTableError(error as any)
           return {
             name: t.name,
             group: t.group,
-            status,
+            status: classifyTableError(error as any),
             count: null,
             error: error.message,
             ms,
@@ -453,14 +483,14 @@ export default function DebugPage() {
           group: t.group,
           status: 'error' as TableStatus,
           count: null,
-          error: err?.message || 'unknown error',
+          error: err?.message || 'unknown',
           ms: Date.now() - t0,
         }
       }
     })
     setTableResults(results)
 
-    await Promise.all([authPromise, storagePromise, endpointPromise])
+    await Promise.all([storagePromise, systemPromise, sanityPromise])
 
     setTotalMs(Date.now() - startedAt)
     setLastRun(Date.now())
@@ -472,16 +502,54 @@ export default function DebugPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const stats = useMemo(() => {
-    return {
+  const stats = useMemo(
+    () => ({
       total: tableResults.length,
       ok: tableResults.filter((r) => r.status === 'ok').length,
       empty: tableResults.filter((r) => r.status === 'empty').length,
       missing: tableResults.filter((r) => r.status === 'missing').length,
       error: tableResults.filter((r) => r.status === 'error').length,
       totalRows: tableResults.reduce((s, r) => s + (r.count || 0), 0),
+    }),
+    [tableResults],
+  )
+
+  // Алёрты — что реально требует внимания
+  const alerts = useMemo(() => {
+    const out: Array<{ severity: 'error' | 'warn'; text: string }> = []
+    if (stats.missing > 0)
+      out.push({
+        severity: 'error',
+        text: `Не найдено таблиц в БД: ${stats.missing}. Проверь миграции.`,
+      })
+    if (stats.error > 0)
+      out.push({
+        severity: 'error',
+        text: `Таблиц с ошибками: ${stats.error}.`,
+      })
+    if (migrations && migrations.pending.length > 0)
+      out.push({
+        severity: 'error',
+        text: `Миграций не применено: ${migrations.pending.length}.`,
+      })
+    if (migrations && migrations.extra.length > 0)
+      out.push({
+        severity: 'warn',
+        text: `В БД лишние миграции (нет файла): ${migrations.extra.length}.`,
+      })
+    for (const s of sanity) {
+      if (s.error) continue
+      if (s.ageMin !== null && s.ageMin > s.warnAfterMin) {
+        out.push({
+          severity: 'warn',
+          text: `${s.label}: ${fmtRelative(s.ts)} (норма < ${
+            s.warnAfterMin >= 60 ? `${Math.round(s.warnAfterMin / 60)}ч` : `${s.warnAfterMin}м`
+          }).`,
+        })
+      }
     }
-  }, [tableResults])
+    return out
+  }, [stats, migrations, sanity])
 
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -492,44 +560,356 @@ export default function DebugPage() {
         if (q && !r.name.toLowerCase().includes(q)) return false
         return true
       })
-      return { ...g, rows }
+      const problemCount = rows.filter(
+        (r) => r.status === 'missing' || r.status === 'error',
+      ).length
+      return { ...g, rows, problemCount }
     }).filter((g) => g.rows.length > 0)
   }, [tableResults, search, filter])
 
   return (
-    <div className="app-page-wide space-y-6">
+    <div className="app-page-wide space-y-5">
       <Header
         loading={loading}
         onRun={runAll}
         lastRun={lastRun}
         totalMs={totalMs}
+        authEmail={authEmail}
       />
 
-      <StatsRow stats={stats} />
+      {alerts.length > 0 && <AlertsBanner alerts={alerts} />}
 
-      <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2 mr-auto">
-            <Database className="w-5 h-5 text-blue-400" />
-            Таблицы БД • {tableResults.length}
-          </h2>
+      <SanityRow rows={sanity} />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <CronsCard crons={crons} loading={loading} error={systemError} />
+        <MigrationsCard migrations={migrations} loading={loading} />
+      </div>
+
+      <TablesSection
+        loading={loading}
+        tableResults={tableResults}
+        stats={stats}
+        search={search}
+        setSearch={setSearch}
+        filter={filter}
+        setFilter={setFilter}
+        groups={filteredGroups}
+        expandedGroups={expandedGroups}
+        toggleGroup={toggleGroup}
+      />
+
+      <div>
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className="flex items-center gap-2 text-xs text-slate-400 hover:text-white"
+        >
+          {showDetails ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          Технические детали
+        </button>
+        {showDetails && (
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <StorageCard buckets={buckets} error={bucketsError} />
+            <EnvCard />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  Подкомпоненты
+// ────────────────────────────────────────────────────────────────────────────
+
+function Header({
+  loading,
+  onRun,
+  lastRun,
+  totalMs,
+  authEmail,
+}: {
+  loading: boolean
+  onRun: () => void
+  lastRun: number | null
+  totalMs: number | null
+  authEmail: string | null
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold text-white">Диагностика системы</h1>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {authEmail && <span className="mr-2">{authEmail} • </span>}
+          {lastRun
+            ? `проверено ${new Date(lastRun).toLocaleTimeString('ru-RU')} • ${totalMs} мс`
+            : 'проверка не запускалась'}
+        </p>
+      </div>
+      <Button onClick={onRun} disabled={loading} variant="outline" size="sm">
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        Перезапустить
+      </Button>
+    </div>
+  )
+}
+
+function AlertsBanner({
+  alerts,
+}: {
+  alerts: Array<{ severity: 'error' | 'warn'; text: string }>
+}) {
+  return (
+    <Card className="border-amber-500/30 bg-amber-500/[0.05] p-4">
+      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-200">
+        <AlertTriangle className="h-4 w-4" />
+        Требует внимания • {alerts.length}
+      </div>
+      <ul className="space-y-1 text-xs">
+        {alerts.map((a, i) => (
+          <li
+            key={i}
+            className={`flex items-start gap-2 ${
+              a.severity === 'error' ? 'text-rose-300' : 'text-amber-200'
+            }`}
+          >
+            <span className="mt-1 h-1 w-1 rounded-full bg-current shrink-0" />
+            {a.text}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+function SanityRow({ rows }: { rows: SanityRow[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {rows.map((r) => {
+        const stale = r.ageMin !== null && r.ageMin > r.warnAfterMin
+        const color = r.error
+          ? 'text-rose-400'
+          : stale
+            ? 'text-amber-400'
+            : r.ts
+              ? 'text-emerald-400'
+              : 'text-slate-500'
+        return (
+          <Card key={r.key} className="border-white/5 bg-white/[0.02] p-3">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500">
+              <Timer className="h-3 w-3" /> {r.label}
+            </div>
+            <div className={`mt-1 text-sm font-semibold ${color}`}>
+              {r.error ? '—' : fmtRelative(r.ts)}
+            </div>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+function CronsCard({
+  crons,
+  loading,
+  error,
+}: {
+  crons: CronInfo[] | null
+  loading: boolean
+  error: string | null
+}) {
+  return (
+    <Card className="border-white/5 bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <Clock className="h-4 w-4 text-cyan-400" />
+        Cron jobs {crons && <span className="text-slate-500">• {crons.length}</span>}
+      </div>
+      {error ? (
+        <div className="text-xs text-rose-300">{error}</div>
+      ) : crons === null ? (
+        loading ? (
+          <div className="text-xs text-slate-500">
+            <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+            Загружаем…
+          </div>
+        ) : (
+          <div className="text-xs text-slate-500">Нет данных</div>
+        )
+      ) : crons.length === 0 ? (
+        <div className="text-xs text-slate-500">Кроны не настроены</div>
+      ) : (
+        <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1 text-xs">
+          {crons.map((c) => {
+            const name = c.path.replace('/api/cron/', '')
+            return (
+              <div
+                key={c.path}
+                className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5"
+              >
+                <span className="font-mono text-slate-200 truncate flex-1">{name}</span>
+                <span className="text-[10px] text-slate-500 tabular-nums">
+                  {fmtCronSchedule(c.schedule)}
+                </span>
+                <span className="text-[10px] text-slate-500 truncate w-24 text-right">
+                  {c.last_run_at ? fmtRelative(c.last_run_at) : '—'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-slate-600">
+        «—» в колонке последнего запуска значит, что крон не пишет в audit_log, не что он не работал.
+      </p>
+    </Card>
+  )
+}
+
+function MigrationsCard({
+  migrations,
+  loading,
+}: {
+  migrations: MigrationInfo | null
+  loading: boolean
+}) {
+  return (
+    <Card className="border-white/5 bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <Database className="h-4 w-4 text-violet-400" />
+        Миграции
+      </div>
+      {!migrations ? (
+        loading ? (
+          <div className="text-xs text-slate-500">
+            <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+            Загружаем…
+          </div>
+        ) : (
+          <div className="text-xs text-slate-500">Нет данных</div>
+        )
+      ) : migrations.error ? (
+        <div className="text-xs text-amber-300">{migrations.error}</div>
+      ) : (
+        <>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-center text-xs">
+            <div className="rounded-md border border-white/5 bg-white/[0.02] p-2">
+              <div className="text-[10px] uppercase text-slate-500">В файлах</div>
+              <div className="text-base font-bold text-white">{migrations.file_count}</div>
+            </div>
+            <div className="rounded-md border border-white/5 bg-white/[0.02] p-2">
+              <div className="text-[10px] uppercase text-slate-500">В БД</div>
+              <div className="text-base font-bold text-white">{migrations.applied_count}</div>
+            </div>
+          </div>
+          {migrations.pending.length === 0 && migrations.extra.length === 0 ? (
+            <div className="flex items-center gap-2 text-xs text-emerald-300">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Всё синхронизировано
+            </div>
+          ) : (
+            <div className="space-y-2 text-xs">
+              {migrations.pending.length > 0 && (
+                <div>
+                  <div className="mb-1 text-[10px] uppercase tracking-wider text-rose-300">
+                    Не применены ({migrations.pending.length})
+                  </div>
+                  <div className="max-h-[120px] space-y-0.5 overflow-y-auto pr-1">
+                    {migrations.pending.map((m) => (
+                      <div
+                        key={m}
+                        className="font-mono text-[11px] text-rose-200/80 truncate"
+                      >
+                        {m}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {migrations.extra.length > 0 && (
+                <div>
+                  <div className="mb-1 text-[10px] uppercase tracking-wider text-amber-300">
+                    В БД, но нет файла ({migrations.extra.length})
+                  </div>
+                  <div className="max-h-[80px] space-y-0.5 overflow-y-auto pr-1">
+                    {migrations.extra.map((m) => (
+                      <div
+                        key={m}
+                        className="font-mono text-[11px] text-amber-200/80 truncate"
+                      >
+                        {m}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
+}
+
+function TablesSection({
+  loading,
+  tableResults,
+  stats,
+  search,
+  setSearch,
+  filter,
+  setFilter,
+  groups,
+  expandedGroups,
+  toggleGroup,
+}: {
+  loading: boolean
+  tableResults: TableResult[]
+  stats: {
+    total: number
+    ok: number
+    empty: number
+    missing: number
+    error: number
+    totalRows: number
+  }
+  search: string
+  setSearch: (s: string) => void
+  filter: 'all' | 'ok' | 'missing' | 'error' | 'empty'
+  setFilter: (f: 'all' | 'ok' | 'missing' | 'error' | 'empty') => void
+  groups: Array<TableGroup & { rows: TableResult[]; problemCount: number }>
+  expandedGroups: Set<string>
+  toggleGroup: (s: string) => void
+}) {
+  return (
+    <Card className="border-white/5 bg-white/[0.02] p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <h2 className="text-sm font-medium text-white">
+          Таблицы БД <span className="text-slate-500">• {stats.total}</span>
+        </h2>
+        <div className="text-xs text-slate-500">
+          <span className="text-emerald-400">{stats.ok}</span> OK ·{' '}
+          <span className="text-slate-400">{stats.empty}</span> пусто ·{' '}
+          <span className="text-amber-400">{stats.missing}</span> нет ·{' '}
+          <span className="text-rose-400">{stats.error}</span> ошибки
+        </div>
+        <div className="ml-auto flex items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+            <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по таблице…"
-              className="h-9 w-64 rounded-md border border-white/10 bg-white/[0.03] pl-7 pr-2 text-sm text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
+              placeholder="Поиск…"
+              className="h-7 w-48 rounded-md border border-white/10 bg-white/[0.03] pl-6 pr-2 text-xs text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
             />
           </div>
-          <div className="flex gap-1 rounded-md bg-white/5 p-1 text-xs">
+          <div className="flex gap-0.5 rounded-md bg-white/5 p-0.5 text-[10px]">
             {(
               [
                 { key: 'all', label: 'Все' },
-                { key: 'ok', label: `OK (${stats.ok})` },
-                { key: 'empty', label: `Пусто (${stats.empty})` },
-                { key: 'missing', label: `Нет (${stats.missing})` },
-                { key: 'error', label: `Ошибки (${stats.error})` },
+                { key: 'missing', label: 'Нет' },
+                { key: 'error', label: 'Ошибки' },
+                { key: 'empty', label: 'Пусто' },
+                { key: 'ok', label: 'OK' },
               ] as const
             ).map((b) => (
               <button
@@ -546,172 +926,72 @@ export default function DebugPage() {
             ))}
           </div>
         </div>
-
-        {loading && tableResults.every((r) => r.status === 'pending') ? (
-          <div className="py-12 text-center text-sm text-slate-400">
-            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-            Проверяем {ALL_TABLES.length} таблиц…
-          </div>
-        ) : filteredGroups.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-500">
-            Ничего не найдено по фильтру
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {filteredGroups.map((g) => (
-              <TableGroupSection key={g.title} title={g.title} rows={g.rows} />
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <ApiEndpointsCard endpoints={endpoints} />
-        <StorageCard buckets={buckets} error={bucketsError} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <AuthCard auth={auth} error={authError} />
-        <EnvCard env={env} />
-      </div>
-    </div>
-  )
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  Подкомпоненты
-// ────────────────────────────────────────────────────────────────────────────
-
-function Header({
-  loading,
-  onRun,
-  lastRun,
-  totalMs,
-}: {
-  loading: boolean
-  onRun: () => void
-  lastRun: number | null
-  totalMs: number | null
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-      <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-            <Database className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              Диагностика системы
-            </h1>
-            <p className="text-gray-400 mt-1 text-sm">
-              {lastRun
-                ? `Последняя проверка: ${new Date(lastRun).toLocaleTimeString('ru-RU')}${
-                    totalMs ? ` • ${totalMs} мс` : ''
-                  }`
-                : 'Проверка не запускалась'}
-            </p>
-          </div>
+      {loading && tableResults.every((r) => r.status === 'pending') ? (
+        <div className="py-10 text-center text-xs text-slate-500">
+          <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+          Проверяем {ALL_TABLES.length} таблиц…
         </div>
-
-        <Button
-          onClick={onRun}
-          disabled={loading}
-          className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4 mr-2" />
-          )}
-          Перезапустить
-        </Button>
-      </div>
-    </div>
+      ) : groups.length === 0 ? (
+        <div className="py-6 text-center text-xs text-slate-500">Ничего не найдено</div>
+      ) : (
+        <div className="space-y-1.5">
+          {groups.map((g) => (
+            <TableGroupBlock
+              key={g.title}
+              title={g.title}
+              rows={g.rows}
+              problemCount={g.problemCount}
+              expanded={expandedGroups.has(g.title) || g.problemCount > 0 || filter !== 'all'}
+              onToggle={() => toggleGroup(g.title)}
+            />
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }
 
-function StatsRow({
-  stats,
+function TableGroupBlock({
+  title,
+  rows,
+  problemCount,
+  expanded,
+  onToggle,
 }: {
-  stats: {
-    total: number
-    ok: number
-    empty: number
-    missing: number
-    error: number
-    totalRows: number
-  }
+  title: string
+  rows: TableResult[]
+  problemCount: number
+  expanded: boolean
+  onToggle: () => void
 }) {
-  const cells: Array<{ label: string; value: string; icon: any; color: string; bg: string }> = [
-    {
-      label: 'Таблиц',
-      value: `${stats.ok + stats.empty} / ${stats.total}`,
-      icon: CheckCircle2,
-      color: 'text-emerald-400',
-      bg: 'bg-emerald-500/20',
-    },
-    {
-      label: 'Пустых',
-      value: String(stats.empty),
-      icon: AlertTriangle,
-      color: 'text-slate-300',
-      bg: 'bg-slate-500/20',
-    },
-    {
-      label: 'Отсутствуют',
-      value: String(stats.missing),
-      icon: AlertTriangle,
-      color: 'text-amber-400',
-      bg: 'bg-amber-500/20',
-    },
-    {
-      label: 'Ошибки',
-      value: String(stats.error),
-      icon: XCircle,
-      color: 'text-rose-400',
-      bg: 'bg-rose-500/20',
-    },
-    {
-      label: 'Записей (≈)',
-      value: stats.totalRows.toLocaleString('ru-RU'),
-      icon: Database,
-      color: 'text-blue-400',
-      bg: 'bg-blue-500/20',
-    },
-  ]
-
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-      {cells.map((c) => (
-        <Card key={c.label} className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${c.bg}`}>
-              <c.icon className={`w-4 h-4 ${c.color}`} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{c.label}</p>
-              <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function TableGroupSection({ title, rows }: { title: string; rows: TableResult[] }) {
-  return (
-    <div>
-      <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">{title}</div>
-      <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
-        {rows.map((r) => (
-          <TableRow key={r.name} row={r} />
-        ))}
-      </div>
+    <div className="rounded-md border border-white/5 bg-white/[0.01]">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/[0.02]"
+      >
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 text-slate-500" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-slate-500" />
+        )}
+        <span className="font-medium text-slate-300">{title}</span>
+        <span className="text-slate-500">• {rows.length}</span>
+        {problemCount > 0 && (
+          <span className="ml-auto rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">
+            {problemCount} проблем
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <div className="grid gap-px border-t border-white/5 bg-white/5 px-px pb-px sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((r) => (
+            <TableRow key={r.name} row={r} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -720,93 +1000,50 @@ function TableRow({ row }: { row: TableResult }) {
   const color = (() => {
     switch (row.status) {
       case 'ok':
-        return 'border-emerald-500/20 bg-emerald-500/[0.04]'
+        return 'bg-slate-950'
       case 'empty':
-        return 'border-white/5 bg-white/[0.02]'
+        return 'bg-slate-950'
       case 'missing':
-        return 'border-amber-500/20 bg-amber-500/[0.06]'
+        return 'bg-amber-500/[0.06]'
       case 'error':
-        return 'border-rose-500/30 bg-rose-500/[0.06]'
+        return 'bg-rose-500/[0.08]'
       default:
-        return 'border-white/5 bg-white/[0.02]'
+        return 'bg-slate-950'
     }
   })()
 
-  const icon = (() => {
+  const dot = (() => {
     switch (row.status) {
       case 'ok':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+        return 'bg-emerald-400'
       case 'empty':
-        return <span className="h-3.5 w-3.5 rounded-full border border-slate-500/40 shrink-0" />
+        return 'bg-slate-600'
       case 'missing':
-        return <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+        return 'bg-amber-400'
       case 'error':
-        return <XCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+        return 'bg-rose-400'
       default:
-        return <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 shrink-0" />
+        return 'bg-slate-700 animate-pulse'
     }
   })()
 
   return (
-    <div className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${color}`}>
-      {icon}
+    <div className={`flex items-center gap-2 px-3 py-1.5 text-xs ${color}`}>
+      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
       <span className="font-mono text-slate-200 truncate flex-1">{row.name}</span>
       {row.error ? (
         <span
           title={row.error}
-          className={`text-[10px] truncate max-w-[160px] ${
+          className={`text-[10px] truncate max-w-[140px] ${
             row.status === 'missing' ? 'text-amber-300' : 'text-rose-300'
           }`}
         >
-          {row.status === 'missing' ? 'нет таблицы' : row.error}
+          {row.status === 'missing' ? 'нет' : row.error}
         </span>
       ) : (
-        <span className="text-slate-400 tabular-nums">
-          {fmtCount(row.count)}
-        </span>
-      )}
-      {row.ms !== null && (
-        <span className="text-[10px] text-slate-600 tabular-nums">{row.ms}ms</span>
+        <span className="text-slate-400 tabular-nums">{fmtCount(row.count)}</span>
       )}
     </div>
-  )
-}
-
-function ApiEndpointsCard({ endpoints }: { endpoints: EndpointResult[] }) {
-  return (
-    <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-        <Server className="w-5 h-5 text-cyan-400" />
-        API endpoints
-      </h2>
-      <div className="space-y-1.5">
-        {endpoints.map((e) => {
-          const color =
-            e.status === 'ok'
-              ? 'text-emerald-300'
-              : e.status === 'unexpected'
-                ? 'text-amber-300'
-                : e.status === 'error'
-                  ? 'text-rose-300'
-                  : 'text-slate-400'
-          return (
-            <div
-              key={e.url}
-              className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 text-xs"
-            >
-              <span className="font-medium text-slate-200 w-32 truncate">{e.label}</span>
-              <span className="font-mono text-slate-500 truncate flex-1">{e.url}</span>
-              <span className={`tabular-nums ${color}`}>
-                {e.status === 'pending' ? '…' : e.code ?? 'fail'}
-              </span>
-              {e.ms !== null && (
-                <span className="text-[10px] text-slate-600 tabular-nums">{e.ms}ms</span>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </Card>
   )
 }
 
@@ -818,39 +1055,28 @@ function StorageCard({
   error: string | null
 }) {
   return (
-    <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-        <HardDrive className="w-5 h-5 text-orange-400" />
-        Storage buckets
-        {buckets && (
-          <span className="ml-auto text-xs font-normal text-slate-500">
-            {buckets.length}
-          </span>
-        )}
-      </h2>
+    <Card className="border-white/5 bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <HardDrive className="h-4 w-4 text-orange-400" />
+        Storage {buckets && <span className="text-slate-500">• {buckets.length}</span>}
+      </div>
       {error ? (
-        <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-          {error}
-        </div>
-      ) : buckets === null ? (
-        <div className="text-xs text-slate-500">
-          <Loader2 className="inline mr-1 h-3 w-3 animate-spin" /> Загружаем…
-        </div>
+        <div className="text-xs text-rose-300">{error}</div>
+      ) : !buckets ? (
+        <div className="text-xs text-slate-500">…</div>
       ) : buckets.length === 0 ? (
         <div className="text-xs text-slate-500">Нет бакетов</div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1 text-xs">
           {buckets.map((b) => (
             <div
               key={b.name}
-              className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 text-xs"
+              className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5"
             >
               <span className="font-mono text-slate-200 flex-1 truncate">{b.name}</span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] ${
-                  b.public
-                    ? 'bg-emerald-500/15 text-emerald-300'
-                    : 'bg-slate-500/15 text-slate-400'
+                className={`text-[10px] ${
+                  b.public ? 'text-emerald-300' : 'text-slate-500'
                 }`}
               >
                 {b.public ? 'public' : 'private'}
@@ -863,94 +1089,29 @@ function StorageCard({
   )
 }
 
-function AuthCard({ auth, error }: { auth: AuthInfo; error: string | null }) {
+function EnvCard() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
   return (
-    <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-        <Zap className="w-5 h-5 text-yellow-400" />
-        Сессия
-      </h2>
-      {error ? (
-        <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-          {error}
-        </div>
-      ) : auth === null ? (
-        <div className="text-xs text-slate-500">
-          <Loader2 className="inline mr-1 h-3 w-3 animate-spin" /> Проверяем…
-        </div>
-      ) : auth.isAuthed ? (
-        <div className="space-y-1 text-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-            <span className="text-slate-200">{auth.email || 'без email'}</span>
-          </div>
-          <div className="font-mono text-[10px] text-slate-500 truncate">{auth.userId}</div>
-          {auth.expiresAt && (
-            <div className="text-slate-500">Истекает: {auth.expiresAt}</div>
-          )}
-        </div>
-      ) : (
-        <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Не авторизован (гостевой режим)
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function EnvCard({
-  env,
-}: {
-  env: { url: string; urlExists: boolean; keyExists: boolean }
-}) {
-  return (
-    <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-        <Key className="w-5 h-5 text-amber-400" />
-        Переменные окружения
-      </h2>
-      <div className="space-y-1.5">
-        <EnvRow label="NEXT_PUBLIC_SUPABASE_URL" exists={env.urlExists} value={env.url} />
-        <EnvRow
-          label="NEXT_PUBLIC_SUPABASE_ANON_KEY"
-          exists={env.keyExists}
-          value={env.keyExists ? '••••••••' : ''}
-        />
+    <Card className="border-white/5 bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+        <Key className="h-4 w-4 text-amber-400" />
+        Env (client-side)
       </div>
-      <p className="mt-3 text-[10px] text-slate-500 flex items-center gap-1">
-        <FileText className="h-3 w-3" />
-        Server-side переменные (SERVICE_ROLE, токены) не видны на клиенте — это нормально.
-      </p>
-    </Card>
-  )
-}
-
-function EnvRow({
-  label,
-  exists,
-  value,
-}: {
-  label: string
-  exists: boolean
-  value: string
-}) {
-  return (
-    <div className="rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-mono text-slate-300 truncate">{label}</span>
-        <span
-          className={`text-[10px] px-2 py-0.5 rounded-full ${
-            exists
-              ? 'bg-emerald-500/15 text-emerald-300'
-              : 'bg-rose-500/15 text-rose-300'
-          }`}
-        >
-          {exists ? '✓ найден' : '✗ отсутствует'}
-        </span>
+      <div className="space-y-1 text-xs">
+        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
+          <span className="font-mono text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_URL</span>
+          <span className={url ? 'text-emerald-400' : 'text-rose-400'}>
+            {url ? '✓' : '✗'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
+          <span className="font-mono text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>
+          <span className={key ? 'text-emerald-400' : 'text-rose-400'}>
+            {key ? '✓' : '✗'}
+          </span>
+        </div>
       </div>
-      {value && (
-        <div className="mt-1 text-[10px] font-mono text-slate-500 truncate">{value}</div>
-      )}
-    </div>
+    </Card>
   )
 }
