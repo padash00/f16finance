@@ -237,19 +237,30 @@ async function notifyLeaderAudit(entry: AuditEntry) {
 
 export async function writeAuditLog(client: any, entry: AuditEntry) {
   try {
-    const { error } = await client.from('audit_log').insert([
-      {
-        actor_user_id: entry.actorUserId || null,
-        entity_type: entry.entityType,
-        entity_id: entry.entityId,
-        action: entry.action,
-        payload: entry.payload || null,
-      },
-    ])
+    const row = {
+      actor_user_id: entry.actorUserId || null,
+      entity_type: entry.entityType,
+      entity_id: entry.entityId,
+      action: entry.action,
+      payload: entry.payload || null,
+    }
+    const { error } = await client.from('audit_log').insert([row])
 
     if (error) {
-      console.warn('Audit log write skipped', error?.message || error)
-      return
+      // 23503 — actor_user_id отсутствует в auth.users (юзер удалён
+      // или сессия устаревшая). Перезаписываем анонимно, чтоб сохранить запись.
+      const code = (error as any)?.code
+      if (code === '23503' && row.actor_user_id) {
+        const retryRow = { ...row, actor_user_id: null }
+        const { error: retryErr } = await client.from('audit_log').insert([retryRow])
+        if (retryErr) {
+          console.warn('Audit log retry skipped', retryErr?.message || retryErr)
+          return
+        }
+      } else {
+        console.warn('Audit log write skipped', error?.message || error)
+        return
+      }
     }
 
     await notifyLeaderAudit(entry)
