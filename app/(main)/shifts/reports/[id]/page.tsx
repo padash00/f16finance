@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
-  Coins,
   ExternalLink,
   FileDown,
   Loader2,
@@ -25,7 +24,6 @@ import {
   ShieldAlert,
   Sparkles,
   StickyNote,
-  Wallet,
   X,
   XCircle,
 } from 'lucide-react'
@@ -499,78 +497,23 @@ export default function ShiftReportDetailPage({
           {/* ─── Z-ОТЧЁТ ─────────────────────────────────────────── */}
           <ZReport shift={shift} sales={sales} returns={returns} income={income} clientDebts={clientDebts} incidentsSummary={incidentsSummary} />
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <Card className="border-white/10 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Статус</div>
-              <div className="mt-1 text-lg text-white">
-                {STATUS_LABEL[shift.status] || shift.status}
-              </div>
-              <div className="mt-2 text-xs text-slate-500">
-                Оператор: {shift.operator?.short_name || shift.operator?.full_name || '—'}
-              </div>
+          {(shift.handover_from_shift_id || shift.closer) && (
+            <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-slate-500">
               {shift.closer && (
-                <div className="text-xs text-slate-500">
-                  Закрыл: {shift.closer.short_name || shift.closer.full_name}
-                </div>
+                <span>
+                  Закрыл: <span className="text-slate-300">{shift.closer.short_name || shift.closer.full_name}</span>
+                </span>
               )}
               {shift.handover_from_shift_id && (
                 <Link
                   href={`/shifts/reports/${shift.handover_from_shift_id}`}
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-emerald-300"
+                  className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200"
                 >
-                  Handover ← предыдущая
+                  ← предыдущая смена (handover)
                 </Link>
               )}
-            </Card>
-
-            <Card className="border-white/10 p-4">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
-                <Wallet className="h-3 w-3" /> Касса
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                <div className="text-slate-500">Открытие:</div>
-                <div className="text-right text-slate-200">{fmtMoney(shift.opening_cash)}</div>
-                <div className="text-slate-500">Закрытие:</div>
-                <div className="text-right text-slate-200">{fmtMoney(shift.closing_cash)}</div>
-                <div className="text-slate-500">Безналичный:</div>
-                <div className="text-right text-slate-200">{fmtMoney(shift.closing_kaspi)}</div>
-                {(shift.closing_kaspi_before_midnight || shift.closing_kaspi_after_midnight) && (
-                  <>
-                    <div className="text-xs text-slate-500">  до 00:00</div>
-                    <div className="text-right text-xs text-slate-400">
-                      {fmtMoney(shift.closing_kaspi_before_midnight)}
-                    </div>
-                    <div className="text-xs text-slate-500">  после 00:00</div>
-                    <div className="text-right text-xs text-slate-400">
-                      {fmtMoney(shift.closing_kaspi_after_midnight)}
-                    </div>
-                  </>
-                )}
-              </div>
-            </Card>
-
-            <Card className="border-white/10 p-4">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
-                <Coins className="h-3 w-3" /> Итоги
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                <div className="text-slate-500">Продажи:</div>
-                <div className="text-right text-emerald-300">
-                  {fmtMoney(Number(totals.sales_total || 0))}
-                </div>
-                <div className="text-slate-500">Возвраты:</div>
-                <div className="text-right text-rose-300">
-                  {fmtMoney(Number(totals.returns_total || 0))}
-                </div>
-                <div className="text-slate-500">Net:</div>
-                <div className="text-right text-white">
-                  {fmtMoney(Number(totals.net_total || 0))}
-                </div>
-                <div className="text-slate-500">Чеков:</div>
-                <div className="text-right text-slate-200">{Number(totals.sales_count || 0)}</div>
-              </div>
-            </Card>
-          </div>
+            </div>
+          )}
 
           {(shift.z_report_url || shift.x_report_url || shift.opening_notes || shift.closing_notes) && (
             <Card className="border-white/10 p-4">
@@ -612,6 +555,7 @@ export default function ShiftReportDetailPage({
             </Card>
           )}
 
+          <div className="grid gap-4 md:grid-cols-2">
           <Card className="overflow-hidden border-white/10">
             <div className="border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
               Чек-листы • {runs.length}
@@ -750,6 +694,7 @@ export default function ShiftReportDetailPage({
               )}
             </div>
           </Card>
+          </div>
 
           {topItems.length > 0 && (
             <Card className="overflow-hidden border-white/10">
@@ -804,7 +749,7 @@ export default function ShiftReportDetailPage({
                     <th className="px-3 py-2">Оператор</th>
                     <th className="px-3 py-2">Клиент</th>
                     <th className="px-3 py-2">Оплата</th>
-                    <th className="px-3 py-2 text-right">Cash</th>
+                    <th className="px-3 py-2 text-right">Наличные</th>
                     <th className="px-3 py-2 text-right">Безналичный</th>
                     <th className="px-3 py-2 text-right">Скидка</th>
                     <th className="px-3 py-2 text-right">Итого</th>
@@ -938,7 +883,7 @@ export default function ShiftReportDetailPage({
                     <th className="px-3 py-2">Время</th>
                     <th className="px-3 py-2">Состав</th>
                     <th className="px-3 py-2">Оплата</th>
-                    <th className="px-3 py-2 text-right">Cash</th>
+                    <th className="px-3 py-2 text-right">Наличные</th>
                     <th className="px-3 py-2 text-right">Безналичный</th>
                     <th className="px-3 py-2 text-right">Итого</th>
                     <th className="px-3 py-2">Комментарий</th>
