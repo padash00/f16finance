@@ -129,6 +129,27 @@ export async function bootstrap(config: AppConfig, companyId?: string | null): P
   return data
 }
 
+// ─── Реклама на экране клиента ─────────────────────────────────────────────────
+
+export type AdPlaylistItem = {
+  id: string
+  media_type: 'image' | 'video'
+  url: string
+  title: string | null
+  duration_sec: number | null
+  sort_order: number
+}
+
+export async function fetchAdPlaylist(
+  config: AppConfig,
+  companyId?: string | null,
+): Promise<AdPlaylistItem[]> {
+  const data = await request<{ ok: boolean; data: AdPlaylistItem[] }>(
+    config, 'GET', '/api/point/ad-playlist', undefined, companyHeader(companyId),
+  )
+  return data.data || []
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export async function loginOperator(

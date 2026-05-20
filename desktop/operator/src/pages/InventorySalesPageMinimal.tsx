@@ -173,6 +173,8 @@ export default function InventorySalesPageMinimal({
   // Превью чека после успешной продажи (в iframe внутри программы)
   const [lastReceipt, setLastReceipt] = useState<SaleReceiptPreview | null>(null)
   const [receiptSettings, setReceiptSettings] = useState<PointReceiptSettings | null>(null)
+  const [adPlaylist, setAdPlaylist] = useState<api.AdPlaylistItem[]>([])
+  const [pushTick, setPushTick] = useState(0)
   const receiptIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   // Корректировка оплаты
@@ -233,6 +235,32 @@ export default function InventorySalesPageMinimal({
       cancelled = true
     }
   }, [config, session.company.id])
+
+  // Плейлист рекламы для экрана клиента. Тянем при старте и обновляем
+  // раз в 10 минут (контент меняется из веб-админки нечасто).
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const items = await api.fetchAdPlaylist(config, session.company.id)
+        if (!cancelled) setAdPlaylist(items)
+      } catch {
+        /* реклама не критична — игнорируем сбой */
+      }
+    }
+    void load()
+    const t = setInterval(load, 10 * 60 * 1000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [config, session.company.id])
+
+  // Свежеоткрытое окно клиента просит переслать состояние — форсим ре-пуш.
+  useEffect(() => {
+    const off = window.electron?.customerDisplay?.onRequest?.(() => setPushTick((n) => n + 1))
+    return () => { if (off) off() }
+  }, [])
 
   // Первичная загрузка с кэшем
   useEffect(() => {
@@ -444,10 +472,11 @@ export default function InventorySalesPageMinimal({
                 loyaltyPoints: Number(selectedCustomer.loyalty_points || 0),
               }
             : null,
+          playlist: adPlaylist,
         },
       })
     } catch { /* customerDisplay API может отсутствовать в старых сборках */ }
-  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name, selectedCustomer])
+  }, [cart, subtotal, discountAmount, loyaltyDiscountAmount, finalTotal, paymentMethod, session.company?.name, selectedCustomer, adPlaylist, pushTick])
 
   // Авто-добавление по штрихкоду / Enter
   function handleSearchSubmit() {

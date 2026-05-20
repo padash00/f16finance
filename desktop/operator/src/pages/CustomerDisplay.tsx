@@ -27,6 +27,14 @@ type DisplayCustomer = {
   loyaltyPoints: number
 } | null
 
+type AdItem = {
+  id: string
+  media_type: 'image' | 'video'
+  url: string
+  title: string | null
+  duration_sec: number | null
+}
+
 type DisplayState = {
   companyName?: string | null
   operatorName?: string | null
@@ -37,6 +45,7 @@ type DisplayState = {
   total: number
   paymentMethod?: 'cash' | 'kaspi' | 'mixed' | null
   customer?: DisplayCustomer
+  playlist?: AdItem[]
 }
 
 type DisplayEvent =
@@ -95,6 +104,8 @@ export default function CustomerDisplay() {
   const [paid, setPaid] = useState<{ total: number; paymentLabel: string; lines: CartLine[] } | null>(null)
   const [now, setNow] = useState(() => new Date())
   const [totalPulse, setTotalPulse] = useState(0)
+  // Плейлист держим отдельно, чтобы он переживал события paid/clear
+  const [playlist, setPlaylist] = useState<AdItem[]>([])
   const prevTotalRef = useRef(0)
 
   useEffect(() => {
@@ -107,6 +118,7 @@ export default function CustomerDisplay() {
       const event = raw as DisplayEvent
       if (event?.kind === 'update') {
         setState(event.state)
+        if (Array.isArray(event.state.playlist)) setPlaylist(event.state.playlist)
         setPaid(null)
       } else if (event?.kind === 'paid') {
         setPaid({ total: event.total, paymentLabel: event.paymentLabel, lines: event.lines })
@@ -178,6 +190,10 @@ export default function CustomerDisplay() {
 
   // ─── Idle — корзина пуста ────────────────────────────────────────────────
   if (state.cart.length === 0) {
+    // Если есть реклама — крутим её во весь экран вместо часов
+    if (playlist.length > 0) {
+      return <AdPlayer items={playlist} clock={timeStr} />
+    }
     return (
       <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
         <div className="pointer-events-none absolute -top-40 -right-40 h-[28rem] w-[28rem] animate-pulse rounded-full bg-emerald-500/10 blur-3xl" />
@@ -306,6 +322,84 @@ export default function CustomerDisplay() {
     </div>
   )
 }
+
+// ─── Плеер рекламы (idle) ──────────────────────────────────────────────────
+// Крутит плейлист по кругу: картинки держим duration_sec секунд,
+// видео играем до конца (без звука — иначе браузер блокирует автоплей).
+function AdPlayer({ items, clock }: { items: AdItem[]; clock: string }) {
+  const [index, setIndex] = useState(0)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  // Защита: если индекс вышел за границы (плейлист уменьшился) — сброс
+  const safeIndex = index % items.length
+  const current = items[safeIndex]
+
+  const goNext = () => setIndex((i) => (i + 1) % items.length)
+
+  // Картинки: таймер на duration_sec. Видео: переключаем по onEnded.
+  useEffect(() => {
+    if (!current) return
+    if (current.media_type === 'image') {
+      const sec = current.duration_sec && current.duration_sec > 0 ? current.duration_sec : 8
+      const t = setTimeout(goNext, sec * 1000)
+      return () => clearTimeout(t)
+    }
+    // video — пытаемся запустить воспроизведение
+    const v = videoRef.current
+    if (v) {
+      v.currentTime = 0
+      const p = v.play()
+      if (p && typeof p.catch === 'function') p.catch(() => { /* автоплей мог не стартовать */ })
+    }
+    // подстраховка: если видео зависло/не доиграло — максимум 5 минут на ролик
+    const guard = setTimeout(goNext, 5 * 60 * 1000)
+    return () => clearTimeout(guard)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeIndex, current?.id])
+
+  if (!current) return null
+
+  return (
+    <div className="relative h-screen w-screen overflow-hidden bg-black">
+      {current.media_type === 'video' ? (
+        <video
+          ref={videoRef}
+          key={current.id}
+          src={current.url}
+          className="h-full w-full object-contain"
+          autoPlay
+          muted
+          playsInline
+          onEnded={goNext}
+          onError={goNext}
+        />
+      ) : (
+        <img
+          key={current.id}
+          src={current.url}
+          alt={current.title || ''}
+          className="h-full w-full object-contain cd-ad-fade"
+          onError={goNext}
+        />
+      )}
+
+      {/* Часы в углу — ненавязчиво */}
+      <div className="absolute bottom-5 right-6 rounded-2xl bg-black/40 px-4 py-2 text-2xl font-light tabular-nums text-white/80 backdrop-blur-sm">
+        {clock}
+      </div>
+
+      <style>{adStyle}</style>
+    </div>
+  )
+}
+
+const adStyle = `
+  @keyframes cd-ad-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .cd-ad-fade { animation: cd-ad-fade 600ms ease-out both; }
+`
 
 // Стили анимаций (Web Animations / CSS keyframes). Без сторонних библиотек.
 const checkmarkStyle = `

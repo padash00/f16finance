@@ -73,6 +73,7 @@ declare global {
         close: () => Promise<{ ok: boolean }>
         push: (state: unknown) => void
         onState: (callback: (state: unknown) => void) => () => void
+        onRequest: (callback: () => void) => () => void
       }
     }
   }

@@ -400,6 +400,15 @@ function openCustomerDisplay() {
     customerWindow = null
   })
 
+  // Когда окно клиента загрузилось — просим операторское окно переслать
+  // актуальное состояние (корзина + плейлист рекламы), чтобы свежеоткрытое
+  // окно сразу показало рекламу, а не дефолтные часы.
+  customerWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('customer-display:request')
+    }
+  })
+
   return { ok: true }
 }
 

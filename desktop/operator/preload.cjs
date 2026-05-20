@@ -51,5 +51,10 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.on('customer-display:state', handler)
       return () => ipcRenderer.removeListener('customer-display:state', handler)
     },
+    onRequest: (callback) => {
+      const handler = () => callback()
+      ipcRenderer.on('customer-display:request', handler)
+      return () => ipcRenderer.removeListener('customer-display:request', handler)
+    },
   },
 })
