@@ -14,6 +14,9 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { supabase } from '@/lib/supabaseClient'
+
+const ADS_BUCKET = 'customer-display-ads'
 
 type CompanyOption = { id: string; name: string; code?: string | null }
 
@@ -84,30 +87,50 @@ export default function AdvertisingPage() {
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !companyId) return
+
+    const mediaType: 'image' | 'video' = file.type.startsWith('video/')
+      ? 'video'
+      : file.type.startsWith('image/')
+        ? 'image'
+        : 'image'
+    if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
+      setError('Допустимы только видео и картинки')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
     setUploading(true)
     setError(null)
     try {
-      // 1. загрузка в storage
-      const fd = new FormData()
-      fd.append('file', file)
-      const upRes = await fetch('/api/admin/advertising/upload', { method: 'POST', body: fd })
-      const up = await upRes.json()
-      if (!upRes.ok) throw new Error(up?.error || 'Ошибка загрузки файла')
+      // 1. Грузим файл НАПРЯМУЮ в Supabase Storage из браузера —
+      //    минуя Next.js API (у Vercel лимит тела ~4.5 МБ, видео не пройдёт).
+      const ext = (file.name.split('.').pop() || (mediaType === 'video' ? 'mp4' : 'jpg'))
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+      const suffix = Math.random().toString(36).slice(2, 10)
+      const fileName = `ad_${Date.now()}_${suffix}.${ext || 'bin'}`
 
-      // 2. создание записи
+      const { error: upErr } = await supabase.storage
+        .from(ADS_BUCKET)
+        .upload(fileName, file, { contentType: file.type, upsert: false })
+      if (upErr) throw new Error(upErr.message || 'Не удалось загрузить файл')
+
+      const { data: pub } = supabase.storage.from(ADS_BUCKET).getPublicUrl(fileName)
+
+      // 2. Создаём запись в БД (маленький JSON — лимита нет).
       const createRes = await fetch('/api/admin/advertising', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company_id: companyId,
-          media_type: up.media_type,
-          url: up.url,
+          media_type: mediaType,
+          url: pub.publicUrl,
           title: file.name,
-          duration_sec: up.media_type === 'image' ? 8 : null,
+          duration_sec: mediaType === 'image' ? 8 : null,
         }),
       })
-      const created = await createRes.json()
-      if (!createRes.ok) throw new Error(created?.error || 'Ошибка создания')
+      const created = await createRes.json().catch(() => null)
+      if (!createRes.ok) throw new Error(created?.error || 'Ошибка создания записи')
       setAds((prev) => [...prev, created.data as Ad])
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
