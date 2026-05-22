@@ -174,16 +174,16 @@ function ActBody({ data }: { data: ActData }) {
         <div className="py-6 text-center text-slate-500">Нет данных за неделю</div>
       ) : (
         <>
-          <div className="columns-2 gap-3 [column-fill:balance]">
+          <div className="grid grid-cols-2 gap-3 print:grid-cols-2">
             {data.companies.map((c) => (
-              <div key={c.id} className="mb-2" style={{ breakInside: 'avoid' }}>
+              <div key={c.id} style={{ breakInside: 'avoid' }}>
                 <CompanyAct block={c} />
               </div>
             ))}
           </div>
 
           {t && data.companies.length > 1 && (
-            <div className="border-2 border-black p-2" style={{ pageBreakInside: 'avoid' }}>
+            <div className="mt-3 border-2 border-black p-2" style={{ pageBreakInside: 'avoid' }}>
               <div className="mb-1 text-xs font-bold uppercase">Итого по всем точкам</div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <Big label="Доход" value={t.income.total} />
@@ -219,9 +219,9 @@ function CompanyAct({ block }: { block: CompanyBlock }) {
         </span>
       </div>
 
-      <div className="grid md:grid-cols-2 print:grid-cols-2">
+      <div>
         {/* По дням */}
-        <div className="border-b border-black p-1.5 md:border-b-0 md:border-r print:border-b-0 print:border-r">
+        <div className="border-b border-black p-1.5">
           <div className="text-[10px] font-semibold uppercase">По дням</div>
           <table className="w-full text-[10px]">
             <thead>
