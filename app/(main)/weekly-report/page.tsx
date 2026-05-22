@@ -14,6 +14,7 @@ import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { WeeklyActPrint } from '@/components/admin/weekly-act-print'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
@@ -60,6 +61,7 @@ import {
   Sparkles,
   Receipt,
   BadgeDollarSign,
+  Printer,
 } from 'lucide-react'
 
 import {
@@ -705,6 +707,7 @@ function WeeklyReportContent() {
 
   const [startDate, setStartDate] = useState(currentWeek.start)
   const [endDate, setEndDate] = useState(currentWeek.end)
+  const [showActPrint, setShowActPrint] = useState(false)
 
   // Data hooks — load current week + previous week in one range for comparison
   const prevStart = useMemo(() => addDaysISO(startDate, -7), [startDate])
@@ -1988,6 +1991,16 @@ function WeeklyReportContent() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+                  onClick={() => setShowActPrint(true)}
+                  title="Печатный акт по точкам"
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Печать акт
+                </Button>
+
                 {can('weekly-report.export') && (
                   <div className="relative group">
                     <Button variant="outline" className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10">
@@ -2817,6 +2830,10 @@ function WeeklyReportContent() {
           </div>
 
         </div>
+
+        {showActPrint && (
+          <WeeklyActPrint from={startDate} to={endDate} onClose={() => setShowActPrint(false)} />
+        )}
     </>
   )
 }

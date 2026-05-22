@@ -114,7 +114,6 @@ export const navSections: NavSection[] = [
       { href: '/expense-whitelist', label: 'Доверенные поставщики', icon: Shield, note: 'Вендоры без чеков' },
       { href: '/store/billing', label: 'Долги поставщикам', icon: Wallet, note: 'Открытые долги, оплата, накладные', isNew: true },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
-      { href: '/weekly-act', label: 'Недельный акт', icon: Receipt, note: 'Печатный акт: доход/расход по точкам', badge: 'new', badgeColor: 'green', isNew: true },
     ],
   },
   {
