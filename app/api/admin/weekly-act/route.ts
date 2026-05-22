@@ -127,15 +127,22 @@ export async function GET(request: Request) {
       incomeByCompanyDay.set(cid, dm)
     }
 
-    // ── Расход: по категориям, по дням, построчно ──
+    // ── Расход: по категориям, по дням, построчно, раздельно нал/безнал ──
     const expenseByCompanyCat = new Map<string, Map<string, number>>()
     const expenseByCompanyDay = new Map<string, Map<string, number>>()
     const expenseRowsByCompany = new Map<string, Array<{ date: string; category: string; payee: string; amount: number }>>()
+    const expenseCashByCompany = new Map<string, number>()
+    const expenseKaspiByCompany = new Map<string, number>()
     for (const r of expenses) {
       const cid = String(r.company_id)
       const cat = (r.category || 'Без категории').trim() || 'Без категории'
-      const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
+      const cashE = Number(r.cash_amount || 0)
+      const kaspiE = Number(r.kaspi_amount || 0)
+      const amount = cashE + kaspiE
       const payee = (r.one_off_payee || r.comment || '').toString().trim() || '—'
+
+      expenseCashByCompany.set(cid, (expenseCashByCompany.get(cid) || 0) + cashE)
+      expenseKaspiByCompany.set(cid, (expenseKaspiByCompany.get(cid) || 0) + kaspiE)
 
       const cm = expenseByCompanyCat.get(cid) || new Map<string, number>()
       cm.set(cat, (cm.get(cat) || 0) + amount)
@@ -152,6 +159,8 @@ export async function GET(request: Request) {
 
     const grandIncome = emptyIncome()
     const grandExpenseByCat = new Map<string, number>()
+    let grandExpCash = 0
+    let grandExpKaspi = 0
 
     const companyBlocks = (companies || []).map((c: any) => {
       const cid = String(c.id)
@@ -164,6 +173,13 @@ export async function GET(request: Request) {
         .map(([category, amount]) => ({ category, amount }))
         .sort((a, b) => b.amount - a.amount)
       const expenseTotal = expenseCats.reduce((s, e) => s + e.amount, 0)
+      const expCash = expenseCashByCompany.get(cid) || 0
+      const expKaspi = expenseKaspiByCompany.get(cid) || 0
+
+      // Остаток по типам оплаты: доход − расход
+      const incomeCashless = inc.kaspi + inc.online + inc.card
+      const remainCash = inc.cash - expCash
+      const remainKaspi = incomeCashless - expKaspi
 
       const daily = days.map((d) => {
         const di = incDay.get(d) || 0
@@ -180,6 +196,8 @@ export async function GET(request: Request) {
       grandIncome.online += inc.online
       grandIncome.card += inc.card
       grandIncome.total += inc.total
+      grandExpCash += expCash
+      grandExpKaspi += expKaspi
       for (const e of expenseCats) grandExpenseByCat.set(e.category, (grandExpenseByCat.get(e.category) || 0) + e.amount)
 
       return {
@@ -189,7 +207,11 @@ export async function GET(request: Request) {
         income: inc,
         expenses: expenseCats,
         expense_total: expenseTotal,
+        expense_cash: expCash,
+        expense_kaspi: expKaspi,
         net: inc.total - expenseTotal,
+        remain_cash: remainCash,
+        remain_kaspi: remainKaspi,
         daily,
         expense_rows: expenseRows,
       }
@@ -199,6 +221,7 @@ export async function GET(request: Request) {
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount)
     const grandExpenseTotal = grandExpenseCats.reduce((s, e) => s + e.amount, 0)
+    const grandIncomeCashless = grandIncome.kaspi + grandIncome.online + grandIncome.card
 
     return json({
       ok: true,
@@ -211,7 +234,11 @@ export async function GET(request: Request) {
           income: grandIncome,
           expenses: grandExpenseCats,
           expense_total: grandExpenseTotal,
+          expense_cash: grandExpCash,
+          expense_kaspi: grandExpKaspi,
           net: grandIncome.total - grandExpenseTotal,
+          remain_cash: grandIncome.cash - grandExpCash,
+          remain_kaspi: grandIncomeCashless - grandExpKaspi,
         },
       },
     })

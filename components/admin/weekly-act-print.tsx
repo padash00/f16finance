@@ -15,7 +15,11 @@ type CompanyBlock = {
   income: IncomeAgg
   expenses: ExpenseCat[]
   expense_total: number
+  expense_cash: number
+  expense_kaspi: number
   net: number
+  remain_cash: number
+  remain_kaspi: number
   daily: DailyRow[]
   expense_rows: ExpenseRow[]
 }
@@ -28,7 +32,11 @@ type ActData = {
     income: IncomeAgg
     expenses: ExpenseCat[]
     expense_total: number
+    expense_cash: number
+    expense_kaspi: number
     net: number
+    remain_cash: number
+    remain_kaspi: number
   } | null
 }
 
@@ -178,6 +186,10 @@ function ActBody({ data }: { data: ActData }) {
                 <Big label="Расход" value={t.expense_total} />
                 <Big label="Чистыми" value={t.net} accent />
               </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 border-t border-black pt-2 text-center">
+                <Big label="Осталось нал" value={t.remain_cash} />
+                <Big label="Осталось безнал" value={t.remain_kaspi} />
+              </div>
             </div>
           )}
         </div>
@@ -240,8 +252,20 @@ function CompanyAct({ block }: { block: CompanyBlock }) {
 
           {/* Доход: нал/безнал */}
           <div className="mt-2 flex justify-between text-[10px] text-slate-600">
-            <span>Наличные: {fmt(block.income.cash)} ₸</span>
-            <span>Безнал: {fmt(block.income.kaspi + block.income.online + block.income.card)} ₸</span>
+            <span>Доход нал: {fmt(block.income.cash)} ₸</span>
+            <span>Доход безнал: {fmt(block.income.kaspi + block.income.online + block.income.card)} ₸</span>
+          </div>
+          {/* Осталось по типам оплаты */}
+          <div className="mt-1 border-t border-black pt-1">
+            <div className="text-[11px] font-semibold uppercase">Осталось</div>
+            <div className="flex justify-between text-[11px]">
+              <span>
+                Нал: <b className="font-mono">{block.remain_cash < 0 ? '−' : ''}{fmt(Math.abs(block.remain_cash))} ₸</b>
+              </span>
+              <span>
+                Безнал: <b className="font-mono">{block.remain_kaspi < 0 ? '−' : ''}{fmt(Math.abs(block.remain_kaspi))} ₸</b>
+              </span>
+            </div>
           </div>
         </div>
 
