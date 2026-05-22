@@ -108,7 +108,7 @@ export function WeeklyActPrint({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="w-full max-w-[860px] rounded-2xl bg-white shadow-2xl print:max-w-none print:rounded-none print:shadow-none">
+      <div className="w-full max-w-[1140px] rounded-2xl bg-white shadow-2xl print:max-w-none print:rounded-none print:shadow-none">
         <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 print:hidden">
           <h3 className="text-sm font-semibold text-slate-900">Недельный акт</h3>
           <div className="flex gap-1">
@@ -148,8 +148,8 @@ export function WeeklyActPrint({
             overflow: visible !important;
           }
           @page {
-            size: A4;
-            margin: 10mm;
+            size: A4 landscape;
+            margin: 8mm;
           }
         }
       `}</style>
@@ -173,10 +173,14 @@ function ActBody({ data }: { data: ActData }) {
       {data.companies.length === 0 ? (
         <div className="py-6 text-center text-slate-500">Нет данных за неделю</div>
       ) : (
-        <div className="space-y-2">
-          {data.companies.map((c) => (
-            <CompanyAct key={c.id} block={c} />
-          ))}
+        <>
+          <div className="columns-2 gap-3 [column-fill:balance]">
+            {data.companies.map((c) => (
+              <div key={c.id} className="mb-2" style={{ breakInside: 'avoid' }}>
+                <CompanyAct block={c} />
+              </div>
+            ))}
+          </div>
 
           {t && data.companies.length > 1 && (
             <div className="border-2 border-black p-2" style={{ pageBreakInside: 'avoid' }}>
@@ -192,7 +196,7 @@ function ActBody({ data }: { data: ActData }) {
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <div className="mt-3 flex justify-between text-[10px] text-slate-600">
