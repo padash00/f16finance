@@ -191,6 +191,7 @@ const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 const OWNER_PATHS = [
   '/dashboard',
   '/welcome',
+  '/planner',
   '/point-devices',
   '/income',
   '/income/add',
