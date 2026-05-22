@@ -286,7 +286,8 @@ export default function AdvertisingPage() {
                 {ad.media_type === 'video' ? (
                   <video
                     src={ad.url}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
+                    controls
                     muted
                     playsInline
                     preload="metadata"
