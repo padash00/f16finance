@@ -162,10 +162,10 @@ function ActBody({ data }: { data: ActData }) {
   const t = data.totals
   const year = new Date(data.to + 'T00:00:00').getFullYear()
   return (
-    <div className="text-[12px] leading-tight">
-      <div className="mb-4 border-b-2 border-black pb-2 text-center">
-        <div className="text-lg font-bold tracking-wide">АКТ ЗА НЕДЕЛЮ</div>
-        <div className="mt-0.5 text-xs">
+    <div className="text-[10px] leading-tight">
+      <div className="mb-2 border-b-2 border-black pb-1 text-center">
+        <div className="text-base font-bold tracking-wide">АКТ ЗА НЕДЕЛЮ</div>
+        <div className="text-[10px]">
           {fmtHuman(data.from)} — {fmtHuman(data.to)} {year}
         </div>
       </div>
@@ -173,14 +173,14 @@ function ActBody({ data }: { data: ActData }) {
       {data.companies.length === 0 ? (
         <div className="py-6 text-center text-slate-500">Нет данных за неделю</div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-2">
           {data.companies.map((c) => (
             <CompanyAct key={c.id} block={c} />
           ))}
 
           {t && data.companies.length > 1 && (
-            <div className="border-2 border-black p-3" style={{ pageBreakInside: 'avoid' }}>
-              <div className="mb-2 text-sm font-bold uppercase">Итого по всем точкам</div>
+            <div className="border-2 border-black p-2" style={{ pageBreakInside: 'avoid' }}>
+              <div className="mb-1 text-xs font-bold uppercase">Итого по всем точкам</div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <Big label="Доход" value={t.income.total} />
                 <Big label="Расход" value={t.expense_total} />
@@ -195,7 +195,7 @@ function ActBody({ data }: { data: ActData }) {
         </div>
       )}
 
-      <div className="mt-5 flex justify-between text-[10px] text-slate-600">
+      <div className="mt-3 flex justify-between text-[10px] text-slate-600">
         <span>Сформировано: {new Date().toLocaleString('ru-RU')}</span>
         <span>Orda Control</span>
       </div>
@@ -205,11 +205,11 @@ function ActBody({ data }: { data: ActData }) {
 
 function CompanyAct({ block }: { block: CompanyBlock }) {
   return (
-    <div className="border border-black" style={{ pageBreakInside: 'avoid' }}>
+    <div className="border border-black">
       {/* Заголовок точки + сводка */}
-      <div className="flex items-baseline justify-between border-b border-black bg-slate-100 px-3 py-1.5 print:bg-slate-100">
-        <span className="text-sm font-bold">{block.name}</span>
-        <span className="text-xs">
+      <div className="flex items-baseline justify-between border-b border-black bg-slate-100 px-2 py-0 print:bg-slate-100">
+        <span className="text-xs font-bold">{block.name}</span>
+        <span className="text-[10px]">
           Доход <b>{fmt(block.income.total)}</b> · Расход <b>{fmt(block.expense_total)}</b> · Чистыми{' '}
           <b>{block.net >= 0 ? '' : '−'}{fmt(Math.abs(block.net))}</b> ₸
         </span>
@@ -217,33 +217,33 @@ function CompanyAct({ block }: { block: CompanyBlock }) {
 
       <div className="grid md:grid-cols-2 print:grid-cols-2">
         {/* По дням */}
-        <div className="border-b border-black p-2 md:border-b-0 md:border-r print:border-b-0 print:border-r">
-          <div className="mb-1 text-[11px] font-semibold uppercase">По дням</div>
-          <table className="w-full text-[11px]">
+        <div className="border-b border-black p-1.5 md:border-b-0 md:border-r print:border-b-0 print:border-r">
+          <div className="text-[10px] font-semibold uppercase">По дням</div>
+          <table className="w-full text-[10px]">
             <thead>
               <tr className="border-b border-slate-400 text-left">
-                <th className="py-0.5 font-medium">День</th>
-                <th className="py-0.5 text-right font-medium">Доход</th>
-                <th className="py-0.5 text-right font-medium">Расход</th>
-                <th className="py-0.5 text-right font-medium">Чистыми</th>
+                <th className="py-0 font-medium">День</th>
+                <th className="py-0 text-right font-medium">Доход</th>
+                <th className="py-0 text-right font-medium">Расход</th>
+                <th className="py-0 text-right font-medium">Чистыми</th>
               </tr>
             </thead>
             <tbody>
               {block.daily.map((d) => (
                 <tr key={d.date} className="border-b border-slate-200">
-                  <td className="py-0.5 whitespace-nowrap">{dayShort(d.date)}</td>
-                  <td className="py-0.5 text-right font-mono tabular-nums">{d.income ? fmt(d.income) : '—'}</td>
-                  <td className="py-0.5 text-right font-mono tabular-nums">{d.expense ? fmt(d.expense) : '—'}</td>
-                  <td className="py-0.5 text-right font-mono tabular-nums">
+                  <td className="py-0 whitespace-nowrap">{dayShort(d.date)}</td>
+                  <td className="py-0 text-right font-mono tabular-nums">{d.income ? fmt(d.income) : '—'}</td>
+                  <td className="py-0 text-right font-mono tabular-nums">{d.expense ? fmt(d.expense) : '—'}</td>
+                  <td className="py-0 text-right font-mono tabular-nums">
                     {d.net ? `${d.net < 0 ? '−' : ''}${fmt(Math.abs(d.net))}` : '—'}
                   </td>
                 </tr>
               ))}
               <tr className="border-t-2 border-black font-bold">
-                <td className="py-0.5">Итого</td>
-                <td className="py-0.5 text-right font-mono tabular-nums">{fmt(block.income.total)}</td>
-                <td className="py-0.5 text-right font-mono tabular-nums">{fmt(block.expense_total)}</td>
-                <td className="py-0.5 text-right font-mono tabular-nums">
+                <td className="py-0">Итого</td>
+                <td className="py-0 text-right font-mono tabular-nums">{fmt(block.income.total)}</td>
+                <td className="py-0 text-right font-mono tabular-nums">{fmt(block.expense_total)}</td>
+                <td className="py-0 text-right font-mono tabular-nums">
                   {block.net < 0 ? '−' : ''}{fmt(Math.abs(block.net))}
                 </td>
               </tr>
@@ -278,19 +278,19 @@ function CompanyAct({ block }: { block: CompanyBlock }) {
             <table className="w-full text-[11px]">
               <thead>
                 <tr className="border-b border-slate-400 text-left">
-                  <th className="py-0.5 font-medium">Дата</th>
-                  <th className="py-0.5 font-medium">Категория</th>
-                  <th className="py-0.5 font-medium">Кому / за что</th>
-                  <th className="py-0.5 text-right font-medium">Сумма</th>
+                  <th className="py-0 font-medium">Дата</th>
+                  <th className="py-0 font-medium">Категория</th>
+                  <th className="py-0 font-medium">Кому / за что</th>
+                  <th className="py-0 text-right font-medium">Сумма</th>
                 </tr>
               </thead>
               <tbody>
                 {block.expense_rows.map((e, i) => (
                   <tr key={i} className="border-b border-slate-200 align-top">
-                    <td className="py-0.5 whitespace-nowrap">{e.date.slice(8, 10)}.{e.date.slice(5, 7)}</td>
-                    <td className="py-0.5">{e.category}</td>
-                    <td className="py-0.5">{e.payee}</td>
-                    <td className="py-0.5 text-right font-mono tabular-nums">{fmt(e.amount)}</td>
+                    <td className="py-0 whitespace-nowrap">{e.date.slice(8, 10)}.{e.date.slice(5, 7)}</td>
+                    <td className="py-0">{e.category}</td>
+                    <td className="py-0">{e.payee}</td>
+                    <td className="py-0 text-right font-mono tabular-nums">{fmt(e.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -304,9 +304,9 @@ function CompanyAct({ block }: { block: CompanyBlock }) {
 
 function Big({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
   return (
-    <div className={accent ? 'rounded border border-black py-1' : 'py-1'}>
-      <div className="text-[10px] uppercase text-slate-600">{label}</div>
-      <div className="font-mono text-base font-bold tabular-nums">
+    <div className={accent ? 'rounded border border-black py-0.5' : 'py-0.5'}>
+      <div className="text-[9px] uppercase text-slate-600">{label}</div>
+      <div className="font-mono text-sm font-bold tabular-nums">
         {value < 0 ? '−' : ''}
         {fmt(Math.abs(value))} ₸
       </div>
