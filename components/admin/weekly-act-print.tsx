@@ -273,30 +273,24 @@ function CompanyAct({ block }: { block: CompanyBlock }) {
           </div>
         </div>
 
-        {/* Расходы построчно */}
-        <div className="p-2">
-          <div className="mb-1 text-[11px] font-semibold uppercase">Расходы ({block.expense_rows.length})</div>
-          {block.expense_rows.length === 0 ? (
-            <div className="text-[11px] text-slate-500">Расходов нет</div>
+        {/* Расходы по категориям */}
+        <div className="p-1.5">
+          <div className="text-[10px] font-semibold uppercase">Расходы по категориям</div>
+          {block.expenses.length === 0 ? (
+            <div className="text-[10px] text-slate-500">Расходов нет</div>
           ) : (
-            <table className="w-full text-[11px]">
-              <thead>
-                <tr className="border-b border-slate-400 text-left">
-                  <th className="py-0 font-medium">Дата</th>
-                  <th className="py-0 font-medium">Категория</th>
-                  <th className="py-0 font-medium">Кому / за что</th>
-                  <th className="py-0 text-right font-medium">Сумма</th>
-                </tr>
-              </thead>
+            <table className="w-full text-[10px]">
               <tbody>
-                {block.expense_rows.map((e, i) => (
-                  <tr key={i} className="border-b border-slate-200 align-top">
-                    <td className="py-0 whitespace-nowrap">{e.date.slice(8, 10)}.{e.date.slice(5, 7)}</td>
+                {block.expenses.map((e, i) => (
+                  <tr key={i} className="border-b border-slate-200">
                     <td className="py-0">{e.category}</td>
-                    <td className="py-0">{e.payee}</td>
                     <td className="py-0 text-right font-mono tabular-nums">{fmt(e.amount)}</td>
                   </tr>
                 ))}
+                <tr className="border-t-2 border-black font-bold">
+                  <td className="py-0">Всего расход</td>
+                  <td className="py-0 text-right font-mono tabular-nums">{fmt(block.expense_total)}</td>
+                </tr>
               </tbody>
             </table>
           )}
