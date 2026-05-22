@@ -18,6 +18,19 @@ function isDate(s: string | null): s is string {
   return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
 }
 
+function dateRange(from: string, to: string): string[] {
+  const out: string[] = []
+  const d = new Date(from + 'T00:00:00')
+  const end = new Date(to + 'T00:00:00')
+  while (d <= end && out.length < 60) {
+    out.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    )
+    d.setDate(d.getDate() + 1)
+  }
+  return out
+}
+
 // Постранично собираем все строки (Supabase отдаёт максимум ~1000 за раз).
 async function fetchAll(makeQuery: (from: number, to: number) => any): Promise<any[]> {
   const PAGE = 1000
@@ -50,26 +63,26 @@ export async function GET(request: Request) {
     const to = url.searchParams.get('to')
     if (!isDate(from) || !isDate(to)) return json({ error: 'from-to-required' }, 400)
 
+    const days = dateRange(from, to)
+
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
     if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length === 0) {
-      return json({ ok: true, data: { from, to, companies: [], totals: null } })
+      return json({ ok: true, data: { from, to, days, companies: [], totals: null } })
     }
 
-    // Компании
     let companiesQ = supabase.from('companies').select('id, name, code').order('name')
     if (companyScope.allowedCompanyIds) companiesQ = companiesQ.in('id', companyScope.allowedCompanyIds)
     const { data: companies, error: compErr } = await companiesQ
     if (compErr) throw compErr
 
-    // Доходы за период
     const incomes = await fetchAll((f, t) => {
       let q = supabase
         .from('incomes')
-        .select('company_id, cash_amount, kaspi_amount, online_amount, card_amount')
+        .select('company_id, date, cash_amount, kaspi_amount, online_amount, card_amount')
         .gte('date', from)
         .lte('date', to)
         .range(f, t)
@@ -77,68 +90,97 @@ export async function GET(request: Request) {
       return q
     })
 
-    // Расходы за период (без отклонённых)
     const expenses = await fetchAll((f, t) => {
       let q = supabase
         .from('expenses')
-        .select('company_id, category, cash_amount, kaspi_amount, status')
+        .select('company_id, date, category, cash_amount, kaspi_amount, comment, one_off_payee, status')
         .gte('date', from)
         .lte('date', to)
         .neq('status', 'declined')
+        .order('date', { ascending: true })
         .range(f, t)
       if (companyScope.allowedCompanyIds) q = q.in('company_id', companyScope.allowedCompanyIds)
       return q
     })
 
-    // Агрегация по компании
+    // ── Доход: итог по компании + по дням ──
     const incomeByCompany = new Map<string, IncomeAgg>()
+    const incomeByCompanyDay = new Map<string, Map<string, number>>() // cid -> date -> total
     for (const r of incomes) {
       const cid = String(r.company_id)
-      const agg = incomeByCompany.get(cid) || emptyIncome()
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const online = Number(r.online_amount || 0)
       const card = Number(r.card_amount || 0)
+      const total = cash + kaspi + online + card
+
+      const agg = incomeByCompany.get(cid) || emptyIncome()
       agg.cash += cash
       agg.kaspi += kaspi
       agg.online += online
       agg.card += card
-      agg.total += cash + kaspi + online + card
+      agg.total += total
       incomeByCompany.set(cid, agg)
+
+      const dm = incomeByCompanyDay.get(cid) || new Map<string, number>()
+      dm.set(r.date, (dm.get(r.date) || 0) + total)
+      incomeByCompanyDay.set(cid, dm)
     }
 
-    // category -> сумма, по компании
-    const expenseByCompany = new Map<string, Map<string, number>>()
+    // ── Расход: по категориям, по дням, построчно ──
+    const expenseByCompanyCat = new Map<string, Map<string, number>>()
+    const expenseByCompanyDay = new Map<string, Map<string, number>>()
+    const expenseRowsByCompany = new Map<string, Array<{ date: string; category: string; payee: string; amount: number }>>()
     for (const r of expenses) {
       const cid = String(r.company_id)
       const cat = (r.category || 'Без категории').trim() || 'Без категории'
       const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
-      const m = expenseByCompany.get(cid) || new Map<string, number>()
-      m.set(cat, (m.get(cat) || 0) + amount)
-      expenseByCompany.set(cid, m)
+      const payee = (r.one_off_payee || r.comment || '').toString().trim() || '—'
+
+      const cm = expenseByCompanyCat.get(cid) || new Map<string, number>()
+      cm.set(cat, (cm.get(cat) || 0) + amount)
+      expenseByCompanyCat.set(cid, cm)
+
+      const dm = expenseByCompanyDay.get(cid) || new Map<string, number>()
+      dm.set(r.date, (dm.get(r.date) || 0) + amount)
+      expenseByCompanyDay.set(cid, dm)
+
+      const list = expenseRowsByCompany.get(cid) || []
+      list.push({ date: r.date, category: cat, payee, amount })
+      expenseRowsByCompany.set(cid, list)
     }
 
-    // Сборка по компаниям
     const grandIncome = emptyIncome()
     const grandExpenseByCat = new Map<string, number>()
 
     const companyBlocks = (companies || []).map((c: any) => {
-      const inc = incomeByCompany.get(String(c.id)) || emptyIncome()
-      const catMap = expenseByCompany.get(String(c.id)) || new Map<string, number>()
+      const cid = String(c.id)
+      const inc = incomeByCompany.get(cid) || emptyIncome()
+      const catMap = expenseByCompanyCat.get(cid) || new Map<string, number>()
+      const incDay = incomeByCompanyDay.get(cid) || new Map<string, number>()
+      const expDay = expenseByCompanyDay.get(cid) || new Map<string, number>()
+
       const expenseCats = Array.from(catMap.entries())
         .map(([category, amount]) => ({ category, amount }))
         .sort((a, b) => b.amount - a.amount)
       const expenseTotal = expenseCats.reduce((s, e) => s + e.amount, 0)
 
-      // в общий итог
+      const daily = days.map((d) => {
+        const di = incDay.get(d) || 0
+        const de = expDay.get(d) || 0
+        return { date: d, income: di, expense: de, net: di - de }
+      })
+
+      const expenseRows = (expenseRowsByCompany.get(cid) || []).sort((a, b) =>
+        a.date < b.date ? -1 : a.date > b.date ? 1 : b.amount - a.amount,
+      )
+
       grandIncome.cash += inc.cash
       grandIncome.kaspi += inc.kaspi
       grandIncome.online += inc.online
       grandIncome.card += inc.card
       grandIncome.total += inc.total
-      for (const e of expenseCats) {
-        grandExpenseByCat.set(e.category, (grandExpenseByCat.get(e.category) || 0) + e.amount)
-      }
+      for (const e of expenseCats) grandExpenseByCat.set(e.category, (grandExpenseByCat.get(e.category) || 0) + e.amount)
 
       return {
         id: c.id,
@@ -148,6 +190,8 @@ export async function GET(request: Request) {
         expenses: expenseCats,
         expense_total: expenseTotal,
         net: inc.total - expenseTotal,
+        daily,
+        expense_rows: expenseRows,
       }
     })
 
@@ -161,6 +205,7 @@ export async function GET(request: Request) {
       data: {
         from,
         to,
+        days,
         companies: companyBlocks,
         totals: {
           income: grandIncome,
