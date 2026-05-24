@@ -1835,6 +1835,18 @@ export async function POST(req: Request) {
         .eq('id', body.paymentId)
       if (voidPayError) throw voidPayError
 
+      // Снимаем lock до пересчёта: ensureSalaryWeekSnapshot для залоченной
+      // недели возвращает зафиксированные значения и не обновляет
+      // paid_amount/status. Если после пересчёта неделя снова закроется —
+      // snapshot выставит locked_at заново.
+      if (payment.salary_week_id) {
+        const { error: unlockError } = await supabase
+          .from('operator_salary_weeks')
+          .update({ locked_at: null })
+          .eq('id', String(payment.salary_week_id))
+        if (unlockError) throw unlockError
+      }
+
       const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null, pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null) })
 
       await writeAuditLog(supabase, {
@@ -1863,7 +1875,7 @@ export async function POST(req: Request) {
 
       const { data: adjustment, error: adjFetchError } = await supabase
         .from('operator_salary_adjustments')
-        .select('id, operator_id, status, kind, linked_expense_id, amount')
+        .select('id, operator_id, status, kind, linked_expense_id, amount, salary_week_id')
         .eq('id', body.adjustmentId)
         .maybeSingle()
 
@@ -1886,6 +1898,17 @@ export async function POST(req: Request) {
         })
         .eq('id', body.adjustmentId)
       if (voidAdjError) throw voidAdjError
+
+      // Снимаем lock с недели, к которой была привязана корректировка, чтобы
+      // пересчёт snapshot отработал заново. Если останется paid — snapshot
+      // выставит lock сам.
+      if (adjustment.salary_week_id) {
+        const { error: unlockError } = await supabase
+          .from('operator_salary_weeks')
+          .update({ locked_at: null })
+          .eq('id', String(adjustment.salary_week_id))
+        if (unlockError) throw unlockError
+      }
 
       const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null, pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null) })
 
