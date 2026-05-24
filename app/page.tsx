@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Fragment } from 'react'
 import Link from 'next/link'
 import {
   Activity,
@@ -258,30 +259,76 @@ const audiences = [
 
 // ─────────────────────── СРАВНЕНИЕ ───────────────────────
 
-const comparisons = [
+type ComparisonColumnKey = 'excel' | 'oneC' | 'poster' | 'orda'
+const comparisonColumns: Array<{
+  key: ComparisonColumnKey
+  label: string
+  subtitle: string
+  highlight?: boolean
+}> = [
+  { key: 'excel', label: 'Excel', subtitle: 'Таблицы' },
+  { key: 'oneC', label: '1С', subtitle: 'Бухучёт и товар' },
+  { key: 'poster', label: 'Poster / Wipon', subtitle: 'POS и продажи' },
+  { key: 'orda', label: 'Orda Control', subtitle: 'Управленческая платформа', highlight: true },
+]
+
+const comparisonRows: Array<{
+  criterion: string
+  values: { excel: string; oneC: string; poster: string; orda: string }
+}> = [
   {
-    name: 'Excel',
-    text:
-      'Подходит для простых таблиц, но быстро превращается в ручной хаос: ошибки, разные версии файлов, нет автоматических отчётов и контроля смен.',
-    tone: 'muted' as const,
+    criterion: 'Финансы в реальном времени',
+    values: {
+      excel: 'Нужно строить вручную',
+      oneC: 'Задним числом, после закрытия месяца',
+      poster: 'Частично, по продажам',
+      orda: 'Прибыль и маржа каждый день',
+    },
   },
   {
-    name: '1С',
-    text:
-      'Мощная система для бухгалтерского и товарного учёта, но часто сложная, тяжёлая и требует настройки под каждую задачу.',
-    tone: 'muted' as const,
+    criterion: 'Смены и сверка кассы',
+    values: {
+      excel: 'Нет',
+      oneC: 'Сложно настроить',
+      poster: 'Базово',
+      orda: 'Авто-сверка нал/безнал/онлайн',
+    },
   },
   {
-    name: 'Poster / Wipon',
-    text:
-      'Хороши для продаж и отдельных ниш, но не всегда дают владельцу полную управленческую картину: прибыль, смены, расходы, зарплаты, AI-анализ и Telegram-контроль в одном месте.',
-    tone: 'muted' as const,
+    criterion: 'Расчёт зарплат',
+    values: {
+      excel: 'Руками',
+      oneC: 'Через настройку правил',
+      poster: 'Через интеграции',
+      orda: 'Авторасчёт: ставка, %, KPI',
+    },
   },
   {
-    name: 'Orda Control',
-    text:
-      'Создан для ежедневного контроля бизнеса: продажи, смены, финансы, склад, зарплаты, Telegram-отчёты и AI-аналитика в одной системе.',
-    tone: 'highlight' as const,
+    criterion: 'AI-анализ показателей',
+    values: {
+      excel: '—',
+      oneC: '—',
+      poster: 'Минимально',
+      orda: 'Объясняет тренды и аномалии',
+    },
+  },
+  {
+    criterion: 'Telegram-отчёты',
+    values: {
+      excel: '—',
+      oneC: '—',
+      poster: '—',
+      orda: 'После каждой смены',
+    },
+  },
+  {
+    criterion: 'Склад / витрина',
+    values: {
+      excel: 'Ручной учёт',
+      oneC: 'Через товарный модуль',
+      poster: 'Базовый учёт',
+      orda: 'Раздельные балансы + заявки',
+    },
   },
 ]
 
@@ -290,6 +337,7 @@ const comparisons = [
 const pricingPlans = [
   {
     name: 'Start',
+    levelLabel: 'Базовый уровень',
     description: 'Для владельцев, которым нужно видеть основные финансовые показатели.',
     features: [
       'Финансовый дашборд',
@@ -303,6 +351,7 @@ const pricingPlans = [
   },
   {
     name: 'Business',
+    levelLabel: 'Оптимальный',
     description: 'Для бизнеса, где есть сотрудники, смены и ежедневная операционная работа.',
     features: [
       'Всё из Start',
@@ -319,6 +368,7 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
+    levelLabel: 'Продвинутый',
     description: 'Для бизнеса, которому нужна полноценная система продаж, склада и автоматизации.',
     features: [
       'Всё из Business',
@@ -335,6 +385,7 @@ const pricingPlans = [
   },
   {
     name: 'Enterprise',
+    levelLabel: 'Индивидуальный',
     description: 'Для сетей, нескольких филиалов и бизнеса с индивидуальными процессами.',
     features: [
       'Несколько компаний и точек',
@@ -812,31 +863,108 @@ export default async function MarketingHomePage() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {comparisons.map((item) => (
+        {/* Desktop / planshet — таблица */}
+        <div className="mt-12 hidden overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/60 shadow-[0_18px_48px_rgba(0,0,0,0.16)] lg:block">
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: `minmax(220px,1.1fr) repeat(${comparisonColumns.length}, minmax(160px,1fr))` }}
+          >
+            {/* Заголовок */}
+            <div className="border-b border-white/[0.06] bg-white/[0.02] px-6 py-5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                Критерий
+              </span>
+            </div>
+            {comparisonColumns.map((col) => (
+              <div
+                key={col.key}
+                className={
+                  'border-b border-l border-white/[0.06] px-6 py-5 ' +
+                  (col.highlight ? 'bg-[var(--color-accent-gold)]/[0.08]' : 'bg-white/[0.02]')
+                }
+              >
+                <div
+                  className={
+                    'font-display text-[18px] font-bold tracking-[-0.01em] ' +
+                    (col.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-primary)]')
+                  }
+                >
+                  {col.label}
+                </div>
+                <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">{col.subtitle}</div>
+              </div>
+            ))}
+
+            {/* Строки */}
+            {comparisonRows.map((row, rowIdx) => (
+              <Fragment key={row.criterion}>
+                <div
+                  className={
+                    'border-white/[0.06] px-6 py-5 text-[14px] font-semibold text-[var(--color-text-primary)] ' +
+                    (rowIdx < comparisonRows.length - 1 ? 'border-b' : '')
+                  }
+                >
+                  {row.criterion}
+                </div>
+                {comparisonColumns.map((col) => (
+                  <div
+                    key={col.key}
+                    className={
+                      'border-l px-6 py-5 text-[14px] leading-[1.55] ' +
+                      (rowIdx < comparisonRows.length - 1 ? 'border-b ' : '') +
+                      'border-white/[0.06] ' +
+                      (col.highlight
+                        ? 'bg-[var(--color-accent-gold)]/[0.04] text-[var(--color-text-primary)]'
+                        : 'text-[var(--color-text-secondary)]')
+                    }
+                  >
+                    {row.values[col.key]}
+                  </div>
+                ))}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* Mobile — стек карточек по инструменту */}
+        <div className="mt-12 grid gap-4 lg:hidden">
+          {comparisonColumns.map((col) => (
             <Card
-              key={item.name}
+              key={col.key}
               className={
-                item.tone === 'highlight'
-                  ? 'rounded-[24px] border-[var(--color-accent-gold)]/40 bg-[linear-gradient(135deg,rgba(245,184,75,0.18),rgba(245,184,75,0.04))] p-7 shadow-[0_24px_60px_rgba(245,184,75,0.18)]'
-                  : 'rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-7 shadow-[0_18px_48px_rgba(0,0,0,0.16)]'
+                col.highlight
+                  ? 'rounded-[24px] border-[var(--color-accent-gold)]/40 bg-[linear-gradient(135deg,rgba(245,184,75,0.14),rgba(245,184,75,0.03))] p-6 shadow-[0_18px_48px_rgba(245,184,75,0.14)]'
+                  : 'rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.14)]'
               }
             >
-              <div className="flex items-center gap-2.5">
-                <h3
-                  className={`font-display text-[20px] font-bold tracking-[-0.02em] ${
-                    item.tone === 'highlight' ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-primary)]'
-                  }`}
+              <div className="flex items-baseline justify-between gap-3">
+                <div
+                  className={
+                    'font-display text-[20px] font-bold tracking-[-0.02em] ' +
+                    (col.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-primary)]')
+                  }
                 >
-                  {item.name}
-                </h3>
-                {item.tone === 'highlight' ? (
-                  <span className="rounded-full border border-[var(--color-accent-gold)]/30 bg-[var(--color-accent-gold)]/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-accent-gold)]">
-                    Выбор
-                  </span>
-                ) : null}
+                  {col.label}
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">{col.subtitle}</div>
               </div>
-              <p className="mt-3.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">{item.text}</p>
+              <dl className="mt-5 grid gap-3 border-t border-white/[0.06] pt-4">
+                {comparisonRows.map((row) => (
+                  <div key={row.criterion} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
+                    <dt className="text-[12px] uppercase tracking-[0.06em] text-[var(--color-text-muted)]">
+                      {row.criterion}
+                    </dt>
+                    <dd
+                      className={
+                        'text-right text-[13px] leading-[1.5] ' +
+                        (col.highlight ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]')
+                      }
+                    >
+                      {row.values[col.key]}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </Card>
           ))}
         </div>
@@ -870,7 +998,15 @@ export default async function MarketingHomePage() {
                   {plan.badge}
                 </span>
               ) : null}
-              <div className="font-display text-[26px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
+              <div
+                className={
+                  'text-[11px] font-semibold uppercase tracking-[0.14em] ' +
+                  (plan.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-muted)]')
+                }
+              >
+                {plan.levelLabel}
+              </div>
+              <div className="mt-2 font-display text-[26px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
                 {plan.name}
               </div>
               <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">

@@ -41,5 +41,5 @@ export const LEGAL_ENTITY = {
   kbe: '17',
 } as const
 
-export const PRODUCT_NAME = 'OrdaOps'
+export const PRODUCT_NAME = 'Orda Control'
 export const PRODUCT_SITE = 'ordaops.kz'
