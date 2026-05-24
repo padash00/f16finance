@@ -1709,7 +1709,12 @@ export async function POST(req: Request) {
           .insert([
             {
               operator_id: body.payload.operator_id,
-              date: paymentDate,
+              // ВАЖНО: дата = первый день следующей недели, потому что
+              // listOperatorSalaryData фильтрует adjustments по полю date
+              // (BETWEEN week_start AND week_end), а не по salary_week_id.
+              // Если поставить paymentDate (сегодня) — корректировка попадёт
+              // в окно текущей недели и вычтется из её net.
+              date: nextWeekStart,
               amount: overpayment,
               kind: 'advance',
               comment: advanceComment,
