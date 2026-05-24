@@ -196,7 +196,7 @@ export async function proxy(request: NextRequest) {
 
   // Маркетинговые/юридические публичные страницы доступны всем,
   // в т.ч. залогиненным операторам/клиентам — не редиректим в /unauthorized
-  const PUBLIC_MARKETING = ['/offer', '/privacy', '/club-management-system', '/operator-salary-system', '/profit-and-loss-ebitda', '/point-terminal']
+  const PUBLIC_MARKETING = ['/offer', '/privacy', '/terms', '/sla', '/cookies', '/club-management-system', '/operator-salary-system', '/profit-and-loss-ebitda', '/point-terminal']
   if (PUBLIC_MARKETING.some((p) => requestedPath === p || requestedPath.startsWith(p + '/'))) {
     return response
   }
