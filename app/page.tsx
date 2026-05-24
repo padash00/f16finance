@@ -63,6 +63,15 @@ const leadClass =
 
 const sectionClass = 'mx-auto max-w-[1600px] px-6 py-20 sm:px-10 lg:py-28 lg:px-14'
 
+// Полоса с тёмным фоном для чередования секций. Добавляет тонкую золотую
+// линию-разделитель сверху для визуального ритма между блоками.
+const bandDimClass =
+  'relative bg-[#070d1f]/70 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-[var(--color-accent-gold)]/30 before:to-transparent before:content-[""]'
+
+// Прозрачная полоса с такой же золотой линией — для секций на основном фоне.
+const bandLightClass =
+  'relative before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/[0.08] before:to-transparent before:content-[""]'
+
 // ─────────────────────── HERO ───────────────────────
 
 const heroBadges = [
@@ -630,6 +639,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ────────── 2. ЧТО ТАКОЕ ────────── */}
+      <div className={bandDimClass}>
       <section className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Что такое {PRODUCT}</div>
@@ -664,8 +674,10 @@ export default async function MarketingHomePage() {
           })}
         </div>
       </section>
+      </div>
 
       {/* ────────── 3. ПРОБЛЕМЫ ────────── */}
+      <div className={bandLightClass}>
       <section className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Знакомая ситуация?</div>
@@ -697,8 +709,10 @@ export default async function MarketingHomePage() {
           ))}
         </div>
       </section>
+      </div>
 
       {/* ────────── 4. ЧЕТЫРЕ СТОЛПА ────────── */}
+      <div className={bandDimClass}>
       <section id="features" className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Что внутри {PRODUCT}</div>
@@ -743,8 +757,10 @@ export default async function MarketingHomePage() {
           })}
         </div>
       </section>
+      </div>
 
       {/* ────────── 5. AI ────────── */}
+      <div className={bandLightClass}>
       <section className={sectionClass}>
         <Card className="overflow-hidden rounded-[28px] border-[var(--color-accent-gold)]/20 bg-[linear-gradient(135deg,rgba(245,184,75,0.10),rgba(13,22,38,0.6))] p-10 shadow-[0_30px_80px_rgba(0,0,0,0.36)] sm:p-12">
           <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
@@ -800,8 +816,10 @@ export default async function MarketingHomePage() {
           </div>
         </Card>
       </section>
+      </div>
 
       {/* ────────── 6. ДЛЯ КОГО ────────── */}
+      <div className={bandDimClass}>
       <section className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Для кого подходит</div>
@@ -849,8 +867,10 @@ export default async function MarketingHomePage() {
           })}
         </div>
       </section>
+      </div>
 
       {/* ────────── 7. СРАВНЕНИЕ ────────── */}
+      <div className={bandLightClass}>
       <section className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Сравнение</div>
@@ -969,8 +989,10 @@ export default async function MarketingHomePage() {
           ))}
         </div>
       </section>
+      </div>
 
       {/* ────────── 8. ТАРИФЫ ────────── */}
+      <div className={bandDimClass}>
       <section id="pricing" className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Тарифы</div>
@@ -1057,8 +1079,10 @@ export default async function MarketingHomePage() {
           </div>
         </div>
       </section>
+      </div>
 
       {/* ────────── 9. ОТДЕЛЬНАЯ СТРАНИЦА ДЛЯ КЛУБОВ ────────── */}
+      <div className={bandLightClass}>
       <section className={sectionClass}>
         <Card className="rounded-[28px] border-[var(--color-accent-teal)]/20 bg-[linear-gradient(135deg,rgba(16,214,194,0.08),rgba(13,22,38,0.6))] p-10 shadow-[0_24px_70px_rgba(0,0,0,0.30)] sm:p-12">
           <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -1089,8 +1113,10 @@ export default async function MarketingHomePage() {
           </div>
         </Card>
       </section>
+      </div>
 
       {/* ────────── FAQ ────────── */}
+      <div className={bandDimClass}>
       <section className={sectionClass}>
         <div className="max-w-[760px]">
           <div className={eyebrowClass}>Частые вопросы</div>
@@ -1115,8 +1141,10 @@ export default async function MarketingHomePage() {
           ))}
         </div>
       </section>
+      </div>
 
       {/* ────────── 10. ФИНАЛЬНЫЙ CTA ────────── */}
+      <div className={bandLightClass}>
       <section
         id="contact"
         className="mx-auto max-w-[1600px] px-6 pb-28 pt-12 sm:px-10 lg:px-12"
@@ -1158,6 +1186,7 @@ export default async function MarketingHomePage() {
           </div>
         </Card>
       </section>
+      </div>
 
       {/* ────────── ФУТЕР ────────── */}
       <footer className="mx-auto max-w-[1600px] px-6 pb-12 sm:px-10 lg:px-12">
