@@ -131,11 +131,16 @@ export async function GET(req: Request) {
               return !companyId || allowedCompanyIds.includes(companyId)
             })
           : historyRes.data || [],
-        careerLinks: (careerLinksRes.data || []).map((item: any) => ({
-          ...item,
-          operator: Array.isArray(item.operator) ? item.operator[0] || null : item.operator || null,
-          staff: Array.isArray(item.staff) ? item.staff[0] || null : item.staff || null,
-        })),
+        careerLinks: (careerLinksRes.data || [])
+          .map((item: any) => ({
+            ...item,
+            operator: Array.isArray(item.operator) ? item.operator[0] || null : item.operator || null,
+            staff: Array.isArray(item.staff) ? item.staff[0] || null : item.staff || null,
+          }))
+          // Скрываем связи к уволенному staff: запись в operator_staff_links
+          // остаётся для истории, но в дереве структуры руководитель должен
+          // пропасть сразу после dismiss.
+          .filter((item: any) => item.staff && item.staff.is_active !== false),
       },
     })
   } catch (error: any) {

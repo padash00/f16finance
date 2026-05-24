@@ -111,6 +111,28 @@ export async function POST(req: Request) {
           .eq('staff_id', id)
       }
 
+      // Каскад на operator_staff_links: уволенный staff не должен висеть
+      // как руководитель в карточках операторов и в дереве структуры.
+      // Дополнительно демотируем гибридов (operator с is_admin_staff=true),
+      // потому что они отображались в зарплате как админ.сотрудники именно
+      // через эту связь.
+      const { data: linkedOperatorRows } = await supabase
+        .from('operator_staff_links')
+        .select('operator_id')
+        .eq('staff_id', id)
+      const linkedOperatorIds = (linkedOperatorRows || [])
+        .map((row: any) => String(row?.operator_id || ''))
+        .filter(Boolean)
+
+      await supabase.from('operator_staff_links').delete().eq('staff_id', id)
+
+      if (linkedOperatorIds.length > 0) {
+        await supabase
+          .from('operators')
+          .update({ is_admin_staff: false })
+          .in('id', linkedOperatorIds)
+      }
+
       // Полная блокировка: ban + завершение всех сессий, чтобы уволенный
       // не мог зайти даже с правильным паролем.
       const staffUserId = (staffRow as any)?.user_id
@@ -167,6 +189,15 @@ export async function POST(req: Request) {
         .from('operator_company_assignments')
         .update({ is_active: false })
         .eq('operator_id', id)
+
+      // Разрываем связи operator↔staff: иначе уволенный operator-гибрид
+      // продолжит висеть в дереве /structure через careerLinks. И снимаем
+      // флаг is_admin_staff чтобы не попадал в админ.сотрудников зарплаты.
+      await supabase.from('operator_staff_links').delete().eq('operator_id', id)
+      await supabase
+        .from('operators')
+        .update({ is_admin_staff: false })
+        .eq('id', id)
 
       // Полная блокировка оператора: ban + signOut
       const opUserId = (opAuthRow as any)?.user_id
