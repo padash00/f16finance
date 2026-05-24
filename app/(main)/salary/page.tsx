@@ -391,6 +391,7 @@ export default function SalaryPage() {
   const [payCash, setPayCash] = useState('')
   const [payKaspi, setPayKaspi] = useState('')
   const [payComment, setPayComment] = useState('')
+  const [payAllowOverpayment, setPayAllowOverpayment] = useState(false)
   const [paySaving, setPaySaving] = useState(false)
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null)
 
@@ -428,7 +429,7 @@ export default function SalaryPage() {
   useEffect(() => { void load() }, [load])
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) }, [error])
   useEffect(() => { if (advanceTarget) { setAdvanceCompanyId(advanceTarget.week.companyAllocations[0]?.companyId || data?.companies[0]?.id || ''); setAdvanceDate(todayISO()); setAdvanceCash(''); setAdvanceKaspi(''); setAdvanceComment('') } }, [advanceTarget, data?.companies])
-  useEffect(() => { if (payTarget) { setPayDate(todayISO()); setPayCash(String(Math.max(payTarget.week.remainingAmount, 0))); setPayKaspi(''); setPayComment('') } }, [payTarget])
+  useEffect(() => { if (payTarget) { setPayDate(todayISO()); setPayCash(String(Math.max(payTarget.week.remainingAmount, 0))); setPayKaspi(''); setPayComment(''); setPayAllowOverpayment(false) } }, [payTarget])
   useEffect(() => { if (chatTarget) setChatValue(chatTarget.operator.telegram_chat_id || '') }, [chatTarget])
   useEffect(() => { if (data?.operators.length) setAdjOperatorId((cur) => cur || data.operators[0].operator.id) }, [data?.operators])
 
@@ -620,7 +621,40 @@ export default function SalaryPage() {
   }
 
   const submitAdvance = async (e: FormEvent) => { e.preventDefault(); if (!advanceTarget) return; const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi); if (!advanceCompanyId) return setError('Для аванса нужно выбрать точку'); if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0'); setAdvanceSaving(true); setError(null); try { await post({ action: 'createAdvance', payload: { operator_id: advanceTarget.operator.id, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } }); setAdvanceTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) } }
-  const submitPayment = async (e: FormEvent) => { e.preventDefault(); if (!payTarget) return; const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi; if (total <= 0) return setError('Сумма выплаты должна быть больше 0'); if (total - payTarget.week.remainingAmount > 0.009) return setError('Сумма выплаты превышает остаток по неделе'); setPaySaving(true); setError(null); try { await post({ action: 'createWeeklyPayment', payload: { operator_id: payTarget.operator.id, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } }); setPayTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) } }
+  const submitPayment = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!payTarget) return
+    const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi
+    if (total <= 0) return setError('Сумма выплаты должна быть больше 0')
+    const overpaymentDelta = total - payTarget.week.remainingAmount
+    const isOverpayment = overpaymentDelta > 0.009
+    if (isOverpayment && !payAllowOverpayment) {
+      return setError('Сумма выплаты превышает остаток по неделе. Включите «выдать сверх остатка», чтобы перенести разницу авансом на следующую неделю.')
+    }
+    setPaySaving(true)
+    setError(null)
+    try {
+      const action = isOverpayment ? 'createPaymentWithAdvance' : 'createWeeklyPayment'
+      await post({
+        action,
+        payload: {
+          operator_id: payTarget.operator.id,
+          week_start: weekStart,
+          payment_date: payDate,
+          cash_amount: cash,
+          kaspi_amount: kaspi,
+          comment: payComment.trim() || null,
+        },
+      })
+      setPayTarget(null)
+      await load(true)
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || 'Не удалось провести выплату')
+    } finally {
+      setPaySaving(false)
+    }
+  }
   const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
@@ -1854,7 +1888,46 @@ export default function SalaryPage() {
               </div>
             </div>
             <textarea className={textarea} value={payComment} onChange={(e) => setPayComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Выплата сейчас: <span className="font-semibold text-white">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
+            {(() => {
+              const total = parseMoney(payCash) + parseMoney(payKaspi)
+              const remaining = payTarget.week.remainingAmount
+              const overpayment = Math.max(0, total - remaining)
+              const showAdvanceRow = overpayment > 0.009
+              return (
+                <>
+                  <label className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-amber-400"
+                      checked={payAllowOverpayment}
+                      onChange={(e) => setPayAllowOverpayment(e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-semibold text-white">Выдать сверх остатка как аванс</span>
+                      <span className="block text-xs text-amber-200/80 mt-0.5">
+                        Если сумма выплаты превышает {money(remaining)} — разница уйдёт авансом и вычтется со следующей недели.
+                      </span>
+                    </span>
+                  </label>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
+                    <div className="flex justify-between">
+                      <span>Выплата сейчас:</span>
+                      <span className="font-semibold text-white">{money(total)}</span>
+                    </div>
+                    <div className="mt-1 flex justify-between text-xs text-slate-400">
+                      <span>В счёт текущей недели:</span>
+                      <span>{money(Math.min(total, remaining))}</span>
+                    </div>
+                    {showAdvanceRow ? (
+                      <div className="mt-1 flex justify-between text-xs text-amber-200">
+                        <span>Аванс на следующую неделю:</span>
+                        <span className="font-semibold">{money(overpayment)}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              )
+            })()}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setPayTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>

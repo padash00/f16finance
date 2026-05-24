@@ -54,6 +54,17 @@ type MutationBody =
       }
     }
   | {
+      action: 'createPaymentWithAdvance'
+      payload: {
+        operator_id: string
+        week_start: string
+        payment_date: string
+        cash_amount?: number | null
+        kaspi_amount?: number | null
+        comment?: string | null
+      }
+    }
+  | {
       action: 'updateOperatorChatId'
       operatorId: string
       telegram_chat_id: string | null
@@ -1536,6 +1547,232 @@ export async function POST(req: Request) {
         data: {
           payment,
           expenses: expenseRows,
+          week: weekAfterPayment,
+        },
+      })
+    }
+
+    if (body.action === 'createPaymentWithAdvance') {
+      const denied = await requireCapability(access, 'salary.create_payment')
+      if (denied) return denied as any
+      const weekStart = normalizeIsoDate(body.payload.week_start)
+      const paymentDate = normalizeIsoDate(body.payload.payment_date)
+      const split = normalizeSplit(body.payload.cash_amount, body.payload.kaspi_amount)
+
+      if (!body.payload.operator_id || !weekStart || !paymentDate) {
+        return json({ error: 'operator_id, week_start и payment_date обязательны' }, 400)
+      }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.payload.operator_id,
+      })
+      if (split.totalAmount <= 0) {
+        return json({ error: 'Сумма выплаты должна быть больше 0' }, 400)
+      }
+
+      const weekBeforePayment = await ensureSalaryWeekSnapshot({
+        supabase,
+        operatorId: body.payload.operator_id,
+        weekStart,
+        actorUserId: user?.id || null,
+        companyIds: allowedCompanyIds || null,
+        pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
+      })
+
+      const overpayment = roundMoney(split.totalAmount - weekBeforePayment.remainingAmount)
+      if (overpayment <= 0.009) {
+        return json(
+          {
+            error: 'Сумма выплаты не превышает остаток. Используйте обычную выплату.',
+          },
+          400,
+        )
+      }
+
+      const positiveAllocations = weekBeforePayment.summary.companyAllocations.filter((item) => item.netAmount > 0)
+      if (positiveAllocations.length === 0) {
+        return json({ error: 'Нет положительных начислений по компаниям для выплаты' }, 400)
+      }
+
+      const { data: operatorRow } = await supabase
+        .from('operators')
+        .select('name')
+        .eq('id', body.payload.operator_id)
+        .single()
+      const operatorName = operatorRow?.name || null
+
+      const paymentComment =
+        body.payload.comment?.trim() ||
+        (operatorName
+          ? `Зарплата с авансом: ${operatorName} за неделю ${weekStart} - ${weekBeforePayment.weekEnd}`
+          : `Зарплата с авансом за неделю ${weekStart} - ${weekBeforePayment.weekEnd}`)
+
+      const paymentResult = await supabase
+        .from('operator_salary_week_payments')
+        .insert([
+          {
+            salary_week_id: weekBeforePayment.weekId,
+            operator_id: body.payload.operator_id,
+            payment_date: paymentDate,
+            cash_amount: split.cashAmount,
+            kaspi_amount: split.kaspiAmount,
+            total_amount: split.totalAmount,
+            comment: paymentComment,
+            created_by: user?.id || null,
+          },
+        ])
+        .select('id,salary_week_id,operator_id,payment_date,cash_amount,kaspi_amount,total_amount,comment,status')
+        .single()
+
+      if (paymentResult.error) throw paymentResult.error
+      const payment = paymentResult.data
+
+      const distribution = buildCompanyDistribution({
+        cashAmount: split.cashAmount,
+        kaspiAmount: split.kaspiAmount,
+        weights: positiveAllocations.map((item) => ({
+          key: item.companyId,
+          weight: item.netAmount,
+        })),
+      }).filter((item) => item.totalAmount > 0)
+
+      const expenseRows: Array<{
+        id: string
+        company_id: string
+        cash_amount: number
+        kaspi_amount: number
+        comment: string | null
+      }> = []
+      let advanceAdjustmentId: string | null = null
+
+      try {
+        for (const item of distribution) {
+          const allocationMeta = positiveAllocations.find((allocation) => allocation.companyId === item.companyId)
+          const comment = allocationMeta?.companyName
+            ? `${paymentComment} • ${allocationMeta.companyName}`
+            : paymentComment
+
+          const { data: expense, error: expenseError } = await supabase
+            .from('expenses')
+            .insert([
+              {
+                date: paymentDate,
+                company_id: item.companyId,
+                operator_id: body.payload.operator_id,
+                category: 'Зарплата',
+                cash_amount: item.cashAmount,
+                kaspi_amount: item.kaspiAmount,
+                comment,
+                source_type: 'salary_payment',
+                source_id: String(payment.id),
+                salary_week_id: weekBeforePayment.weekId,
+              },
+            ])
+            .select('id,company_id,cash_amount,kaspi_amount,comment')
+            .single()
+
+          if (expenseError) throw expenseError
+          expenseRows.push(expense as typeof expenseRows[number])
+        }
+
+        if (expenseRows.length > 0) {
+          const { error: linksError } = await supabase
+            .from('operator_salary_week_payment_expenses')
+            .insert(
+              expenseRows.map((expense) => ({
+                payment_id: payment.id,
+                company_id: expense.company_id,
+                expense_id: String(expense.id),
+                cash_amount: expense.cash_amount,
+                kaspi_amount: expense.kaspi_amount,
+                total_amount: roundMoney(Number(expense.cash_amount || 0) + Number(expense.kaspi_amount || 0)),
+              })),
+            )
+
+          if (linksError) throw linksError
+        }
+
+        const nextWeekStart = addDaysISO(weekStart, 7)
+        const nextWeekSnapshot = await ensureSalaryWeekSnapshot({
+          supabase,
+          operatorId: body.payload.operator_id,
+          weekStart: nextWeekStart,
+          actorUserId: user?.id || null,
+          companyIds: allowedCompanyIds || null,
+          pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
+        })
+
+        const advanceComment = `Перенос переплаты с недели ${weekStart} — ${weekBeforePayment.weekEnd} (${overpayment} ₸)`
+        const { data: advanceAdjustment, error: advanceError } = await supabase
+          .from('operator_salary_adjustments')
+          .insert([
+            {
+              operator_id: body.payload.operator_id,
+              date: paymentDate,
+              amount: overpayment,
+              kind: 'advance',
+              comment: advanceComment,
+              company_id: null,
+              salary_week_id: nextWeekSnapshot.weekId,
+              linked_expense_id: null,
+              source_type: 'salary_payment_overpayment',
+              status: 'active',
+            },
+          ])
+          .select('id')
+          .single()
+
+        if (advanceError) throw advanceError
+        advanceAdjustmentId = String(advanceAdjustment.id)
+      } catch (transactionError) {
+        if (advanceAdjustmentId) {
+          await supabase.from('operator_salary_adjustments').delete().eq('id', advanceAdjustmentId)
+        }
+        await supabase.from('operator_salary_week_payment_expenses').delete().eq('payment_id', String(payment.id))
+        if (expenseRows.length > 0) {
+          await safeDeleteExpenses(
+            supabase,
+            expenseRows.map((expense) => String(expense.id)),
+          )
+        }
+        await supabase.from('operator_salary_week_payments').delete().eq('id', String(payment.id))
+        throw transactionError
+      }
+
+      const weekAfterPayment = await ensureSalaryWeekSnapshot({
+        supabase,
+        operatorId: body.payload.operator_id,
+        weekStart,
+        actorUserId: user?.id || null,
+        companyIds: allowedCompanyIds || null,
+        pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
+      })
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'operator-salary-week-payment',
+        entityId: String(payment.id),
+        action: 'create-with-advance',
+        payload: {
+          week_start: weekStart,
+          payment_date: paymentDate,
+          cash_amount: split.cashAmount,
+          kaspi_amount: split.kaspiAmount,
+          total_amount: split.totalAmount,
+          overpayment_amount: overpayment,
+          advance_adjustment_id: advanceAdjustmentId,
+          company_count: expenseRows.length,
+        },
+      })
+
+      return json({
+        ok: true,
+        data: {
+          payment,
+          expenses: expenseRows,
+          overpaymentAmount: overpayment,
+          advanceAdjustmentId,
           week: weekAfterPayment,
         },
       })
