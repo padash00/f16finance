@@ -1042,10 +1042,19 @@ export default async function MarketingHomePage() {
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-medium text-[var(--color-text-muted)]">
               <Link href="/offer" className="transition hover:text-[var(--color-accent-gold)]">
-                Договор оферты
+                Оферта
               </Link>
               <Link href="/privacy" className="transition hover:text-[var(--color-accent-gold)]">
-                Политика конфиденциальности
+                Политика
+              </Link>
+              <Link href="/terms" className="transition hover:text-[var(--color-accent-gold)]">
+                Соглашение
+              </Link>
+              <Link href="/sla" className="transition hover:text-[var(--color-accent-gold)]">
+                SLA
+              </Link>
+              <Link href="/cookies" className="transition hover:text-[var(--color-accent-gold)]">
+                Cookies
               </Link>
               <Link href="/club-management-system" className="transition hover:text-[var(--color-accent-gold)]">
                 Для компьютерных клубов

@@ -29,6 +29,9 @@ const HIDDEN_PATH_PREFIXES = [
   '/point-terminal',
   '/offer',
   '/privacy',
+  '/terms',
+  '/sla',
+  '/cookies',
 ]
 
 // Главная (landing) страница тоже публичная — точное совпадение
