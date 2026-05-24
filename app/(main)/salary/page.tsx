@@ -46,7 +46,7 @@ type OperatorTimelineEvent = {
 type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: string | null; companyName: string | null; totalIncome: number; baseSalary: number; seniorityBonus?: number; seniorityPercent?: number; autoBonus: number; roleBonus: number; salary: number }
 
 // ─── Admin staff salary types ─────────────────────────────────────────────────
-type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator' }
+type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator'; is_active?: boolean; dismissed_at?: string | null; dismissal_date?: string | null }
 type StaffAdjustment = {
   id: string
   staff_id: string
@@ -810,15 +810,19 @@ export default function SalaryPage() {
     return { total, payments, deductions }
   }, [filteredStaffGlobalTimeline])
 
-  const loadStaffSalary = useCallback(async () => {
+  const [showStaffArchived, setShowStaffArchived] = useState(false)
+  const loadStaffSalary = useCallback(async (archived?: boolean) => {
     setStaffSalaryLoading(true)
     try {
-      const res = await fetch('/api/admin/staff-salary', { cache: 'no-store' })
+      const url = (archived ?? showStaffArchived)
+        ? '/api/admin/staff-salary?include_archived=1'
+        : '/api/admin/staff-salary'
+      const res = await fetch(url, { cache: 'no-store' })
       const json = await res.json().catch(() => null)
       if (res.ok) setStaffSalary(json)
     } catch {}
     finally { setStaffSalaryLoading(false) }
-  }, [])
+  }, [showStaffArchived])
   useEffect(() => { void loadStaffSalary() }, [loadStaffSalary])
   const canEditStaffSalary = staffSalary?.can_edit === true
 
@@ -1507,7 +1511,21 @@ export default function SalaryPage() {
                   )}
                 </div>
               </div>
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={
+                    'rounded-xl border-white/10 text-xs ' +
+                    (showStaffArchived ? 'bg-amber-400/20 text-amber-100 hover:bg-amber-400/30' : 'bg-white/5 text-slate-300 hover:bg-white/10')
+                  }
+                  onClick={() => setShowStaffArchived((v) => !v)}
+                  title={showStaffArchived ? 'Скрыть уволенных' : 'Показать архив'}
+                >
+                  {showStaffArchived ? 'Архив открыт' : 'Архив'}
+                </Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
+              </div>
             </div>
             {staffSalaryLoading ? (
               <div className="space-y-4 p-5">
@@ -1572,15 +1590,26 @@ export default function SalaryPage() {
                     0,
                   )
                   const isOperatorBased = s.source_type === 'operator'
+                  const isDismissed = s.is_active === false
+                  const dismissedDateLabel = isDismissed
+                    ? String(s.dismissal_date || s.dismissed_at || '').slice(0, 10)
+                    : null
                   return (
-                    <div key={s.id} className="p-5">
+                    <div key={s.id} className={'p-5 ' + (isDismissed ? 'opacity-60' : '')}>
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-sm font-semibold text-white">
+                          <div className={'flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-600 to-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600')}>
                             {(s.short_name || s.full_name).charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-semibold text-white">{s.full_name}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-white">{s.full_name}</div>
+                              {isDismissed ? (
+                                <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+                                  Уволен{dismissedDateLabel ? ` · ${dismissedDateLabel}` : ''}
+                                </span>
+                              ) : null}
+                            </div>
                             <div className="text-xs text-slate-400">
                               {formatRoleLabel(s.role)}
                               {isOperatorBased ? ' · из operators' : ` · Оклад: ${money(s.monthly_salary)}/мес`}
@@ -1588,13 +1617,13 @@ export default function SalaryPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {canStaffAddAdjustment && (
+                          {!isDismissed && canStaffAddAdjustment && (
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           )}
-                          {canStaffAddExtraDay && (
+                          {!isDismissed && canStaffAddExtraDay && (
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           )}
-                          {canStaffCreatePayment && (
+                          {!isDismissed && canStaffCreatePayment && (
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                           )}
                         </div>

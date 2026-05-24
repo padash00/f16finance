@@ -134,6 +134,9 @@ export default function HrPage() {
   const [dismissReason, setDismissReason] = useState('')
   const [dismissDate, setDismissDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [dismissType, setDismissType] = useState<DismissalType>('voluntary')
+  const [pairedRecord, setPairedRecord] = useState<{ kind: 'staff' | 'operator'; id: string; name: string; role?: string | null } | null>(null)
+  const [pairedLoading, setPairedLoading] = useState(false)
+  const [cascadeDismiss, setCascadeDismiss] = useState(true)
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
   const [historyData, setHistoryData] = useState<Record<string, HistoryEntry[]>>({})
   const [historyLoading, setHistoryLoading] = useState<Record<string, boolean>>({})
@@ -286,11 +289,28 @@ export default function HrPage() {
     }
   }
 
-  function openDismiss(emp: HrEmployee) {
+  async function openDismiss(emp: HrEmployee) {
     setDismissTarget(emp)
     setDismissReason('')
     setDismissDate(new Date().toISOString().slice(0, 10))
     setDismissType('voluntary')
+    setPairedRecord(null)
+    setCascadeDismiss(true)
+    setPairedLoading(true)
+    try {
+      const res = await fetch(
+        `/api/admin/hr/paired?kind=${encodeURIComponent(emp.kind)}&id=${encodeURIComponent(emp.id)}`,
+        { cache: 'no-store' },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json?.paired) {
+        setPairedRecord(json.paired)
+      }
+    } catch {
+      // молча: предупреждение про парную запись опционально
+    } finally {
+      setPairedLoading(false)
+    }
   }
 
   async function confirmDismiss() {
@@ -311,12 +331,15 @@ export default function HrPage() {
           reason: dismissReason.trim(),
           dismissal_date: dismissDate,
           dismissal_type: dismissType,
+          cascade_paired: !!pairedRecord && cascadeDismiss,
         }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Не удалось уволить')
       setDismissTarget(null)
       setDismissReason('')
+      setPairedRecord(null)
+      setCascadeDismiss(true)
       setHistoryData((s) => {
         const copy = { ...s }
         delete copy[`${dismissTarget.kind}-${dismissTarget.id}`]
@@ -1063,6 +1086,28 @@ export default function HrPage() {
               rows={4}
               className="w-full px-3 py-2 rounded-lg border border-gray-700 bg-gray-900 text-sm mb-4"
             />
+            {pairedLoading ? (
+              <div className="mb-4 text-xs text-gray-500">Проверяем парную запись…</div>
+            ) : pairedRecord ? (
+              <label className="mb-4 flex items-start gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-amber-400"
+                  checked={cascadeDismiss}
+                  onChange={(e) => setCascadeDismiss(e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold text-white">
+                    У сотрудника также есть запись «{pairedRecord.name}»
+                    {' '}({pairedRecord.kind === 'operator' ? 'оператор' : 'админ'}).
+                  </span>
+                  <span className="block text-xs text-amber-200/80 mt-0.5">
+                    Уволить и её одной операцией. Это безопасно: иначе парная запись останется
+                    активной и сотрудник продолжит висеть в /structure и /salary.
+                  </span>
+                </span>
+              </label>
+            ) : null}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDismissTarget(null)}>Отмена</Button>
               <Button variant="destructive" onClick={confirmDismiss} disabled={busyId === dismissTarget.id}>

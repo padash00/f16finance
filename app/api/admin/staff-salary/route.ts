@@ -66,12 +66,15 @@ export async function GET(req: Request) {
     const canView = access.isSuperAdmin || !!access.staffRole
     if (!canView) return json({ error: 'forbidden' }, 403)
 
+    const url = new URL(req.url)
+    const includeArchived = url.searchParams.get('include_archived') === '1'
+
     const supabase = createAdminSupabaseClient()
 
     const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
       supabase
         .from('staff')
-        .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active')
+        .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active, dismissed_at, dismissal_date')
         .order('full_name'),
       supabase
         .from('staff_adjustments')
@@ -119,7 +122,7 @@ export async function GET(req: Request) {
     // сотрудник не «воскресал» как виртуальный из operators.is_admin_staff.
     const allStaffRows = (staffRes.data ?? []) as any[]
     const baseStaff = allStaffRows
-      .filter((row) => row.is_active !== false)
+      .filter((row) => (includeArchived ? true : row.is_active !== false))
       .map((row) => ({ ...row, source_type: 'staff' }))
     const staffIdSet = new Set(allStaffRows.map((row) => String(row.id)))
     const staffByTelegram = new Map<string, string>()
