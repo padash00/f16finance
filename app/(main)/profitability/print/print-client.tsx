@@ -134,6 +134,62 @@ export default function PrintClient() {
   const ownerProfit = report.netProfit - partnersTotal
   const ownerPercent = 100 - partnersPayouts.reduce((s, p) => s + p.percent, 0)
 
+  // Метрики качества бизнеса для KPI-полоски.
+  const profitMargin = report.turnover > 0 ? (report.netProfit / report.turnover) * 100 : 0
+  const expensesShare = report.turnover > 0 ? (report.expensesTotal / report.turnover) * 100 : 0
+  const taxShare = report.turnoverTaxRate * 100
+
+  // Разбивка оборота для горизонтального бара.
+  const turnoverBreakdown = [
+    {
+      key: 'profit',
+      label: 'Прибыль',
+      amount: Math.max(0, report.netProfit),
+      color: report.netProfit >= 0 ? '#f59e0b' : '#94a3b8',
+      percent: report.turnover > 0 ? (Math.max(0, report.netProfit) / report.turnover) * 100 : 0,
+    },
+    {
+      key: 'expenses',
+      label: 'Расходы',
+      amount: report.expensesTotal,
+      color: '#475569',
+      percent: report.turnover > 0 ? (report.expensesTotal / report.turnover) * 100 : 0,
+    },
+    {
+      key: 'tax',
+      label: 'Налог',
+      amount: report.turnoverTax,
+      color: '#fb7185',
+      percent: report.turnover > 0 ? (report.turnoverTax / report.turnover) * 100 : 0,
+    },
+  ]
+
+  // Цвета точек для группы расходов.
+  const groupColor = (group: string): string => {
+    if (group === 'payroll' || group === 'payroll_advance' || group === 'payroll_tax') return '#3b82f6'
+    if (group === 'income_tax') return '#fb923c'
+    if (group === 'pos_commission' || group === 'financial') return '#a855f7'
+    if (group === 'cogs') return '#10b981'
+    if (group === 'non_operating') return '#fb7185'
+    return '#64748b' // operating и пр.
+  }
+  const groupLabel = (group: string): string => {
+    if (group === 'payroll' || group === 'payroll_advance') return 'ФОТ'
+    if (group === 'payroll_tax') return 'Зарпл. налоги'
+    if (group === 'income_tax') return 'Налоги'
+    if (group === 'pos_commission') return 'POS'
+    if (group === 'cogs') return 'Себестоимость'
+    if (group === 'financial') return 'Финансы'
+    if (group === 'non_operating') return 'Прочее'
+    return 'Операционные'
+  }
+
+  // Максимум для масштабирования мини-bar внутри строк расходов.
+  const expensesMax = report.expenses.reduce((m, e) => Math.max(m, e.amount), 0)
+
+  // Множество ID топ-3 расходов для подсветки золотой полосой слева.
+  const topThreeIds = new Set(report.expenses.slice(0, 3).map((e) => e.category))
+
   // Разделяем расходы на две колонки для печати: чередуем чтобы суммы балансировались.
   const expensesLeft = report.expenses.filter((_, i) => i % 2 === 0)
   const expensesRight = report.expenses.filter((_, i) => i % 2 === 1)
@@ -229,6 +285,60 @@ export default function PrintClient() {
               </div>
             </section>
 
+            {/* KPI-полоска */}
+            <section className="grid grid-cols-3 gap-3 mb-3 keep">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Рентабельность</div>
+                <div className={'text-[15px] font-bold tabular-nums leading-tight ' + (profitMargin >= 0 ? 'text-amber-700' : 'text-rose-700')}>
+                  {profitMargin.toFixed(1)}%
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Доля расходов</div>
+                <div className="text-[15px] font-bold tabular-nums leading-tight text-slate-700">
+                  {expensesShare.toFixed(1)}%
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
+                <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Налоговая нагрузка</div>
+                <div className="text-[15px] font-bold tabular-nums leading-tight text-rose-700">
+                  {taxShare.toFixed(1)}%
+                </div>
+              </div>
+            </section>
+
+            {/* Разбивка оборота — горизонтальный bar */}
+            <section className="mb-4 keep">
+              <div className="mb-1 flex items-baseline justify-between text-[9px] uppercase tracking-wider text-slate-500">
+                <span className="font-semibold">Куда ушёл оборот</span>
+                <span>100% = {fmtMoney(report.turnover)} ₸</span>
+              </div>
+              <div className="flex h-5 overflow-hidden rounded-md ring-1 ring-slate-200">
+                {turnoverBreakdown
+                  .filter((b) => b.percent > 0)
+                  .map((b) => (
+                    <div
+                      key={b.key}
+                      style={{ width: `${b.percent}%`, background: b.color }}
+                      className="flex items-center justify-center text-[9px] font-bold text-white"
+                      title={`${b.label}: ${fmtMoney(b.amount)} ₸ (${b.percent.toFixed(1)}%)`}
+                    >
+                      {b.percent >= 8 ? `${b.percent.toFixed(1)}%` : ''}
+                    </div>
+                  ))}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]">
+                {turnoverBreakdown.map((b) => (
+                  <div key={b.key} className="flex items-baseline gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-sm" style={{ background: b.color }} />
+                    <span className="text-slate-600">{b.label}</span>
+                    <span className="tabular-nums font-semibold text-slate-900">{fmtMoney(b.amount)} ₸</span>
+                    <span className="tabular-nums text-slate-400">({b.percent.toFixed(1)}%)</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             {/* Расходы — две колонки */}
             <section className="mb-4 keep">
               <div className="mb-2 flex items-baseline justify-between">
@@ -245,23 +355,56 @@ export default function PrintClient() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-0.5">
                     {[expensesLeft, expensesRight].map((col, colIdx) => (
                       <div key={colIdx} className="space-y-0.5">
-                        {col.map((line) => (
-                          <div key={line.category} className="flex items-baseline justify-between border-b border-slate-100 py-1 text-[11.5px]">
-                            <div className="truncate pr-2">
-                              <span className="font-medium text-slate-900">{line.category}</span>
+                        {col.map((line) => {
+                          const sharePercent = report.expensesTotal > 0 ? (line.amount / report.expensesTotal) * 100 : 0
+                          const barWidth = expensesMax > 0 ? (line.amount / expensesMax) * 100 : 0
+                          const isTopThree = topThreeIds.has(line.category)
+                          const dotColor = groupColor(line.accountingGroup)
+                          return (
+                            <div
+                              key={line.category}
+                              className="border-b border-slate-100 py-0.5 text-[11px]"
+                              style={isTopThree ? { borderLeft: '3px solid #f59e0b', paddingLeft: '6px' } : { paddingLeft: '0' }}
+                            >
+                              <div className="flex items-baseline justify-between">
+                                <div className="flex items-center gap-1.5 truncate pr-2">
+                                  <span
+                                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                    style={{ background: dotColor }}
+                                    title={groupLabel(line.accountingGroup)}
+                                  />
+                                  <span className="font-medium text-slate-900 truncate">{line.category}</span>
+                                </div>
+                                <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                                  <span className="text-[9px] tabular-nums text-slate-400">{sharePercent.toFixed(1)}%</span>
+                                  <span className="tabular-nums font-semibold text-slate-800">{fmtMoney(line.amount)}</span>
+                                </div>
+                              </div>
+                              <div className="mt-0.5 h-[2px] w-full overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${barWidth}%`, background: dotColor }}
+                                />
+                              </div>
                               {line.comments.length > 0 && line.comments[0] ? (
-                                <span className="ml-1 text-[9.5px] text-slate-400">· {line.comments[0].slice(0, 50)}</span>
+                                <div className="text-[9px] text-slate-400 truncate">{line.comments[0].slice(0, 70)}</div>
                               ) : null}
                             </div>
-                            <div className="tabular-nums font-semibold text-slate-800 whitespace-nowrap">
-                              {fmtMoney(line.amount)}
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
+                    ))}
+                  </div>
+                  {/* Легенда групп */}
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[8.5px] text-slate-500">
+                    {Array.from(new Set(report.expenses.map((e) => e.accountingGroup))).map((g) => (
+                      <span key={g} className="inline-flex items-center gap-1">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: groupColor(g) }} />
+                        {groupLabel(g)}
+                      </span>
                     ))}
                   </div>
                   <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5 text-white">
