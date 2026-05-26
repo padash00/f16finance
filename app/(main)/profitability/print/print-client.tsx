@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, Printer, TrendingUp, Banknote, Wallet, PiggyBank, Building2, Calendar } from 'lucide-react'
+import { Loader2, Printer } from 'lucide-react'
 
 type Partner = { name: string; percent: number }
 
@@ -100,7 +100,6 @@ export default function PrintClient() {
     void load()
   }, [companyId, monthFrom, monthTo])
 
-  // Автоматический вызов диалога печати когда данные загружены.
   useEffect(() => {
     if (report && !loading && params.get('auto') === '1') {
       const timer = setTimeout(() => window.print(), 600)
@@ -119,9 +118,9 @@ export default function PrintClient() {
   if (error || !report) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white text-slate-900">
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center">
-          <div className="text-lg font-semibold text-rose-700">Не удалось загрузить отчёт</div>
-          <div className="mt-2 text-sm text-rose-600">{error || 'Неизвестная ошибка'}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+          <div className="font-semibold text-rose-700">Не удалось загрузить отчёт</div>
+          <div className="mt-1 text-sm text-rose-600">{error || 'Неизвестная ошибка'}</div>
         </div>
       </div>
     )
@@ -133,193 +132,184 @@ export default function PrintClient() {
   }))
   const partnersTotal = partnersPayouts.reduce((sum, p) => sum + p.amount, 0)
   const ownerProfit = report.netProfit - partnersTotal
+  const ownerPercent = 100 - partnersPayouts.reduce((s, p) => s + p.percent, 0)
+
+  // Разделяем расходы на две колонки для печати: чередуем чтобы суммы балансировались.
+  const expensesLeft = report.expenses.filter((_, i) => i % 2 === 0)
+  const expensesRight = report.expenses.filter((_, i) => i % 2 === 1)
 
   return (
     <>
       <style jsx global>{`
+        :root { color-scheme: light; }
+        @media screen {
+          .print-shell {
+            padding: 24px 16px;
+            background: #f3f4f6;
+            min-height: 100vh;
+          }
+        }
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; }
-          @page { margin: 14mm; size: A4; }
-        }
-        @media screen {
-          .print-shell { padding: 32px 24px; background: #f3f4f6; min-height: 100vh; }
+          html, body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { margin: 10mm; size: A4 portrait; }
+          .print-shell { padding: 0 !important; background: white !important; }
+          .doc-paper { box-shadow: none !important; max-width: none !important; width: 100% !important; }
+          .doc-paper section, .doc-paper .keep { page-break-inside: avoid; break-inside: avoid; }
         }
       `}</style>
 
       <div className="print-shell">
         {/* Toolbar — только на экране */}
-        <div className="no-print mx-auto mb-6 flex max-w-[820px] items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
+        <div className="no-print mx-auto mb-4 flex max-w-[820px] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
           <div className="text-sm text-slate-600">
-            Отчёт по точке <span className="font-semibold text-slate-900">{report.company.name}</span>
+            <span className="font-semibold text-slate-900">{report.company.name}</span>
             {' · '}
-            <span>{fmtPeriod(report.period.from, report.period.to)}</span>
+            {fmtPeriod(report.period.from, report.period.to)}
           </div>
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
           >
-            <Printer className="h-4 w-4" />
+            <Printer className="h-3.5 w-3.5" />
             Печать / Save as PDF
           </button>
         </div>
 
-        {/* Документ */}
-        <div className="mx-auto max-w-[820px] bg-white text-slate-900 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-          {/* Шапка */}
-          <header className="border-b-2 border-amber-500 px-10 pb-6 pt-10">
-            <div className="flex items-start justify-between gap-6">
+        {/* Документ A4 */}
+        <div className="doc-paper mx-auto max-w-[820px] bg-white text-slate-900 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+          <div className="px-8 py-6 print:px-6 print:py-4">
+
+            {/* Шапка */}
+            <header className="flex items-end justify-between border-b-2 border-amber-500 pb-3 mb-4 keep">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
-                  Управленческий отчёт о прибыли
+                <div className="text-[9px] font-bold uppercase tracking-[0.22em] text-amber-700">
+                  Управленческий отчёт · Orda Control
                 </div>
-                <div className="mt-2 flex items-center gap-3">
-                  <Building2 className="h-6 w-6 text-slate-400" />
-                  <h1 className="text-3xl font-bold tracking-tight">{report.company.name}</h1>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
-                  <Calendar className="h-4 w-4" />
-                  {fmtPeriod(report.period.from, report.period.to)}
-                </div>
+                <h1 className="mt-1 text-2xl font-extrabold tracking-tight leading-none">
+                  {report.company.name}
+                </h1>
               </div>
               <div className="text-right">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Orda Control</div>
-                <div className="mt-1 text-[10px] text-slate-400">
-                  Сформирован: {new Date().toLocaleDateString('ru-RU')}
+                <div className="text-[15px] font-semibold capitalize text-slate-700">
+                  {fmtPeriod(report.period.from, report.period.to)}
+                </div>
+                <div className="text-[9px] text-slate-400">
+                  Сформирован {new Date().toLocaleDateString('ru-RU')}
                 </div>
               </div>
-            </div>
-          </header>
+            </header>
 
-          <main className="px-10 py-8 space-y-8">
-            {/* Оборот */}
-            <section>
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-emerald-50 to-white p-6">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                  <TrendingUp className="h-4 w-4" />
-                  Общий оборот за период
+            {/* Топ-строка: оборот + налог + чистая прибыль */}
+            <section className="grid grid-cols-3 gap-3 mb-4 keep">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Оборот</div>
+                <div className="mt-0.5 text-xl font-extrabold tabular-nums leading-tight">
+                  {fmtMoney(report.turnover)} <span className="text-sm font-semibold text-emerald-700">₸</span>
                 </div>
-                <div className="mt-2 text-4xl font-bold tabular-nums">{fmtMoney(report.turnover)} ₸</div>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+                <div className="text-[9px] font-bold uppercase tracking-wider text-rose-700">
+                  Налог {(report.turnoverTaxRate * 100).toFixed(0)}%
+                </div>
+                <div className="mt-0.5 text-xl font-extrabold tabular-nums leading-tight">
+                  −{fmtMoney(report.turnoverTax)} <span className="text-sm font-semibold text-rose-700">₸</span>
+                </div>
+              </div>
+              <div className={
+                'rounded-xl px-4 py-3 border-2 ' +
+                (report.netProfit >= 0 ? 'border-amber-500 bg-amber-50' : 'border-rose-500 bg-rose-50')
+              }>
+                <div className={'text-[9px] font-bold uppercase tracking-wider ' + (report.netProfit >= 0 ? 'text-amber-800' : 'text-rose-700')}>
+                  Чистая прибыль
+                </div>
+                <div className={'mt-0.5 text-xl font-extrabold tabular-nums leading-tight ' + (report.netProfit >= 0 ? 'text-amber-900' : 'text-rose-700')}>
+                  {fmtMoney(report.netProfit)} <span className="text-sm font-semibold">₸</span>
+                </div>
               </div>
             </section>
 
-            {/* Налог с оборота */}
-            <section>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Налог с оборота ({(report.turnoverTaxRate * 100).toFixed(0)}%)
-                    </div>
-                    <div className="mt-1 text-sm text-slate-500">Автоматически вычитается из оборота</div>
-                  </div>
-                  <div className="text-2xl font-bold tabular-nums text-rose-700">− {fmtMoney(report.turnoverTax)} ₸</div>
+            {/* Расходы — две колонки */}
+            <section className="mb-4 keep">
+              <div className="mb-2 flex items-baseline justify-between">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
+                  Расходы за период
+                </h2>
+                <div className="text-[10px] text-slate-500">
+                  {report.expenses.length} {report.expenses.length === 1 ? 'категория' : 'категорий'}
                 </div>
-                <div className="mt-3 border-t border-slate-200 pt-3 flex items-center justify-between">
-                  <div className="text-sm font-medium text-slate-700">После налога</div>
-                  <div className="text-xl font-semibold tabular-nums">{fmtMoney(report.afterTax)} ₸</div>
-                </div>
-              </div>
-            </section>
-
-            {/* Расходы */}
-            <section>
-              <div className="mb-3 flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-slate-500" />
-                <h2 className="text-lg font-bold">Расходы за период</h2>
-                <span className="ml-auto text-sm text-slate-500">{report.expenses.length} категорий</span>
               </div>
               {report.expenses.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] text-slate-500">
                   Расходов за период не зафиксировано
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-slate-200">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold">Категория</th>
-                        <th className="px-4 py-3 text-right font-semibold">Сумма</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {report.expenses.map((line) => (
-                        <tr key={line.category} className="align-top">
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-slate-900">{line.category}</div>
-                            {line.comments.length > 0 ? (
-                              <div className="mt-1 text-xs text-slate-500">
-                                {line.comments.slice(0, 2).join(' · ')}
-                              </div>
-                            ) : null}
-                            <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                              {line.count} {line.count === 1 ? 'операция' : 'операций'}
+                <>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
+                    {[expensesLeft, expensesRight].map((col, colIdx) => (
+                      <div key={colIdx} className="space-y-0.5">
+                        {col.map((line) => (
+                          <div key={line.category} className="flex items-baseline justify-between border-b border-slate-100 py-1 text-[11.5px]">
+                            <div className="truncate pr-2">
+                              <span className="font-medium text-slate-900">{line.category}</span>
+                              {line.comments.length > 0 && line.comments[0] ? (
+                                <span className="ml-1 text-[9.5px] text-slate-400">· {line.comments[0].slice(0, 50)}</span>
+                              ) : null}
                             </div>
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">
-                            {fmtMoney(line.amount)} ₸
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-slate-900 text-white">
-                      <tr>
-                        <td className="px-4 py-3 text-sm font-semibold">Итого расходов</td>
-                        <td className="px-4 py-3 text-right text-base font-bold tabular-nums">
-                          {fmtMoney(report.expensesTotal)} ₸
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                            <div className="tabular-nums font-semibold text-slate-800 whitespace-nowrap">
+                              {fmtMoney(line.amount)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5 text-white">
+                    <div className="text-[11px] font-bold uppercase tracking-wider">Итого расходов</div>
+                    <div className="text-base font-extrabold tabular-nums">
+                      {fmtMoney(report.expensesTotal)} ₸
+                    </div>
+                  </div>
+                </>
               )}
             </section>
 
-            {/* Чистая прибыль */}
-            <section>
-              <div className={
-                'rounded-2xl border-2 p-6 ' +
-                (report.netProfit >= 0
-                  ? 'border-emerald-500 bg-emerald-50'
-                  : 'border-rose-500 bg-rose-50')
-              }>
-                <div className={'flex items-center gap-2 text-xs font-bold uppercase tracking-widest ' + (report.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-700')}>
-                  <Banknote className="h-4 w-4" />
-                  Чистая прибыль
-                </div>
-                <div className={'mt-2 text-5xl font-extrabold tabular-nums ' + (report.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-700')}>
-                  {fmtMoney(report.netProfit)} ₸
-                </div>
-                <div className="mt-3 text-xs text-slate-600">
-                  = {fmtMoney(report.turnover)} − {fmtMoney(report.turnoverTax)} (налог) − {fmtMoney(report.expensesTotal)} (расходы)
-                </div>
-              </div>
+            {/* Формула расчёта */}
+            <section className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-[10px] text-slate-600 keep">
+              <span className="font-semibold tabular-nums">{fmtMoney(report.turnover)}</span>
+              <span className="mx-1.5 text-slate-400">−</span>
+              <span className="tabular-nums">{fmtMoney(report.turnoverTax)}</span>
+              <span className="text-slate-400"> (налог)</span>
+              <span className="mx-1.5 text-slate-400">−</span>
+              <span className="tabular-nums">{fmtMoney(report.expensesTotal)}</span>
+              <span className="text-slate-400"> (расходы)</span>
+              <span className="mx-1.5 text-slate-400">=</span>
+              <span className="font-bold tabular-nums text-slate-900">{fmtMoney(report.netProfit)} ₸</span>
             </section>
 
-            {/* Доли учредителей */}
+            {/* Распределение прибыли */}
             {partnersPayouts.length > 0 ? (
-              <section>
-                <div className="mb-3 flex items-center gap-2">
-                  <PiggyBank className="h-5 w-5 text-slate-500" />
-                  <h2 className="text-lg font-bold">Распределение чистой прибыли</h2>
-                </div>
-                <div className="space-y-2">
+              <section className="mb-4 keep">
+                <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
+                  Распределение чистой прибыли
+                </h2>
+                <div className="grid grid-cols-2 gap-2">
                   {partnersPayouts.map((p) => (
-                    <div key={p.name + p.percent} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-3">
+                    <div key={p.name + p.percent} className="flex items-baseline justify-between rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11.5px]">
                       <div>
-                        <div className="font-medium text-slate-900">{p.name}</div>
-                        <div className="text-xs text-slate-500">{p.percent}% от чистой прибыли</div>
+                        <span className="font-medium text-slate-900">{p.name}</span>
+                        <span className="ml-1.5 text-[10px] text-slate-500">{p.percent}%</span>
                       </div>
-                      <div className="tabular-nums text-lg font-semibold text-slate-900">{fmtMoney(p.amount)} ₸</div>
+                      <div className="tabular-nums font-bold text-slate-900">{fmtMoney(p.amount)} ₸</div>
                     </div>
                   ))}
-                  {ownerProfit > 0 ? (
-                    <div className="flex items-center justify-between rounded-xl border-2 border-amber-400 bg-amber-50 px-5 py-3">
+                  {ownerProfit !== 0 && ownerPercent > 0 ? (
+                    <div className="flex items-baseline justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-1.5 text-[11.5px]">
                       <div>
-                        <div className="font-semibold text-amber-900">Остаётся владельцу</div>
-                        <div className="text-xs text-amber-700">{(100 - partnersPayouts.reduce((s, p) => s + p.percent, 0)).toFixed(0)}% от чистой прибыли</div>
+                        <span className="font-bold text-amber-900">Владельцу</span>
+                        <span className="ml-1.5 text-[10px] text-amber-700">{ownerPercent.toFixed(0)}%</span>
                       </div>
-                      <div className="tabular-nums text-xl font-bold text-amber-900">{fmtMoney(ownerProfit)} ₸</div>
+                      <div className="tabular-nums font-extrabold text-amber-900">{fmtMoney(ownerProfit)} ₸</div>
                     </div>
                   ) : null}
                 </div>
@@ -328,47 +318,40 @@ export default function PrintClient() {
 
             {/* Капитальные вложения */}
             {includeCapex && report.capex.length > 0 ? (
-              <section>
-                <div className="mb-3 flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-slate-500" />
-                  <h2 className="text-lg font-bold">Капитальные вложения</h2>
-                  <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+              <section className="mb-3 keep">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
+                    Капитальные вложения
+                  </h2>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">
                     Справочно, вне P&L
                   </span>
                 </div>
-                <div className="overflow-hidden rounded-xl border border-slate-200">
-                  <table className="w-full text-sm">
-                    <tbody className="divide-y divide-slate-100">
-                      {report.capex.map((line) => (
-                        <tr key={line.category}>
-                          <td className="px-4 py-3">
-                            <div className="font-medium">{line.category}</div>
-                            {line.comments.length > 0 ? (
-                              <div className="mt-1 text-xs text-slate-500">{line.comments.slice(0, 2).join(' · ')}</div>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums font-semibold">
-                            {fmtMoney(line.amount)} ₸
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-slate-100">
-                      <tr>
-                        <td className="px-4 py-3 text-sm font-semibold">Итого вложений</td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums">{fmtMoney(report.capexTotal)} ₸</td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                <div className="rounded-lg border border-slate-200">
+                  {report.capex.map((line, idx) => (
+                    <div key={line.category} className={'flex items-baseline justify-between px-3 py-1.5 text-[11.5px] ' + (idx > 0 ? 'border-t border-slate-100' : '')}>
+                      <div>
+                        <span className="font-medium text-slate-900">{line.category}</span>
+                        {line.comments.length > 0 && line.comments[0] ? (
+                          <span className="ml-1.5 text-[9.5px] text-slate-400">· {line.comments[0].slice(0, 50)}</span>
+                        ) : null}
+                      </div>
+                      <div className="tabular-nums font-semibold text-slate-800">{fmtMoney(line.amount)} ₸</div>
+                    </div>
+                  ))}
+                  <div className="flex items-baseline justify-between border-t border-slate-200 bg-slate-50 px-3 py-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-700">Итого вложений</div>
+                    <div className="tabular-nums font-extrabold text-slate-900 text-[13px]">{fmtMoney(report.capexTotal)} ₸</div>
+                  </div>
                 </div>
               </section>
             ) : null}
 
             {/* Подпись */}
-            <footer className="pt-6 border-t border-slate-200 text-[10px] text-slate-400 text-center">
-              Сформировано системой Orda Control · {new Date().toLocaleString('ru-RU')}
+            <footer className="border-t border-slate-100 pt-2 text-center text-[8.5px] text-slate-400">
+              Orda Control · {new Date().toLocaleString('ru-RU')}
             </footer>
-          </main>
+          </div>
         </div>
       </div>
     </>
