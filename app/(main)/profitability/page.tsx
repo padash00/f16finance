@@ -581,6 +581,15 @@ export default function ProfitabilityPage() {
   const [branchReportCompanyId, setBranchReportCompanyId] = useState<string>('')
   const [branchReportPartners, setBranchReportPartners] = useState<Array<{ name: string; percent: string }>>([])
   const [branchReportIncludeCapex, setBranchReportIncludeCapex] = useState(true)
+  const [branchReportFrom, setBranchReportFrom] = useState<string>('')
+  const [branchReportTo, setBranchReportTo] = useState<string>('')
+
+  // По умолчанию выбираем последний месяц периода страницы (один месяц).
+  // Это можно переопределить вручную полями ниже.
+  useEffect(() => {
+    if (!branchReportFrom && monthTo) setBranchReportFrom(monthTo)
+    if (!branchReportTo && monthTo) setBranchReportTo(monthTo)
+  }, [monthTo, branchReportFrom, branchReportTo])
 
   // Per-month, per-company P&L breakdown — нужно для инвесторского экспорта.
   // Та же логика что byCompany, но строится по каждому месяцу периода.
@@ -1246,6 +1255,41 @@ export default function ProfitabilityPage() {
                 </div>
               </div>
 
+              <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                <div>
+                  <label className="block text-xs font-medium text-amber-100/80 mb-1.5">С месяца</label>
+                  <input
+                    type="month"
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
+                    value={branchReportFrom}
+                    onChange={(e) => setBranchReportFrom(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-amber-100/80 mb-1.5">По месяц</label>
+                  <input
+                    type="month"
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
+                    value={branchReportTo}
+                    onChange={(e) => setBranchReportTo(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (monthTo) {
+                        setBranchReportFrom(monthTo)
+                        setBranchReportTo(monthTo)
+                      }
+                    }}
+                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 hover:bg-amber-500/20"
+                  >
+                    Только последний месяц
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs font-medium text-amber-100/80">Распределение чистой прибыли (партнёры)</div>
@@ -1319,15 +1363,17 @@ export default function ProfitabilityPage() {
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Button
-                  disabled={!branchReportCompanyId}
+                  disabled={!branchReportCompanyId || !branchReportFrom || !branchReportTo}
                   onClick={() => {
                     const cleanPartners = branchReportPartners
                       .map((p) => ({ name: p.name.trim(), percent: Number(p.percent) || 0 }))
                       .filter((p) => p.name && p.percent > 0)
+                    const fromValue = branchReportFrom || monthFrom
+                    const toValue = branchReportTo || monthTo
                     const params = new URLSearchParams({
                       company_id: branchReportCompanyId,
-                      from: monthFrom,
-                      to: monthTo,
+                      from: fromValue,
+                      to: toValue,
                       capex: branchReportIncludeCapex ? '1' : '0',
                       auto: '1',
                     })
