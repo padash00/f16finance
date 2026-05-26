@@ -578,6 +578,9 @@ export default function ProfitabilityPage() {
   const [showManualInputs, setShowManualInputs] = useState(false)
   const [investorCompanyId, setInvestorCompanyId] = useState<string>('')
   const [investorExporting, setInvestorExporting] = useState(false)
+  const [branchReportCompanyId, setBranchReportCompanyId] = useState<string>('')
+  const [branchReportPartners, setBranchReportPartners] = useState<Array<{ name: string; percent: string }>>([])
+  const [branchReportIncludeCapex, setBranchReportIncludeCapex] = useState(true)
 
   // Per-month, per-company P&L breakdown — нужно для инвесторского экспорта.
   // Та же логика что byCompany, но строится по каждому месяцу периода.
@@ -1201,6 +1204,149 @@ export default function ProfitabilityPage() {
               </div>
             </Card>
           )}
+
+          {/* ═══ УПРАВЛЕНЧЕСКИЙ ОТЧЁТ ПО ТОЧКЕ (PDF) — детальный, без других точек ═══ */}
+          <Card className="border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-rose-500/[0.03] p-5">
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-200 flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Управленческий отчёт по точке (PDF)
+                </h2>
+                <p className="mt-1 text-xs text-amber-100/70">
+                  Чистая P&L одной точки за {periodLabel}: оборот, 2% налог, расходы по категориям,
+                  чистая прибыль и распределение по партнёрам. Без сводки по другим точкам.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-amber-100/80 mb-1.5">Точка</label>
+                  <select
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
+                    value={branchReportCompanyId}
+                    onChange={(e) => setBranchReportCompanyId(e.target.value)}
+                  >
+                    <option value="">— выберите точку —</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="inline-flex items-center gap-2 text-xs text-amber-100/80">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-amber-400"
+                      checked={branchReportIncludeCapex}
+                      onChange={(e) => setBranchReportIncludeCapex(e.target.checked)}
+                    />
+                    Включить раздел «Капитальные вложения» (если есть)
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-amber-100/80">Распределение чистой прибыли (партнёры)</div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBranchReportPartners((prev) => [...prev, { name: '', percent: '10' }])
+                    }
+                    className="text-xs text-amber-300 hover:text-amber-100 underline-offset-2 hover:underline"
+                  >
+                    + Добавить партнёра
+                  </button>
+                </div>
+                {branchReportPartners.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-amber-500/20 bg-amber-500/[0.03] px-3 py-2 text-xs text-amber-100/60">
+                    Нет партнёров. Чистая прибыль целиком останется владельцу.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {branchReportPartners.map((p, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Имя партнёра"
+                          className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none focus:border-amber-500/40"
+                          value={p.name}
+                          onChange={(e) =>
+                            setBranchReportPartners((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, name: e.target.value } : row)),
+                            )
+                          }
+                        />
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="%"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="w-20 rounded-lg border border-border bg-card px-2 py-1.5 text-sm text-foreground tabular-nums outline-none focus:border-amber-500/40"
+                          value={p.percent}
+                          onChange={(e) =>
+                            setBranchReportPartners((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, percent: e.target.value } : row)),
+                            )
+                          }
+                        />
+                        <span className="text-sm text-amber-100/60">%</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBranchReportPartners((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          className="px-2 text-rose-400 hover:text-rose-200"
+                          title="Удалить"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <div className="text-[10px] text-amber-100/50">
+                      Сумма долей:{' '}
+                      {branchReportPartners
+                        .reduce((sum, p) => sum + (Number(p.percent) || 0), 0)
+                        .toFixed(1)}
+                      %
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  disabled={!branchReportCompanyId}
+                  onClick={() => {
+                    const cleanPartners = branchReportPartners
+                      .map((p) => ({ name: p.name.trim(), percent: Number(p.percent) || 0 }))
+                      .filter((p) => p.name && p.percent > 0)
+                    const params = new URLSearchParams({
+                      company_id: branchReportCompanyId,
+                      from: monthFrom,
+                      to: monthTo,
+                      capex: branchReportIncludeCapex ? '1' : '0',
+                      auto: '1',
+                    })
+                    if (cleanPartners.length > 0) {
+                      params.set('partners', encodeURIComponent(JSON.stringify(cleanPartners)))
+                    }
+                    window.open(`/profitability/print?${params.toString()}`, '_blank')
+                  }}
+                  className="bg-amber-600 text-white hover:bg-amber-500"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Открыть PDF
+                </Button>
+                <span className="text-[11px] text-amber-100/60">
+                  Откроется в новой вкладке с диалогом печати. Выбери «Сохранить как PDF».
+                </span>
+              </div>
+            </div>
+          </Card>
 
           {/* ═══ INVESTOR EXPORT — Excel по одной точке + общая сводка ═══ */}
           <Card className="border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.06] to-cyan-500/[0.03] p-5">
