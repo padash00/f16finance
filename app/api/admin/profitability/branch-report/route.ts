@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server'
 
+import { calculateOperatorSalarySummary } from '@/lib/domain/salary'
+import type {
+  SalaryAdjustmentRow,
+  SalaryDebtRow,
+  SalaryIncomeRow,
+  SalaryOperatorMeta,
+} from '@/lib/domain/salary'
+import { calculateStaffAccrualForMonth } from '@/lib/domain/staff-payroll'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { listSalaryReferenceData } from '@/lib/server/repositories/salary'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -38,6 +47,25 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
 
+function iterateMonths(monthFrom: string, monthTo: string): Array<{ monthStart: string; monthEnd: string }> {
+  const result: Array<{ monthStart: string; monthEnd: string }> = []
+  const [yStr, mStr] = monthFrom.split('-')
+  const [yEndStr, mEndStr] = monthTo.split('-')
+  let y = Number(yStr)
+  let m = Number(mStr)
+  const yEnd = Number(yEndStr)
+  const mEnd = Number(mEndStr)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(yEnd) || !Number.isFinite(mEnd)) return result
+  while (y < yEnd || (y === yEnd && m <= mEnd)) {
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    const mm = String(m).padStart(2, '0')
+    result.push({ monthStart: `${y}-${mm}-01`, monthEnd: `${y}-${mm}-${String(lastDay).padStart(2, '0')}` })
+    m += 1
+    if (m > 12) { y += 1; m = 1 }
+  }
+  return result
+}
+
 type ExpenseLine = {
   category: string
   accountingGroup: string
@@ -69,11 +97,11 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const [companyRes, incomesRes, expensesRes, categoriesRes] = await Promise.all([
+    const [companyRes, incomesRes, expensesRes, categoriesRes, staffRes, staffPeriodsRes, salaryAdjustmentsRes, salaryReference] = await Promise.all([
       supabase.from('companies').select('id, name, code').eq('id', companyId).maybeSingle(),
       supabase
         .from('incomes')
-        .select('cash_amount, kaspi_amount, online_amount, card_amount, date')
+        .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, shift, operator_id, operator_name')
         .eq('company_id', companyId)
         .gte('date', fromDate)
         .lte('date', toDate),
@@ -84,6 +112,14 @@ export async function GET(req: Request) {
         .gte('date', fromDate)
         .lte('date', toDate),
       supabase.from('expense_categories').select('name, accounting_group'),
+      supabase.from('staff').select('id, full_name, created_at, dismissed_at, monthly_salary'),
+      supabase.from('staff_salary_periods').select('staff_id, effective_from, monthly_salary'),
+      supabase
+        .from('operator_salary_adjustments')
+        .select('operator_id,amount,kind,company_id,status,date')
+        .gte('date', fromDate)
+        .lte('date', toDate),
+      listSalaryReferenceData(supabase, { companyIds: [companyId] }),
     ])
 
     if (companyRes.error) throw companyRes.error
@@ -91,6 +127,10 @@ export async function GET(req: Request) {
     if (incomesRes.error) throw incomesRes.error
     if (expensesRes.error) throw expensesRes.error
     if (categoriesRes.error) throw categoriesRes.error
+    if (staffRes.error) throw staffRes.error
+    // staff_salary_periods может ещё не быть (миграция не накатана) — тогда idle null.
+    const staffPeriodsRows = staffPeriodsRes.error ? [] : (staffPeriodsRes.data || [])
+    if (salaryAdjustmentsRes.error) throw salaryAdjustmentsRes.error
 
     const company = companyRes.data as { id: string; name: string; code: string | null }
 
@@ -153,6 +193,96 @@ export async function GET(req: Request) {
     const turnoverTax = round2(turnover * TURNOVER_TAX_RATE)
     const netProfit = round2(turnover - turnoverTax - expensesTotal)
 
+    // ===== Начисления зарплаты (по факту, а не по выплатам) =====
+    // Адм. сотрудники: для каждого месяца отчёта раскладываем по периодам effective_from.
+    const months = iterateMonths(monthFrom, monthTo)
+    const staffRows = (staffRes.data || []) as Array<{
+      id: string
+      full_name: string | null
+      created_at: string | null
+      dismissed_at: string | null
+      monthly_salary: number | null
+    }>
+    const staffMeta = staffRows.map((row) => ({
+      id: row.id,
+      created_at: row.created_at,
+      dismissed_at: row.dismissed_at,
+    }))
+    let staffAccruedTotal = 0
+    for (const { monthStart, monthEnd } of months) {
+      const result = calculateStaffAccrualForMonth({
+        staff: staffMeta,
+        periods: staffPeriodsRows as any,
+        monthStart,
+        monthEnd,
+      })
+      staffAccruedTotal += result.total
+    }
+
+    // Операторы: считаем через calculateOperatorSalarySummary, ограничиваясь сменами этой компании.
+    const incomesRows = (incomesRes.data || []) as SalaryIncomeRow[]
+    const operatorIds = Array.from(
+      new Set(incomesRows.map((row) => String(row.operator_id || '')).filter(Boolean)),
+    )
+
+    let operatorsAccruedTotal = 0
+    if (operatorIds.length > 0) {
+      const [operatorsRes, debtsRes] = await Promise.all([
+        supabase
+          .from('operators')
+          .select('id,name,short_name,is_active,role,operator_profiles(hire_date)')
+          .in('id', operatorIds),
+        supabase
+          .from('debts')
+          .select('operator_id,amount,company_id,status,week_start')
+          .in('operator_id', operatorIds)
+          .eq('status', 'active')
+          .gte('week_start', fromDate)
+          .lte('week_start', toDate),
+      ])
+      if (operatorsRes.error) throw operatorsRes.error
+      if (debtsRes.error) throw debtsRes.error
+
+      const adjustments = (salaryAdjustmentsRes.data || []) as SalaryAdjustmentRow[]
+      const debts = (debtsRes.data || []) as SalaryDebtRow[]
+      const operatorRows = (operatorsRes.data || []) as any[]
+      const companyCode = companyRes.data.code || undefined
+
+      for (const opId of operatorIds) {
+        const opRow = operatorRows.find((r) => r.id === opId)
+        const profile = Array.isArray(opRow?.operator_profiles)
+          ? opRow.operator_profiles[0]
+          : opRow?.operator_profiles
+        const operatorMeta: SalaryOperatorMeta | null = opRow
+          ? {
+              id: opId,
+              name: opRow.name || '',
+              short_name: opRow.short_name || null,
+              hire_date: profile?.hire_date || null,
+            }
+          : null
+        const summary = calculateOperatorSalarySummary({
+          operatorId: opId,
+          operator: operatorMeta,
+          companies: salaryReference.companies,
+          rules: salaryReference.rules,
+          seniorityTiers: salaryReference.seniorityTiers,
+          assignments: salaryReference.assignments,
+          incomes: incomesRows,
+          adjustments,
+          debts,
+          options: companyCode ? { companyCodes: [companyCode] } : undefined,
+        })
+        operatorsAccruedTotal += summary.totalAccrued
+      }
+    }
+
+    const payrollAccrued = {
+      staff: Math.round(staffAccruedTotal),
+      operators: Math.round(operatorsAccruedTotal),
+      total: Math.round(staffAccruedTotal + operatorsAccruedTotal),
+    }
+
     return json({
       ok: true,
       data: {
@@ -182,6 +312,7 @@ export async function GET(req: Request) {
         })),
         expensesTotal,
         netProfit,
+        payrollAccrued,
         capex: capexLines.map((line) => ({
           category: line.category,
           amount: line.amount,

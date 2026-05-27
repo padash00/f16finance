@@ -6,6 +6,16 @@ import { Loader2, Printer } from 'lucide-react'
 
 type Partner = { name: string; percent: number }
 
+type ExpenseLine = {
+  category: string
+  amount: number
+  cashAmount: number
+  kaspiAmount: number
+  count: number
+  comments: string[]
+  accountingGroup: string
+}
+
 type BranchReport = {
   company: { id: string; name: string; code: string | null }
   period: { from: string; to: string; fromDate: string; toDate: string }
@@ -13,17 +23,10 @@ type BranchReport = {
   turnoverTax: number
   turnoverTaxRate: number
   afterTax: number
-  expenses: Array<{
-    category: string
-    amount: number
-    cashAmount: number
-    kaspiAmount: number
-    count: number
-    comments: string[]
-    accountingGroup: string
-  }>
+  expenses: ExpenseLine[]
   expensesTotal: number
   netProfit: number
+  payrollAccrued?: { staff: number; operators: number; total: number }
   capex: Array<{ category: string; amount: number; comments: string[]; count: number }>
   capexTotal: number
 }
@@ -126,17 +129,41 @@ export default function PrintClient() {
     )
   }
 
+  // Управленческий учёт: payroll/payroll_advance из expenses заменяем
+  // на синтетическую строку «Зарплата (начислено)» с суммой по начислениям,
+  // а не по фактическим выплатам. payroll_tax остаётся как есть.
+  const payrollAccrued = report.payrollAccrued || null
+  const isPayrollGroup = (group: string) => group === 'payroll' || group === 'payroll_advance'
+  const nonPayrollExpenses = report.expenses.filter((e) => !isPayrollGroup(e.accountingGroup))
+  const accruedLine: ExpenseLine | null = payrollAccrued && payrollAccrued.total > 0
+    ? {
+        category: 'Зарплата (начислено)',
+        amount: payrollAccrued.total,
+        accountingGroup: 'payroll',
+        cashAmount: 0,
+        kaspiAmount: 0,
+        count: 0,
+        comments: [],
+      }
+    : null
+  const displayedExpenses: ExpenseLine[] = (accruedLine
+    ? [accruedLine, ...nonPayrollExpenses]
+    : nonPayrollExpenses
+  ).sort((a, b) => b.amount - a.amount)
+  const displayedExpensesTotal = Math.round(displayedExpenses.reduce((s, e) => s + e.amount, 0))
+  const displayedNetProfit = Math.round(report.turnover - report.turnoverTax - displayedExpensesTotal)
+
   const partnersPayouts = partners.map((p) => ({
     ...p,
-    amount: Math.round((report.netProfit * p.percent) / 100),
+    amount: Math.round((displayedNetProfit * p.percent) / 100),
   }))
   const partnersTotal = partnersPayouts.reduce((sum, p) => sum + p.amount, 0)
-  const ownerProfit = report.netProfit - partnersTotal
+  const ownerProfit = displayedNetProfit - partnersTotal
   const ownerPercent = 100 - partnersPayouts.reduce((s, p) => s + p.percent, 0)
 
   // Метрики качества бизнеса для KPI-полоски.
-  const profitMargin = report.turnover > 0 ? (report.netProfit / report.turnover) * 100 : 0
-  const expensesShare = report.turnover > 0 ? (report.expensesTotal / report.turnover) * 100 : 0
+  const profitMargin = report.turnover > 0 ? (displayedNetProfit / report.turnover) * 100 : 0
+  const expensesShare = report.turnover > 0 ? (displayedExpensesTotal / report.turnover) * 100 : 0
   const taxShare = report.turnoverTaxRate * 100
 
   // Разбивка оборота для горизонтального бара.
@@ -144,16 +171,16 @@ export default function PrintClient() {
     {
       key: 'profit',
       label: 'Прибыль',
-      amount: Math.max(0, report.netProfit),
-      color: report.netProfit >= 0 ? '#f59e0b' : '#94a3b8',
-      percent: report.turnover > 0 ? (Math.max(0, report.netProfit) / report.turnover) * 100 : 0,
+      amount: Math.max(0, displayedNetProfit),
+      color: displayedNetProfit >= 0 ? '#f59e0b' : '#94a3b8',
+      percent: report.turnover > 0 ? (Math.max(0, displayedNetProfit) / report.turnover) * 100 : 0,
     },
     {
       key: 'expenses',
       label: 'Расходы',
-      amount: report.expensesTotal,
+      amount: displayedExpensesTotal,
       color: '#475569',
-      percent: report.turnover > 0 ? (report.expensesTotal / report.turnover) * 100 : 0,
+      percent: report.turnover > 0 ? (displayedExpensesTotal / report.turnover) * 100 : 0,
     },
     {
       key: 'tax',
@@ -185,14 +212,14 @@ export default function PrintClient() {
   }
 
   // Максимум для масштабирования мини-bar внутри строк расходов.
-  const expensesMax = report.expenses.reduce((m, e) => Math.max(m, e.amount), 0)
+  const expensesMax = displayedExpenses.reduce((m, e) => Math.max(m, e.amount), 0)
 
   // Множество ID топ-3 расходов для подсветки золотой полосой слева.
-  const topThreeIds = new Set(report.expenses.slice(0, 3).map((e) => e.category))
+  const topThreeIds = new Set(displayedExpenses.slice(0, 3).map((e) => e.category))
 
   // Разделяем расходы на две колонки для печати: чередуем чтобы суммы балансировались.
-  const expensesLeft = report.expenses.filter((_, i) => i % 2 === 0)
-  const expensesRight = report.expenses.filter((_, i) => i % 2 === 1)
+  const expensesLeft = displayedExpenses.filter((_, i) => i % 2 === 0)
+  const expensesRight = displayedExpenses.filter((_, i) => i % 2 === 1)
 
   return (
     <>
@@ -274,13 +301,13 @@ export default function PrintClient() {
               </div>
               <div className={
                 'rounded-xl px-4 py-3 border-2 ' +
-                (report.netProfit >= 0 ? 'border-amber-500 bg-amber-50' : 'border-rose-500 bg-rose-50')
+                (displayedNetProfit >= 0 ? 'border-amber-500 bg-amber-50' : 'border-rose-500 bg-rose-50')
               }>
-                <div className={'text-[9px] font-bold uppercase tracking-wider ' + (report.netProfit >= 0 ? 'text-amber-800' : 'text-rose-700')}>
+                <div className={'text-[9px] font-bold uppercase tracking-wider ' + (displayedNetProfit >= 0 ? 'text-amber-800' : 'text-rose-700')}>
                   Чистая прибыль
                 </div>
-                <div className={'mt-0.5 text-xl font-extrabold tabular-nums leading-tight ' + (report.netProfit >= 0 ? 'text-amber-900' : 'text-rose-700')}>
-                  {fmtMoney(report.netProfit)} <span className="text-sm font-semibold">₸</span>
+                <div className={'mt-0.5 text-xl font-extrabold tabular-nums leading-tight ' + (displayedNetProfit >= 0 ? 'text-amber-900' : 'text-rose-700')}>
+                  {fmtMoney(displayedNetProfit)} <span className="text-sm font-semibold">₸</span>
                 </div>
               </div>
             </section>
@@ -306,6 +333,49 @@ export default function PrintClient() {
                 </div>
               </div>
             </section>
+
+            {/* Детализация ФОТ — по факту начисления, не по выплатам */}
+            {payrollAccrued && payrollAccrued.total > 0 ? (
+              <section className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 px-3 py-2 keep">
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
+                    Фонд оплаты труда (начислено)
+                  </h2>
+                  <span className="text-[9px] text-slate-500">
+                    по факту начисления за период
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-blue-200 bg-white px-3 py-1.5">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">
+                      Адм. сотрудники
+                    </div>
+                    <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
+                      {fmtMoney(payrollAccrued.staff)} <span className="text-[10px] text-slate-500">₸</span>
+                    </div>
+                    <div className="text-[8.5px] text-slate-400">оклады с учётом дат изменений</div>
+                  </div>
+                  <div className="rounded-lg border border-blue-200 bg-white px-3 py-1.5">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">
+                      Операторы по сменам
+                    </div>
+                    <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
+                      {fmtMoney(payrollAccrued.operators)} <span className="text-[10px] text-slate-500">₸</span>
+                    </div>
+                    <div className="text-[8.5px] text-slate-400">смены × ставки + премии − штрафы</div>
+                  </div>
+                  <div className="rounded-lg border-2 border-blue-400 bg-blue-100 px-3 py-1.5">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-blue-800">
+                      Итого ФОТ
+                    </div>
+                    <div className="mt-0.5 text-[15px] font-extrabold tabular-nums text-blue-900">
+                      {fmtMoney(payrollAccrued.total)} <span className="text-[10px] font-semibold">₸</span>
+                    </div>
+                    <div className="text-[8.5px] text-blue-700">включено в расходы ниже</div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             {/* Разбивка оборота — горизонтальный bar */}
             <section className="mb-4 keep">
@@ -346,10 +416,10 @@ export default function PrintClient() {
                   Расходы за период
                 </h2>
                 <div className="text-[10px] text-slate-500">
-                  {report.expenses.length} {report.expenses.length === 1 ? 'категория' : 'категорий'}
+                  {displayedExpenses.length} {displayedExpenses.length === 1 ? 'категория' : 'категорий'}
                 </div>
               </div>
-              {report.expenses.length === 0 ? (
+              {displayedExpenses.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] text-slate-500">
                   Расходов за период не зафиксировано
                 </div>
@@ -359,7 +429,7 @@ export default function PrintClient() {
                     {[expensesLeft, expensesRight].map((col, colIdx) => (
                       <div key={colIdx} className="space-y-0.5">
                         {col.map((line) => {
-                          const sharePercent = report.expensesTotal > 0 ? (line.amount / report.expensesTotal) * 100 : 0
+                          const sharePercent = displayedExpensesTotal > 0 ? (line.amount / displayedExpensesTotal) * 100 : 0
                           const barWidth = expensesMax > 0 ? (line.amount / expensesMax) * 100 : 0
                           const isTopThree = topThreeIds.has(line.category)
                           const dotColor = groupColor(line.accountingGroup)
@@ -400,7 +470,7 @@ export default function PrintClient() {
                   </div>
                   {/* Легенда групп */}
                   <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[8.5px] text-slate-500">
-                    {Array.from(new Set(report.expenses.map((e) => e.accountingGroup))).map((g) => (
+                    {Array.from(new Set(displayedExpenses.map((e) => e.accountingGroup))).map((g) => (
                       <span key={g} className="inline-flex items-center gap-1">
                         <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: groupColor(g) }} />
                         {groupLabel(g)}
@@ -410,7 +480,7 @@ export default function PrintClient() {
                   <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-900 px-3 py-1.5 text-white">
                     <div className="text-[11px] font-bold uppercase tracking-wider">Итого расходов</div>
                     <div className="text-base font-extrabold tabular-nums">
-                      {fmtMoney(report.expensesTotal)} ₸
+                      {fmtMoney(displayedExpensesTotal)} ₸
                     </div>
                   </div>
                 </>
@@ -424,10 +494,10 @@ export default function PrintClient() {
               <span className="tabular-nums">{fmtMoney(report.turnoverTax)}</span>
               <span className="text-slate-400"> (налог)</span>
               <span className="mx-1.5 text-slate-400">−</span>
-              <span className="tabular-nums">{fmtMoney(report.expensesTotal)}</span>
+              <span className="tabular-nums">{fmtMoney(displayedExpensesTotal)}</span>
               <span className="text-slate-400"> (расходы)</span>
               <span className="mx-1.5 text-slate-400">=</span>
-              <span className="font-bold tabular-nums text-slate-900">{fmtMoney(report.netProfit)} ₸</span>
+              <span className="font-bold tabular-nums text-slate-900">{fmtMoney(displayedNetProfit)} ₸</span>
             </section>
 
             {/* Распределение прибыли */}
