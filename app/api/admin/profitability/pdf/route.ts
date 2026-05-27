@@ -32,6 +32,8 @@ export async function GET(req: Request) {
     const monthTo = (url.searchParams.get('to') || '').trim()
     const partnersRaw = url.searchParams.get('partners') || ''
     const includeCapex = url.searchParams.get('capex') !== '0'
+    const payrollStaffOverride = url.searchParams.get('payroll_staff') || ''
+    const payrollOpsOverride = url.searchParams.get('payroll_ops') || ''
 
     if (!companyId || !monthFrom || !monthTo) {
       return json({ error: 'company_id, from, to обязательны' }, 400)
@@ -44,6 +46,8 @@ export async function GET(req: Request) {
     printUrl.searchParams.set('to', monthTo)
     if (partnersRaw) printUrl.searchParams.set('partners', partnersRaw)
     if (!includeCapex) printUrl.searchParams.set('capex', '0')
+    if (payrollStaffOverride) printUrl.searchParams.set('payroll_staff', payrollStaffOverride)
+    if (payrollOpsOverride) printUrl.searchParams.set('payroll_ops', payrollOpsOverride)
 
     // Динамические импорты — чтобы Vercel не паковал chromium в обычные routes.
     const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
