@@ -585,7 +585,22 @@ export default function ProfitabilityPage() {
   const [branchReportTo, setBranchReportTo] = useState<string>('')
   const [branchPayrollStaffOverride, setBranchPayrollStaffOverride] = useState<string>('')
   const [branchPayrollOpsOverride, setBranchPayrollOpsOverride] = useState<string>('')
+  const [branchNote, setBranchNote] = useState<string>('')
   const [branchPdfDownloading, setBranchPdfDownloading] = useState(false)
+
+  // Сохраняем комментарий в localStorage чтобы между визитами не вводить заново.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('profitability-branch-note')
+      if (saved) setBranchNote(saved)
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => {
+    try {
+      if (branchNote) localStorage.setItem('profitability-branch-note', branchNote)
+      else localStorage.removeItem('profitability-branch-note')
+    } catch { /* ignore */ }
+  }, [branchNote])
 
   const buildBranchReportParams = () => {
     const cleanPartners = branchReportPartners
@@ -609,6 +624,11 @@ export default function ProfitabilityPage() {
     if (opsOverrideTrim) {
       const value = Math.max(0, Math.round(Number(opsOverrideTrim.replace(/\s/g, '').replace(',', '.'))) || 0)
       params.set('payroll_ops', String(value))
+    }
+    const noteTrim = branchNote.trim()
+    if (noteTrim) {
+      // Ограничим разумной длиной чтобы не сломать URL.
+      params.set('note', noteTrim.slice(0, 2000))
     }
     return params
   }
@@ -1377,6 +1397,26 @@ export default function ProfitabilityPage() {
                       onChange={(e) => setBranchPayrollOpsOverride(e.target.value)}
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Комментарий к отчёту — попадает в PDF (например, «в апреле провели ремонт зоны PS5») */}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                <div className="mb-2 text-xs font-medium text-amber-100/80">
+                  Пояснение к отчёту
+                  <span className="ml-2 text-[10px] text-amber-100/50">появится в PDF внизу страницы</span>
+                </div>
+                <textarea
+                  value={branchNote}
+                  onChange={(e) => setBranchNote(e.target.value)}
+                  placeholder="Например: в апреле провели ремонт зоны PS5 на 350 000 ₸ — деньги отражены в капвложениях. Также подняли оклад менеджеру с 15 числа."
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full resize-y rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-amber-100/50">
+                  <span>Сохраняется автоматически в браузере</span>
+                  <span>{branchNote.length}/2000</span>
                 </div>
               </div>
 

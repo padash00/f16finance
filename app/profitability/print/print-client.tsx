@@ -68,6 +68,7 @@ export default function PrintClient() {
   // используем эти суммы вместо расчётных из API. Пустая строка = не задано.
   const overrideStaffRaw = params.get('payroll_staff')
   const overrideOpsRaw = params.get('payroll_ops')
+  const note = (params.get('note') || '').trim()
   const overrideStaff = overrideStaffRaw != null && overrideStaffRaw !== ''
     ? Math.max(0, Math.round(Number(overrideStaffRaw)) || 0)
     : null
@@ -610,6 +611,18 @@ export default function PrintClient() {
                     <div className="tabular-nums font-extrabold text-slate-900 text-[13px]">{fmtMoney(report.capexTotal)} ₸</div>
                   </div>
                 </div>
+              </section>
+            ) : null}
+
+            {/* Пояснение к отчёту — комментарий владельца (например, о ремонте зоны) */}
+            {note ? (
+              <section className="mb-3 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 keep">
+                <h2 className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-800">
+                  Пояснение к отчёту
+                </h2>
+                <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-slate-800">
+                  {note}
+                </p>
               </section>
             ) : null}
 
