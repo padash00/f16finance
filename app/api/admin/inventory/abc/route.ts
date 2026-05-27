@@ -159,7 +159,9 @@ export async function GET(request: Request) {
 
     // Aggregate by item_id. Пропускаем строки без item_id — иначе в Map попадёт
     // ключ 'null' и SQL получит "invalid input syntax for type uuid: 'null'".
+    // Параллельно собираем продажи по дням для XYZ-анализа (коэф. вариации).
     const itemMap: Record<string, { revenue: number; qty: number; transactions: number }> = {}
+    const dailyQtyByItem: Record<string, Record<string, number>> = {}
     for (const si of filtered) {
       const itemId = (si as any)?.item_id
       if (!itemId || typeof itemId !== 'string') continue
@@ -167,19 +169,35 @@ export async function GET(request: Request) {
       itemMap[itemId].revenue += Number(si.total_price || (si.quantity * si.unit_price) || 0)
       itemMap[itemId].qty += Number(si.quantity || 0)
       itemMap[itemId].transactions += 1
+      const ps = (si as any)?.point_sales
+      const saleDate = String((Array.isArray(ps) ? ps[0]?.sale_date : ps?.sale_date) || '').slice(0, 10)
+      if (saleDate) {
+        if (!dailyQtyByItem[itemId]) dailyQtyByItem[itemId] = {}
+        dailyQtyByItem[itemId][saleDate] = (dailyQtyByItem[itemId][saleDate] || 0) + Number(si.quantity || 0)
+      }
     }
 
-    // Fetch item details
-    const itemIds = Object.keys(itemMap).filter((id) => id && id !== 'null' && id !== 'undefined')
-    let items: any[] = []
-    if (itemIds.length > 0) {
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
-        .in('id', itemIds)
-      if (error) throw error
-      items = data || []
+    // XYZ по коэффициенту вариации (CV) суточных продаж за период.
+    // X = стабильный (CV < 25%), Y = средне-стабильный (25-50%), Z = непредсказуемый (>50%).
+    // Для товаров с < 3 днями продаж — Z (недостаточно данных для стабильности).
+    function computeXyz(itemId: string): 'X' | 'Y' | 'Z' {
+      const days = dailyQtyByItem[itemId]
+      if (!days) return 'Z'
+      const values = Object.values(days)
+      if (values.length < 3) return 'Z'
+      const mean = values.reduce((a, b) => a + b, 0) / values.length
+      if (mean <= 0) return 'Z'
+      const variance = values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / values.length
+      const cv = (Math.sqrt(variance) / mean) * 100
+      if (cv < 25) return 'X'
+      if (cv < 50) return 'Y'
+      return 'Z'
     }
+
+    // Fetch all items (active) — нам нужны и items без продаж (C-класс),
+    // и itemDetailsMap для items с продажами.
+    const itemIds = Object.keys(itemMap).filter((id) => id && id !== 'null' && id !== 'undefined')
+    void itemIds // используется только для документации scope; реальный лукап — через allItems ниже
 
     // Also fetch items with zero sales (C-class candidates)
     const { data: allItems, error: allItemsError } = await supabase
@@ -187,6 +205,35 @@ export async function GET(request: Request) {
       .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
       .eq('is_active', true)
     if (allItemsError) throw allItemsError
+
+    // Загружаем остатки складов (warehouse) этой точки/области — для stock_value и slow-movers.
+    let stockLocationsQuery = supabase
+      .from('inventory_locations')
+      .select('id, company_id')
+      .eq('is_active', true)
+      .not('company_id', 'is', null)
+    if (companyId) stockLocationsQuery = stockLocationsQuery.eq('company_id', companyId)
+    if (scopedCompanyIds) stockLocationsQuery = stockLocationsQuery.in('company_id', scopedCompanyIds)
+    const { data: stockLocations, error: stockLocationsError } = await stockLocationsQuery
+    if (stockLocationsError) throw stockLocationsError
+    const stockLocationIds = (stockLocations || [])
+      .map((row: any) => String(row.id))
+      .filter((id) => id && id !== 'null')
+
+    const stockQtyByItem: Record<string, number> = {}
+    if (stockLocationIds.length > 0) {
+      const { data: stockBalances, error: stockBalancesError } = await supabase
+        .from('inventory_balances')
+        .select('item_id, quantity')
+        .in('location_id', stockLocationIds)
+        .gt('quantity', 0)
+      if (stockBalancesError) throw stockBalancesError
+      for (const row of stockBalances || []) {
+        const id = (row as any)?.item_id
+        if (!id || typeof id !== 'string') continue
+        stockQtyByItem[id] = (stockQtyByItem[id] || 0) + Number((row as any).quantity || 0)
+      }
+    }
 
     // Build result
     const totalRevenue = Object.values(itemMap).reduce((s, v) => s + v.revenue, 0)
@@ -203,8 +250,11 @@ export async function GET(request: Request) {
       revenue_percent: number
       cumulative_percent: number
       abc_class: 'A' | 'B' | 'C'
+      xyz_class: 'X' | 'Y' | 'Z'
       margin: number
       margin_percent: number
+      stock_qty: number
+      stock_value: number
     }
 
     const result: AbcItem[] = []
@@ -224,6 +274,7 @@ export async function GET(request: Request) {
       const margin = stats.qty > 0 ? stats.revenue - purchasePrice * stats.qty : 0
       const marginPercent = stats.revenue > 0 ? (margin / stats.revenue) * 100 : 0
       const cat = detail?.category
+      const stockQty = Number(stockQtyByItem[itemId] || 0)
       result.push({
         item_id: itemId,
         name: detail?.name || itemId,
@@ -236,8 +287,11 @@ export async function GET(request: Request) {
         revenue_percent: Math.round(revenuePercent * 10) / 10,
         cumulative_percent: Math.round(cumulative * 10) / 10,
         abc_class: abcClass,
+        xyz_class: computeXyz(itemId),
         margin: Math.round(margin),
         margin_percent: Math.round(marginPercent * 10) / 10,
+        stock_qty: Math.round(stockQty * 100) / 100,
+        stock_value: Math.round(stockQty * purchasePrice),
       })
     }
 
@@ -245,22 +299,43 @@ export async function GET(request: Request) {
     for (const item of allItems || []) {
       if (!itemMap[item.id]) {
         const cat = item.category as any
+        const stockQty = Number(stockQtyByItem[item.id] || 0)
+        const purchasePrice = Number(item.default_purchase_price || 0)
         result.push({
           item_id: item.id,
           name: item.name,
           category: Array.isArray(cat) ? cat[0]?.name || null : cat?.name || null,
           sale_price: Number(item.sale_price || 0),
-          purchase_price: Number(item.default_purchase_price || 0),
+          purchase_price: purchasePrice,
           revenue: 0,
           qty: 0,
           transactions: 0,
           revenue_percent: 0,
           cumulative_percent: 100,
           abc_class: 'C',
+          xyz_class: 'Z',
           margin: 0,
           margin_percent: 0,
+          stock_qty: Math.round(stockQty * 100) / 100,
+          stock_value: Math.round(stockQty * purchasePrice),
         })
       }
+    }
+
+    // Slow-movers: товары с положительным остатком и нулевыми продажами за период.
+    // Замороженные деньги = stock_value.
+    const slowMovers = result
+      .filter((r) => r.revenue === 0 && r.stock_qty > 0)
+      .sort((a, b) => b.stock_value - a.stock_value)
+    const slowMoversValue = slowMovers.reduce((s, r) => s + r.stock_value, 0)
+
+    // Матрица ABC×XYZ — 3×3 ячейки с количеством товаров и суммарной выручкой.
+    const abcXyzMatrix: Record<string, { count: number; revenue: number }> = {}
+    for (const r of result) {
+      const key = `${r.abc_class}${r.xyz_class}`
+      if (!abcXyzMatrix[key]) abcXyzMatrix[key] = { count: 0, revenue: 0 }
+      abcXyzMatrix[key].count += 1
+      abcXyzMatrix[key].revenue += r.revenue
     }
 
     const summary = {
@@ -271,9 +346,20 @@ export async function GET(request: Request) {
       revenue_a: Math.round(result.filter(i => i.abc_class === 'A').reduce((s, i) => s + i.revenue, 0)),
       revenue_b: Math.round(result.filter(i => i.abc_class === 'B').reduce((s, i) => s + i.revenue, 0)),
       revenue_c: Math.round(result.filter(i => i.abc_class === 'C').reduce((s, i) => s + i.revenue, 0)),
+      slow_movers_count: slowMovers.length,
+      slow_movers_value: Math.round(slowMoversValue),
+      abc_xyz_matrix: abcXyzMatrix,
     }
 
-    return json({ ok: true, data: result, summary, days, total_revenue: totalRevenue, mode })
+    return json({
+      ok: true,
+      data: result,
+      slow_movers: slowMovers,
+      summary,
+      days,
+      total_revenue: totalRevenue,
+      mode,
+    })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/inventory/abc.GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка' }, 500)
