@@ -258,13 +258,26 @@ export default function PrintClient() {
             min-height: 100vh;
           }
         }
+        /* Глобальные виджеты root layout (AI-ассистент, тосты, ошибки) — скрыть на всей print-странице, не только при печати. */
+        [data-claude-assistant],
+        [data-global-assistant],
+        [data-toaster],
+        [data-sonner-toaster],
+        .sonner-toaster,
+        [data-radix-toast-viewport] {
+          display: none !important;
+        }
         @media print {
           .no-print { display: none !important; }
           html, body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @page { margin: 10mm; size: A4 portrait; }
           .print-shell { padding: 0 !important; background: white !important; }
           .doc-paper { box-shadow: none !important; max-width: none !important; width: 100% !important; }
-          .doc-paper section, .doc-paper .keep { page-break-inside: avoid; break-inside: avoid; }
+          /* Маленькие секции (топ-блок, KPI, ФОТ, формула, партнёры) — не резать на странице. */
+          .doc-paper .keep { page-break-inside: avoid; break-inside: avoid; }
+          /* Длинные секции (расходы, капвложения) — пусть текут естественно, но строки внутри не рвём. */
+          .doc-paper .capex-item,
+          .doc-paper .capex-category { page-break-inside: avoid; break-inside: avoid; }
         }
       `}</style>
 
@@ -547,10 +560,10 @@ export default function PrintClient() {
               </section>
             ) : null}
 
-            {/* Капитальные вложения — с детализацией каждой покупки */}
+            {/* Капитальные вложения — с детализацией каждой покупки. Длинный раздел, режется на страницы по строкам */}
             {includeCapex && report.capex.length > 0 ? (
-              <section className="mb-3 keep">
-                <div className="mb-2 flex items-baseline justify-between">
+              <section className="mb-3">
+                <div className="mb-2 flex items-baseline justify-between capex-item">
                   <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
                     Капитальные вложения
                   </h2>
@@ -563,7 +576,7 @@ export default function PrintClient() {
                     const items = line.items || []
                     return (
                       <div key={line.category} className={idx > 0 ? 'border-t border-slate-200' : ''}>
-                        <div className="flex items-baseline justify-between bg-slate-50 px-3 py-1.5 text-[11.5px]">
+                        <div className="capex-category flex items-baseline justify-between bg-slate-50 px-3 py-1.5 text-[11.5px]">
                           <div>
                             <span className="font-semibold text-slate-900">{line.category}</span>
                             <span className="ml-2 text-[9.5px] text-slate-500">
@@ -575,7 +588,7 @@ export default function PrintClient() {
                         {items.length > 0 ? (
                           <div className="divide-y divide-slate-100">
                             {items.map((it, i) => (
-                              <div key={i} className="flex items-start gap-2 px-3 py-1 text-[10.5px]">
+                              <div key={i} className="capex-item flex items-start gap-2 px-3 py-1 text-[10.5px]">
                                 <span className="w-[58px] shrink-0 font-mono text-[9px] text-slate-400">
                                   {it.date ? it.date.slice(5) : '—'}
                                 </span>
@@ -592,7 +605,7 @@ export default function PrintClient() {
                       </div>
                     )
                   })}
-                  <div className="flex items-baseline justify-between border-t border-slate-200 bg-slate-100 px-3 py-1.5">
+                  <div className="capex-item flex items-baseline justify-between border-t border-slate-200 bg-slate-100 px-3 py-1.5">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-700">Итого вложений</div>
                     <div className="tabular-nums font-extrabold text-slate-900 text-[13px]">{fmtMoney(report.capexTotal)} ₸</div>
                   </div>
