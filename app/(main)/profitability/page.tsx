@@ -583,6 +583,47 @@ export default function ProfitabilityPage() {
   const [branchReportIncludeCapex, setBranchReportIncludeCapex] = useState(true)
   const [branchReportFrom, setBranchReportFrom] = useState<string>('')
   const [branchReportTo, setBranchReportTo] = useState<string>('')
+  const [branchPdfDownloading, setBranchPdfDownloading] = useState(false)
+
+  const handleDownloadBranchPdf = async () => {
+    if (!branchReportCompanyId || !branchReportFrom || !branchReportTo) return
+    setBranchPdfDownloading(true)
+    try {
+      const cleanPartners = branchReportPartners
+        .map((p) => ({ name: p.name.trim(), percent: Number(p.percent) || 0 }))
+        .filter((p) => p.name && p.percent > 0)
+      const params = new URLSearchParams({
+        company_id: branchReportCompanyId,
+        from: branchReportFrom,
+        to: branchReportTo,
+        capex: branchReportIncludeCapex ? '1' : '0',
+      })
+      if (cleanPartners.length > 0) {
+        params.set('partners', encodeURIComponent(JSON.stringify(cleanPartners)))
+      }
+      const res = await fetch(`/api/admin/profitability/pdf?${params.toString()}`, { cache: 'no-store' })
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null)
+        throw new Error(errJson?.error || `HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename="?([^";]+)"?/i)
+      const filename = match?.[1] || `profitability-${branchReportFrom}.pdf`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      alert(`Не удалось сформировать PDF: ${e?.message || 'неизвестная ошибка'}`)
+    } finally {
+      setBranchPdfDownloading(false)
+    }
+  }
 
   // По умолчанию выбираем последний месяц периода страницы (один месяц).
   // Это можно переопределить вручную полями ниже.
@@ -1363,6 +1404,15 @@ export default function ProfitabilityPage() {
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Button
+                  disabled={!branchReportCompanyId || !branchReportFrom || !branchReportTo || branchPdfDownloading}
+                  onClick={() => void handleDownloadBranchPdf()}
+                  className="bg-amber-600 text-white hover:bg-amber-500"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {branchPdfDownloading ? 'Готовим PDF…' : 'Скачать PDF'}
+                </Button>
+                <Button
+                  variant="outline"
                   disabled={!branchReportCompanyId || !branchReportFrom || !branchReportTo}
                   onClick={() => {
                     const cleanPartners = branchReportPartners
@@ -1375,20 +1425,17 @@ export default function ProfitabilityPage() {
                       from: fromValue,
                       to: toValue,
                       capex: branchReportIncludeCapex ? '1' : '0',
-                      auto: '1',
                     })
                     if (cleanPartners.length > 0) {
                       params.set('partners', encodeURIComponent(JSON.stringify(cleanPartners)))
                     }
                     window.open(`/profitability/print?${params.toString()}`, '_blank')
                   }}
-                  className="bg-amber-600 text-white hover:bg-amber-500"
                 >
-                  <Download className="mr-2 h-4 w-4" />
-                  Открыть PDF
+                  Открыть в браузере
                 </Button>
                 <span className="text-[11px] text-amber-100/60">
-                  Откроется в новой вкладке с диалогом печати. Выбери «Сохранить как PDF».
+                  «Скачать PDF» — сразу .pdf файл. «Открыть в браузере» — для предпросмотра.
                 </span>
               </div>
             </div>

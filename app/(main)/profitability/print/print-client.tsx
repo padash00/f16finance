@@ -519,7 +519,7 @@ export default function PrintClient() {
                   {ownerProfit !== 0 && ownerPercent > 0 ? (
                     <div className="flex items-baseline justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-1.5 text-[11.5px]">
                       <div>
-                        <span className="font-bold text-amber-900">Владельцу</span>
+                        <span className="font-bold text-amber-900">В бизнесе</span>
                         <span className="ml-1.5 text-[10px] text-amber-700">{ownerPercent.toFixed(0)}%</span>
                       </div>
                       <div className="tabular-nums font-extrabold text-amber-900">{fmtMoney(ownerProfit)} ₸</div>
