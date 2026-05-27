@@ -53,7 +53,6 @@ export async function GET(req: Request) {
 
     browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(CHROMIUM_PACK_URL),
       headless: true,
     })
