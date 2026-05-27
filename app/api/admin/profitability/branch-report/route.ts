@@ -74,6 +74,7 @@ type ExpenseLine = {
   kaspiAmount: number
   count: number
   topComments: string[]
+  items: Array<{ date: string; amount: number; comment: string }>
 }
 
 export async function GET(req: Request) {
@@ -170,6 +171,7 @@ export async function GET(req: Request) {
         kaspiAmount: 0,
         count: 0,
         topComments: [],
+        items: [],
       }
       current.amount = round2(current.amount + total)
       current.cashAmount = round2(current.cashAmount + cash)
@@ -178,6 +180,14 @@ export async function GET(req: Request) {
       const comment = String(row?.comment || '').trim()
       if (comment && current.topComments.length < 3 && !current.topComments.includes(comment)) {
         current.topComments.push(comment)
+      }
+      // Для capex сохраняем полный список позиций — пригодится в детализации PDF.
+      if (accountingGroup === 'capex') {
+        current.items.push({
+          date: String(row?.date || ''),
+          amount: round2(total),
+          comment,
+        })
       }
       expenseMap.set(category, current)
     }
@@ -318,6 +328,9 @@ export async function GET(req: Request) {
           amount: line.amount,
           comments: line.topComments,
           count: line.count,
+          items: line.items
+            .slice()
+            .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
         })),
         capexTotal,
       },

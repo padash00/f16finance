@@ -27,7 +27,13 @@ type BranchReport = {
   expensesTotal: number
   netProfit: number
   payrollAccrued?: { staff: number; operators: number; total: number }
-  capex: Array<{ category: string; amount: number; comments: string[]; count: number }>
+  capex: Array<{
+    category: string
+    amount: number
+    comments: string[]
+    count: number
+    items?: Array<{ date: string; amount: number; comment: string }>
+  }>
   capexTotal: number
 }
 
@@ -541,7 +547,7 @@ export default function PrintClient() {
               </section>
             ) : null}
 
-            {/* Капитальные вложения */}
+            {/* Капитальные вложения — с детализацией каждой покупки */}
             {includeCapex && report.capex.length > 0 ? (
               <section className="mb-3 keep">
                 <div className="mb-2 flex items-baseline justify-between">
@@ -553,18 +559,40 @@ export default function PrintClient() {
                   </span>
                 </div>
                 <div className="rounded-lg border border-slate-200">
-                  {report.capex.map((line, idx) => (
-                    <div key={line.category} className={'flex items-baseline justify-between px-3 py-1.5 text-[11.5px] ' + (idx > 0 ? 'border-t border-slate-100' : '')}>
-                      <div>
-                        <span className="font-medium text-slate-900">{line.category}</span>
-                        {line.comments.length > 0 && line.comments[0] ? (
-                          <span className="ml-1.5 text-[9.5px] text-slate-400">· {line.comments[0].slice(0, 50)}</span>
+                  {report.capex.map((line, idx) => {
+                    const items = line.items || []
+                    return (
+                      <div key={line.category} className={idx > 0 ? 'border-t border-slate-200' : ''}>
+                        <div className="flex items-baseline justify-between bg-slate-50 px-3 py-1.5 text-[11.5px]">
+                          <div>
+                            <span className="font-semibold text-slate-900">{line.category}</span>
+                            <span className="ml-2 text-[9.5px] text-slate-500">
+                              {line.count} {line.count === 1 ? 'позиция' : 'позиций'}
+                            </span>
+                          </div>
+                          <div className="tabular-nums font-bold text-slate-900">{fmtMoney(line.amount)} ₸</div>
+                        </div>
+                        {items.length > 0 ? (
+                          <div className="divide-y divide-slate-100">
+                            {items.map((it, i) => (
+                              <div key={i} className="flex items-start gap-2 px-3 py-1 text-[10.5px]">
+                                <span className="w-[58px] shrink-0 font-mono text-[9px] text-slate-400">
+                                  {it.date ? it.date.slice(5) : '—'}
+                                </span>
+                                <span className="flex-1 text-slate-700 break-words">
+                                  {it.comment || <span className="text-slate-400">без комментария</span>}
+                                </span>
+                                <span className="tabular-nums whitespace-nowrap text-slate-800">
+                                  {fmtMoney(it.amount)} ₸
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         ) : null}
                       </div>
-                      <div className="tabular-nums font-semibold text-slate-800">{fmtMoney(line.amount)} ₸</div>
-                    </div>
-                  ))}
-                  <div className="flex items-baseline justify-between border-t border-slate-200 bg-slate-50 px-3 py-1.5">
+                    )
+                  })}
+                  <div className="flex items-baseline justify-between border-t border-slate-200 bg-slate-100 px-3 py-1.5">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-700">Итого вложений</div>
                     <div className="tabular-nums font-extrabold text-slate-900 text-[13px]">{fmtMoney(report.capexTotal)} ₸</div>
                   </div>
