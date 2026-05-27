@@ -75,12 +75,12 @@ export async function GET(request: Request) {
 
       const qtyByItem: Record<string, number> = {}
       for (const row of balanceRows || []) {
-        const key = String((row as any).item_id || '')
-        if (!key) continue
-        qtyByItem[key] = (qtyByItem[key] || 0) + Number((row as any).quantity || 0)
+        const itemId = (row as any)?.item_id
+        if (!itemId || typeof itemId !== 'string') continue
+        qtyByItem[itemId] = (qtyByItem[itemId] || 0) + Number((row as any).quantity || 0)
       }
 
-      const itemIds = Object.keys(qtyByItem)
+      const itemIds = Object.keys(qtyByItem).filter((id) => id && id !== 'null' && id !== 'undefined')
       if (itemIds.length === 0) {
         return json({
           ok: true,
@@ -157,17 +157,20 @@ export async function GET(request: Request) {
 
     const filtered = saleItems || []
 
-    // Aggregate by item_id
+    // Aggregate by item_id. Пропускаем строки без item_id — иначе в Map попадёт
+    // ключ 'null' и SQL получит "invalid input syntax for type uuid: 'null'".
     const itemMap: Record<string, { revenue: number; qty: number; transactions: number }> = {}
     for (const si of filtered) {
-      if (!itemMap[si.item_id]) itemMap[si.item_id] = { revenue: 0, qty: 0, transactions: 0 }
-      itemMap[si.item_id].revenue += Number(si.total_price || (si.quantity * si.unit_price) || 0)
-      itemMap[si.item_id].qty += Number(si.quantity || 0)
-      itemMap[si.item_id].transactions += 1
+      const itemId = (si as any)?.item_id
+      if (!itemId || typeof itemId !== 'string') continue
+      if (!itemMap[itemId]) itemMap[itemId] = { revenue: 0, qty: 0, transactions: 0 }
+      itemMap[itemId].revenue += Number(si.total_price || (si.quantity * si.unit_price) || 0)
+      itemMap[itemId].qty += Number(si.quantity || 0)
+      itemMap[itemId].transactions += 1
     }
 
     // Fetch item details
-    const itemIds = Object.keys(itemMap)
+    const itemIds = Object.keys(itemMap).filter((id) => id && id !== 'null' && id !== 'undefined')
     let items: any[] = []
     if (itemIds.length > 0) {
       const { data, error } = await supabase
