@@ -58,6 +58,16 @@ export default function PrintClient() {
   const monthTo = params.get('to') || ''
   const partnersRaw = params.get('partners') || ''
   const includeCapex = params.get('capex') !== '0'
+  // Ручной override ФОТ — если в URL пришёл ?payroll_staff или ?payroll_ops,
+  // используем эти суммы вместо расчётных из API. Пустая строка = не задано.
+  const overrideStaffRaw = params.get('payroll_staff')
+  const overrideOpsRaw = params.get('payroll_ops')
+  const overrideStaff = overrideStaffRaw != null && overrideStaffRaw !== ''
+    ? Math.max(0, Math.round(Number(overrideStaffRaw)) || 0)
+    : null
+  const overrideOps = overrideOpsRaw != null && overrideOpsRaw !== ''
+    ? Math.max(0, Math.round(Number(overrideOpsRaw)) || 0)
+    : null
 
   const partners: Partner[] = useMemo(() => {
     if (!partnersRaw) return []
@@ -132,7 +142,17 @@ export default function PrintClient() {
   // Управленческий учёт: payroll/payroll_advance из expenses заменяем
   // на синтетическую строку «Зарплата (начислено)» с суммой по начислениям,
   // а не по фактическим выплатам. payroll_tax остаётся как есть.
-  const payrollAccrued = report.payrollAccrued || null
+  // Если в URL передан ручной override — приоритет за ним.
+  const apiPayroll = report.payrollAccrued || null
+  const payrollAccrued = (overrideStaff !== null || overrideOps !== null)
+    ? {
+        staff: overrideStaff !== null ? overrideStaff : (apiPayroll?.staff ?? 0),
+        operators: overrideOps !== null ? overrideOps : (apiPayroll?.operators ?? 0),
+        total:
+          (overrideStaff !== null ? overrideStaff : (apiPayroll?.staff ?? 0)) +
+          (overrideOps !== null ? overrideOps : (apiPayroll?.operators ?? 0)),
+      }
+    : apiPayroll
   const isPayrollGroup = (group: string) => group === 'payroll' || group === 'payroll_advance'
   const nonPayrollExpenses = report.expenses.filter((e) => !isPayrollGroup(e.accountingGroup))
   const accruedLine: ExpenseLine | null = payrollAccrued && payrollAccrued.total > 0
@@ -516,15 +536,7 @@ export default function PrintClient() {
                       <div className="tabular-nums font-bold text-slate-900">{fmtMoney(p.amount)} ₸</div>
                     </div>
                   ))}
-                  {ownerProfit !== 0 && ownerPercent > 0 ? (
-                    <div className="flex items-baseline justify-between rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-1.5 text-[11.5px]">
-                      <div>
-                        <span className="font-bold text-amber-900">В бизнесе</span>
-                        <span className="ml-1.5 text-[10px] text-amber-700">{ownerPercent.toFixed(0)}%</span>
-                      </div>
-                      <div className="tabular-nums font-extrabold text-amber-900">{fmtMoney(ownerProfit)} ₸</div>
-                    </div>
-                  ) : null}
+                  {/* Остаток в бизнесе/владельцу — не показываем инвестору. */}
                 </div>
               </section>
             ) : null}

@@ -583,24 +583,41 @@ export default function ProfitabilityPage() {
   const [branchReportIncludeCapex, setBranchReportIncludeCapex] = useState(true)
   const [branchReportFrom, setBranchReportFrom] = useState<string>('')
   const [branchReportTo, setBranchReportTo] = useState<string>('')
+  const [branchPayrollStaffOverride, setBranchPayrollStaffOverride] = useState<string>('')
+  const [branchPayrollOpsOverride, setBranchPayrollOpsOverride] = useState<string>('')
   const [branchPdfDownloading, setBranchPdfDownloading] = useState(false)
+
+  const buildBranchReportParams = () => {
+    const cleanPartners = branchReportPartners
+      .map((p) => ({ name: p.name.trim(), percent: Number(p.percent) || 0 }))
+      .filter((p) => p.name && p.percent > 0)
+    const params = new URLSearchParams({
+      company_id: branchReportCompanyId,
+      from: branchReportFrom,
+      to: branchReportTo,
+      capex: branchReportIncludeCapex ? '1' : '0',
+    })
+    if (cleanPartners.length > 0) {
+      params.set('partners', encodeURIComponent(JSON.stringify(cleanPartners)))
+    }
+    const staffOverrideTrim = branchPayrollStaffOverride.trim()
+    if (staffOverrideTrim) {
+      const value = Math.max(0, Math.round(Number(staffOverrideTrim.replace(/\s/g, '').replace(',', '.'))) || 0)
+      params.set('payroll_staff', String(value))
+    }
+    const opsOverrideTrim = branchPayrollOpsOverride.trim()
+    if (opsOverrideTrim) {
+      const value = Math.max(0, Math.round(Number(opsOverrideTrim.replace(/\s/g, '').replace(',', '.'))) || 0)
+      params.set('payroll_ops', String(value))
+    }
+    return params
+  }
 
   const handleDownloadBranchPdf = async () => {
     if (!branchReportCompanyId || !branchReportFrom || !branchReportTo) return
     setBranchPdfDownloading(true)
     try {
-      const cleanPartners = branchReportPartners
-        .map((p) => ({ name: p.name.trim(), percent: Number(p.percent) || 0 }))
-        .filter((p) => p.name && p.percent > 0)
-      const params = new URLSearchParams({
-        company_id: branchReportCompanyId,
-        from: branchReportFrom,
-        to: branchReportTo,
-        capex: branchReportIncludeCapex ? '1' : '0',
-      })
-      if (cleanPartners.length > 0) {
-        params.set('partners', encodeURIComponent(JSON.stringify(cleanPartners)))
-      }
+      const params = buildBranchReportParams()
       const res = await fetch(`/api/admin/profitability/pdf?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) {
         const errJson = await res.json().catch(() => null)
@@ -1331,6 +1348,38 @@ export default function ProfitabilityPage() {
                 </div>
               </div>
 
+              {/* Ручной override ФОТ — если расчёт по БД для прошлых месяцев неточный */}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                <div className="mb-2 text-xs font-medium text-amber-100/80">
+                  ФОТ для отчёта (вручную)
+                  <span className="ml-2 text-[10px] text-amber-100/50">пусто = считать автоматически</span>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div>
+                    <label className="block text-[11px] text-amber-100/70 mb-1">Адм. сотрудники, ₸</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="напр., 1850000"
+                      className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
+                      value={branchPayrollStaffOverride}
+                      onChange={(e) => setBranchPayrollStaffOverride(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-amber-100/70 mb-1">Операторы по сменам, ₸</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="напр., 600000"
+                      className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
+                      value={branchPayrollOpsOverride}
+                      onChange={(e) => setBranchPayrollOpsOverride(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs font-medium text-amber-100/80">Распределение чистой прибыли (партнёры)</div>
@@ -1415,20 +1464,7 @@ export default function ProfitabilityPage() {
                   variant="outline"
                   disabled={!branchReportCompanyId || !branchReportFrom || !branchReportTo}
                   onClick={() => {
-                    const cleanPartners = branchReportPartners
-                      .map((p) => ({ name: p.name.trim(), percent: Number(p.percent) || 0 }))
-                      .filter((p) => p.name && p.percent > 0)
-                    const fromValue = branchReportFrom || monthFrom
-                    const toValue = branchReportTo || monthTo
-                    const params = new URLSearchParams({
-                      company_id: branchReportCompanyId,
-                      from: fromValue,
-                      to: toValue,
-                      capex: branchReportIncludeCapex ? '1' : '0',
-                    })
-                    if (cleanPartners.length > 0) {
-                      params.set('partners', encodeURIComponent(JSON.stringify(cleanPartners)))
-                    }
+                    const params = buildBranchReportParams()
                     window.open(`/profitability/print?${params.toString()}`, '_blank')
                   }}
                 >
