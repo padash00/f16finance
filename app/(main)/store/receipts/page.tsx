@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
@@ -24,247 +24,30 @@ import { formatMoney } from '@/lib/core/format'
 import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isAbortError } from '@/lib/is-abort-error'
-
-type InventoryLocation = {
-  id: string
-  name: string
-  code: string | null
-  location_type: 'warehouse' | 'point_display'
-}
-
-type InventorySupplier = {
-  id: string
-  name: string
-  bin_iin: string | null
-  organization_name: string | null
-  preferred_expense_category_id?: string | null
-}
-
-type ExpenseCategoryOption = {
-  id: string
-  name: string
-  accounting_group: string
-}
-
-type InventoryItem = {
-  id: string
-  name: string
-  barcode: string
-  unit: string
-  sale_price: number
-  default_purchase_price: number
-  item_type: string
-  category?: { id: string; name: string } | null
-}
-
-type InventoryReceipt = {
-  id: string
-  received_at: string
-  total_amount: number
-  invoice_number: string | null
-  invoice_file_url: string | null
-  comment: string | null
-  status: 'posted' | 'cancelled'
-  kind: 'supplier' | 'posting'
-  cancelled_at: string | null
-  cancel_reason: string | null
-  supplier?: InventorySupplier | null
-  location?: InventoryLocation | null
-  items?: Array<{
-    id: string
-    quantity: number
-    unit_cost: number
-    total_cost: number
-    is_bonus?: boolean
-    item?: { id: string; name: string; barcode: string; unit?: string | null } | null
-  }>
-}
-
-type InventoryReceiptDraft = {
-  id: string
-  title: string | null
-  payload: {
-    location_id?: string | null
-    supplier_id?: string | null
-    supplier_create?: {
-      name?: string
-      organization_name?: string
-      bin_iin?: string
-    } | null
-    received_at?: string | null
-    invoice_number?: string | null
-    invoice_file_url?: string | null
-    expense_category_id?: string | null
-    payment_method?: 'cash' | 'kaspi' | null
-    comment?: string | null
-    items?: Array<{
-      item_id?: string
-      quantity?: number | string
-      unit_cost?: number | string
-      sale_price?: number | string
-      is_bonus?: boolean
-      comment?: string | null
-    }>
-  }
-  status: string
-  created_at: string
-  updated_at: string
-}
-
-type ReceiptsResponse = {
-  ok: boolean
-  data?: {
-    items: InventoryItem[]
-    suppliers: InventorySupplier[]
-    locations: InventoryLocation[]
-    receipts: InventoryReceipt[]
-    drafts?: InventoryReceiptDraft[]
-    expense_categories?: ExpenseCategoryOption[]
-  }
-  error?: string
-}
-
-type ReceiptLine = {
-  item_id: string
-  quantity: string
-  unit_cost: string
-  sale_price: string
-  markup_percent: string
-  comment: string
-  is_bonus?: boolean
-  invoice_name?: string
-  last_unit_cost?: number | null
-}
-
-type AiParseItem = {
-  invoice_name: string
-  quantity: number
-  unit_cost: number
-  total_cost: number
-  barcode: string | null
-  matched_item_id: string | null
-  matched_item_name: string | null
-  match_source: 'barcode' | 'mapping' | 'mapping_supplier' | 'mapping_global' | 'gpt' | null
-  last_unit_cost?: number | null
-  last_sale_price?: number | null
-  unit_cost_change_pct?: number | null
-  manual_item_id?: string | null
-}
-
-type AiParseResult = {
-  supplier_name: string | null
-  invoice_number: string | null
-  invoice_date: string | null
-  raw_text: string | null
-  total_amount: number
-  matched_count: number
-  unmatched_count: number
-  cogs_suggestion?: {
-    recommended_category_id: string | null
-    recommended_category_name: string | null
-    reason: string | null
-    confidence?: 'high' | 'medium' | 'low' | null
-    alternatives?: Array<{ id: string; name: string }>
-  } | null
-  items: AiParseItem[]
-}
-
-function firstOrSelf<T>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) return (value[0] as T) || null
-  return value ?? null
-}
-
-function asArray<T>(value: T[] | T | null | undefined): T[] {
-  if (Array.isArray(value)) return value
-  if (value == null) return []
-  return [value]
-}
-
-function normalizeReceipt(raw: any): InventoryReceipt {
-  return {
-    id: String(raw?.id || ''),
-    received_at: raw?.received_at || '',
-    total_amount: Number(raw?.total_amount || 0),
-    invoice_number: raw?.invoice_number || null,
-    invoice_file_url: raw?.invoice_file_url || null,
-    comment: raw?.comment || null,
-    status: raw?.status === 'cancelled' ? 'cancelled' : 'posted',
-    kind: raw?.kind === 'posting' ? 'posting' : 'supplier',
-    cancelled_at: raw?.cancelled_at || null,
-    cancel_reason: raw?.cancel_reason || null,
-    supplier: firstOrSelf(raw?.supplier),
-    location: firstOrSelf(raw?.location),
-    items: asArray(raw?.items).map((item: any) => ({
-      id: String(item?.id || ''),
-      quantity: Number(item?.quantity || 0),
-      unit_cost: Number(item?.unit_cost || 0),
-      total_cost: Number(item?.total_cost || 0),
-      item: firstOrSelf(item?.item),
-    })),
-  }
-}
-
-function parseMoney(value: string) {
-  const numeric = Number(String(value).replace(',', '.').trim())
-  if (!Number.isFinite(numeric)) return 0
-  return Math.round((numeric + Number.EPSILON) * 100) / 100
-}
-
-function parseUnitCost(value: string) {
-  const numeric = Number(String(value).replace(',', '.').trim())
-  if (!Number.isFinite(numeric)) return 0
-  return Math.round((numeric + Number.EPSILON) * 10000) / 10000
-}
-
-function parseQty(value: string) {
-  const numeric = Number(String(value).replace(',', '.').trim())
-  if (!Number.isFinite(numeric)) return 0
-  return Math.round((numeric + Number.EPSILON) * 1000) / 1000
-}
-
-function formatUnitCost(value: number) {
-  const normalized = Number(value || 0)
-  if (!Number.isFinite(normalized)) return '0 ₸'
-  const hasFraction = Math.abs(normalized - Math.round(normalized)) > 0.00001
-  return `${normalized.toLocaleString('ru-RU', {
-    minimumFractionDigits: hasFraction ? 2 : 0,
-    maximumFractionDigits: 4,
-  })} ₸`
-}
-
-function formatQty(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2)
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return '—'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(parsed)
-}
-
-const emptyLine = (): ReceiptLine => ({
-  item_id: '',
-  quantity: '',
-  unit_cost: '',
-  sale_price: '',
-  markup_percent: '',
-  comment: '',
-  is_bonus: false,
-})
-
-function calcMarkupPercent(unitCostRaw: string, salePriceRaw: string) {
-  const unitCost = parseUnitCost(unitCostRaw)
-  const salePrice = parseMoney(salePriceRaw)
-  if (unitCost <= 0) return ''
-  const pct = ((salePrice - unitCost) / unitCost) * 100
-  if (!Number.isFinite(pct)) return ''
-  return String(Math.round((pct + Number.EPSILON) * 100) / 100)
-}
+import { ReceiptLineRow } from '@/components/store/receipts/receipt-line-row'
+import type {
+  AiParseResult,
+  DebtSummary,
+  ExpenseCategoryOption,
+  InventoryItem,
+  InventoryReceipt,
+  InventoryReceiptDraft,
+  ReceiptLine,
+  ReceiptsResponse,
+} from '@/components/store/receipts/types'
+import {
+  asArray,
+  calcMarkupPercent,
+  emptyLine,
+  formatDate,
+  formatQty,
+  formatUnitCost,
+  nextLineUid,
+  normalizeReceipt,
+  parseMoney,
+  parseQty,
+  parseUnitCost,
+} from '@/lib/store/receipts/format'
 
 export default function StoreReceiptsPage() {
   const { can } = useCapabilities()
@@ -277,7 +60,7 @@ export default function StoreReceiptsPage() {
   const canSaveTemplate = can('store-receipts.save_template')
 
   const [data, setData] = useState<ReceiptsResponse['data'] | null>(null)
-  const [debtByReceiptId, setDebtByReceiptId] = useState<Map<string, { status: 'open' | 'paid' | 'written_off'; total_amount: number; due_date: string | null; is_consignment: boolean }>>(new Map())
+  const [debtByReceiptId, setDebtByReceiptId] = useState<Map<string, DebtSummary>>(new Map())
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -351,7 +134,7 @@ export default function StoreReceiptsPage() {
         const debtsResponse = await fetch('/api/admin/store/debts?status=all', { cache: 'no-store', signal })
         const debtsJson = await debtsResponse.json().catch(() => null)
         if (debtsResponse.ok && debtsJson?.ok && Array.isArray(debtsJson.data?.debts)) {
-          const map = new Map<string, { status: 'open' | 'paid' | 'written_off'; total_amount: number; due_date: string | null; is_consignment: boolean }>()
+          const map = new Map<string, DebtSummary>()
           for (const d of debtsJson.data.debts) {
             if (d?.receipt_id) {
               map.set(String(d.receipt_id), {
@@ -461,6 +244,26 @@ export default function StoreReceiptsPage() {
     return lines.reduce((sum, line) => sum + (line.is_bonus ? 0 : parseQty(line.quantity) * parseUnitCost(line.unit_cost)), 0)
   }, [lines])
 
+  const catalogItems = useMemo(() => data?.items || [], [data?.items])
+
+  const itemsById = useMemo(() => {
+    const map = new Map<string, InventoryItem>()
+    for (const item of catalogItems) map.set(item.id, item)
+    return map
+  }, [catalogItems])
+
+  const patchLine = useCallback((uid: string, patch: Partial<ReceiptLine>) => {
+    setLines((current) => current.map((line) => (line.uid === uid ? { ...line, ...patch } : line)))
+  }, [])
+
+  const removeLine = useCallback((uid: string) => {
+    setLines((current) => (current.length === 1 ? current : current.filter((line) => line.uid !== uid)))
+  }, [])
+
+  const addLine = useCallback(() => {
+    setLines((current) => [...current, emptyLine()])
+  }, [])
+
   const quickMatches = useMemo(() => {
     const q = quickQuery.trim().toLowerCase()
     if (!q) return []
@@ -496,6 +299,7 @@ export default function StoreReceiptsPage() {
       }
 
       const nextLine: ReceiptLine = {
+        uid: nextLineUid(),
         item_id: itemId,
         quantity: '1',
         unit_cost: String(item.default_purchase_price || ''),
@@ -772,10 +576,11 @@ export default function StoreReceiptsPage() {
       setSupplierOrganizationName('')
       setSupplierBinIin('')
     }
-    const mappedLines = items.length > 0
+    const mappedLines: ReceiptLine[] = items.length > 0
       ? items.map((item) => {
           const isBonus = Boolean((item as any).is_bonus)
           return {
+            uid: nextLineUid(),
             item_id: String(item.item_id || ''),
             quantity: String(item.quantity ?? ''),
             unit_cost: isBonus ? '0' : String(item.unit_cost ?? ''),
@@ -829,7 +634,7 @@ export default function StoreReceiptsPage() {
   const applyTemplate = (name: string) => {
     const tpl = savedTemplates.find((item) => item.name === name)
     if (!tpl) return
-    setLines(tpl.lines.map((line) => ({ ...line })))
+    setLines(tpl.lines.map((line) => ({ ...line, uid: nextLineUid() })))
     setSuccess(`Шаблон «${name}» применён`)
   }
 
@@ -1017,6 +822,7 @@ export default function StoreReceiptsPage() {
           ? String(lastSale)
           : String(Number(catalog?.sale_price || 0) || '')
         return {
+          uid: nextLineUid(),
           item_id: String(item.resolved_item_id),
           quantity: String(item.quantity || ''),
           unit_cost: finalUnit,
@@ -1793,195 +1599,21 @@ export default function StoreReceiptsPage() {
             </div>
 
             <div className="space-y-3">
-              {lines.map((line, index) => {
-                const lineItem = (data?.items || []).find((row) => row.id === line.item_id) || null
-                return (
-                <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
-                  <div className="space-y-1.5 min-w-0">
-                    <Label>Товар</Label>
-                    <Select
-                      value={line.item_id || `__empty__${index}`}
-                      onValueChange={(value) =>
-                        setLines((current) =>
-                          current.map((item, itemIndex) => {
-                            if (itemIndex !== index) return item
-                            const selectedItem = (data?.items || []).find((row) => row.id === value)
-                            return {
-                              ...item,
-                              item_id: value.startsWith('__empty__') ? '' : value,
-                              // Для бонусной строки цену закупа держим 0 независимо от каталога.
-                              unit_cost: item.is_bonus
-                                ? '0'
-                                : selectedItem ? String(selectedItem.default_purchase_price || '') : item.unit_cost,
-                              sale_price: selectedItem ? String(selectedItem.sale_price || '') : item.sale_price,
-                              markup_percent: item.is_bonus
-                                ? ''
-                                : selectedItem
-                                  ? calcMarkupPercent(String(selectedItem.default_purchase_price || ''), String(selectedItem.sale_price || ''))
-                                  : item.markup_percent,
-                            }
-                          }),
-                        )
-                      }
-                    >
-                      <SelectTrigger className="min-w-0 w-full overflow-hidden [&>span]:block [&>span]:truncate">
-                        <SelectValue placeholder="Выберите товар" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={`__empty__${index}`}>Выберите товар</SelectItem>
-                        {(data?.items || []).map((item) => (
-                          <SelectItem key={item.id} value={item.id} title={`${item.name} · ${item.barcode}`}>
-                            <span className="block max-w-[420px] truncate">{item.name} · {item.barcode}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5 min-w-0">
-                    <Label>Штрихкод</Label>
-                    <Input value={lineItem?.barcode || '—'} readOnly className="bg-white/[0.03] truncate" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Кол-во</Label>
-                    <Input inputMode="decimal" value={line.quantity} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Цена закупа</Label>
-                    <Input
-                      inputMode="decimal"
-                      value={line.is_bonus ? '0' : line.unit_cost}
-                      readOnly={line.is_bonus}
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? {
-                                  ...item,
-                                  unit_cost: event.target.value,
-                                  markup_percent: calcMarkupPercent(event.target.value, item.sale_price),
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                      placeholder="499,6757"
-                      className={line.is_bonus ? 'opacity-50' : undefined}
-                    />
-                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-[11px]">
-                      <input
-                        type="checkbox"
-                        checked={!!line.is_bonus}
-                        onChange={(event) =>
-                          setLines((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? {
-                                    ...item,
-                                    is_bonus: event.target.checked,
-                                    unit_cost: event.target.checked ? '0' : item.unit_cost,
-                                    markup_percent: event.target.checked ? '' : item.markup_percent,
-                                  }
-                                : item,
-                            ),
-                          )
-                        }
-                        className="h-3.5 w-3.5 accent-emerald-500"
-                      />
-                      <span className={line.is_bonus ? 'font-medium text-emerald-300' : 'text-muted-foreground'}>
-                        Бонус (подарок поставщика)
-                      </span>
-                    </label>
-                    {!line.is_bonus && (() => {
-                      if (!line.last_unit_cost || line.last_unit_cost <= 0) return null
-                      const current = parseUnitCost(line.unit_cost)
-                      if (current <= 0) return null
-                      const change = ((current - line.last_unit_cost) / line.last_unit_cost) * 100
-                      const abs = Math.abs(change)
-                      if (abs < 1) {
-                        return (
-                          <p className="text-[10px] text-muted-foreground">Прошлая закупка: {line.last_unit_cost} ₸</p>
-                        )
-                      }
-                      const up = change > 0
-                      return (
-                        <p className={`text-[10px] ${up ? 'text-rose-300' : 'text-emerald-300'}`}>
-                          {up ? '↑' : '↓'} {Math.round(abs * 10) / 10}% к прошлой ({line.last_unit_cost} ₸)
-                        </p>
-                      )
-                    })()}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Цена продажи</Label>
-                    <Input
-                      inputMode="decimal"
-                      value={line.sale_price}
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? {
-                                  ...item,
-                                  sale_price: event.target.value,
-                                  markup_percent: calcMarkupPercent(item.unit_cost, event.target.value),
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                      placeholder="0"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Наценка %</Label>
-                    <Input
-                      inputMode="decimal"
-                      value={line.is_bonus ? '' : line.markup_percent}
-                      readOnly={line.is_bonus}
-                      onChange={(event) =>
-                        setLines((current) =>
-                          current.map((item, itemIndex) => {
-                            if (itemIndex !== index) return item
-                            const pct = parseMoney(event.target.value)
-                            const base = parseUnitCost(item.unit_cost)
-                            const sale = base > 0 ? String(Math.round((base * (1 + pct / 100) + Number.EPSILON) * 100) / 100) : item.sale_price
-                            return {
-                              ...item,
-                              markup_percent: event.target.value,
-                              sale_price: sale,
-                            }
-                          }),
-                        )
-                      }
-                      placeholder={line.is_bonus ? '—' : '0'}
-                      className={line.is_bonus ? 'opacity-50' : undefined}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Комментарий</Label>
-                    <Input value={line.comment} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Например, акция поставщика" />
-                  </div>
-
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setLines((current) => current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index))}
-                    >
-                      Убрать
-                    </Button>
-                  </div>
-                </div>
-              )})}
+              {lines.map((line) => (
+                <ReceiptLineRow
+                  key={line.uid}
+                  line={line}
+                  items={catalogItems}
+                  itemsById={itemsById}
+                  canRemove={lines.length > 1}
+                  onPatch={patchLine}
+                  onRemove={removeLine}
+                />
+              ))}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, emptyLine()])}>
+              <Button type="button" variant="outline" onClick={addLine}>
                 Добавить строку
               </Button>
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
