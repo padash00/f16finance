@@ -15,7 +15,34 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-const PAGE = 10000
+// PostgREST режет ответ по db-max-rows (часто 1000). Тянем данные чанками
+// и склеиваем, как в /api/admin/expenses и /api/admin/incomes.
+const CHUNK = 1000
+const MAX_ROWS = 200000
+
+type ReportExpenseRow = {
+  id: string
+  date: string
+  company_id: string
+  category: string | null
+  cash_amount: number | null
+  kaspi_amount: number | null
+  comment: string | null
+}
+
+async function fetchAllRows<T>(buildQuery: () => any): Promise<T[]> {
+  const out: T[] = []
+  let cursor = 0
+  while (out.length < MAX_ROWS) {
+    const { data, error } = await buildQuery().range(cursor, cursor + CHUNK - 1)
+    if (error) throw error
+    const batch = (data || []) as T[]
+    out.push(...batch)
+    if (batch.length < CHUNK) break
+    cursor += CHUNK
+  }
+  return out
+}
 
 export async function GET(req: Request) {
   try {
@@ -67,46 +94,42 @@ export async function GET(req: Request) {
 
     const companyName = (id: string) => nameById.get(id) ?? 'Неизвестно'
 
-    let incQuery = supabase
-      .from('incomes')
-      .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
-      .gte('date', incomeFetchFrom)
-      .lte('date', dateTo)
-      .order('date', { ascending: true })
-      .range(0, PAGE - 1)
-
-    let expQuery = supabase
-      .from('expenses')
-      .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
-      .gte('date', expenseFetchFrom)
-      .lte('date', expenseFetchTo)
-      .order('date', { ascending: true })
-      .range(0, PAGE - 1)
-
-    if (companyScope.allowedCompanyIds !== null) {
-      incQuery = incQuery.in('company_id', companyScope.allowedCompanyIds)
-      expQuery = expQuery.in('company_id', companyScope.allowedCompanyIds)
+    // Стабильная сортировка по (date, id) обязательна для чанковой пагинации,
+    // иначе строки с одинаковой датой могут продублироваться/потеряться между чанками.
+    const buildIncomeQuery = () => {
+      let q = supabase
+        .from('incomes')
+        .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
+        .gte('date', incomeFetchFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      if (companyId) q = q.eq('company_id', companyId)
+      if (shift) q = q.eq('shift', shift)
+      return q
     }
-    if (companyId) {
-      incQuery = incQuery.eq('company_id', companyId)
-      expQuery = expQuery.eq('company_id', companyId)
+
+    const buildExpenseQuery = () => {
+      let q = supabase
+        .from('expenses')
+        .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
+        .gte('date', expenseFetchFrom)
+        .lte('date', expenseFetchTo)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+      if (companyScope.allowedCompanyIds !== null) q = q.in('company_id', companyScope.allowedCompanyIds)
+      if (companyId) q = q.eq('company_id', companyId)
+      return q
     }
-    if (shift) incQuery = incQuery.eq('shift', shift)
 
-    const [incRes, expRes] = await Promise.all([incQuery, expQuery])
-    if (incRes.error) throw incRes.error
-    if (expRes.error) throw expRes.error
+    const [rowsInRaw, rowsExRaw] = await Promise.all([
+      fetchAllRows<ReportIncomeCalendarRow>(buildIncomeQuery),
+      fetchAllRows<ReportExpenseRow>(buildExpenseQuery),
+    ])
 
-    let rowsIn = (incRes.data || []) as ReportIncomeCalendarRow[]
-    let rowsEx = (expRes.data || []) as {
-      id: string
-      date: string
-      company_id: string
-      category: string | null
-      cash_amount: number | null
-      kaspi_amount: number | null
-      comment: string | null
-    }[]
+    let rowsIn = rowsInRaw
+    let rowsEx = rowsExRaw
 
     if (!includeExtra && !companyId && extraCompanyId) {
       rowsIn = rowsIn.filter((r) => r.company_id !== extraCompanyId)
