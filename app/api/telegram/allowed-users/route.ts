@@ -2,9 +2,16 @@ import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
+function canManageTelegram(access: { isSuperAdmin: boolean; staffRole: string }) {
+  return access.isSuperAdmin || access.staffRole === 'owner'
+}
+
 export async function GET(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
 
   try {
     const supabase = createAdminSupabaseClient()
@@ -29,6 +36,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  if (!canManageTelegram(access)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
   const telegramUserId = String(body.telegram_user_id || '').trim()
@@ -59,6 +67,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  if (!canManageTelegram(access)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
@@ -77,6 +86,7 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  if (!canManageTelegram(access)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
   const { id, label, can_finance } = body

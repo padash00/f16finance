@@ -47,8 +47,9 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+    // Управление ролями (в т.ч. seed:'open' = роль со всеми правами) —
+    // только владелец/суперадмин. Иначе любой staff мог поднять себе права.
+    if (!access.isSuperAdmin && access.staffRole !== 'owner') return json({ error: 'forbidden' }, 403)
 
     const body = await req.json().catch(() => null)
     const action = body?.action

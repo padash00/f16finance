@@ -4,6 +4,10 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  // Переустановка webhook бота — только владелец/суперадмин.
+  if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
 
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) {
