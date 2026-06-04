@@ -120,18 +120,16 @@ export default function OperatorHomePage() {
 
   return (
     <div className="space-y-4">
-      <OperatorPanel accent="emerald">
+      <OperatorPanel accent="amber">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-sm text-slate-400">Здравствуйте</div>
-            <div className="mt-1 text-2xl font-semibold text-white">{data.operator.name}</div>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500">Здравствуйте</div>
+            <div className="mt-1.5 font-mono text-xl font-semibold uppercase tracking-tight text-zinc-50 sm:text-2xl">{data.operator.name}</div>
+            <p className="mt-3 text-[13px] leading-5 text-zinc-500">
               Здесь видно всё важное по работе: ближайшую смену, новые задачи, долг и сумму к выплате за неделю.
             </p>
           </div>
-          <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-300">
-            <Sparkles className="h-6 w-6" />
-          </div>
+          <Sparkles className="h-5 w-5 shrink-0 text-amber-400" />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -212,16 +210,14 @@ export default function OperatorHomePage() {
             <OperatorEmptyState title="Новых задач нет" description="Когда появятся новые поручения, они сразу будут показаны здесь и в разделе задач." />
           ) : (
             data.activeTasks.map((task) => (
-              <div key={task.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-white">{task.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {task.due_date ? `Срок: ${formatRuDate(task.due_date, 'full')}` : 'Без дедлайна'}
-                    </div>
+              <div key={task.id} className="flex items-start justify-between gap-3 border border-[#23262b] bg-[#0b0c0d] p-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-zinc-100">{task.title}</div>
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
+                    {task.due_date ? `Срок: ${formatRuDate(task.due_date, 'full')}` : 'Без дедлайна'}
                   </div>
-                  <OperatorPill tone={task.priority === 'critical' || task.priority === 'high' ? 'amber' : 'default'}>{task.priority}</OperatorPill>
                 </div>
+                <OperatorPill tone={task.priority === 'critical' || task.priority === 'high' ? 'amber' : 'default'}>{task.priority}</OperatorPill>
               </div>
             ))
           )}
@@ -236,17 +232,15 @@ export default function OperatorHomePage() {
               <OperatorEmptyState title="Свежих долгов нет" description="Если на этой неделе не было долгов по товарам, блок останется пустым." />
             ) : (
               data.recentDebts.map((debt) => (
-                <div key={debt.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-white">{debt.comment || 'Долг по товару'}</div>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {debt.companyName || 'Точка не указана'}
-                      </div>
+                <div key={debt.id} className="flex items-start justify-between gap-3 border border-[#23262b] bg-[#0b0c0d] p-3">
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium text-zinc-100">{debt.comment || 'Долг по товару'}</div>
+                    <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
+                      <MapPin className="h-3 w-3" />
+                      {debt.companyName || 'Точка не указана'}
                     </div>
-                    <div className="text-sm font-semibold text-red-300">{formatMoney(debt.amount)}</div>
                   </div>
+                  <div className="font-mono text-[14px] font-semibold tabular-nums text-rose-400">{formatMoney(debt.amount)}</div>
                 </div>
               ))
             )}
