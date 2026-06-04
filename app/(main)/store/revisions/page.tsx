@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ClipboardCheck, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Trash2 } from 'lucide-react'
+import { ClipboardCheck, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Smartphone, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -711,6 +712,12 @@ export default function StoreRevisionsPage() {
           >
             <ClipboardCheck className="h-3.5 w-3.5" />
             Новый акт
+          </Button>
+          <Button asChild size="sm" variant="outline" className="h-9 gap-1.5 border-amber-400/40 text-amber-300 hover:bg-amber-400/10">
+            <Link href="/store/revisions/scan">
+              <Smartphone className="h-3.5 w-3.5" />
+              Сканер с телефона
+            </Link>
           </Button>
         </div>
       </div>
