@@ -883,10 +883,10 @@ export default function SmartDashboardPage() {
       <>
           <div className="text-center">
             <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/30 border-t-purple-500 mx-auto mb-6" />
-              <Brain className="w-8 h-8 text-purple-400 absolute top-4 left-1/2 -translate-x-1/2" />
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-500/30 border-t-amber-500 mx-auto mb-6" />
+              <Brain className="w-8 h-8 text-amber-400 absolute top-4 left-1/2 -translate-x-1/2" />
             </div>
-            <p className="text-gray-400">Грузы считаю. Не мешай калькулятору думать 😄</p>
+            <p className="text-slate-400">Грузы считаю. Не мешай калькулятору думать 😄</p>
           </div>
       </>
     )
@@ -898,7 +898,7 @@ export default function SmartDashboardPage() {
           <Card className="p-8 max-w-md text-center border-red-500/30 bg-red-950/10 backdrop-blur-sm">
             <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Ошибка загрузки</h2>
-            <p className="text-gray-400 mb-6">{error}</p>
+            <p className="text-slate-400 mb-6">{error}</p>
             <Button
               onClick={() => window.location.reload()}
               className="bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30"
@@ -953,13 +953,13 @@ export default function SmartDashboardPage() {
           {/* Пульс бизнеса сегодня */}
           {todayStats !== null && (
             <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-5">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute top-0 right-0 w-48 h-48 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-4">
-                  <Activity className="w-5 h-5 text-purple-400" />
+                  <Activity className="w-5 h-5 text-amber-400" />
                   <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Пульс бизнеса сегодня</h2>
                   {todayStats.txCount === 0 ? (
-                    <span className="ml-auto text-xs text-gray-500">📊 Данных за сегодня нет</span>
+                    <span className="ml-auto text-xs text-slate-500">📊 Данных за сегодня нет</span>
                   ) : (todayStats.income - todayStats.expense) > 0 ? (
                     <span className="ml-auto text-xs text-emerald-400">✅ Прибыльный день</span>
                   ) : (
@@ -975,14 +975,14 @@ export default function SmartDashboardPage() {
                     <p className="text-[11px] text-red-400 uppercase tracking-wider">Расходы</p>
                     <p className="text-lg font-bold text-white mt-1">{Formatters.moneyDetailed(todayStats.expense)}</p>
                   </div>
-                  <div className={`rounded-xl p-3 border ${(todayStats.income - todayStats.expense) >= 0 ? 'bg-purple-500/10 border-purple-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
-                    <p className="text-[11px] text-purple-400 uppercase tracking-wider">Прибыль</p>
+                  <div className={`rounded-xl p-3 border ${(todayStats.income - todayStats.expense) >= 0 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+                    <p className="text-[11px] text-amber-400 uppercase tracking-wider">Прибыль</p>
                     <p className={`text-lg font-bold mt-1 ${(todayStats.income - todayStats.expense) >= 0 ? 'text-white' : 'text-red-400'}`}>
                       {Formatters.moneyDetailed(todayStats.income - todayStats.expense)}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-3">
-                    <p className="text-[11px] text-blue-400 uppercase tracking-wider">Транзакций</p>
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+                    <p className="text-[11px] text-amber-400 uppercase tracking-wider">Транзакций</p>
                     <p className="text-lg font-bold text-white mt-1">{todayStats.txCount}</p>
                   </div>
                 </div>
@@ -1045,7 +1045,7 @@ export default function SmartDashboardPage() {
 
 function Tabs({ active, onChange }: { active: 'overview' | 'details' | 'forecast'; onChange: (v: any) => void }) {
   return (
-    <div className="flex w-full gap-2 overflow-x-auto rounded-xl border border-gray-700 bg-gray-800/50 p-1 sm:w-fit">
+    <div className="flex w-full gap-2 overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/50 p-1 sm:w-fit">
       <TabButton active={active === 'overview'} onClick={() => onChange('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
       <TabButton active={active === 'details'} onClick={() => onChange('details')} icon={<BarChart2 className="w-4 h-4" />} label="Детали" />
       <TabButton active={active === 'forecast'} onClick={() => onChange('forecast')} icon={<Sparkles className="w-4 h-4" />} label="Прогноз" />
@@ -1058,7 +1058,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
     <button
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-        active ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+        active ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
       }`}
     >
       {icon}
@@ -1083,22 +1083,22 @@ function HeaderBlock(props: {
 }) {
   const statusStyle: Record<AIInsight['status'], string> = {
     excellent: 'bg-green-500/15 border-green-500/30 text-green-300',
-    good: 'bg-purple-500/15 border-purple-500/30 text-purple-300',
+    good: 'bg-amber-500/15 border-amber-500/30 text-amber-300',
     warning: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-300',
     critical: 'bg-red-500/15 border-red-500/30 text-red-300',
   }
 
   return (
-    <div className="relative overflow-visible rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
+    <div className="relative overflow-visible rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 p-6 border border-amber-500/20">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-500/20 rounded-xl">
-              <Brain className="w-6 h-6 text-purple-300" />
+            <div className="p-2 bg-amber-500/20 rounded-xl">
+              <Brain className="w-6 h-6 text-amber-300" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">Финансовый дашборд</h1>
-              <p className="text-xs text-gray-400">Без “мертвых” кнопок. Только рабочая логика.</p>
+              <p className="text-xs text-slate-400">Без “мертвых” кнопок. Только рабочая логика.</p>
             </div>
 
             <span className={`ml-auto px-3 py-1 rounded-full text-xs font-medium border ${statusStyle[props.insight.status]}`}>
@@ -1117,13 +1117,13 @@ function HeaderBlock(props: {
 
             <button
               onClick={props.onToggleCalendar}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-purple-500/50 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-amber-500/50 transition-colors"
             >
-              <Calendar className="w-4 h-4 text-purple-300" />
-              <span className="text-gray-200">
+              <Calendar className="w-4 h-4 text-amber-300" />
+              <span className="text-slate-200">
                 {DateUtils.formatFull(props.dateFrom)} — {DateUtils.formatFull(props.dateTo)}
               </span>
-              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${props.calendarOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${props.calendarOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {props.hasExtraCompany && (
@@ -1132,18 +1132,18 @@ function HeaderBlock(props: {
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
                   props.includeExtra
                     ? 'bg-red-500/10 border-red-500/30 text-red-300'
-                    : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
+                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-700/50'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full ${props.includeExtra ? 'bg-red-400' : 'bg-gray-500'}`} />
+                <span className={`w-2 h-2 rounded-full ${props.includeExtra ? 'bg-red-400' : 'bg-slate-500'}`} />
                 {props.includeExtra ? 'Extra включён' : 'Extra исключён'}
               </button>
             )}
 
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
               <Sparkles className="w-4 h-4 text-yellow-400" />
-              <span className="text-gray-300">Прогноз:</span>
-              <span className="font-medium text-purple-300">{props.insight.predictions.confidence}%</span>
+              <span className="text-slate-300">Прогноз:</span>
+              <span className="font-medium text-amber-300">{props.insight.predictions.confidence}%</span>
             </div>
           </div>
         </div>
@@ -1151,31 +1151,31 @@ function HeaderBlock(props: {
 
       {props.calendarOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 z-[100]">
-          <Card className="p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl shadow-2xl">
+          <Card className="p-4 bg-slate-900/95 backdrop-blur-xl border border-amber-500/20 rounded-2xl shadow-2xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs text-gray-500 uppercase tracking-wider">Начало</label>
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Начало</label>
                 <input
                   type="date"
                   value={props.dateFrom}
                   onChange={e => props.onDateFromChange(e.target.value)}
-                  className="w-full bg-gray-800 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-purple-500 outline-none"
+                  className="w-full bg-slate-800 text-white px-4 py-3 rounded-xl border border-slate-700 focus:border-amber-500 outline-none"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-gray-500 uppercase tracking-wider">Конец</label>
+                <label className="text-xs text-slate-500 uppercase tracking-wider">Конец</label>
                 <input
                   type="date"
                   value={props.dateTo}
                   min={props.dateFrom}
                   onChange={e => props.onDateToChange(e.target.value)}
-                  className="w-full bg-gray-800 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-purple-500 outline-none"
+                  className="w-full bg-slate-800 text-white px-4 py-3 rounded-xl border border-slate-700 focus:border-amber-500 outline-none"
                 />
               </div>
             </div>
 
             <div className="flex justify-end pt-4">
-              <Button onClick={props.onToggleCalendar} className="bg-purple-500 hover:bg-purple-600 text-white">
+              <Button onClick={props.onToggleCalendar} className="bg-amber-500 hover:bg-amber-600 text-white">
                 Применить
               </Button>
             </div>
@@ -1191,7 +1191,7 @@ function QuickRangeBtn({ active, onClick, label }: { active: boolean; onClick: (
     <button
       onClick={onClick}
       className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
-        active ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+        active ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
       }`}
     >
       {label}
@@ -1246,7 +1246,7 @@ function Overview(props: {
             value={props.current.profit}
             previousValue={props.previous.profit}
             icon={<Target className="w-5 h-5" />}
-            color="from-purple-500 to-indigo-500"
+            color="from-amber-500 to-amber-500"
             selected={props.selectedMetric === 'profit'}
             onClick={() => props.onMetricChange('profit')}
           />
@@ -1274,43 +1274,43 @@ function Overview(props: {
 
 function AICard({ insight }: { insight: AIInsight }) {
   return (
-    <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/30 via-gray-900 to-indigo-900/30 backdrop-blur-sm">
+    <Card className="p-6 border-0 bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-purple-500/20 rounded-xl">
-          <Brain className="w-5 h-5 text-purple-300" />
+        <div className="p-2 bg-amber-500/20 rounded-xl">
+          <Brain className="w-5 h-5 text-amber-300" />
         </div>
-        <span className="text-sm font-medium text-gray-200">AI анализ</span>
+        <span className="text-sm font-medium text-slate-200">AI анализ</span>
       </div>
 
       <div className="mb-3">
         <div className="text-4xl font-bold text-white">{insight.score}</div>
-        <div className="text-xs text-gray-500">из 100</div>
+        <div className="text-xs text-slate-500">из 100</div>
       </div>
 
       <div className="space-y-3">
         <div>
           <div className="flex justify-between text-xs mb-1">
-            <span className="text-gray-400">Маржа</span>
-            <span className="text-purple-300 font-medium">{insight.margin.toFixed(1)}%</span>
+            <span className="text-slate-400">Маржа</span>
+            <span className="text-amber-300 font-medium">{insight.margin.toFixed(1)}%</span>
           </div>
-          <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-            <div className="h-full bg-purple-400 rounded-full" style={{ width: `${Math.min(100, insight.margin * 2)}%` }} />
+          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, insight.margin * 2)}%` }} />
           </div>
         </div>
 
         <div>
           <div className="flex justify-between text-xs mb-1">
-            <span className="text-gray-400">Эффективность</span>
+            <span className="text-slate-400">Эффективность</span>
             <span className="text-green-300 font-medium">{insight.efficiency.toFixed(2)}x</span>
           </div>
-          <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-green-400 rounded-full" style={{ width: `${Math.min(100, insight.efficiency * 30)}%` }} />
           </div>
         </div>
 
-        <div className="pt-3 border-t border-gray-800">
-          <p className="text-xs text-gray-400 mb-2">{insight.summary}</p>
-          <p className="text-sm text-gray-200">{insight.recommendation}</p>
+        <div className="pt-3 border-t border-slate-800">
+          <p className="text-xs text-slate-400 mb-2">{insight.summary}</p>
+          <p className="text-sm text-slate-200">{insight.recommendation}</p>
         </div>
       </div>
     </Card>
@@ -1330,19 +1330,19 @@ function MetricCard(props: {
   return (
     <Card
       onClick={props.onClick}
-      className={`p-6 cursor-pointer transition-all border-0 bg-gray-800/50 hover:bg-gray-800/80 ${props.selected ? 'ring-2 ring-purple-500' : ''}`}
+      className={`p-6 cursor-pointer transition-all border-0 bg-slate-800/50 hover:bg-slate-800/80 ${props.selected ? 'ring-2 ring-amber-500' : ''}`}
     >
       <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-gray-400">{props.label}</span>
+        <span className="text-sm text-slate-400">{props.label}</span>
         <div className={`p-2 rounded-xl bg-gradient-to-br ${props.color} bg-opacity-20`}>{props.icon}</div>
       </div>
       <div className="text-2xl font-bold text-white mb-2 break-all">{Formatters.moneyDetailed(props.value)}</div>
       <div className="flex items-center gap-2 text-xs">
         <span className={ch.positive ? 'text-green-300' : 'text-red-300'}>{ch.text}</span>
-        <span className="text-gray-500">к прошлому периоду</span>
+        <span className="text-slate-500">к прошлому периоду</span>
       </div>
       {props.selected && (
-        <div className="mt-4 text-xs text-purple-300 flex items-center gap-1">
+        <div className="mt-4 text-xs text-amber-300 flex items-center gap-1">
           <Activity className="w-3 h-3" /> на графике
         </div>
       )}
@@ -1360,15 +1360,15 @@ function ChartCard(props: {
   const metricColor = props.metric === 'income' ? COLORS.income : props.metric === 'expense' ? COLORS.expense : COLORS.profit
 
   return (
-    <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+    <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-500/20 rounded-xl">
-            <LineChart className="w-5 h-5 text-purple-300" />
+          <div className="p-2 bg-amber-500/20 rounded-xl">
+            <LineChart className="w-5 h-5 text-amber-300" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">Динамика: {metricName}</h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500">
               {props.data.length ? `с ${DateUtils.formatShort(props.data[0].date)} по ${DateUtils.formatShort(props.data[props.data.length - 1].date)}` : 'Нет данных'}
             </p>
           </div>
@@ -1378,14 +1378,14 @@ function ChartCard(props: {
           variant="ghost"
           size="sm"
           onClick={props.onToggleMovingAvg}
-          className="text-xs h-8 bg-gray-700/50 hover:bg-gray-700 text-gray-200"
+          className="text-xs h-8 bg-slate-700/50 hover:bg-slate-700 text-slate-200"
         >
           {props.showMovingAvg ? 'Скрыть среднее' : 'Показать среднее'}
         </Button>
       </div>
 
       {!props.data.length ? (
-        <div className="h-80 flex items-center justify-center text-gray-500">Нет данных</div>
+        <div className="h-80 flex items-center justify-center text-slate-500">Нет данных</div>
       ) : (
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -1444,14 +1444,14 @@ function ChartCard(props: {
 
 function CategoryPie(props: { title: string; data: CategoryData[]; total: number; icon: ReactNode }) {
   return (
-    <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+    <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-gray-700/40 rounded-xl">{props.icon}</div>
+        <div className="p-2 bg-slate-700/40 rounded-xl">{props.icon}</div>
         <h3 className="text-sm font-semibold text-white">{props.title}</h3>
       </div>
 
       {!props.data.length ? (
-        <div className="h-48 flex items-center justify-center text-gray-500">Нет данных</div>
+        <div className="h-48 flex items-center justify-center text-slate-500">Нет данных</div>
       ) : (
         <div className="space-y-4">
           <div className="h-48">
@@ -1477,19 +1477,19 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
               <div key={i} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: x.color }} />
-                  <span className="text-gray-300 truncate max-w-[120px]">{x.name}</span>
+                  <span className="text-slate-300 truncate max-w-[120px]">{x.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-white font-medium">{Formatters.moneyDetailed(x.value)}</span>
-                  <span className="text-gray-500">({x.percentage.toFixed(1)}%)</span>
+                  <span className="text-slate-500">({x.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="pt-2 border-t border-gray-700">
+          <div className="pt-2 border-t border-slate-700">
             <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Всего</span>
+              <span className="text-slate-400">Всего</span>
               <span className="text-white font-medium">{Formatters.moneyDetailed(props.total)}</span>
             </div>
           </div>
@@ -1507,7 +1507,7 @@ function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
   }
 
   return (
-    <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+    <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-yellow-500/20 rounded-xl">
           <AlertTriangle className="w-5 h-5 text-yellow-300" />
@@ -1519,8 +1519,8 @@ function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
       {!anomalies.length ? (
         <div className="text-center py-8">
           <CheckCircle2 className="w-12 h-12 text-green-500/50 mx-auto mb-2" />
-          <p className="text-sm text-gray-300">Аномалий не обнаружено</p>
-          <p className="text-xs text-gray-500">Пока всё ровно</p>
+          <p className="text-sm text-slate-300">Аномалий не обнаружено</p>
+          <p className="text-xs text-slate-500">Пока всё ровно</p>
         </div>
       ) : (
         <div className="space-y-2 max-h-64 overflow-auto">
@@ -1548,18 +1548,18 @@ function FeedCard(props: {
   dateTo: string
 }) {
   return (
-    <Card className="p-0 border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden flex flex-col">
-      <div className="p-4 border-b border-gray-700">
+    <Card className="p-0 border-0 bg-slate-800/50 backdrop-blur-sm overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-slate-700">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-500/20 rounded-xl">
-            <Activity className="w-5 h-5 text-blue-300" />
+          <div className="p-2 bg-amber-500/20 rounded-xl">
+            <Activity className="w-5 h-5 text-amber-300" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">Лента</h3>
-            <p className="text-xs text-gray-500">Последние операции</p>
+            <p className="text-xs text-slate-500">Последние операции</p>
           </div>
           {!!props.feed.length && (
-            <span className="ml-auto px-2 py-0.5 bg-blue-500/20 text-blue-200 text-xs rounded-full">
+            <span className="ml-auto px-2 py-0.5 bg-amber-500/20 text-amber-200 text-xs rounded-full">
               {props.feed.length}
             </span>
           )}
@@ -1568,18 +1568,18 @@ function FeedCard(props: {
 
       <div className="flex-1 overflow-auto max-h-[300px] p-2 space-y-1">
         {!props.feed.length ? (
-          <div className="text-center py-8 text-gray-500">Нет операций</div>
+          <div className="text-center py-8 text-slate-500">Нет операций</div>
         ) : (
           props.feed.map(it => (
             <div
               key={it.id}
               className={`flex items-center justify-between p-3 rounded-xl transition-all ${
-                it.isAnomaly ? 'bg-yellow-500/10 border border-yellow-500/20' : 'hover:bg-gray-700/50'
+                it.isAnomaly ? 'bg-yellow-500/10 border border-yellow-500/20' : 'hover:bg-slate-700/50'
               }`}
             >
               <div className="min-w-0">
                 <div className="text-xs font-medium text-white truncate">{it.title}</div>
-                <div className="text-[10px] text-gray-500 truncate">
+                <div className="text-[10px] text-slate-500 truncate">
                   {props.companyName(it.company_id)} • {DateUtils.formatShort(it.date)}
                 </div>
               </div>
@@ -1592,9 +1592,9 @@ function FeedCard(props: {
         )}
       </div>
 
-      <div className="p-3 border-t border-gray-700 bg-gray-900/40">
+      <div className="p-3 border-t border-slate-700 bg-slate-900/40">
         <Link href={`/income?from=${props.dateFrom}&to=${props.dateTo}`}>
-          <Button variant="ghost" size="sm" className="w-full text-xs h-8 text-gray-300 hover:text-white hover:bg-gray-700">
+          <Button variant="ghost" size="sm" className="w-full text-xs h-8 text-slate-300 hover:text-white hover:bg-slate-700">
             Все операции
           </Button>
         </Link>
@@ -1608,16 +1608,16 @@ function PredictionWide({ insight, currentProfit }: { insight: AIInsight; curren
   const pct = currentProfit ? (diff / Math.abs(currentProfit)) * 100 : 0
 
   return (
-    <Card className="p-6 border-0 bg-gradient-to-br from-blue-900/30 via-gray-900 to-purple-900/30 backdrop-blur-sm">
+    <Card className="p-6 border-0 bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 backdrop-blur-sm">
       <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-5 h-5 text-blue-300" />
+            <Sparkles className="w-5 h-5 text-amber-300" />
             <h3 className="text-sm font-semibold text-white">Прогноз на 30 дней (прибыль)</h3>
           </div>
           <div className="text-3xl font-bold text-white">{Formatters.moneyDetailed(insight.predictions.nextMonthProfit)}</div>
-          <div className="text-xs text-gray-400 mt-1">
-            Достоверность: <span className="text-purple-300 font-medium">{insight.predictions.confidence}%</span> • {insight.predictions.recommendation}
+          <div className="text-xs text-slate-400 mt-1">
+            Достоверность: <span className="text-amber-300 font-medium">{insight.predictions.confidence}%</span> • {insight.predictions.recommendation}
           </div>
         </div>
 
@@ -1625,7 +1625,7 @@ function PredictionWide({ insight, currentProfit }: { insight: AIInsight; curren
           <div className={`px-3 py-1 rounded-lg text-sm font-medium ${diff >= 0 ? 'bg-green-500/20 text-green-200' : 'bg-red-500/20 text-red-200'}`}>
             {diff >= 0 ? '↗' : '↘'} {Math.abs(pct).toFixed(1)}%
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-slate-400">
             {diff >= 0 ? 'лучше' : 'хуже'} текущего периода
           </div>
         </div>
@@ -1660,7 +1660,7 @@ function Details(props: {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-white mb-4">Способы оплаты</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -1684,7 +1684,7 @@ function Details(props: {
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-white mb-4">Баланс</h3>
           <div className="space-y-4">
             <BalanceRow icon={<Wallet className="w-4 h-4" />} label="Net Cash" value={props.current.netCash} />
@@ -1705,17 +1705,17 @@ function Details(props: {
 function MiniStat(props: { label: string; value: number; prev: number; icon: ReactNode; money?: boolean }) {
   const ch = Formatters.percentChange(props.value, props.prev)
   return (
-    <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+    <Card className="p-4 border-0 bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-2 mb-3">
-        <div className="p-1.5 rounded-lg bg-gray-700/40">{props.icon}</div>
-        <span className="text-xs text-gray-400">{props.label}</span>
+        <div className="p-1.5 rounded-lg bg-slate-700/40">{props.icon}</div>
+        <span className="text-xs text-slate-400">{props.label}</span>
       </div>
       <div className="text-xl font-bold text-white">
         {props.money ? Formatters.moneyDetailed(props.value) : props.value.toLocaleString('ru-RU')}
       </div>
       <div className="flex items-center gap-2 text-xs mt-1">
         <span className={ch.positive ? 'text-green-300' : 'text-red-300'}>{ch.text}</span>
-        <span className="text-gray-500">к прошлому</span>
+        <span className="text-slate-500">к прошлому</span>
       </div>
     </Card>
   )
@@ -1723,8 +1723,8 @@ function MiniStat(props: { label: string; value: number; prev: number; icon: Rea
 
 function BalanceRow({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-700/20 rounded-xl border border-gray-700">
-      <div className="flex items-center gap-2 text-sm text-gray-300">
+    <div className="flex items-center justify-between p-3 bg-slate-700/20 rounded-xl border border-slate-700">
+      <div className="flex items-center gap-2 text-sm text-slate-300">
         {icon}
         {label}
       </div>
@@ -1738,9 +1738,9 @@ function BalanceRow({ icon, label, value }: { icon: ReactNode; label: string; va
 function Forecast({ insight }: { insight: AIInsight }) {
   return (
     <div className="space-y-6">
-      <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+      <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
         <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-5 h-5 text-purple-300" />
+          <Sparkles className="w-5 h-5 text-amber-300" />
           <h3 className="text-sm font-semibold text-white">Что делать дальше</h3>
         </div>
 
@@ -1779,12 +1779,12 @@ function Forecast({ insight }: { insight: AIInsight }) {
 
 function Advice({ title, text, icon }: { title: string; text: string; icon: ReactNode }) {
   return (
-    <div className="p-4 bg-gray-700/20 rounded-xl border border-gray-700 hover:border-purple-500/30 transition-colors">
+    <div className="p-4 bg-slate-700/20 rounded-xl border border-slate-700 hover:border-amber-500/30 transition-colors">
       <div className="flex items-center gap-2 mb-2">
-        <div className="p-1.5 bg-purple-500/15 rounded-lg">{icon}</div>
+        <div className="p-1.5 bg-amber-500/15 rounded-lg">{icon}</div>
         <div className="text-sm font-medium text-white">{title}</div>
       </div>
-      <div className="text-xs text-gray-300">{text}</div>
+      <div className="text-xs text-slate-300">{text}</div>
     </div>
   )
 }

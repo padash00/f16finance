@@ -105,8 +105,8 @@ const MONTH_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
 
 const METRICS: Array<{ value: Metric; label: string; unit: string; icon: any; accent: string }> = [
   { value: 'revenue', label: 'Выручка', unit: '₸', icon: TrendingUp, accent: 'emerald' },
-  { value: 'profit', label: 'Прибыль', unit: '₸', icon: Coins, accent: 'cyan' },
-  { value: 'margin', label: 'Маржа', unit: '%', icon: Percent, accent: 'violet' },
+  { value: 'profit', label: 'Прибыль', unit: '₸', icon: Coins, accent: 'amber' },
+  { value: 'margin', label: 'Маржа', unit: '%', icon: Percent, accent: 'amber' },
 ]
 
 const PERIOD_LABEL: Record<PeriodKind, string> = {
@@ -121,8 +121,6 @@ const metricMeta = (m: Metric) => METRICS.find((x) => x.value === m)!
 const accentClasses = (accent: string) => {
   const map: Record<string, { border: string; bg: string; text: string; fill: string }> = {
     emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/[0.06]', text: 'text-emerald-300', fill: '#10b981' },
-    cyan: { border: 'border-cyan-500/30', bg: 'bg-cyan-500/[0.06]', text: 'text-cyan-300', fill: '#06b6d4' },
-    violet: { border: 'border-violet-500/30', bg: 'bg-violet-500/[0.06]', text: 'text-violet-300', fill: '#8b5cf6' },
     amber: { border: 'border-amber-500/30', bg: 'bg-amber-500/[0.06]', text: 'text-amber-300', fill: '#f59e0b' },
     rose: { border: 'border-rose-500/30', bg: 'bg-rose-500/[0.06]', text: 'text-rose-300', fill: '#f43f5e' },
   }
@@ -523,14 +521,14 @@ export default function GoalsPage() {
   return (
     <div className="app-page-wide relative">
       {/* Декоративные акценты */}
-      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
 
       <div className="relative space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg shadow-violet-500/40">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/40">
               <Target className="h-5 w-5" />
             </div>
             <div className="min-w-0">
@@ -552,7 +550,7 @@ export default function GoalsPage() {
             <button onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50" title="Обновить">
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
-            <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 transition hover:from-violet-700 hover:to-fuchsia-700">
+            <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:from-amber-700 hover:to-amber-700">
               <Plus className="h-4 w-4" />
               Новая цель
             </button>
@@ -575,7 +573,7 @@ export default function GoalsPage() {
               onClick={() => { setTab(p); setSelectedMonth(null) }}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                 tab === p
-                  ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow shadow-violet-500/20'
+                  ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow shadow-amber-500/20'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -718,17 +716,17 @@ export default function GoalsPage() {
                 const prof = rev - exp
                 const margin = rev > 0 ? (prof / rev) * 100 : 0
                 return (
-                  <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/[0.06] p-3">
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Прибыль</p>
-                        <p className={`mt-1 text-xl font-bold tabular-nums ${prof >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>
+                        <p className={`mt-1 text-xl font-bold tabular-nums ${prof >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                           {fmt(prof)} ₸
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Маржа</p>
-                        <p className={`mt-1 text-xl font-bold tabular-nums ${margin >= 0 ? 'text-violet-300' : 'text-rose-300'}`}>
+                        <p className={`mt-1 text-xl font-bold tabular-nums ${margin >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                           {margin.toFixed(1)}%
                         </p>
                       </div>
@@ -750,16 +748,16 @@ export default function GoalsPage() {
                 const wProf = seasonalWeights(priorMonthly, 'profit', companyId)
                 const hasPriorData = priorMonthly.some((r) => (companyId == null ? !r.company_id : r.company_id === companyId) && (r.revenue !== 0 || r.expenses !== 0))
                 return (
-                  <div className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-3 space-y-2">
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3 space-y-2">
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={form.distributeSeasonal}
                         onChange={(e) => setForm((f) => ({ ...f, distributeSeasonal: e.target.checked }))}
-                        className="mt-0.5 h-4 w-4 accent-violet-500"
+                        className="mt-0.5 h-4 w-4 accent-amber-500"
                       />
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-violet-200">Разлить по месяцам с учётом сезонности</p>
+                        <p className="text-sm font-semibold text-amber-200">Разлить по месяцам с учётом сезонности</p>
                         <p className="text-[11px] text-muted-foreground">
                           {hasPriorData
                             ? `Веса берутся из факта ${year - 1} года. Создастся 12 месячных целей.`
@@ -776,7 +774,7 @@ export default function GoalsPage() {
                             <div key={idx} className="rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5 text-center">
                               <p className="text-[9px] uppercase text-muted-foreground">{mLabel}</p>
                               <p className="text-[11px] font-semibold tabular-nums text-emerald-300">{fmt(shareRev / 1000)}k</p>
-                              <p className="text-[10px] tabular-nums text-cyan-300">{fmt(shareProf / 1000)}k</p>
+                              <p className="text-[10px] tabular-nums text-amber-300">{fmt(shareProf / 1000)}k</p>
                             </div>
                           )
                         })}
@@ -788,7 +786,7 @@ export default function GoalsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setDialogOpen(false)}>Отмена</Button>
-              <Button onClick={handleAddPlan} disabled={saving} className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
+              <Button onClick={handleAddPlan} disabled={saving} className="bg-gradient-to-r from-amber-600 to-amber-600 hover:from-amber-700 hover:to-amber-700">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Сохранить
               </Button>
@@ -832,7 +830,7 @@ function KpiCard({
           </div>
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{meta.label}</span>
           {planLabel ? (
-            <span className="ml-auto rounded-full border border-violet-500/30 bg-violet-500/[0.08] px-2 py-0.5 text-[9px] uppercase tracking-wider text-violet-300">{planLabel}</span>
+            <span className="ml-auto rounded-full border border-amber-500/30 bg-amber-500/[0.08] px-2 py-0.5 text-[9px] uppercase tracking-wider text-amber-300">{planLabel}</span>
           ) : null}
         </div>
         <p className={`mt-2 font-bold tabular-nums ${large ? 'text-3xl' : compact ? 'text-lg' : 'text-2xl'} ${a.text}`}>
@@ -893,7 +891,7 @@ function MonthGrid({
             onClick={() => onOpenMonth(idx)}
             className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition hover:scale-[1.02] hover:shadow-xl ${
               isCurrent
-                ? 'border-violet-500/40 bg-gradient-to-br from-violet-500/[0.08] to-fuchsia-500/[0.04] hover:border-violet-500/60'
+                ? 'border-amber-500/40 bg-gradient-to-br from-amber-500/[0.08] to-amber-500/[0.04] hover:border-amber-500/60'
                 : isClosed
                   ? 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
                   : 'border-dashed border-white/10 bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03]'
@@ -902,7 +900,7 @@ function MonthGrid({
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">{mLabel}</p>
               {isCurrent ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                   <Sparkles className="h-3 w-3" /> Сейчас
                 </span>
               ) : isClosed ? (
@@ -927,13 +925,13 @@ function MonthGrid({
                   </div>
                   <div className="flex items-baseline justify-between text-xs">
                     <span className="text-muted-foreground">Прибыль</span>
-                    <span className={`font-semibold tabular-nums ${facts.profit >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>
+                    <span className={`font-semibold tabular-nums ${facts.profit >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                       {fmt(facts.profit)} ₸
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between text-xs">
                     <span className="text-muted-foreground">Маржа</span>
-                    <span className={`font-semibold ${facts.margin >= 0 ? 'text-violet-300' : 'text-rose-300'}`}>
+                    <span className={`font-semibold ${facts.margin >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                       {facts.margin}%
                     </span>
                   </div>
@@ -1158,7 +1156,7 @@ function PeriodView({
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-muted-foreground">
                             План {fmt(ct.value)} {metricMeta(activeMetric).unit}
-                            {ct.isSynthetic ? <span className="ml-1 text-violet-300">(Σ мес)</span> : null}
+                            {ct.isSynthetic ? <span className="ml-1 text-amber-300">(Σ мес)</span> : null}
                           </span>
                           <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
                         </div>
@@ -1176,7 +1174,7 @@ function PeriodView({
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-muted-foreground">
                             Доля {fmt(allocated)} {metricMeta(activeMetric).unit}
-                            <span className="ml-1 text-violet-300">({Math.round(share * 100)}%)</span>
+                            <span className="ml-1 text-amber-300">({Math.round(share * 100)}%)</span>
                           </span>
                           <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
                         </div>
@@ -1258,9 +1256,9 @@ function MonthDetailDialog({
         <DialogDescription className="sr-only">
           Факт и план по выбранному месяцу с разбивкой по точкам и динамикой по дням.
         </DialogDescription>
-        <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-violet-500/[0.08] to-fuchsia-500/[0.04] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-amber-500/[0.08] to-amber-500/[0.04] px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg shadow-violet-500/30">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/30">
               <CalendarDays className="h-5 w-5" />
             </div>
             <div>
@@ -1403,7 +1401,7 @@ function MonthDetailDialog({
                               <div className="flex items-center justify-between text-[11px]">
                                 <span className="text-muted-foreground">
                                   Доля {fmt(allocated)} {metricMeta(activeMetric).unit}
-                                  <span className="ml-1 text-violet-300">({Math.round(share * 100)}%)</span>
+                                  <span className="ml-1 text-amber-300">({Math.round(share * 100)}%)</span>
                                 </span>
                                 <span className={pct >= 100 ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>{pct}%</span>
                               </div>

@@ -201,7 +201,7 @@ const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: st
   warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
   danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
   opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Zap },
-  info: { bg: 'bg-gray-800/30', border: 'border-white/5', text: 'text-gray-400', icon: Info },
+  info: { bg: 'bg-slate-800/30', border: 'border-white/5', text: 'text-slate-400', icon: Info },
 }
 
 const DATE_PRESETS: Record<DatePreset, { label: string; getRange: () => { from: string; to: string } }> = {
@@ -367,7 +367,7 @@ const OperatorDailyChart = memo(({ data }: { data: { date: string; amount: numbe
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-between text-xs text-gray-500">
+      <div className="flex justify-between text-xs text-slate-500">
         <span>Макс: <span className="text-emerald-400 font-medium">{formatMoneyCompact(maxAmount)}</span></span>
         <span>Мин: <span className="text-rose-400 font-medium">{formatMoneyCompact(minAmount)}</span></span>
         <span>Сред: <span className="text-blue-400 font-medium">{formatMoneyCompact(data.reduce((sum, d) => sum + d.amount, 0) / data.length)}</span></span>
@@ -467,17 +467,17 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   onClick?: () => void
 }) => {
   const colors: Record<string, string> = {
-    blue: 'from-blue-500 to-cyan-500',
+    blue: 'from-blue-500 to-blue-400',
     green: 'from-emerald-500 to-teal-500',
-    red: 'from-rose-500 to-pink-500',
+    red: 'from-rose-500 to-red-500',
     amber: 'from-amber-500 to-orange-500',
-    violet: 'from-violet-500 to-purple-500',
+    violet: 'from-amber-400 to-amber-600',
   }
   
   return (
     <div 
       onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-5 hover:bg-gray-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
+      className={`relative overflow-hidden rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-5 hover:bg-slate-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
       <div className="relative z-10">
@@ -489,15 +489,15 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
               trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : 
               trend < 0 ? 'bg-rose-500/20 text-rose-400' : 
-              'bg-gray-500/20 text-gray-400'
+              'bg-slate-500/20 text-slate-400'
             }`}>
               {trend > 0 ? '+' : ''}{trend}%
             </span>
           )}
         </div>
-        <p className="text-gray-400 text-xs mb-1">{title}</p>
+        <p className="text-slate-400 text-xs mb-1">{title}</p>
         <p className="text-xl font-bold text-white mb-1">{value}</p>
-        {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
+        {subValue && <p className="text-xs text-slate-500">{subValue}</p>}
       </div>
     </div>
   )
@@ -518,7 +518,7 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-white mb-0.5">{insight.title}</p>
-          <p className="text-[11px] text-gray-400 line-clamp-2">{insight.description}</p>
+          <p className="text-[11px] text-slate-400 line-clamp-2">{insight.description}</p>
           {insight.metric && (
             <p className={`text-sm font-bold mt-1 ${styles.text}`}>{insight.metric}</p>
           )}
@@ -594,12 +594,12 @@ const OperatorDetailsModal = memo(({
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div
         ref={modalRef}
-        className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
       >
-        <div className="sticky top-0 bg-gray-900 border-b border-white/5 rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-slate-900 border-b border-white/5 rounded-t-2xl z-10">
           <div className="p-6 flex justify-between items-center">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-violet-500 to-fuchsia-500">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-amber-600">
                 {operator.photo_url ? (
                   <Image
                     src={operator.photo_url}
@@ -621,15 +621,15 @@ const OperatorDetailsModal = memo(({
                 <div className="flex items-center gap-3 mt-1">
                   {operator.position && (
                     <>
-                      <p className="text-sm text-gray-400">{operator.position}</p>
-                      <span className="w-1 h-1 rounded-full bg-gray-600" />
+                      <p className="text-sm text-slate-400">{operator.position}</p>
+                      <span className="w-1 h-1 rounded-full bg-slate-600" />
                     </>
                   )}
-                  <p className="text-sm text-gray-400 font-mono">ID: {operator.operatorId.slice(0, 8)}</p>
+                  <p className="text-sm text-slate-400 font-mono">ID: {operator.operatorId.slice(0, 8)}</p>
                   {tenure && (
                     <>
-                      <span className="w-1 h-1 rounded-full bg-gray-600" />
-                      <p className="text-sm text-gray-400 flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-slate-600" />
+                      <p className="text-sm text-slate-400 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {tenure}
                       </p>
@@ -642,7 +642,7 @@ const OperatorDetailsModal = memo(({
               onClick={onClose}
               className="p-2 hover:bg-white/10 rounded-xl transition-colors"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-5 h-5 text-slate-400" />
             </button>
           </div>
 
@@ -651,8 +651,8 @@ const OperatorDetailsModal = memo(({
               onClick={() => setActiveTab('overview')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'overview'
-                  ? 'bg-violet-500/20 text-violet-400 border-b-2 border-violet-500'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-amber-500/20 text-amber-400 border-b-2 border-amber-500'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               Обзор
@@ -661,8 +661,8 @@ const OperatorDetailsModal = memo(({
               onClick={() => setActiveTab('payments')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'payments'
-                  ? 'bg-violet-500/20 text-violet-400 border-b-2 border-violet-500'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-amber-500/20 text-amber-400 border-b-2 border-amber-500'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               Платежи
@@ -671,8 +671,8 @@ const OperatorDetailsModal = memo(({
               onClick={() => setActiveTab('adjustments')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'adjustments'
-                  ? 'bg-violet-500/20 text-violet-400 border-b-2 border-violet-500'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-amber-500/20 text-amber-400 border-b-2 border-amber-500'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               Корректировки
@@ -687,50 +687,50 @@ const OperatorDetailsModal = memo(({
                 <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 rounded-xl border border-emerald-500/20">
                   <div className="flex items-center justify-between mb-2">
                     <DollarSign className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs text-gray-500">Выручка</span>
+                    <span className="text-xs text-slate-500">Выручка</span>
                   </div>
                   <p className="text-xl font-bold text-emerald-400">{formatMoneyCompact(operator.totalTurnover)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{operator.days} дн • {operator.shifts} см</p>
+                  <p className="text-xs text-slate-500 mt-1">{operator.days} дн • {operator.shifts} см</p>
                 </div>
 
                 <div className="p-4 bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-xl border border-blue-500/20">
                   <div className="flex items-center justify-between mb-2">
                     <TrendUp className="w-4 h-4 text-blue-400" />
-                    <span className="text-xs text-gray-500">Среднее</span>
+                    <span className="text-xs text-slate-500">Среднее</span>
                   </div>
                   <p className="text-xl font-bold text-blue-400">{formatMoneyCompact(operator.avgPerShift)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{formatMoneyCompact(avgPerDay)}/день</p>
+                  <p className="text-xs text-slate-500 mt-1">{formatMoneyCompact(avgPerDay)}/день</p>
                 </div>
 
                 <div className="p-4 bg-gradient-to-br from-amber-500/10 to-amber-500/5 rounded-xl border border-amber-500/20">
                   <div className="flex items-center justify-between mb-2">
                     <Award className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs text-gray-500">Премии</span>
+                    <span className="text-xs text-slate-500">Премии</span>
                   </div>
                   <p className="text-xl font-bold text-amber-400">{formatMoneyCompact(operator.manualPlus)}</p>
-                  <p className="text-xs text-gray-500 mt-1">Авансы: {formatMoneyCompact(operator.advances)}</p>
+                  <p className="text-xs text-slate-500 mt-1">Авансы: {formatMoneyCompact(operator.advances)}</p>
                 </div>
 
                 <div className="p-4 bg-gradient-to-br from-rose-500/10 to-rose-500/5 rounded-xl border border-rose-500/20">
                   <div className="flex items-center justify-between mb-2">
                     <AlertTriangle className="w-4 h-4 text-rose-400" />
-                    <span className="text-xs text-gray-500">Удержания</span>
+                    <span className="text-xs text-slate-500">Удержания</span>
                   </div>
                   <p className="text-xl font-bold text-rose-400">{formatMoneyCompact(totalDeductions)}</p>
-                  <p className="text-xs text-gray-500 mt-1">Долги: {formatMoneyCompact(operator.autoDebts)}</p>
+                  <p className="text-xs text-slate-500 mt-1">Долги: {formatMoneyCompact(operator.autoDebts)}</p>
                 </div>
               </div>
 
               {operator.dailyData.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-white">Динамика выручки по дням</h3>
-                  <div className="h-48 bg-gray-800/30 rounded-xl p-4 border border-white/5">
+                  <div className="h-48 bg-slate-800/30 rounded-xl p-4 border border-white/5">
                     <OperatorDailyChart data={operator.dailyData} />
                   </div>
                   <div className="flex justify-between text-xs">
                     {bestDay && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">Лучший:</span>
+                        <span className="text-slate-500">Лучший:</span>
                         <span className="text-emerald-400">
                           {bestDay.date.slice(5)} • {formatMoneyCompact(bestDay.amount)}
                         </span>
@@ -738,7 +738,7 @@ const OperatorDetailsModal = memo(({
                     )}
                     {worstDay && bestDay !== worstDay && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">Худший:</span>
+                        <span className="text-slate-500">Худший:</span>
                         <span className="text-rose-400">
                           {worstDay.date.slice(5)} • {formatMoneyCompact(worstDay.amount)}
                         </span>
@@ -749,20 +749,20 @@ const OperatorDetailsModal = memo(({
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-800/30 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Всего смен</p>
+                <div className="p-3 bg-slate-800/30 rounded-lg">
+                  <p className="text-xs text-slate-500 mb-1">Всего смен</p>
                   <p className="text-lg font-semibold text-white">{operator.shifts}</p>
                 </div>
-                <div className="p-3 bg-gray-800/30 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Рабочих дней</p>
+                <div className="p-3 bg-slate-800/30 rounded-lg">
+                  <p className="text-xs text-slate-500 mb-1">Рабочих дней</p>
                   <p className="text-lg font-semibold text-white">{operator.days}</p>
                 </div>
-                <div className="p-3 bg-gray-800/30 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Смен в день</p>
+                <div className="p-3 bg-slate-800/30 rounded-lg">
+                  <p className="text-xs text-slate-500 mb-1">Смен в день</p>
                   <p className="text-lg font-semibold text-white">{shiftsPerDay}</p>
                 </div>
-                <div className="p-3 bg-gray-800/30 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Доля в выручке</p>
+                <div className="p-3 bg-slate-800/30 rounded-lg">
+                  <p className="text-xs text-slate-500 mb-1">Доля в выручке</p>
                   <p className="text-lg font-semibold text-white">{(operator.share * 100).toFixed(1)}%</p>
                 </div>
               </div>
@@ -772,43 +772,43 @@ const OperatorDetailsModal = memo(({
           {activeTab === 'payments' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 bg-gray-800/30 rounded-xl border border-emerald-500/20">
-                  <p className="text-xs text-gray-500 mb-2">Наличные</p>
+                <div className="p-4 bg-slate-800/30 rounded-xl border border-emerald-500/20">
+                  <p className="text-xs text-slate-500 mb-2">Наличные</p>
                   <p className="text-xl font-bold text-emerald-400">{formatMoneyCompact(operator.cashAmount)}</p>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.cashAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
-                <div className="p-4 bg-gray-800/30 rounded-xl border border-blue-500/20">
-                  <p className="text-xs text-gray-500 mb-2">Безналичный</p>
+                <div className="p-4 bg-slate-800/30 rounded-xl border border-blue-500/20">
+                  <p className="text-xs text-slate-500 mb-2">Безналичный</p>
                   <p className="text-xl font-bold text-blue-400">{formatMoneyCompact(operator.kaspiAmount)}</p>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.kaspiAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
-                <div className="p-4 bg-gray-800/30 rounded-xl border border-violet-500/20">
-                  <p className="text-xs text-gray-500 mb-2">Online</p>
-                  <p className="text-xl font-bold text-violet-400">{formatMoneyCompact(operator.onlineAmount)}</p>
-                  <p className="text-xs text-gray-500 mt-2">
+                <div className="p-4 bg-slate-800/30 rounded-xl border border-amber-500/20">
+                  <p className="text-xs text-slate-500 mb-2">Online</p>
+                  <p className="text-xl font-bold text-amber-400">{formatMoneyCompact(operator.onlineAmount)}</p>
+                  <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.onlineAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
-                <div className="p-4 bg-gray-800/30 rounded-xl border border-amber-500/20">
-                  <p className="text-xs text-gray-500 mb-2">Карта</p>
+                <div className="p-4 bg-slate-800/30 rounded-xl border border-amber-500/20">
+                  <p className="text-xs text-slate-500 mb-2">Карта</p>
                   <p className="text-xl font-bold text-amber-400">{formatMoneyCompact(operator.cardAmount)}</p>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.cardAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
               </div>
 
               {dominantPayment && (
-                <div className="p-4 bg-gray-800/30 rounded-xl border border-white/5">
-                  <p className="text-sm text-gray-400">Доминирующий метод оплаты</p>
+                <div className="p-4 bg-slate-800/30 rounded-xl border border-white/5">
+                  <p className="text-sm text-slate-400">Доминирующий метод оплаты</p>
                   <p className="text-2xl font-bold mt-1" style={{ color: dominantPayment.color }}>
                     {dominantPayment.name}
                   </p>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-sm text-slate-500 mt-2">
                     {((dominantPayment.value / operator.totalTurnover) * 100).toFixed(1)}% от общей выручки
                   </p>
                 </div>
@@ -825,7 +825,7 @@ const OperatorDetailsModal = memo(({
                     <span className="font-medium text-emerald-400">Премии</span>
                   </div>
                   <p className="text-2xl font-bold text-emerald-400 mb-2">{formatMoneyFull(operator.manualPlus)}</p>
-                  <p className="text-xs text-gray-500">Начислено за высокие показатели</p>
+                  <p className="text-xs text-slate-500">Начислено за высокие показатели</p>
                 </div>
 
                 <div className="p-4 bg-amber-500/5 rounded-xl border border-amber-500/20">
@@ -834,7 +834,7 @@ const OperatorDetailsModal = memo(({
                     <span className="font-medium text-amber-400">Авансы</span>
                   </div>
                   <p className="text-2xl font-bold text-amber-400 mb-2">{formatMoneyFull(operator.advances)}</p>
-                  <p className="text-xs text-gray-500">Выдано авансов за период</p>
+                  <p className="text-xs text-slate-500">Выдано авансов за период</p>
                 </div>
 
                 <div className="p-4 bg-rose-500/5 rounded-xl border border-rose-500/20">
@@ -843,7 +843,7 @@ const OperatorDetailsModal = memo(({
                     <span className="font-medium text-rose-400">Автоматические долги</span>
                   </div>
                   <p className="text-2xl font-bold text-rose-400 mb-2">{formatMoneyFull(operator.autoDebts)}</p>
-                  <p className="text-xs text-gray-500">Долги по зарплате/выручке</p>
+                  <p className="text-xs text-slate-500">Долги по зарплате/выручке</p>
                 </div>
 
                 <div className="p-4 bg-rose-500/5 rounded-xl border border-rose-500/20">
@@ -852,19 +852,19 @@ const OperatorDetailsModal = memo(({
                     <span className="font-medium text-rose-400">Ручные штрафы</span>
                   </div>
                   <p className="text-2xl font-bold text-rose-400 mb-2">{formatMoneyFull(operator.manualMinus)}</p>
-                  <p className="text-xs text-gray-500">Штрафы за нарушения</p>
+                  <p className="text-xs text-slate-500">Штрафы за нарушения</p>
                 </div>
               </div>
 
-              <div className="mt-6 p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-xl border border-white/5">
+              <div className="mt-6 p-6 bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl border border-white/5">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm text-gray-400 mb-2">Итоговый баланс за период</p>
+                    <p className="text-sm text-slate-400 mb-2">Итоговый баланс за период</p>
                     <p className="text-3xl font-bold text-white">{formatMoneyFull(finalBalance)}</p>
                     <div className="flex flex-wrap gap-4 mt-3 text-xs">
-                      <span className="text-gray-500">Выручка: {formatMoneyCompact(operator.totalTurnover)}</span>
-                      <span className="text-gray-500">Премии: +{formatMoneyCompact(operator.manualPlus)}</span>
-                      <span className="text-gray-500">Удержания: -{formatMoneyCompact(totalDeductions)}</span>
+                      <span className="text-slate-500">Выручка: {formatMoneyCompact(operator.totalTurnover)}</span>
+                      <span className="text-slate-500">Премии: +{formatMoneyCompact(operator.manualPlus)}</span>
+                      <span className="text-slate-500">Удержания: -{formatMoneyCompact(totalDeductions)}</span>
                     </div>
                   </div>
                   <div className={`px-4 py-3 rounded-xl ${
@@ -872,7 +872,7 @@ const OperatorDetailsModal = memo(({
                       ? 'bg-emerald-500/20 border border-emerald-500/30' 
                       : 'bg-rose-500/20 border border-rose-500/30'
                   }`}>
-                    <p className="text-sm text-gray-400 mb-1">Чистый эффект</p>
+                    <p className="text-sm text-slate-400 mb-1">Чистый эффект</p>
                     <p className={`text-xl font-bold ${operator.netEffect >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {operator.netEffect >= 0 ? '+' : ''}{formatMoneyFull(operator.netEffect)}
                     </p>
@@ -883,7 +883,7 @@ const OperatorDetailsModal = memo(({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-gray-900 border-t border-white/5 rounded-b-2xl p-4 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-slate-900 border-t border-white/5 rounded-b-2xl p-4 flex justify-end gap-2">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
@@ -905,10 +905,10 @@ function OperatorAnalyticsLoading() {
   return (
     <>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center animate-pulse">
             <Users2 className="w-8 h-8 text-white" />
           </div>
-          <p className="text-gray-400">Загрузка аналитики операторов...</p>
+          <p className="text-slate-400">Загрузка аналитики операторов...</p>
         </div>
     </>
   )
@@ -1700,7 +1700,7 @@ function OperatorAnalyticsContent() {
               <AlertTriangle className="w-8 h-8 text-rose-400" />
             </div>
             <h2 className="text-xl font-semibold text-white">Ошибка загрузки</h2>
-            <p className="text-gray-400 max-w-md">{error}</p>
+            <p className="text-slate-400 max-w-md">{error}</p>
             <Button onClick={handleRefresh} variant="outline" className="border-white/10">
               <RefreshCw className="w-4 h-4 mr-2" />
               Повторить
@@ -1719,32 +1719,32 @@ function OperatorAnalyticsContent() {
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-              'bg-gray-900/80 border-white/10 text-white'
+              'bg-slate-900/80 border-white/10 text-white'
             }`}>
               <div className="text-sm font-medium">{toast.message}</div>
             </div>
           )}
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/20 via-amber-600/15 to-amber-700/10 border border-white/10 p-6 lg:p-8">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
             <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <Link href="/dashboard">
                   <div className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-gray-400" />
+                    <ArrowLeft className="w-5 h-5 text-slate-400" />
                   </div>
                 </Link>
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
+                <div className="p-3 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl shadow-lg shadow-amber-500/25">
                   <Users2 className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
                     Аналитика операторов
                   </h1>
-                  <p className="text-gray-400 mt-1 flex items-center gap-2">
+                  <p className="text-slate-400 mt-1 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     {formatDateRange(dateFrom, dateTo)}
                   </p>
@@ -1752,13 +1752,13 @@ function OperatorAnalyticsContent() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex bg-gray-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
+                <div className="flex bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
                   {(['thisWeek', 'lastWeek', 'thisMonth'] as DatePreset[]).map((preset) => (
                     <button
                       key={preset}
                       onClick={() => handlePresetChange(preset)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        datePreset === preset ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
+                        datePreset === preset ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       {DATE_PRESETS[preset].label}
@@ -1769,7 +1769,7 @@ function OperatorAnalyticsContent() {
                 <Button 
                   variant="outline" 
                   size="icon" 
-                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
                 >
@@ -1779,7 +1779,7 @@ function OperatorAnalyticsContent() {
                 <Button 
                   variant="outline" 
                   size="icon" 
-                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                  className="rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10"
                   onClick={handleDownloadCSV}
                   title="Скачать CSV"
                 >
@@ -1799,11 +1799,11 @@ function OperatorAnalyticsContent() {
           )}
 
           {/* Filters Bar */}
-          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
+          <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-400">Фильтры:</span>
+                <Filter className="w-4 h-4 text-slate-400" />
+                <span className="text-sm text-slate-400">Фильтры:</span>
               </div>
 
               <button
@@ -1811,7 +1811,7 @@ function OperatorAnalyticsContent() {
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeArena
                     ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10'
-                    : 'border-white/10 text-gray-400 hover:bg-white/5'
+                    : 'border-white/10 text-slate-400 hover:bg-white/5'
                 }`}
               >
                 Arena
@@ -1822,7 +1822,7 @@ function OperatorAnalyticsContent() {
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeRamen
                     ? 'border-amber-500/50 text-amber-300 bg-amber-500/10'
-                    : 'border-white/10 text-gray-400 hover:bg-white/5'
+                    : 'border-white/10 text-slate-400 hover:bg-white/5'
                 }`}
               >
                 Ramen
@@ -1832,8 +1832,8 @@ function OperatorAnalyticsContent() {
                 onClick={() => setIncludeExtra(!includeExtra)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeExtra
-                    ? 'border-violet-500/50 text-violet-300 bg-violet-500/10'
-                    : 'border-white/10 text-gray-400 hover:bg-white/5'
+                    ? 'border-amber-500/50 text-amber-300 bg-amber-500/10'
+                    : 'border-white/10 text-slate-400 hover:bg-white/5'
                 }`}
               >
                 Extra
@@ -1846,14 +1846,14 @@ function OperatorAnalyticsContent() {
                   type="checkbox"
                   checked={showInactive}
                   onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                  className="rounded border-white/10 bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                 />
-                <span className="text-xs text-gray-400">Показывать неактивных</span>
+                <span className="text-xs text-slate-400">Показывать неактивных</span>
               </label>
 
               <button
                 onClick={() => setShowCharts(!showCharts)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-white/10 text-xs hover:bg-gray-700/50 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-white/10 text-xs hover:bg-slate-700/50 transition-colors"
               >
                 <BarChart3 className="w-3.5 h-3.5" />
                 {showCharts ? 'Скрыть графики' : 'Показать графики'}
@@ -1862,17 +1862,17 @@ function OperatorAnalyticsContent() {
               <div className="flex-1" />
 
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск оператора..."
-                  className="h-8 w-48 pl-8 pr-7 bg-gray-800/50 border border-white/10 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
+                  className="h-8 w-48 pl-8 pr-7 bg-slate-800/50 border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1935,7 +1935,7 @@ function OperatorAnalyticsContent() {
           )}
 
           {/* Main Table */}
-          <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
+          <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1943,7 +1943,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-left">
                       <button
                         onClick={() => handleSort('name')}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
                       >
                         Оператор
                         {sortKey === 'name' && (
@@ -1956,7 +1956,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-center">
                       <button
                         onClick={() => handleSort('shifts')}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
                       >
                         Смен
                         {sortKey === 'shifts' && (
@@ -1968,7 +1968,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">
                       <button
                         onClick={() => handleSort('turnover')}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors ml-auto"
                       >
                         Выручка
                         {sortKey === 'turnover' && (
@@ -1979,7 +1979,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">
                       <button
                         onClick={() => handleSort('avg')}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors ml-auto"
                       >
                         Ср. смена
                         {sortKey === 'avg' && (
@@ -1990,7 +1990,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">Доля</th>
                     <th className="py-3 px-2 text-right text-emerald-400">Нал</th>
                     <th className="py-3 px-2 text-right text-blue-400">Безналичный</th>
-                    <th className="py-3 px-2 text-right text-violet-400">Online</th>
+                    <th className="py-3 px-2 text-right text-amber-400">Online</th>
                     <th className="py-3 px-2 text-right text-amber-400">Карта</th>
                     <th className="py-3 px-2 text-right text-red-400">Долги</th>
                     <th className="py-3 px-2 text-right text-red-400">Штрафы</th>
@@ -1999,7 +1999,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">
                       <button
                         onClick={() => handleSort('net')}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors ml-auto"
                       >
                         Чистый
                         {sortKey === 'net' && (
@@ -2013,7 +2013,7 @@ function OperatorAnalyticsContent() {
                 <tbody>
                   {(loading || refreshing) && (
                     <tr>
-                      <td colSpan={18} className="py-8 text-center text-gray-500">
+                      <td colSpan={18} className="py-8 text-center text-slate-500">
                         Загрузка данных...
                       </td>
                     </tr>
@@ -2021,7 +2021,7 @@ function OperatorAnalyticsContent() {
 
                   {!loading && !refreshing && analytics.rows.length === 0 && (
                     <tr>
-                      <td colSpan={18} className="py-8 text-center text-gray-500">
+                      <td colSpan={18} className="py-8 text-center text-slate-500">
                         Нет данных за выбранный период
                       </td>
                     </tr>
@@ -2042,7 +2042,7 @@ function OperatorAnalyticsContent() {
                             className="flex items-center gap-2 group"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-fuchsia-500 flex-shrink-0">
+                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-amber-500 to-amber-600 flex-shrink-0">
                               {op.photo_url ? (
                                 <Image
                                   src={op.photo_url}
@@ -2058,11 +2058,11 @@ function OperatorAnalyticsContent() {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <span className="font-medium group-hover:text-violet-400 transition-colors block truncate">
+                              <span className="font-medium group-hover:text-amber-400 transition-colors block truncate">
                                 {op.operatorName}
                               </span>
                               {op.position && (
-                                <span className="text-xs text-gray-500 truncate block" title={op.position}>
+                                <span className="text-xs text-slate-500 truncate block" title={op.position}>
                                   {op.position}
                                 </span>
                               )}
@@ -2073,19 +2073,19 @@ function OperatorAnalyticsContent() {
                         <td className="py-2 px-2">
                           <div className="space-y-0.5">
                             {op.phone && (
-                              <div className="flex items-center gap-1 text-gray-400 text-xs" title={formatPhone(op.phone)}>
+                              <div className="flex items-center gap-1 text-slate-400 text-xs" title={formatPhone(op.phone)}>
                                 <Phone className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate max-w-[100px]">{op.phone}</span>
                               </div>
                             )}
                             {op.email && (
-                              <div className="flex items-center gap-1 text-gray-400 text-xs" title={op.email}>
+                              <div className="flex items-center gap-1 text-slate-400 text-xs" title={op.email}>
                                 <Mail className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate max-w-[120px]">{op.email}</span>
                               </div>
                             )}
                             {tenure && (
-                              <div className="flex items-center gap-1 text-gray-500 text-xs">
+                              <div className="flex items-center gap-1 text-slate-500 text-xs">
                                 <Clock className="w-3 h-3" />
                                 <span>{tenure}</span>
                               </div>
@@ -2096,7 +2096,7 @@ function OperatorAnalyticsContent() {
                         <td className="py-2 px-2 text-center">
                           <Link 
                             href={`/operators/${op.operatorId}/profile?tab=docs`}
-                            className="inline-flex items-center gap-1 text-gray-400 hover:text-violet-400 transition-colors"
+                            className="inline-flex items-center gap-1 text-slate-400 hover:text-amber-400 transition-colors"
                             onClick={(e) => e.stopPropagation()}
                             title={`${op.documents_count} документов${op.expiring_documents > 0 ? `, ${op.expiring_documents} скоро истекают` : ''}`}
                           >
@@ -2114,10 +2114,10 @@ function OperatorAnalyticsContent() {
                           {formatMoneyCompact(op.totalTurnover)}
                         </td>
                         <td className="py-2 px-2 text-right">{formatMoneyCompact(op.avgPerShift)}</td>
-                        <td className="py-2 px-2 text-right text-gray-500">{(op.share * 100).toFixed(1)}%</td>
+                        <td className="py-2 px-2 text-right text-slate-500">{(op.share * 100).toFixed(1)}%</td>
                         <td className="py-2 px-2 text-right text-emerald-400">{formatMoneyCompact(op.cashAmount)}</td>
                         <td className="py-2 px-2 text-right text-blue-400">{formatMoneyCompact(op.kaspiAmount)}</td>
-                        <td className="py-2 px-2 text-right text-violet-400">{formatMoneyCompact(op.onlineAmount)}</td>
+                        <td className="py-2 px-2 text-right text-amber-400">{formatMoneyCompact(op.onlineAmount)}</td>
                         <td className="py-2 px-2 text-right text-amber-400">{formatMoneyCompact(op.cardAmount)}</td>
                         <td className="py-2 px-2 text-right text-red-400">{formatMoneyCompact(op.autoDebts)}</td>
                         <td className="py-2 px-2 text-right text-red-400">{formatMoneyCompact(op.manualMinus)}</td>
@@ -2140,15 +2140,15 @@ function OperatorAnalyticsContent() {
                       <td className="py-3 px-2 text-right font-semibold text-emerald-400">
                         {formatMoneyCompact(analytics.totalsFiltered.turnover)}
                       </td>
-                      <td className="py-3 px-2 text-right text-gray-500">—</td>
-                      <td className="py-3 px-2 text-right text-gray-500">—</td>
+                      <td className="py-3 px-2 text-right text-slate-500">—</td>
+                      <td className="py-3 px-2 text-right text-slate-500">—</td>
                       <td className="py-3 px-2 text-right text-emerald-400">
                         {formatMoneyCompact(analytics.rows.reduce((sum, r) => sum + r.cashAmount, 0))}
                       </td>
                       <td className="py-3 px-2 text-right text-blue-400">
                         {formatMoneyCompact(analytics.rows.reduce((sum, r) => sum + r.kaspiAmount, 0))}
                       </td>
-                      <td className="py-3 px-2 text-right text-violet-400">
+                      <td className="py-3 px-2 text-right text-amber-400">
                         {formatMoneyCompact(analytics.rows.reduce((sum, r) => sum + r.onlineAmount, 0))}
                       </td>
                       <td className="py-3 px-2 text-right text-amber-400">
@@ -2180,9 +2180,9 @@ function OperatorAnalyticsContent() {
           {showCharts && analytics.rows.length > 0 && mounted && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Top Operators Chart */}
-              <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-violet-400" />
+                  <BarChart3 className="w-4 h-4 text-amber-400" />
                   Топ-5 операторов по выручке
                 </h3>
                 <div className="h-64">
@@ -2202,14 +2202,14 @@ function OperatorAnalyticsContent() {
                         formatter={(value: number) => formatMoneyFull(value)}
                         contentStyle={{ background: '#1f2937', border: 'none', borderRadius: '8px' }}
                       />
-                      <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </Card>
 
               {/* Payment Distribution */}
-              <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                   <PieChart className="w-4 h-4 text-amber-400" />
                   Распределение по типам платежей

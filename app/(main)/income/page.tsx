@@ -848,7 +848,7 @@ export default function IncomePage() {
   if (loading && serverRows.length === 0) {
     return (
       <div className="app-page-wide space-y-4">
-        <CardSkeleton rows={3} className="border-purple-500/20" />
+        <CardSkeleton rows={3} className="border-amber-500/20" />
         <StatGridSkeleton count={4} />
         <CardSkeleton rows={2} />
         <TableSkeleton rows={8} cols={6} />
@@ -860,21 +860,21 @@ export default function IncomePage() {
     <>
         <div className="app-page-wide space-y-6">
           {/* Шапка */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 p-6 border border-amber-500/20">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
             
             <div className="relative z-10">
               <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-purple-500/20 rounded-xl">
-                    <Brain className="w-8 h-8 text-purple-400" />
+                  <div className="p-3 bg-amber-500/20 rounded-xl">
+                    <Brain className="w-8 h-8 text-amber-400" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                    <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
                       AI Журнал доходов
                     </h1>
-                    <p className="text-sm text-gray-400">Умная аналитика и прогнозирование</p>
+                    <p className="text-sm text-slate-400">Умная аналитика и прогнозирование</p>
                   </div>
                 </div>
 
@@ -884,14 +884,14 @@ export default function IncomePage() {
                     onClick={() => setShowFilters(!showFilters)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
                       activeFiltersCount > 0
-                        ? 'bg-purple-500/20 border-purple-500/30 text-purple-400'
-                        : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-purple-500/50'
+                        ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
+                        : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:border-amber-500/50'
                     }`}
                   >
                     <Filter className="w-4 h-4" />
                     Фильтры
                     {activeFiltersCount > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded-full">
+                      <span className="ml-1 px-1.5 py-0.5 bg-amber-500 text-white text-xs rounded-full">
                         {activeFiltersCount}
                       </span>
                     )}
@@ -899,11 +899,11 @@ export default function IncomePage() {
 
                   <button
                     onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 rounded-xl border border-slate-700 hover:border-amber-500/50 transition-colors"
                   >
-                    <Calendar className="w-4 h-4 text-purple-400" />
-                    <span className="text-gray-300 text-sm">{periodLabel}</span>
-                    <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
+                    <Calendar className="w-4 h-4 text-amber-400" />
+                    <span className="text-slate-300 text-sm">{periodLabel}</span>
+                    <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {extraCompanyId && (
@@ -912,23 +912,23 @@ export default function IncomePage() {
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
                         includeExtraInTotals
                           ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                          : 'bg-gray-800/50 border-gray-700 text-gray-400'
+                          : 'bg-slate-800/50 border-slate-700 text-slate-400'
                       }`}
                     >
-                      <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-gray-500'}`} />
+                      <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-slate-500'}`} />
                       Extra
                     </button>
                   )}
 
                   {canExportIncome && (
-                    <Button variant="outline" size="sm" onClick={downloadCSV} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                    <Button variant="outline" size="sm" onClick={downloadCSV} className="border-slate-700 bg-slate-800/50 hover:bg-slate-700 text-slate-300">
                       <Download className="w-4 h-4 mr-1" /> Экспорт
                     </Button>
                   )}
 
                   {canCreateIncome ? (
                     <Link href="/income/add">
-                      <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25">
+                      <Button size="sm" className="bg-gradient-to-r from-amber-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-white shadow-lg shadow-amber-500/25">
                         <Plus className="w-4 h-4 mr-1" /> Добавить
                       </Button>
                     </Link>
@@ -938,7 +938,7 @@ export default function IncomePage() {
 
               {/* Календарь */}
               {isCalendarOpen && (
-                <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl">
+                <div className="mt-4 p-4 bg-slate-900/95 backdrop-blur-xl border border-amber-500/20 rounded-2xl">
                   <div className="flex flex-wrap gap-2 mb-4">
                     {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
                       <button
@@ -946,8 +946,8 @@ export default function IncomePage() {
                         onClick={() => setPreset(p)}
                         className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
                           activePreset === p
-                            ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-                            : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
+                            : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
                         }`}
                       >
                         {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
@@ -956,21 +956,21 @@ export default function IncomePage() {
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="text-xs text-gray-500 uppercase mb-1 block">С</label>
+                      <label className="text-xs text-slate-500 uppercase mb-1 block">С</label>
                       <input
                         type="date"
                         value={dateFrom}
                         onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-purple-500 outline-none"
+                        className="w-full bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 focus:border-amber-500 outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 uppercase mb-1 block">По</label>
+                      <label className="text-xs text-slate-500 uppercase mb-1 block">По</label>
                       <input
                         type="date"
                         value={dateTo}
                         onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-purple-500 outline-none"
+                        className="w-full bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 focus:border-amber-500 outline-none"
                       />
                     </div>
                   </div>
@@ -979,10 +979,10 @@ export default function IncomePage() {
 
               {/* Панель фильтров */}
               {showFilters && (
-                <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl">
+                <div className="mt-4 p-4 bg-slate-900/95 backdrop-blur-xl border border-amber-500/20 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium text-white flex items-center gap-2">
-                      <Filter className="w-4 h-4 text-purple-400" />
+                      <Filter className="w-4 h-4 text-amber-400" />
                       Фильтры данных
                     </h3>
                     <div className="flex items-center gap-2">
@@ -997,7 +997,7 @@ export default function IncomePage() {
                       )}
                       <button
                         onClick={() => setShowFilters(false)}
-                        className="text-gray-400 hover:text-white"
+                        className="text-slate-400 hover:text-white"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -1007,14 +1007,14 @@ export default function IncomePage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Фильтр компании */}
                     <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                      <label className="text-xs text-slate-500 uppercase flex items-center gap-1">
                         <Building2 className="w-3 h-3" />
                         Компания
                       </label>
                       <select
                         value={companyFilter}
                         onChange={(e) => setCompanyFilter(e.target.value)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                        className="w-full bg-slate-800 text-white px-3 py-2.5 rounded-lg border border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все компании</option>
                         {companies.map(c => (
@@ -1025,14 +1025,14 @@ export default function IncomePage() {
 
                     {/* Фильтр оператора */}
                     <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                      <label className="text-xs text-slate-500 uppercase flex items-center gap-1">
                         <Users className="w-3 h-3" />
                         Оператор
                       </label>
                       <select
                         value={operatorFilter}
                         onChange={(e) => setOperatorFilter(e.target.value as OperatorFilter)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                        className="w-full bg-slate-800 text-white px-3 py-2.5 rounded-lg border border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все операторы</option>
                         <option value="none">Без оператора</option>
@@ -1044,14 +1044,14 @@ export default function IncomePage() {
 
                     {/* Фильтр смены */}
                     <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                      <label className="text-xs text-slate-500 uppercase flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         Смена
                       </label>
                       <select
                         value={shiftFilter}
                         onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                        className="w-full bg-slate-800 text-white px-3 py-2.5 rounded-lg border border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Все смены</option>
                         <option value="day">День (утро)</option>
@@ -1061,14 +1061,14 @@ export default function IncomePage() {
 
                     {/* Фильтр способа оплаты */}
                     <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                      <label className="text-xs text-slate-500 uppercase flex items-center gap-1">
                         <CardIcon className="w-3 h-3" />
                         Способ оплаты
                       </label>
                       <select
                         value={payFilter}
                         onChange={(e) => setPayFilter(e.target.value as PayFilter)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                        className="w-full bg-slate-800 text-white px-3 py-2.5 rounded-lg border border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                       >
                         <option value="all">Любая оплата</option>
                         <option value="cash">Наличные 💵</option>
@@ -1080,9 +1080,9 @@ export default function IncomePage() {
                   </div>
 
                   {/* Поиск и дополнительные опции */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-800">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-800">
                     <div className="space-y-2">
-                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                      <label className="text-xs text-slate-500 uppercase flex items-center gap-1">
                         <Search className="w-3 h-3" />
                         Поиск по комментарию, зоне, оператору
                       </label>
@@ -1092,13 +1092,13 @@ export default function IncomePage() {
                           placeholder="Введите текст для поиска..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full bg-gray-800 text-white pl-10 pr-4 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                          className="w-full bg-slate-800 text-white pl-10 pr-4 py-2.5 rounded-lg border border-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm"
                         />
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
                         {searchTerm && (
                           <button
                             onClick={() => setSearchTerm('')}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-slate-300"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -1113,10 +1113,10 @@ export default function IncomePage() {
                           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors w-full md:w-auto ${
                             hideExtraRows
                               ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-300'
+                              : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300'
                           }`}
                         >
-                          {hideExtraRows ? <Check className="w-4 h-4" /> : <div className="w-4 h-4 border border-gray-500 rounded" />}
+                          {hideExtraRows ? <Check className="w-4 h-4" /> : <div className="w-4 h-4 border border-slate-500 rounded" />}
                           Скрыть строки Extra из таблицы
                         </button>
                       </div>
@@ -1125,16 +1125,16 @@ export default function IncomePage() {
 
                   {/* Активные фильтры */}
                   {activeFiltersCount > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-800">
-                      <span className="text-xs text-gray-500">Активные фильтры:</span>
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-800">
+                      <span className="text-xs text-slate-500">Активные фильтры:</span>
                       {companyFilter !== 'all' && (
-                        <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-lg flex items-center gap-1">
                           Компания: {companyName(companyFilter)}
                           <button onClick={() => setCompanyFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {operatorFilter !== 'all' && (
-                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-lg flex items-center gap-1">
                           Оператор: {operatorFilter === 'none' ? 'Без оператора' : operatorName(operatorFilter)}
                           <button onClick={() => setOperatorFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
@@ -1152,7 +1152,7 @@ export default function IncomePage() {
                         </span>
                       )}
                       {searchTerm && (
-                        <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded-lg flex items-center gap-1">
                           Поиск: "{searchTerm}"
                           <button onClick={() => setSearchTerm('')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
@@ -1172,22 +1172,22 @@ export default function IncomePage() {
                 onClick={() => setPreset(p)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                   activePreset === p
-                    ? 'bg-purple-500 text-white shadow-sm shadow-purple-500/30'
-                    : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                    : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'
                 }`}
               >
                 {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
               </button>
             ))}
             {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
-              <span className="px-3 py-1.5 text-xs text-gray-400 border border-gray-700/50 rounded-lg">
+              <span className="px-3 py-1.5 text-xs text-slate-400 border border-slate-700/50 rounded-lg">
                 {dateFrom && dateTo ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}` : 'Весь период'}
               </span>
             )}
           </div>
 
           {/* Табы навигации */}
-          <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+          <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
             <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<LineChart className="w-4 h-4" />} label="Аналитика" />
             <TabButton active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} icon={<Clock className="w-4 h-4" />} label="Операции" />
@@ -1243,11 +1243,11 @@ export default function IncomePage() {
           {editingIncome && typeof window !== 'undefined' && createPortal(
             <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 p-4 py-8 backdrop-blur-sm overflow-y-auto"
               onClick={(e) => { if (e.target === e.currentTarget) closeIncomeEditor() }}>
-              <Card className="w-full max-w-2xl border-white/10 bg-gray-900 p-5 my-auto">
+              <Card className="w-full max-w-2xl border-white/10 bg-slate-900 p-5 my-auto">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-white">Редактирование дохода</h3>
-                    <p className="text-sm text-gray-400">Эту операцию может выполнить только владелец или супер-админ</p>
+                    <p className="text-sm text-slate-400">Эту операцию может выполнить только владелец или супер-админ</p>
                   </div>
                   <Button variant="ghost" size="icon" onClick={closeIncomeEditor}>
                     <X className="h-4 w-4" />
@@ -1255,22 +1255,22 @@ export default function IncomePage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="space-y-2 text-sm text-gray-300">
+                  <label className="space-y-2 text-sm text-slate-300">
                     <span>Дата</span>
                     <input
                       type="date"
                       value={editIncomeDate}
                       onChange={(e) => setEditIncomeDate(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40"
                     />
                   </label>
 
-                  <label className="space-y-2 text-sm text-gray-300">
+                  <label className="space-y-2 text-sm text-slate-300">
                     <span>Оператор</span>
                     <select
                       value={editIncomeOperatorId}
                       onChange={(e) => setEditIncomeOperatorId(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40"
                     >
                       <option value="none">Без оператора</option>
                       {operators.map((operator) => (
@@ -1281,18 +1281,18 @@ export default function IncomePage() {
                     </select>
                   </label>
 
-                  <label className="space-y-2 text-sm text-gray-300">
+                  <label className="space-y-2 text-sm text-slate-300">
                     <span>Наличные</span>
-                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40" />
                   </label>
 
-                  <label className="space-y-2 text-sm text-gray-300">
+                  <label className="space-y-2 text-sm text-slate-300">
                     <span>{cashLabels.pos}</span>
-                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40" />
                   </label>
 
                   {editingIncome?.shift === 'night' && (
-                    <label className="space-y-2 text-sm text-gray-300 md:col-span-2">
+                    <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
                       <span className="flex items-center gap-2">
                         {cashLabels.providerName} до 00:00
                         <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] text-blue-300">только для ночных смен</span>
@@ -1307,23 +1307,23 @@ export default function IncomePage() {
                     </label>
                   )}
 
-                  <label className="space-y-2 text-sm text-gray-300">
+                  <label className="space-y-2 text-sm text-slate-300">
                     <span>Online</span>
-                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40" />
                   </label>
 
-                  <label className="space-y-2 text-sm text-gray-300">
+                  <label className="space-y-2 text-sm text-slate-300">
                     <span>Карта</span>
-                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40" />
                   </label>
 
-                  <label className="space-y-2 text-sm text-gray-300 md:col-span-2">
+                  <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
                     <span>Комментарий</span>
                     <textarea
                       rows={3}
                       value={editCommentDraft}
                       onChange={(e) => setEditCommentDraft(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-white outline-none focus:border-amber-500/40"
                     />
                   </label>
                 </div>
@@ -1351,8 +1351,8 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
         active
-          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-          : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
+          : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
       }`}
     >
       {icon}
@@ -1380,7 +1380,7 @@ function OverviewTab(props: any) {
   } = props
   const trendIcon = analytics.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-400" /> :
                    analytics.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-400" /> : 
-                   <MinusIcon className="w-4 h-4 text-gray-400" />
+                   <MinusIcon className="w-4 h-4 text-slate-400" />
 
   return (
     <div className="space-y-6">
@@ -1390,7 +1390,7 @@ function OverviewTab(props: any) {
           label="Общий доход"
           value={analytics.total}
           icon={<Wallet className="w-5 h-5" />}
-          color="from-purple-500 to-indigo-500"
+          color="from-amber-500 to-amber-500"
           trend={analytics.trend}
         />
         <MetricCard
@@ -1404,7 +1404,7 @@ function OverviewTab(props: any) {
           label={`${cashLabels.providerName} + Карта`}
           value={analytics.kaspi + analytics.card}
           icon={<CreditCard className="w-5 h-5" />}
-          color="from-blue-500 to-cyan-500"
+          color="from-amber-500 to-amber-500"
           percentage={analytics.total ? ((analytics.kaspi + analytics.card) / analytics.total) * 100 : 0}
         />
         <MetricCard
@@ -1418,20 +1418,20 @@ function OverviewTab(props: any) {
 
       {/* График и структура */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="lg:col-span-2 p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-500/20 rounded-xl">
-                <LineChart className="w-5 h-5 text-purple-400" />
+              <div className="p-2 bg-amber-500/20 rounded-xl">
+                <LineChart className="w-5 h-5 text-amber-400" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-white">Динамика доходов</h3>
-                <p className="text-xs text-gray-500">По дням с скользящим средним</p>
+                <p className="text-xs text-slate-500">По дням с скользящим средним</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {trendIcon}
-              <span className={`text-xs ${analytics.trend === 'up' ? 'text-green-400' : analytics.trend === 'down' ? 'text-red-400' : 'text-gray-400'}`}>
+              <span className={`text-xs ${analytics.trend === 'up' ? 'text-green-400' : analytics.trend === 'down' ? 'text-red-400' : 'text-slate-400'}`}>
                 {analytics.trend === 'up' ? 'Рост' : analytics.trend === 'down' ? 'Снижение' : 'Стабильно'}
               </span>
             </div>
@@ -1457,10 +1457,10 @@ function OverviewTab(props: any) {
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-blue-500/20 rounded-xl">
-              <BarChart2 className="w-5 h-5 text-blue-400" />
+            <div className="p-2 bg-amber-500/20 rounded-xl">
+              <BarChart2 className="w-5 h-5 text-amber-400" />
             </div>
             <h3 className="text-sm font-semibold text-white">Структура оплат</h3>
           </div>
@@ -1491,11 +1491,11 @@ function OverviewTab(props: any) {
               <div key={p.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="text-gray-400">{p.name}</span>
+                  <span className="text-slate-400">{p.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-white font-medium">{Formatters.moneyDetailed(p.value)}</span>
-                  <span className="text-gray-500">({p.percentage.toFixed(1)}%)</span>
+                  <span className="text-slate-500">({p.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
             ))}
@@ -1505,17 +1505,17 @@ function OverviewTab(props: any) {
 
       {/* AI Прогноз и Топы */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 border-0 bg-gradient-to-br from-blue-900/30 via-gray-900 to-purple-900/30 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-blue-500/20 rounded-xl">
-              <Sparkles className="w-5 h-5 text-blue-400" />
+            <div className="p-2 bg-amber-500/20 rounded-xl">
+              <Sparkles className="w-5 h-5 text-amber-400" />
             </div>
             <h3 className="text-sm font-semibold text-white">AI Прогноз</h3>
           </div>
           
           <div className="mb-4">
-            <p className="text-xs text-gray-400 mb-1">Ожидается в следующем месяце</p>
-            <p className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <p className="text-xs text-slate-400 mb-1">Ожидается в следующем месяце</p>
+            <p className="text-2xl font-bold bg-gradient-to-r from-amber-400 to-amber-400 bg-clip-text text-transparent">
               {Formatters.moneyDetailed(analytics.prediction.value)}
             </p>
           </div>
@@ -1523,19 +1523,19 @@ function OverviewTab(props: any) {
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-400">Достоверность</span>
+                <span className="text-slate-400">Достоверность</span>
                 <span className={analytics.prediction.confidence > 70 ? 'text-green-400' : 'text-yellow-400'}>
                   {analytics.prediction.confidence}%
                 </span>
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-blue-400 to-purple-400 rounded-full transition-all" style={{ width: `${analytics.prediction.confidence}%` }} />
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-amber-400 to-amber-400 rounded-full transition-all" style={{ width: `${analytics.prediction.confidence}%` }} />
               </div>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-amber-500/20 rounded-xl">
               <Trophy className="w-5 h-5 text-amber-400" />
@@ -1544,24 +1544,24 @@ function OverviewTab(props: any) {
           </div>
           <div className="text-lg font-bold text-white mb-1">{analytics.topOperator[0]}</div>
           <div className="text-2xl font-bold text-amber-400">{Formatters.moneyDetailed(analytics.topOperator[1])}</div>
-          <p className="text-xs text-gray-500 mt-2">Лучший результат за период</p>
+          <p className="text-xs text-slate-500 mt-2">Лучший результат за период</p>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-blue-500/20 rounded-xl">
-              <MapPin className="w-5 h-5 text-blue-400" />
+            <div className="p-2 bg-amber-500/20 rounded-xl">
+              <MapPin className="w-5 h-5 text-amber-400" />
             </div>
             <h3 className="text-sm font-semibold text-white">Топ зона</h3>
           </div>
           <div className="text-lg font-bold text-white mb-1">{analytics.topZone[0]}</div>
-          <div className="text-2xl font-bold text-blue-400">{Formatters.moneyDetailed(analytics.topZone[1])}</div>
-          <p className="text-xs text-gray-500 mt-2">Самая прибыльная локация</p>
+          <div className="text-2xl font-bold text-amber-400">{Formatters.moneyDetailed(analytics.topZone[1])}</div>
+          <p className="text-xs text-slate-500 mt-2">Самая прибыльная локация</p>
         </Card>
       </div>
 
       {/* Последние операции */}
-      <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+      <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-500/20 rounded-xl">
@@ -1597,19 +1597,19 @@ function OverviewTab(props: any) {
 
 function MetricCard({ label, value, icon, color, trend, percentage }: any) {
   return (
-    <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm hover:bg-gray-800/80 transition-colors">
+    <Card className="p-4 border-0 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/80 transition-colors">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-400 uppercase tracking-wide">{label}</span>
+        <span className="text-xs text-slate-400 uppercase tracking-wide">{label}</span>
         <div className={`p-2 rounded-xl bg-gradient-to-br ${color} bg-opacity-20`}>
           {icon}
         </div>
       </div>
       <div className="text-xl font-bold text-white mb-1">{Formatters.moneyDetailed(value)}</div>
       {percentage !== undefined && (
-        <div className="text-xs text-gray-500">{percentage.toFixed(1)}% от общего</div>
+        <div className="text-xs text-slate-500">{percentage.toFixed(1)}% от общего</div>
       )}
       {trend && (
-        <div className={`text-xs flex items-center gap-1 ${trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-gray-400'}`}>
+        <div className={`text-xs flex items-center gap-1 ${trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-slate-400'}`}>
           {trend === 'up' ? '↗ Рост' : trend === 'down' ? '↘ Снижение' : '→ Стабильно'}
         </div>
       )}
@@ -1635,7 +1635,7 @@ function IncomeRowCompact({
   
   return (
     <div className={`flex items-center justify-between p-3 rounded-xl transition-all ${
-      isExtra ? 'bg-yellow-500/5 border border-yellow-500/20' : 'hover:bg-gray-700/30'
+      isExtra ? 'bg-yellow-500/5 border border-yellow-500/20' : 'hover:bg-slate-700/30'
     }`}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className={`w-2 h-2 rounded-full ${row.shift === 'day' ? 'bg-amber-400' : 'bg-blue-400'}`} />
@@ -1644,14 +1644,14 @@ function IncomeRowCompact({
             {companyName}
             {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">EXTRA</span>}
           </span>
-          <span className="text-xs text-gray-500 truncate">{operatorName} • {row.zone || '—'}</span>
+          <span className="text-xs text-slate-500 truncate">{operatorName} • {row.zone || '—'}</span>
         </div>
       </div>
 
       <div className="flex items-center gap-4 text-xs">
         {row.cash_amount > 0 && <span className="text-amber-400 font-mono">{Formatters.moneyDetailed(row.cash_amount)}</span>}
         {row.kaspi_amount > 0 && <span className="text-blue-400 font-mono">{Formatters.moneyDetailed(row.kaspi_amount)}</span>}
-        {row.card_amount > 0 && <span className="text-purple-400 font-mono">{Formatters.moneyDetailed(row.card_amount)}</span>}
+        {row.card_amount > 0 && <span className="text-amber-400 font-mono">{Formatters.moneyDetailed(row.card_amount)}</span>}
         
         {/* Online с inline редактированием */}
         {String(row.id).startsWith('extra-') ? (
@@ -1689,7 +1689,7 @@ function IncomeRowCompact({
                 setOnlineDraft('')
                 saveOnlineAmount(row, val)
               }}
-              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-gray-900 text-white text-xs outline-none"
+              className="w-20 h-6 text-right px-1 rounded border border-pink-500 bg-slate-900 text-white text-xs outline-none"
             />
           </div>
         ) : (
@@ -1698,7 +1698,7 @@ function IncomeRowCompact({
               setEditingOnlineId(row.id)
               setOnlineDraft(String(row.online_amount ?? ''))
             }}
-            className={`font-mono hover:bg-pink-500/10 rounded px-1 transition-colors ${row.online_amount ? 'text-pink-400' : 'text-gray-600'}`}
+            className={`font-mono hover:bg-pink-500/10 rounded px-1 transition-colors ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}
           >
             {row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '+'}
           </button>
@@ -1714,7 +1714,7 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-white mb-4">По способам оплаты</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -1733,32 +1733,32 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-slate-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-white mb-4">Распределение по сменам</h3>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-400 flex items-center gap-2"><Sun className="w-4 h-4 text-amber-400" /> День</span>
+                <span className="text-slate-400 flex items-center gap-2"><Sun className="w-4 h-4 text-amber-400" /> День</span>
                 <span className="text-white font-medium">{Formatters.moneyDetailed(analytics.dayTotal)}</span>
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div className="h-full bg-amber-400 rounded-full" style={{ width: `${analytics.total ? (analytics.dayTotal / analytics.total) * 100 : 0}%` }} />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-400 flex items-center gap-2"><Moon className="w-4 h-4 text-blue-400" /> Ночь</span>
+                <span className="text-slate-400 flex items-center gap-2"><Moon className="w-4 h-4 text-blue-400" /> Ночь</span>
                 <span className="text-white font-medium">{Formatters.moneyDetailed(analytics.nightTotal)}</span>
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-400 rounded-full" style={{ width: `${analytics.total ? (analytics.nightTotal / analytics.total) * 100 : 0}%` }} />
               </div>
             </div>
           </div>
           
-          <div className="mt-6 pt-4 border-t border-gray-700">
+          <div className="mt-6 pt-4 border-t border-slate-700">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Средний чек</span>
+              <span className="text-slate-400">Средний чек</span>
               <span className="text-white font-medium">{Formatters.moneyDetailed(analytics.avgCheck)}</span>
             </div>
           </div>
@@ -1773,8 +1773,8 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {analytics.anomalies.map((a: any, i: number) => (
-              <div key={i} className="p-3 bg-gray-800/50 rounded-xl">
-                <div className="text-xs text-gray-400 mb-1">{DateUtils.formatDate(a.date)}</div>
+              <div key={i} className="p-3 bg-slate-800/50 rounded-xl">
+                <div className="text-xs text-slate-400 mb-1">{DateUtils.formatDate(a.date)}</div>
                 <div className={`text-sm font-medium ${a.type === 'spike' ? 'text-green-400' : 'text-red-400'}`}>
                   {a.type === 'spike' ? '↗ Всплеск' : '↘ Падение'}: {Formatters.moneyDetailed(a.amount)}
                 </div>
@@ -1805,13 +1805,13 @@ function FeedTab({
   deletingIncomeId,
 }: any) {
   return (
-    <Card className="p-0 border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
-      <div className="p-4 border-b border-gray-700">
+    <Card className="p-0 border-0 bg-slate-800/50 backdrop-blur-sm overflow-hidden">
+      <div className="p-4 border-b border-slate-700">
         <h3 className="text-sm font-semibold text-white">Все операции ({displayRows.length})</h3>
       </div>
-      <div className="divide-y divide-gray-800">
+      <div className="divide-y divide-slate-800">
         {displayRows.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
+          <div className="p-12 text-center text-slate-500">
             <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Нет операций по выбранным фильтрам</p>
           </div>
@@ -1866,7 +1866,7 @@ function IncomeRowFull({
   const canDeleteIncome = can('income.delete')
 
   return (
-    <div className={`p-4 hover:bg-gray-700/30 transition-colors ${isExtra ? 'bg-yellow-500/5' : ''}`}>
+    <div className={`p-4 hover:bg-slate-700/30 transition-colors ${isExtra ? 'bg-yellow-500/5' : ''}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className={`p-2 rounded-lg ${row.shift === 'day' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`}>
@@ -1877,12 +1877,12 @@ function IncomeRowFull({
               <span className="font-medium text-white">{companyName}</span>
               {isExtra && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">EXTRA</span>}
             </div>
-            <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+            <div className="text-xs text-slate-500 flex items-center gap-2 mt-1">
               <UserCircle2 className="w-3 h-3" />
               {operatorName}
-              <span className="text-gray-600">•</span>
+              <span className="text-slate-600">•</span>
               {row.zone || '—'}
-              <span className="text-gray-600">•</span>
+              <span className="text-slate-600">•</span>
               {DateUtils.formatDate(row.date, 'full')}
             </div>
           </div>
@@ -1892,26 +1892,26 @@ function IncomeRowFull({
             <div className="flex items-center gap-4 text-sm">
             {row.cash_amount > 0 && (
               <div className="text-right">
-                <div className="text-[10px] text-gray-500">Нал</div>
+                <div className="text-[10px] text-slate-500">Нал</div>
                 <div className="text-amber-400 font-mono">{Formatters.moneyDetailed(row.cash_amount)}</div>
               </div>
             )}
             {row.kaspi_amount > 0 && (
               <div className="text-right">
-                <div className="text-[10px] text-gray-500">{cashLabels.providerName}</div>
+                <div className="text-[10px] text-slate-500">{cashLabels.providerName}</div>
                 <div className="text-blue-400 font-mono">{Formatters.moneyDetailed(row.kaspi_amount)}</div>
               </div>
             )}
             {row.card_amount > 0 && (
               <div className="text-right">
-                <div className="text-[10px] text-gray-500">Карта</div>
-                <div className="text-purple-400 font-mono">{Formatters.moneyDetailed(row.card_amount)}</div>
+                <div className="text-[10px] text-slate-500">Карта</div>
+                <div className="text-amber-400 font-mono">{Formatters.moneyDetailed(row.card_amount)}</div>
               </div>
             )}
             
             {/* Online с inline редактированием */}
             <div className="text-right">
-              <div className="text-[10px] text-gray-500">Online</div>
+              <div className="text-[10px] text-slate-500">Online</div>
               {String(row.id).startsWith('extra-') ? (
                 <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
               ) : !canManageIncome ? (
@@ -1946,7 +1946,7 @@ function IncomeRowFull({
                     setOnlineDraft('')
                     saveOnlineAmount(row, val)
                   }}
-                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-gray-900 text-white text-sm outline-none"
+                  className="w-24 h-7 text-right px-2 rounded border border-pink-500 bg-slate-900 text-white text-sm outline-none"
                 />
               ) : (
                 <button
@@ -1954,7 +1954,7 @@ function IncomeRowFull({
                     setEditingOnlineId(row.id)
                     setOnlineDraft(String(row.online_amount ?? ''))
                   }}
-                  className={`font-mono hover:bg-pink-500/10 rounded px-2 py-1 transition-colors ${row.online_amount ? 'text-pink-400' : 'text-gray-600'}`}
+                  className={`font-mono hover:bg-pink-500/10 rounded px-2 py-1 transition-colors ${row.online_amount ? 'text-pink-400' : 'text-slate-600'}`}
                 >
                   {row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '+ добавить'}
                 </button>
@@ -1963,7 +1963,7 @@ function IncomeRowFull({
           </div>
 
             <div className="text-right min-w-[100px]">
-              <div className="text-[10px] text-gray-500">Итого</div>
+              <div className="text-[10px] text-slate-500">Итого</div>
               <div className="text-lg font-bold text-white font-mono">{Formatters.moneyDetailed(total)}</div>
             </div>
 
@@ -1989,7 +1989,7 @@ function IncomeRowFull({
           </div>
         </div>
       {row.comment && (
-        <div className="mt-2 text-xs text-gray-500 pl-12">{row.comment}</div>
+        <div className="mt-2 text-xs text-slate-500 pl-12">{row.comment}</div>
       )}
     </div>
   )

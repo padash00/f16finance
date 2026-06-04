@@ -21,7 +21,7 @@ const EVENT_LABELS: Record<string, { label: string; subtitle?: string }> = {
 }
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: any; color: string }> = {
-  push: { label: 'Push', icon: BellIcon, color: 'text-orange-300' },
+  push: { label: 'Push', icon: BellIcon, color: 'text-amber-300' },
   telegram: { label: 'Telegram', icon: Send, color: 'text-blue-300' },
   in_app: { label: 'В приложении', icon: MessageSquare, color: 'text-purple-300' },
 }
@@ -72,10 +72,10 @@ export default function NotificationSettingsPage() {
   }
 
   return (
-    <div className="app-page-wide max-w-3xl mx-auto space-y-5">
+    <div className="app-page-tight space-y-5">
       <div className="flex items-center gap-4">
-        <div className="p-3 bg-orange-500/10 rounded-xl">
-          <Bell className="w-7 h-7 text-orange-300" />
+        <div className="p-3 bg-amber-500/10 rounded-xl">
+          <Bell className="w-7 h-7 text-amber-300" />
         </div>
         <div>
           <h1 className="text-3xl font-bold text-foreground">Уведомления</h1>
@@ -99,7 +99,7 @@ export default function NotificationSettingsPage() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               {channels.map(channel => {
-                const ch = CHANNEL_LABELS[channel] || { label: channel, icon: Bell, color: 'text-gray-300' }
+                const ch = CHANNEL_LABELS[channel] || { label: channel, icon: Bell, color: 'text-slate-300' }
                 const Icon = ch.icon
                 const enabled = isEnabled(channel, eventType)
                 return (
@@ -108,11 +108,11 @@ export default function NotificationSettingsPage() {
                     onClick={() => toggle(channel, eventType, !enabled)}
                     className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
                       enabled
-                        ? 'border-orange-500/40 bg-orange-500/10 text-orange-200'
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
                         : 'border-border bg-background/50 text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${enabled ? 'text-orange-300' : ch.color}`} />
+                    <Icon className={`w-3.5 h-3.5 ${enabled ? 'text-amber-300' : ch.color}`} />
                     <span className="text-xs font-medium">{ch.label}</span>
                     {enabled && <span className="text-[10px]">✓</span>}
                   </button>

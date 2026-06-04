@@ -436,7 +436,7 @@ export default function OperatorsPage() {
           <AdminPageHeader
             title="Операторы"
             description="Управление операторами и их профилями"
-            accent="violet"
+            accent="amber"
             icon={<Users2 className="h-5 w-5" aria-hidden />}
             actions={
               <Button
@@ -477,75 +477,75 @@ export default function OperatorsPage() {
               <form onSubmit={handleAdd} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-slate-500 mb-1 block">
                       Имя оператора <span className="text-rose-400">*</span>
                     </label>
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Например: Маржан"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-slate-500 mb-1 block">
                       Полное ФИО
                     </label>
                     <input
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Например: Жумабекова Маржан Нурлановна"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-slate-500 mb-1 block">
                       Краткое имя
                     </label>
                     <input
                       value={shortName}
                       onChange={(e) => setShortName(e.target.value)}
-                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Напр.: Маржан (день)"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-slate-500 mb-1 block">
                       Должность
                     </label>
                     <input
                       value={position}
                       onChange={(e) => setPosition(e.target.value)}
-                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="Напр.: Старший оператор"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-slate-500 mb-1 block">
                       Телефон
                     </label>
                     <input
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="+7 (777) 777-77-77"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">
+                    <label className="text-xs text-slate-500 mb-1 block">
                       Email
                     </label>
                     <input
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       type="email"
-                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
                       placeholder="operator@example.com"
                     />
                   </div>
@@ -554,7 +554,7 @@ export default function OperatorsPage() {
                     <Button
                       type="submit"
                       disabled={saving || !name.trim()}
-                      className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+                      className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
                     >
                       {saving ? (
                         <>
@@ -575,20 +575,20 @@ export default function OperatorsPage() {
           )}
 
           {/* Поиск и фильтры */}
-          <div className="rounded-xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+          <div className="rounded-xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск по имени, должности, email..."
-                  className="w-full pl-9 pr-9 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
+                  className="w-full pl-9 pr-9 py-2 bg-slate-800/50 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -601,14 +601,14 @@ export default function OperatorsPage() {
                 onClick={() => setShowInactive((prev) => !prev)}
                 className={`rounded-lg border-white/10 ${
                   showInactive
-                    ? 'bg-violet-500/15 text-violet-200 hover:bg-violet-500/20'
-                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
+                    ? 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/20'
+                    : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50'
                 }`}
               >
                 {showInactive ? (
-                  <ToggleRight className="w-4 h-4 mr-2 text-violet-300" />
+                  <ToggleRight className="w-4 h-4 mr-2 text-amber-300" />
                 ) : (
-                  <ToggleLeft className="w-4 h-4 mr-2 text-gray-400" />
+                  <ToggleLeft className="w-4 h-4 mr-2 text-slate-400" />
                 )}
                 {showInactive ? 'Скрыть неактивных' : 'Показать неактивных'}
               </Button>
@@ -627,7 +627,7 @@ export default function OperatorsPage() {
           </div>
 
           {/* Таблица операторов */}
-          <Card className="overflow-hidden bg-gray-900/40 backdrop-blur-xl border-white/5 p-0">
+          <Card className="overflow-hidden bg-slate-900/40 backdrop-blur-xl border-white/5 p-0">
             <AdminTableViewport
               maxHeight="min(70vh, 40rem)"
               className="rounded-none border-0 border-b border-white/10 bg-transparent"
@@ -641,7 +641,7 @@ export default function OperatorsPage() {
                           type="checkbox"
                           checked={selectAll}
                           onChange={(e) => setSelectAll(e.target.checked)}
-                          className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                          className="rounded border-white/10 bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                         />
                       ) : null}
                     </th>
@@ -655,7 +655,7 @@ export default function OperatorsPage() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
+                      <td colSpan={6} className="py-12 text-center text-slate-500">
                         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                         Загрузка операторов...
                       </td>
@@ -664,10 +664,10 @@ export default function OperatorsPage() {
 
                   {!loading && filteredOperators.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
+                      <td colSpan={6} className="py-12 text-center text-slate-500">
                         <Users2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
                         <p className="text-lg font-medium mb-1">Операторы не найдены</p>
-                        <p className="text-sm text-gray-600">Добавьте первого оператора с помощью формы выше</p>
+                        <p className="text-sm text-slate-600">Добавьте первого оператора с помощью формы выше</p>
                       </td>
                     </tr>
                   )}
@@ -702,7 +702,7 @@ export default function OperatorsPage() {
                                 setSelectedOperators(newSelected)
                                 setSelectAll(false)
                               }}
-                              className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                              className="rounded border-white/10 bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                             />
                           ) : null}
                         </td>
@@ -711,7 +711,7 @@ export default function OperatorsPage() {
                             href={`/operators/${op.id}/profile`}
                             className="flex items-center gap-3 group"
                           >
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0">
                               {profile?.photo_url ? (
                                 <img
                                   src={profile.photo_url}
@@ -723,10 +723,10 @@ export default function OperatorsPage() {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-medium truncate group-hover:text-violet-400 transition-colors">
+                              <p className="font-medium truncate group-hover:text-amber-400 transition-colors">
                                 {getOperatorDisplayName({ ...op, full_name: profile?.full_name })}
                               </p>
-                              <p className="text-xs text-gray-500 truncate">
+                              <p className="text-xs text-slate-500 truncate">
                                 {op.short_name || op.name || 'Нет краткого имени'}
                                 {profile?.position && ` • ${profile.position}`}
                               </p>
@@ -736,19 +736,19 @@ export default function OperatorsPage() {
                         <td className="py-3 px-4">
                           <div className="space-y-1">
                             {profile?.phone && (
-                              <p className="text-xs flex items-center gap-1 text-gray-400">
+                              <p className="text-xs flex items-center gap-1 text-slate-400">
                                 <Phone className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate">{profile.phone}</span>
                               </p>
                             )}
                             {profile?.email && (
-                              <p className="text-xs flex items-center gap-1 text-gray-400">
+                              <p className="text-xs flex items-center gap-1 text-slate-400">
                                 <Mail className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate">{profile.email}</span>
                               </p>
                             )}
                             {!profile?.phone && !profile?.email && (
-                              <p className="text-xs text-gray-600">Нет данных</p>
+                              <p className="text-xs text-slate-600">Нет данных</p>
                             )}
                           </div>
                         </td>
@@ -756,7 +756,7 @@ export default function OperatorsPage() {
                           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs whitespace-nowrap ${
                             op.is_active
                               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                              : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
                           }`}>
                             {op.is_active ? (
                               <>
@@ -777,11 +777,11 @@ export default function OperatorsPage() {
                               {formatMoney(operatorStats.totalTurnover)}
                             </p>
                             <div className="flex items-center justify-end gap-3 text-xs whitespace-nowrap">
-                              <span className="text-gray-500" title="Смен">
+                              <span className="text-slate-500" title="Смен">
                                 <Briefcase className="w-3 h-3 inline mr-1" />
                                 {operatorStats.totalShifts}
                               </span>
-                              <span className="text-gray-500" title="Средняя смена">
+                              <span className="text-slate-500" title="Средняя смена">
                                 <TrendingUp className="w-3 h-3 inline mr-1" />
                                 {formatMoney(operatorStats.avgPerShift)}
                               </span>
@@ -828,7 +828,7 @@ export default function OperatorsPage() {
                                   <button
                                     onClick={() => toggleActive(op)}
                                     className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${
-                                      op.is_active ? 'text-emerald-400' : 'text-gray-500'
+                                      op.is_active ? 'text-emerald-400' : 'text-slate-500'
                                     }`}
                                     title={op.is_active ? 'Деактивировать' : 'Активировать'}
                                   >
@@ -862,19 +862,19 @@ export default function OperatorsPage() {
             {/* Footer с итогами */}
             <div className="border-t border-white/5 bg-white/5 px-4 py-3">
               <div className="flex flex-wrap justify-between items-center gap-2 text-sm">
-                <span className="text-gray-400">
+                <span className="text-slate-400">
                   Всего: {filteredOperators.length} операторов
                   {filteredOperators.length !== operators.length && (
-                    <span className="text-gray-600 ml-2">
+                    <span className="text-slate-600 ml-2">
                       (отфильтровано из {operators.length})
                     </span>
                   )}
                 </span>
                 <div className="flex items-center gap-4">
-                  <span className="text-gray-400">
+                  <span className="text-slate-400">
                     Активных: {operators.filter(o => o.is_active).length}
                   </span>
-                  <span className="text-gray-400">
+                  <span className="text-slate-400">
                     Неактивных: {operators.filter(o => !o.is_active).length}
                   </span>
                 </div>
@@ -884,37 +884,37 @@ export default function OperatorsPage() {
 
           {/* Быстрая статистика */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-500/20">
                   <Users2 className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Всего операторов</p>
+                  <p className="text-xs text-slate-500">Всего операторов</p>
                   <p className="text-xl font-bold">{operators.length}</p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-500/20">
                   <Briefcase className="w-4 h-4 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Активных</p>
+                  <p className="text-xs text-slate-500">Активных</p>
                   <p className="text-xl font-bold">{operators.filter(o => o.is_active).length}</p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-violet-500/20">
-                  <User className="w-4 h-4 text-violet-400" />
+                <div className="p-2 rounded-lg bg-amber-500/20">
+                  <User className="w-4 h-4 text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">С профилями</p>
+                  <p className="text-xs text-slate-500">С профилями</p>
                   <p className="text-xl font-bold">{profiles.size}</p>
                 </div>
               </div>
@@ -932,7 +932,7 @@ export default function OperatorsPage() {
             <Button
               onClick={saveEdit}
               disabled={saving || !editName.trim()}
-              className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
             >
               {saving ? (<><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Сохранение...</>) : 'Сохранить'}
             </Button>
@@ -941,28 +941,28 @@ export default function OperatorsPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Имя оператора <span className="text-rose-400">*</span></label>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" required />
+            <label className="text-xs text-slate-500 mb-1 block">Имя оператора <span className="text-rose-400">*</span></label>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" required />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Полное ФИО</label>
-            <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+            <label className="text-xs text-slate-500 mb-1 block">Полное ФИО</label>
+            <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Краткое имя</label>
-            <input value={editShortName} onChange={(e) => setEditShortName(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+            <label className="text-xs text-slate-500 mb-1 block">Краткое имя</label>
+            <input value={editShortName} onChange={(e) => setEditShortName(e.target.value)} className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Должность</label>
-            <input value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+            <label className="text-xs text-slate-500 mb-1 block">Должность</label>
+            <input value={editPosition} onChange={(e) => setEditPosition(e.target.value)} className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Телефон</label>
-            <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+            <label className="text-xs text-slate-500 mb-1 block">Телефон</label>
+            <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Email</label>
-            <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50" />
+            <label className="text-xs text-slate-500 mb-1 block">Email</label>
+            <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" className="w-full bg-slate-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50" />
           </div>
         </div>
       </AppModal>

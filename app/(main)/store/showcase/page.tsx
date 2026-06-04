@@ -304,8 +304,8 @@ export default function ShowcasePage() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
-            <Store className="h-5 w-5 text-blue-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <Store className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">
@@ -323,7 +323,7 @@ export default function ShowcasePage() {
               <select
                 value={selectedCompanyId || ''}
                 onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-blue-400/50"
+                className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
               >
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -349,7 +349,7 @@ export default function ShowcasePage() {
           <Button
             size="sm"
             onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}
-            className="h-9 gap-1.5 bg-blue-600 hover:bg-blue-700"
+            className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
           >
             <ClipboardList className="h-3.5 w-3.5" />
             Запросить со склада
@@ -363,9 +363,9 @@ export default function ShowcasePage() {
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
         </Card>
-        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Ед. товара на витрине</p>
-          <p className="mt-1 text-xl font-semibold text-blue-200">{totalShowcaseQty}</p>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Ед. товара на витрине</p>
+          <p className="mt-1 text-xl font-semibold text-amber-200">{totalShowcaseQty}</p>
         </Card>
         <Card className={`p-3 ${newRequestsCount > 0 ? 'border-amber-500/20 bg-amber-500/[0.05]' : 'border-white/10 bg-white/[0.03]'}`}>
           <p className={`text-[10px] uppercase tracking-widest ${newRequestsCount > 0 ? 'text-amber-300/70' : 'text-muted-foreground'}`}>Заявок в работе</p>
@@ -448,7 +448,7 @@ export default function ShowcasePage() {
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Итого</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-300/70">Подсобка</th>
-                  <th className="w-24 py-2.5 px-2 text-right font-normal text-blue-300/70">Витрина</th>
+                  <th className="w-24 py-2.5 px-2 text-right font-normal text-amber-300/70">Витрина</th>
                   <th className="w-24 py-2.5 px-2 pr-4 text-right font-normal">Цена</th>
                 </tr>
               </thead>
@@ -458,7 +458,7 @@ export default function ShowcasePage() {
                   const threshold = b.item?.low_stock_threshold ?? null
                   const isLow = threshold !== null ? qty <= threshold : qty <= 0
                   const isZero = qty <= 0
-                  const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-blue-300'
+                  const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-amber-300'
                   const rowBg = isLow && !isZero ? 'bg-amber-500/[0.03]' : isZero ? 'bg-rose-500/[0.03]' : ''
                   return (
                     <tr key={b.item_id} className={`transition hover:bg-white/[0.02] ${rowBg}`}>
@@ -508,12 +508,12 @@ export default function ShowcasePage() {
         <CardHeader className="border-b border-white/10 pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <ClipboardList className="h-4 w-4 text-violet-300" />
+              <ClipboardList className="h-4 w-4 text-amber-300" />
               История заявок
             </CardTitle>
             <Link
               href="/store/requests"
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-300 transition-colors"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-amber-300 transition-colors"
             >
               Все заявки
               <ArrowRight className="h-3 w-3" />
@@ -567,7 +567,7 @@ export default function ShowcasePage() {
         <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
           <SheetHeader className="border-b border-white/10 p-5">
             <SheetTitle className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-blue-300" />
+              <ClipboardList className="h-5 w-5 text-amber-300" />
               Заявка на пополнение
             </SheetTitle>
             <SheetDescription>
@@ -589,7 +589,7 @@ export default function ShowcasePage() {
                           <select
                             value={line.item_id}
                             onChange={(e) => setLineItem(idx, e.target.value)}
-                            className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-blue-400/50"
+                            className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-amber-400/50"
                           >
                             <option value="">Выберите товар</option>
                             {warehouseItems.map((wi) => (
@@ -604,7 +604,7 @@ export default function ShowcasePage() {
                               <p className="text-[10px] text-muted-foreground">
                                 Итого: <span className="font-medium text-foreground">{bal.catalog_quantity}</span>
                                 {' · '}Склад: <span className="font-medium text-amber-300">{bal.warehouse_quantity}</span>
-                                {' · '}Витрина: <span className="font-medium text-blue-300">{bal.quantity}</span>
+                                {' · '}Витрина: <span className="font-medium text-amber-300">{bal.quantity}</span>
                               </p>
                             ) : null
                           })()}
@@ -661,7 +661,7 @@ export default function ShowcasePage() {
                       onChange={(e) => setRequestComment(e.target.value)}
                       placeholder="Что и зачем нужно..."
                       rows={2}
-                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:border-blue-400/50"
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:border-amber-400/50"
                     />
                   </div>
 

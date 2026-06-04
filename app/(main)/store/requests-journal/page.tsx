@@ -150,11 +150,11 @@ function requestStatusLabel(status: string) {
 function requestStatusClass(status: string) {
   if (status === 'approved_full') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
   if (status === 'approved_partial') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (status === 'issued') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+  if (status === 'issued') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (status === 'received') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
   if (status === 'rejected') return 'border-red-500/30 bg-red-500/10 text-red-200'
   if (status === 'disputed') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
-  return 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+  return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
 }
 
 function RequestStatusBadge({ status }: { status: string }) {
@@ -378,8 +378,8 @@ function StoreRequestsJournalPageContent() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
-            <History className="h-5 w-5 text-blue-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <History className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">Журнал заявок</h1>
@@ -404,21 +404,21 @@ function StoreRequestsJournalPageContent() {
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold">{stats.total}</p>}
         </Card>
-        <Card className="border-violet-500/20 bg-violet-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-violet-300/70">Новые</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-violet-200">{stats.newCount}</p>}
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Новые</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.newCount}</p>}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Одобрены</p>
           {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.approved}</p>}
         </Card>
-        <Card className="border-cyan-500/20 bg-cyan-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">Выданы</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.issued}</p>}
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Выданы</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.issued}</p>}
         </Card>
-        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Получены</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-blue-200">{stats.received}</p>}
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Получены</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.received}</p>}
         </Card>
         <Card className="border-red-500/20 bg-red-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-red-300/70">Отклонены</p>
@@ -623,7 +623,7 @@ function StoreRequestsJournalPageContent() {
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-blue-300" />
+              <ClipboardList className="h-5 w-5 text-amber-300" />
               Детали заявки
             </DialogTitle>
             <DialogDescription>

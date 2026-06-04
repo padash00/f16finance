@@ -1688,7 +1688,7 @@ export default function OperatorProfilePage() {
       )}
 
       <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="app-page-wide space-y-6">
           {/* Уведомления */}
           {uploadError && (
             <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-4 flex items-center gap-3">

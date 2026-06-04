@@ -68,13 +68,13 @@ export default function OperatorSettingsMobilePage() {
       <OperatorPanel accent="amber">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm text-slate-400">Настройки</div>
-            <div className="mt-1 text-xl font-semibold text-white">Управление личным кабинетом</div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
+            <div className="text-sm text-zinc-500">Настройки</div>
+            <div className="mt-1 text-xl font-semibold text-zinc-100">Управление личным кабинетом</div>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
               Здесь собраны действия, которые оператору реально нужны с телефона: сменить пароль, открыть профиль, перейти в задачи или выйти из системы.
             </p>
           </div>
-          <div className="rounded-2xl bg-amber-500/15 p-3 text-amber-300">
+          <div className="rounded-none bg-amber-500/15 p-3 text-amber-300">
             <UserCog className="h-6 w-6" />
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function OperatorSettingsMobilePage() {
 
       {loading ? (
         <OperatorPanel>
-          <div className="flex items-center gap-3 text-sm text-slate-300">
+          <div className="flex items-center gap-3 text-sm text-zinc-400">
             <Loader2 className="h-5 w-5 animate-spin" />
             Загружаю настройки...
           </div>
@@ -95,10 +95,10 @@ export default function OperatorSettingsMobilePage() {
         <>
           <OperatorPanel>
             <OperatorSectionHeading title="Ваш аккаунт" description="Короткая сводка по аккаунту, чтобы быстро проверить, всё ли подключено." />
-            <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <div className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
-                <div className="font-medium text-white">{data.operator.name}</div>
-                <div className="mt-1 text-xs text-slate-400">
+            <div className="mt-4 space-y-3 text-sm text-zinc-400">
+              <div className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+                <div className="font-medium text-zinc-100">{data.operator.name}</div>
+                <div className="mt-1 text-xs text-zinc-500">
                   {data.operator.profile.position || 'Оператор'}
                   {data.operator.username ? ` · ${data.operator.username}` : ''}
                 </div>
@@ -114,8 +114,8 @@ export default function OperatorSettingsMobilePage() {
           </OperatorPanel>
 
           <OperatorPanel>
-            <div className="flex items-center gap-2 text-lg font-semibold text-white">
-              <ShieldCheck className="h-5 w-5 text-emerald-300" />
+            <div className="flex items-center gap-2 text-lg font-semibold text-zinc-100">
+              <ShieldCheck className="h-5 w-5 text-amber-400" />
               Безопасность
             </div>
             <div className="mt-4 grid gap-3">
@@ -129,15 +129,15 @@ export default function OperatorSettingsMobilePage() {
           </OperatorPanel>
 
           <OperatorPanel>
-            <div className="flex items-center gap-2 text-lg font-semibold text-white">
-              <Bell className="h-5 w-5 text-blue-300" />
+            <div className="flex items-center gap-2 text-lg font-semibold text-zinc-100">
+              <Bell className="h-5 w-5 text-amber-400" />
               Рабочие действия
             </div>
             <div className="mt-4 grid gap-3">
-              <Button asChild variant="outline" className="w-full justify-start border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]">
+              <Button asChild variant="outline" className="w-full justify-start border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]">
                 <Link href="/operator/profile">Открыть профиль</Link>
               </Button>
-              <Button asChild variant="outline" className="w-full justify-start border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]">
+              <Button asChild variant="outline" className="w-full justify-start border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]">
                 <Link href="/operator/tasks">
                   <Briefcase className="h-4 w-4" />
                   Открыть мои задачи
@@ -147,8 +147,8 @@ export default function OperatorSettingsMobilePage() {
           </OperatorPanel>
 
           <OperatorPanel>
-            <div className="text-lg font-semibold text-white">Выход</div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
+            <div className="text-lg font-semibold text-zinc-100">Выход</div>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
               Если вы закончили работу на этом устройстве, безопасно выйдите из кабинета.
             </p>
             <Button

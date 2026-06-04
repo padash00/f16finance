@@ -158,8 +158,8 @@ export default function ReceiptSettingsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
-            <Receipt className="h-5 w-5 text-cyan-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <Receipt className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">Реквизиты чека ККМ</h1>
@@ -187,7 +187,7 @@ export default function ReceiptSettingsPage() {
             size="sm"
             onClick={handleSave}
             disabled={saving || loading || !settings}
-            className="h-9 gap-1.5 bg-cyan-600 hover:bg-cyan-700"
+            className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             Сохранить
@@ -237,7 +237,7 @@ export default function ReceiptSettingsPage() {
           {/* Налогоплательщик */}
           <Card className="border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-cyan-300" />
+              <Building2 className="h-4 w-4 text-amber-300" />
               <h2 className="text-sm font-semibold">Налогоплательщик</h2>
             </div>
             <div className="space-y-3">
@@ -272,7 +272,7 @@ export default function ReceiptSettingsPage() {
           {/* ККМ */}
           <Card className="border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-cyan-300" />
+              <FileText className="h-4 w-4 text-amber-300" />
               <h2 className="text-sm font-semibold">Контрольно-кассовая машина</h2>
             </div>
             <div className="space-y-3">
@@ -298,7 +298,7 @@ export default function ReceiptSettingsPage() {
           {/* НДС */}
           <Card className="border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-cyan-300" />
+              <ShieldCheck className="h-4 w-4 text-amber-300" />
               <h2 className="text-sm font-semibold">НДС</h2>
             </div>
             <div className="flex items-center justify-between">
@@ -328,7 +328,7 @@ export default function ReceiptSettingsPage() {
           {/* ОФД */}
           <Card className="border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-cyan-300" />
+              <FileText className="h-4 w-4 text-amber-300" />
               <h2 className="text-sm font-semibold">Оператор фискальных данных (ОФД)</h2>
             </div>
             <div className="space-y-3">
@@ -354,7 +354,7 @@ export default function ReceiptSettingsPage() {
           {/* Языки и доп. */}
           <Card className="border-white/10 bg-card/70 p-5 space-y-4 lg:col-span-2">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-cyan-300" />
+              <FileText className="h-4 w-4 text-amber-300" />
               <h2 className="text-sm font-semibold">Параметры чека</h2>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

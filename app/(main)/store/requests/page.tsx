@@ -172,11 +172,11 @@ function requestStatusLabel(status: string) {
 function requestStatusClass(status: string) {
   if (status === 'approved_full') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
   if (status === 'approved_partial') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (status === 'issued') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+  if (status === 'issued') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (status === 'received') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
   if (status === 'rejected') return 'border-red-500/30 bg-red-500/10 text-red-200'
   if (status === 'disputed') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
-  return 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+  return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
 }
 
 function RequestStatusBadge({ status }: { status: string }) {
@@ -528,8 +528,8 @@ function StoreRequestsPageContent() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
-            <ClipboardList className="h-5 w-5 text-violet-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <ClipboardList className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">Заявки точек</h1>
@@ -578,23 +578,23 @@ function StoreRequestsPageContent() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <Card className="border-violet-500/20 bg-violet-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-violet-300/70">Новые заявки</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-violet-200">{stats.pending}</p>}
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Новые заявки</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.pending}</p>}
         </Card>
-        <Card className="border-cyan-500/20 bg-cyan-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">Ждёт выдачи</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.toIssue}</p>}
-          <p className="mt-1 text-[10px] text-cyan-200/60">Одобрено, не отмечено «выдано»</p>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Ждёт выдачи</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.toIssue}</p>}
+          <p className="mt-1 text-[10px] text-amber-200/60">Одобрено, не отмечено «выдано»</p>
         </Card>
         <Card className="border-teal-500/20 bg-teal-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-teal-300/70">В пути</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-teal-200">{stats.issued}</p>}
           <p className="mt-1 text-[10px] text-teal-200/60">Выдано со склада</p>
         </Card>
-        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">История</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-blue-200">{stats.history}</p>}
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">История</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.history}</p>}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Запрошено</p>
@@ -651,9 +651,9 @@ function StoreRequestsPageContent() {
       </div>
 
       {stats.pending > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5">
-          <AlertCircle className="h-4 w-4 shrink-0 text-violet-300" />
-          <span className="text-sm font-semibold text-violet-200">{stats.pending} {stats.pending === 1 ? 'новая заявка ждёт' : 'новых заявки ждут'} решения</span>
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-300" />
+          <span className="text-sm font-semibold text-amber-200">{stats.pending} {stats.pending === 1 ? 'новая заявка ждёт' : 'новых заявки ждут'} решения</span>
         </div>
       )}
 
@@ -662,11 +662,11 @@ function StoreRequestsPageContent() {
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <input
             type="checkbox"
-            className="h-4 w-4 accent-violet-500"
+            className="h-4 w-4 accent-amber-500"
             checked={pendingRequests.length > 0 && pendingRequests.every((request) => selectedIds.includes(request.id))}
             onChange={(event) => toggleSelectAllPending(event.target.checked)}
           />
-          <AlertCircle className="h-4 w-4 text-violet-300" />
+          <AlertCircle className="h-4 w-4 text-amber-300" />
           Очередь на решение
           <span className="text-xs text-muted-foreground">({pendingRequests.length})</span>
         </div>
@@ -688,7 +688,7 @@ function StoreRequestsPageContent() {
                   <div className="flex flex-wrap items-center gap-3">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-violet-500"
+                      className="h-4 w-4 accent-amber-500"
                       checked={selectedIds.includes(request.id)}
                       onChange={(event) => toggleSelected(request.id, event.target.checked)}
                     />
@@ -821,7 +821,7 @@ function StoreRequestsPageContent() {
       {/* Одобрено — отметить выдачу со склада (статус «Выдана») */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <PackageCheck className="h-4 w-4 text-cyan-300" />
+          <PackageCheck className="h-4 w-4 text-amber-300" />
           Одобрено — отметьте выдачу со склада
           <span className="text-xs text-muted-foreground">({readyToIssueRequests.length})</span>
         </div>
@@ -839,7 +839,7 @@ function StoreRequestsPageContent() {
             const approved = items.reduce((sum, i) => sum + Number(i.approved_qty || 0), 0)
             const pointName = request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'
             return (
-              <Card key={request.id} className="overflow-hidden border-cyan-500/20 bg-card/70">
+              <Card key={request.id} className="overflow-hidden border-amber-500/20 bg-card/70">
                 <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-3">
                   <RequestStatusBadge status={request.status} />
                   <span className="text-base font-semibold text-foreground">{pointName}</span>
@@ -864,7 +864,7 @@ function StoreRequestsPageContent() {
                         type="button"
                         size="sm"
                         variant="secondary"
-                        className="gap-1.5 bg-cyan-600/90 text-white hover:bg-cyan-600"
+                        className="gap-1.5 bg-amber-600/90 text-white hover:bg-amber-600"
                         disabled={savingId === request.id}
                         onClick={() => void transitionStatus(request.id, 'issued')}
                       >
@@ -935,8 +935,8 @@ function StoreRequestsPageContent() {
       </div>
 
       {selectedIds.length > 0 ? (
-        <div className="sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-500/30 bg-[#0f172a]/95 px-4 py-3 shadow-2xl backdrop-blur">
-          <div className="text-sm text-violet-100">
+        <div className="sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-[#0f172a]/95 px-4 py-3 shadow-2xl backdrop-blur">
+          <div className="text-sm text-amber-100">
             Выбрано заявок: <span className="font-semibold">{selectedIds.length}</span>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -293,9 +293,9 @@ export default function OperatorTerminalLoginPage() {
         onChange={onFileChange}
       />
 
-      <OperatorPanel className="border-white/10 bg-white/[0.045]">
+      <OperatorPanel className="border-[#23262b] bg-[#0e0f10]">
         <div className="flex items-start gap-3">
-          <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-200">
+          <div className="rounded-none border border-amber-400/25 bg-amber-400/10 p-3 text-amber-200">
             <MonitorSmartphone className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
@@ -303,10 +303,10 @@ export default function OperatorTerminalLoginPage() {
               title="Вход на Orda Point по QR"
               description="Без ввода пароля на кассе — подтверждение здесь, в кабинете оператора."
             />
-            <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm leading-relaxed text-slate-300">
+            <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm leading-relaxed text-zinc-400">
               <li>На кассе в Orda Point откройте вход «QR-код».</li>
               <li>
-                На телефоне нажмите <strong className="text-white">«Сканировать QR»</strong>, разрешите камеру — появится превью, наведите на QR на экране ПК.
+                На телефоне нажмите <strong className="text-zinc-100">«Сканировать QR»</strong>, разрешите камеру — появится превью, наведите на QR на экране ПК.
               </li>
               <li>Можно загрузить фото с QR или вставить код из ссылки вручную.</li>
             </ol>
@@ -314,18 +314,18 @@ export default function OperatorTerminalLoginPage() {
         </div>
       </OperatorPanel>
 
-      <OperatorPanel className="border-white/10 bg-white/[0.045]">
+      <OperatorPanel className="border-[#23262b] bg-[#0e0f10]">
         <OperatorSectionHeading
           title="Сканировать камерой"
           description="После разрешения камеры должно появиться изображение. Если чёрный экран подождите 1–2 с или нажмите «Стоп» и снова «Сканировать»."
         />
         {scanning ? (
           <div className="mt-4 space-y-3">
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+            <div className="overflow-hidden rounded-none border border-[#23262b] bg-black/40">
               <video ref={videoRef} className="aspect-video w-full object-cover" playsInline muted autoPlay />
             </div>
-            <p className="text-center text-xs text-slate-400">Держите QR в центре кадра 2–5 секунд при хорошем свете.</p>
-            <Button type="button" variant="outline" className="w-full border-white/20 text-white" onClick={stopScan}>
+            <p className="text-center text-xs text-zinc-500">Держите QR в центре кадра 2–5 секунд при хорошем свете.</p>
+            <Button type="button" variant="outline" className="w-full border-white/20 text-zinc-100" onClick={stopScan}>
               Остановить камеру
             </Button>
           </div>
@@ -333,28 +333,28 @@ export default function OperatorTerminalLoginPage() {
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
-              className="flex-1 gap-2 bg-[linear-gradient(135deg,rgba(255,179,107,0.96),rgba(255,122,89,0.94))] text-slate-950 hover:opacity-95"
+              className="flex-1 gap-2 border border-amber-400/60 bg-amber-400/15 text-amber-300"
               onClick={() => void startScan()}
             >
               <Camera className="h-4 w-4" />
               Сканировать QR
             </Button>
-            <Button type="button" variant="outline" className="flex-1 gap-2 border-white/20 text-white" onClick={onPickImage}>
+            <Button type="button" variant="outline" className="flex-1 gap-2 border-white/20 text-zinc-100" onClick={onPickImage}>
               <ImageUp className="h-4 w-4" />
               Фото с QR
             </Button>
           </div>
         )}
-        {scanError ? <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">{scanError}</p> : null}
+        {scanError ? <p className="mt-3 rounded-none border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">{scanError}</p> : null}
       </OperatorPanel>
 
-      <OperatorPanel className="border-white/10 bg-white/[0.045]">
+      <OperatorPanel className="border-[#23262b] bg-[#0e0f10]">
         <OperatorSectionHeading
           title="Код из ссылки"
           description="Если ссылка уже открыта в другом окне — скопируйте из адреса значение параметра n= (длинная строка)."
         />
         <div className="mt-4 space-y-2">
-          <Label htmlFor="terminal-nonce" className="text-slate-300">
+          <Label htmlFor="terminal-nonce" className="text-zinc-400">
             Код
           </Label>
           <Input
@@ -362,7 +362,7 @@ export default function OperatorTerminalLoginPage() {
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Вставьте код после n= …"
-            className="border-white/15 bg-white/[0.06] text-white placeholder:text-slate-500"
+            className="border-white/15 bg-[#0e0f10] text-zinc-100 placeholder:text-zinc-500"
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}

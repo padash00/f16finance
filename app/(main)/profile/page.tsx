@@ -205,7 +205,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="app-page space-y-6 max-w-3xl mx-auto w-full">
+    <div className="app-page-tight space-y-6">
       {/* Шапка */}
       <Card className="border-white/10 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white">
         <div className="flex items-center gap-4">

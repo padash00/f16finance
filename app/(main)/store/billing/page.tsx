@@ -561,7 +561,7 @@ export default function BillingPage() {
         ) : null}
       </div>
 
-      <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+      <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
         <button
           onClick={() => setActiveTab('debts')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'debts' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
@@ -583,7 +583,7 @@ export default function BillingPage() {
         <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card>
       ) : null}
 
-      <Card className="p-3 bg-gray-900/40 border-gray-800">
+      <Card className="p-3 bg-slate-900/40 border-slate-800">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
           <Input
             value={searchQuery}
@@ -615,17 +615,17 @@ export default function BillingPage() {
       {activeTab === 'debts' ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Card className="p-3 bg-gray-900/60 border-gray-800">
+            <Card className="p-3 bg-slate-900/60 border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Открытых долгов</div>
               <div className="text-lg font-bold text-amber-300">{totalsByStatus.openCount}</div>
               <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.open)} ₸</div>
             </Card>
-            <Card className="p-3 bg-gray-900/60 border-gray-800">
+            <Card className="p-3 bg-slate-900/60 border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Просрочено</div>
               <div className="text-lg font-bold text-red-300">{totalsByStatus.overdueCount}</div>
               <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.overdue)} ₸</div>
             </Card>
-            <Card className="p-3 bg-gray-900/60 border-gray-800">
+            <Card className="p-3 bg-slate-900/60 border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Фильтр статуса</div>
               <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
                 <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
@@ -679,7 +679,7 @@ export default function BillingPage() {
           ) : (
             <div className="space-y-2">
               {filteredDebts.map((debt) => (
-                <Card key={debt.id} className="p-4 bg-gray-900/60 border-gray-800">
+                <Card key={debt.id} className="p-4 bg-slate-900/60 border-slate-800">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     {debt.status === 'open' ? (
                       <input
@@ -694,7 +694,7 @@ export default function BillingPage() {
                         <span className="font-semibold">{debt.supplier?.organization_name || debt.supplier?.name || 'Поставщик не указан'}</span>
                         {debt.supplier?.bin_iin ? <span className="text-xs text-muted-foreground">· {debt.supplier.bin_iin}</span> : null}
                         {debt.is_consignment ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-200 border border-purple-500/30">реализация</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-200 border border-amber-500/30">реализация</span>
                         ) : null}
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full border ${
@@ -702,7 +702,7 @@ export default function BillingPage() {
                               ? 'bg-amber-500/15 text-amber-200 border-amber-500/30'
                               : debt.status === 'paid'
                               ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30'
-                              : 'bg-gray-500/15 text-gray-200 border-gray-500/30'
+                              : 'bg-slate-500/15 text-slate-200 border-slate-500/30'
                           }`}
                         >
                           {debt.status === 'open' ? 'Открыт' : debt.status === 'paid' ? 'Оплачен' : 'Списан'}
@@ -785,7 +785,7 @@ export default function BillingPage() {
                     {fmtDate(date)} · накладных: {items.length}
                   </div>
                   {items.map((r) => (
-                    <Card key={r.id} className="p-4 bg-gray-900/60 border-gray-800">
+                    <Card key={r.id} className="p-4 bg-slate-900/60 border-slate-800">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 text-sm">

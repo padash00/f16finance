@@ -429,7 +429,7 @@ export default function ShiftReportDetailPage({
   const totals = (shift?.totals_json || {}) as Record<string, any>
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="app-page-wide space-y-6">
       <AdminPageHeader
         title={shift ? `Смена • ${shift.company?.name || '—'}` : 'Смена'}
         description={

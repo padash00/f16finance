@@ -118,7 +118,7 @@ const ROLE_LABEL: Record<StaffRole, { label: string; color: string; icon: any }>
   },
   marketer: { 
     label: 'Маркетолог', 
-    color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+    color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
     icon: TrendingUp 
   },
   owner: { 
@@ -146,11 +146,11 @@ const ACCOUNT_STATE_LABEL: Record<StaffAccountState, { label: string; className:
   },
   no_account: {
     label: 'Нет аккаунта',
-    className: 'text-sky-300 bg-sky-500/10 border-sky-500/20',
+    className: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
   },
   invited: {
     label: 'Приглашён',
-    className: 'text-violet-300 bg-violet-500/10 border-violet-500/20',
+    className: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
   },
   active: {
     label: 'Активен',
@@ -200,7 +200,7 @@ function StaffLoading() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center animate-pulse">
             <Users2 className="w-8 h-8 text-white" />
           </div>
-          <p className="text-gray-400">Загрузка сотрудников...</p>
+          <p className="text-slate-400">Загрузка сотрудников...</p>
         </div>
     </>
   )
@@ -568,20 +568,20 @@ export default function StaffPageSmart() {
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Поиск..." className="w-full pl-9 pr-8 h-9 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50" />
-              {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>}
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Поиск..." className="w-full pl-9 pr-8 h-9 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+              {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>}
             </div>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="h-9 px-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-emerald-500/50 [color-scheme:dark]">
               <option value="name">По имени</option>
               <option value="salary">По окладу</option>
             </select>
             <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 transition-colors flex items-center">{sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-400 ml-1">
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-400 ml-1">
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-white/10 text-emerald-500" />
               Архивные
             </label>
-            {(searchTerm || showInactive || sortBy !== 'name' || sortDir !== 'asc') && <button onClick={resetFilters} className="text-sm text-gray-500 hover:text-white transition-colors">Сбросить</button>}
+            {(searchTerm || showInactive || sortBy !== 'name' || sortDir !== 'asc') && <button onClick={resetFilters} className="text-sm text-slate-500 hover:text-white transition-colors">Сбросить</button>}
           </div>
 
           {/* Main Table */}
@@ -590,15 +590,15 @@ export default function StaffPageSmart() {
               <table className="w-full text-sm">
                 <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-white/5">
-                    <th className="py-4 px-4 text-left text-xs font-medium text-gray-400">Сотрудник</th>
-                    <th className="py-4 px-4 text-right text-xs font-medium text-gray-400">Оклад</th>
-                    <th className="py-4 px-4 text-center text-xs font-medium text-gray-400">Действия</th>
+                    <th className="py-4 px-4 text-left text-xs font-medium text-slate-400">Сотрудник</th>
+                    <th className="py-4 px-4 text-right text-xs font-medium text-slate-400">Оклад</th>
+                    <th className="py-4 px-4 text-center text-xs font-medium text-slate-400">Действия</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {loading && !refreshing && (
                     <tr>
-                      <td colSpan={3} className="py-12 text-center text-gray-500">
+                      <td colSpan={3} className="py-12 text-center text-slate-500">
                         Загрузка данных...
                       </td>
                     </tr>
@@ -606,7 +606,7 @@ export default function StaffPageSmart() {
 
                   {!loading && filteredStaff.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="py-12 text-center text-gray-500">
+                      <td colSpan={3} className="py-12 text-center text-slate-500">
                         {staff.length === 0 
                           ? 'Список сотрудников пуст. Добавьте первого сотрудника.'
                           : 'Нет сотрудников, соответствующих фильтрам'}
@@ -694,7 +694,7 @@ function StaffRow({
                   {roleStyle.label}
                 </span>
                 {staff.short_name && (
-                  <span className="text-[10px] text-gray-500">
+                  <span className="text-[10px] text-slate-500">
                     {staff.short_name}
                   </span>
                 )}
@@ -704,7 +704,7 @@ function StaffRow({
               </div>
               <span className={cn(
                 "mt-1 text-[11px]",
-                effectiveEmail?.trim() ? "text-gray-500" : "text-amber-300"
+                effectiveEmail?.trim() ? "text-slate-500" : "text-amber-300"
               )}>
                 {effectiveEmail?.trim() || 'Email не заполнен'}
               </span>
@@ -713,7 +713,7 @@ function StaffRow({
                   {accountStateLabel.label}
                 </span>
                 {accountInfo?.lastSignInAt && (
-                  <span className="text-[10px] text-gray-500">
+                  <span className="text-[10px] text-slate-500">
                     Вход: {new Date(accountInfo.lastSignInAt).toLocaleDateString('ru-RU')}
                   </span>
                 )}
@@ -735,7 +735,7 @@ function StaffRow({
                 className={cn(
                   "h-8 px-3 text-xs gap-1.5 border-white/10 bg-white/[0.03]",
                   !effectiveEmail?.trim() && "border-amber-500/30 text-amber-300 hover:bg-amber-500/10",
-                  !staff.is_active && "border-gray-700 text-gray-500"
+                  !staff.is_active && "border-slate-700 text-slate-500"
                 )}
                 onClick={onInviteAccount}
                 disabled={inviteBusy}
@@ -772,8 +772,8 @@ function StaffRow({
                 className={cn(
                   "h-8 w-8",
                   staff.is_active
-                    ? "text-gray-500 hover:text-red-400 hover:bg-red-500/10"
-                    : "text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                    ? "text-slate-500 hover:text-red-400 hover:bg-red-500/10"
+                    : "text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10"
                 )}
                 onClick={onToggleStatus}
                 title={staff.is_active ? "В архив" : "Активировать"}
@@ -846,7 +846,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
+      <DialogContent className="bg-slate-900 border-white/10 text-white sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <div className={cn(
@@ -857,7 +857,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
             </div>
             <span>{staff.short_name || staff.full_name}</span>
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-slate-400">
             Оклад: {money(salary)} · Выплачено: {money(paidSoFar)}
           </DialogDescription>
         </DialogHeader>
@@ -881,21 +881,21 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Дата</label>
+              <label className="text-xs text-slate-400 font-medium">Дата</label>
               <Input 
                 type="date" 
                 value={date} 
                 onChange={e => setDate(e.target.value)} 
-                className="bg-gray-800/50 border-white/10 text-white"
+                className="bg-slate-800/50 border-white/10 text-white"
                 required
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Тип выплаты</label>
+              <label className="text-xs text-slate-400 font-medium">Тип выплаты</label>
               <select 
                 value={slot} 
                 onChange={e => setSlot(e.target.value as PaySlot)}
-                className="w-full h-9 rounded-md border border-white/10 bg-gray-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full h-9 rounded-md border border-white/10 bg-slate-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:border-emerald-500/50"
                 required
               >
                 <option value="first">Аванс (1-е число)</option>
@@ -906,14 +906,14 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs text-gray-400 font-medium">Сумма (₸)</label>
+            <label className="text-xs text-slate-400 font-medium">Сумма (₸)</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg">₸</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-lg">₸</span>
               <Input 
                 type="number" 
                 value={amount} 
                 onChange={e => setAmount(e.target.value)} 
-                className="bg-gray-800/50 border-white/10 text-white pl-10 font-mono text-lg" 
+                className="bg-slate-800/50 border-white/10 text-white pl-10 font-mono text-lg" 
                 required
               />
             </div>
@@ -921,14 +921,14 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
               <button 
                 type="button" 
                 onClick={() => setAmount(String(Math.floor(salary / 2)))} 
-                className="text-xs text-gray-500 hover:text-emerald-400 transition-colors px-2 py-1 hover:bg-white/5 rounded"
+                className="text-xs text-slate-500 hover:text-emerald-400 transition-colors px-2 py-1 hover:bg-white/5 rounded"
               >
                 50%
               </button>
               <button 
                 type="button" 
                 onClick={() => setAmount(String(remainder))} 
-                className="text-xs text-gray-500 hover:text-emerald-400 transition-colors px-2 py-1 hover:bg-white/5 rounded"
+                className="text-xs text-slate-500 hover:text-emerald-400 transition-colors px-2 py-1 hover:bg-white/5 rounded"
               >
                 Остаток
               </button>
@@ -936,12 +936,12 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs text-gray-400 font-medium">Комментарий</label>
+            <label className="text-xs text-slate-400 font-medium">Комментарий</label>
             <Input 
               value={comment} 
               onChange={e => setComment(e.target.value)} 
               placeholder="Бонус, штраф, примечание..."
-              className="bg-gray-800/50 border-white/10 text-white"
+              className="bg-slate-800/50 border-white/10 text-white"
             />
           </div>
 
@@ -950,7 +950,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
               type="button" 
               variant="ghost" 
               onClick={onClose}
-              className="text-gray-400 hover:text-white"
+              className="text-slate-400 hover:text-white"
             >
               Отмена
             </Button>

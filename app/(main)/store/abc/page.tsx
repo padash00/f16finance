@@ -209,8 +209,8 @@ export default function StoreAbcPage() {
     <div className="app-page-wide space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
-            <BarChart3 className="h-5 w-5 text-violet-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <BarChart3 className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">ABC-анализ</h1>
@@ -348,7 +348,7 @@ export default function StoreAbcPage() {
       {tab === 'sales' && summary.abc_xyz_matrix ? (
         <Card className="border-white/10 bg-card/70 p-4">
           <div className="mb-3 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-violet-300" />
+            <TrendingUp className="h-4 w-4 text-amber-300" />
             <h2 className="text-sm font-semibold text-foreground">Матрица ABC × XYZ</h2>
             <span className="text-[11px] text-muted-foreground">· XYZ = стабильность спроса</span>
           </div>

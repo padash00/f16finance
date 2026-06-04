@@ -168,7 +168,7 @@ export default function MessagesPage() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-300 font-bold shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-300 font-bold shrink-0">
                       {t.otherName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -181,7 +181,7 @@ export default function MessagesPage() {
                           {t.lastFromMe ? 'Вы: ' : ''}{t.lastMessage}
                         </span>
                         {t.unreadCount > 0 && (
-                          <span className="text-[10px] font-bold text-white bg-orange-500 rounded-full px-1.5 min-w-[18px] text-center">
+                          <span className="text-[10px] font-bold text-white bg-amber-500 rounded-full px-1.5 min-w-[18px] text-center">
                             {t.unreadCount}
                           </span>
                         )}
@@ -209,7 +209,7 @@ export default function MessagesPage() {
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-300 font-bold">
+                <div className="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-300 font-bold">
                   {activeUser.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -227,7 +227,7 @@ export default function MessagesPage() {
                     return (
                       <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[70%] px-3 py-2 rounded-2xl ${
-                          isMine ? 'bg-orange-500 text-white' : 'bg-white/[0.06] text-foreground'
+                          isMine ? 'bg-amber-500 text-white' : 'bg-white/[0.06] text-foreground'
                         }`}>
                           <div className="text-sm whitespace-pre-wrap break-words">{m.message}</div>
                           <div className={`text-[10px] mt-1 ${isMine ? 'text-white/70' : 'text-muted-foreground'}`}>
@@ -251,9 +251,9 @@ export default function MessagesPage() {
                     }
                   }}
                   placeholder="Сообщение..."
-                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-orange-500"
+                  className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-amber-500"
                 />
-                <Button onClick={send} disabled={!draft.trim()} className="bg-orange-600 hover:bg-orange-700">
+                <Button onClick={send} disabled={!draft.trim()} className="bg-amber-600 hover:bg-amber-700">
                   <Send className="w-4 h-4" />
                 </Button>
               </div>

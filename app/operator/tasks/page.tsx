@@ -156,7 +156,7 @@ export default function OperatorTasksMobilePage() {
           title="Что нужно сделать сегодня"
           description="Здесь собраны ваши активные задачи. Можно сразу взять задачу в работу, завершить её или написать комментарий руководителю."
           action={
-            <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => void load()}>
+            <Button type="button" variant="ghost" className="text-zinc-400 hover:text-zinc-100" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           }
@@ -174,7 +174,7 @@ export default function OperatorTasksMobilePage() {
 
       {loading ? (
         <OperatorPanel>
-          <div className="flex items-center gap-3 text-sm text-slate-300">
+          <div className="flex items-center gap-3 text-sm text-zinc-400">
             <Loader2 className="h-5 w-5 animate-spin" />
             Загружаю задачи...
           </div>
@@ -195,8 +195,8 @@ export default function OperatorTasksMobilePage() {
             <OperatorPanel key={task.id}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Задача #{task.task_number}</div>
-                  <div className="mt-2 text-lg font-semibold text-white">{task.title}</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Задача #{task.task_number}</div>
+                  <div className="mt-2 text-lg font-semibold text-zinc-100">{task.title}</div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs">
                     <OperatorPill>{statusLabel(task.status)}</OperatorPill>
                     <OperatorPill tone={task.priority === 'critical' || task.priority === 'high' ? 'amber' : 'default'}>{task.priority}</OperatorPill>
@@ -204,13 +204,13 @@ export default function OperatorTasksMobilePage() {
                     {task.due_date ? <OperatorPill>до {formatRuDate(task.due_date, 'full')}</OperatorPill> : null}
                   </div>
                 </div>
-                <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => setExpandedId(isOpen ? null : task.id)}>
+                <Button type="button" variant="ghost" className="text-zinc-400 hover:text-zinc-100" onClick={() => setExpandedId(isOpen ? null : task.id)}>
                   <MessageSquare className="h-4 w-4" />
                   {isOpen ? 'Скрыть' : 'Открыть'}
                 </Button>
               </div>
 
-              {task.description ? <p className="mt-4 text-sm leading-6 text-slate-300">{task.description}</p> : null}
+              {task.description ? <p className="mt-4 text-sm leading-6 text-zinc-400">{task.description}</p> : null}
 
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
                 {responseButtons.map((item) => (
@@ -218,7 +218,7 @@ export default function OperatorTasksMobilePage() {
                     key={item.action}
                     type="button"
                     variant={item.action === 'complete' ? 'default' : 'outline'}
-                    className={item.action === 'complete' ? '' : 'border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]'}
+                    className={item.action === 'complete' ? '' : 'border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]'}
                     disabled={!!actionLoading}
                     onClick={() => void submitResponse(task.id, item.action)}
                   >
@@ -235,14 +235,14 @@ export default function OperatorTasksMobilePage() {
               </div>
 
               {isOpen ? (
-                <div className="mt-4 space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
+                <div className="mt-4 space-y-4 rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
                   <div>
-                    <div className="text-sm font-medium text-white">Комментарии</div>
+                    <div className="text-sm font-medium text-zinc-100">Комментарии</div>
                     <div className="mt-3 space-y-3">
-                      {comments.length === 0 ? <div className="text-sm text-slate-400">Пока комментариев нет.</div> : null}
+                      {comments.length === 0 ? <div className="text-sm text-zinc-500">Пока комментариев нет.</div> : null}
                       {comments.map((comment) => (
-                        <div key={comment.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                          <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                        <div key={comment.id} className="rounded-none border border-[#23262b] bg-[#0e0f10] p-3">
+                          <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
                             <span>{comment.author_name}</span>
                             <span>{new Date(comment.created_at).toLocaleString('ru-RU')}</span>
                           </div>
@@ -256,7 +256,7 @@ export default function OperatorTasksMobilePage() {
                     <textarea
                       value={commentDrafts[task.id] || ''}
                       onChange={(event) => setCommentDrafts((prev) => ({ ...prev, [task.id]: event.target.value }))}
-                      className="min-h-[96px] w-full rounded-[1.2rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none"
+                      className="min-h-[96px] w-full rounded-none border border-[#23262b] bg-[#0e0f10] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400/40 focus:outline-none"
                       placeholder="Напишите комментарий по задаче"
                     />
                     <Button type="submit" disabled={!commentDrafts[task.id]?.trim() || !!actionLoading}>
@@ -275,9 +275,9 @@ export default function OperatorTasksMobilePage() {
           <OperatorSectionHeading title="Недавно завершено" description="Последние задачи, которые вы уже довели до результата." />
           <div className="mt-4 space-y-3">
             {completedTasks.slice(0, 5).map((task) => (
-              <div key={task.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
-                <div className="text-sm font-medium text-white">{task.title}</div>
-                <div className="mt-1 text-xs text-slate-400">Обновлено: {new Date(task.updated_at).toLocaleString('ru-RU')}</div>
+              <div key={task.id} className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+                <div className="text-sm font-medium text-zinc-100">{task.title}</div>
+                <div className="mt-1 text-xs text-zinc-500">Обновлено: {new Date(task.updated_at).toLocaleString('ru-RU')}</div>
               </div>
             ))}
           </div>

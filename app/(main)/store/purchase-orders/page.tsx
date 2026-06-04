@@ -63,7 +63,7 @@ type CatalogItem = { id: string; name: string; barcode: string; unit?: string | 
 type DraftLine = { item_id: string; qty: string }
 
 const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = {
-  draft: { label: 'Черновик', cls: 'bg-gray-500/15 text-gray-200 border-gray-500/30' },
+  draft: { label: 'Черновик', cls: 'bg-slate-500/15 text-slate-200 border-slate-500/30' },
   sent: { label: 'Отправлена', cls: 'bg-sky-500/15 text-sky-200 border-sky-500/30' },
   received: { label: 'Получена', cls: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30' },
   cancelled: { label: 'Отменена', cls: 'bg-rose-500/15 text-rose-200 border-rose-500/30' },
@@ -253,8 +253,8 @@ export default function PurchaseOrdersPage() {
     <div className="app-page max-w-[1600px] space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shrink-0">
-            <ClipboardList className="w-6 h-6 text-emerald-300" />
+          <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 shrink-0">
+            <ClipboardList className="w-6 h-6 text-amber-300" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold">Заявки поставщикам</h1>
@@ -269,7 +269,7 @@ export default function PurchaseOrdersPage() {
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card> : null}
 
-      <div className="flex flex-wrap gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+      <div className="flex flex-wrap gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
         {(['all', 'draft', 'sent', 'received', 'cancelled'] as const).map((s) => (
           <button
             key={s}
@@ -294,7 +294,7 @@ export default function PurchaseOrdersPage() {
           {orders.map((o) => (
             <Card
               key={o.id}
-              className="p-3 bg-gray-900/60 border-gray-800 cursor-pointer hover:border-emerald-500/40 transition"
+              className="p-3 bg-slate-900/60 border-slate-800 cursor-pointer hover:border-emerald-500/40 transition"
               onClick={() => void openDetail(o.id)}
             >
               <div className="flex items-center justify-between gap-3">
@@ -307,7 +307,7 @@ export default function PurchaseOrdersPage() {
                       {STATUS_META[o.status].label}
                     </span>
                     {o.is_auto ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full border bg-violet-500/15 text-violet-200 border-violet-500/30">авто</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-200 border-amber-500/30">авто</span>
                     ) : null}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
@@ -420,7 +420,7 @@ export default function PurchaseOrdersPage() {
                     {STATUS_META[detail.status].label}
                   </span>
                   {detail.is_auto ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-violet-500/15 text-violet-200 border-violet-500/30">авто</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-200 border-amber-500/30">авто</span>
                   ) : null}
                   <span className="text-xs text-muted-foreground">создана {fmtDate(detail.created_at)}</span>
                 </div>
@@ -475,7 +475,7 @@ export default function PurchaseOrdersPage() {
               {detail.status === 'draft' ? (
                 <>
                   <Button
-                    className="bg-emerald-600 hover:bg-emerald-700"
+                    className="bg-amber-600 hover:bg-amber-700"
                     onClick={() => void sendWhatsApp()}
                     disabled={statusBusy}
                   >

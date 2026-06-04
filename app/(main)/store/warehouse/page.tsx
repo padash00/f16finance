@@ -769,7 +769,7 @@ export default function WarehousePage() {
             </Button>
           )}
           {canEdit && (
-            <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+            <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
               <PackagePlus className="h-3.5 w-3.5" />
               Добавить товары
             </Button>
@@ -783,9 +783,9 @@ export default function WarehousePage() {
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
         </Card>
-        <Card className="border-sky-500/20 bg-sky-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-sky-300/70">Итого</p>
-          <p className="mt-1 text-xl font-semibold text-sky-200">{totalCatalogQty}</p>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Итого</p>
+          <p className="mt-1 text-xl font-semibold text-amber-200">{totalCatalogQty}</p>
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Подсобка</p>
@@ -795,9 +795,9 @@ export default function WarehousePage() {
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Витрина</p>
           <p className="mt-1 text-xl font-semibold text-emerald-300">{totalShowcaseQty}</p>
         </Card>
-        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Стоимость (закуп / продажа)</p>
-          <p className="mt-1 truncate text-sm font-semibold text-blue-200" title={`${fmtMoney(totalPurchase)} / ${fmtMoney(totalSale)} ₸`}>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Стоимость (закуп / продажа)</p>
+          <p className="mt-1 truncate text-sm font-semibold text-amber-200" title={`${fmtMoney(totalPurchase)} / ${fmtMoney(totalSale)} ₸`}>
             {fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸
           </p>
         </Card>
@@ -900,7 +900,7 @@ export default function WarehousePage() {
                   <th className="py-2.5 px-2 font-normal">Товар</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
-                  <th className="w-20 py-2.5 px-2 text-right font-normal text-sky-300/70">Итого</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-300/70">Итого</th>
                   <th className="w-28 py-2.5 px-2 text-right font-normal text-amber-300/70">Подсобка</th>
                   <th className="w-20 py-2.5 px-2 pr-4 text-right font-normal text-emerald-300/70">Витрина</th>
                 </tr>
@@ -942,7 +942,7 @@ export default function WarehousePage() {
                       <span className="line-clamp-1 text-xs text-muted-foreground">{b.item?.category?.name || '—'}</span>
                     </td>
                     <td className="w-20 py-2.5 px-2 text-right align-middle">
-                      <span className="text-sm font-semibold text-sky-200">{b.catalog_quantity}</span>
+                      <span className="text-sm font-semibold text-amber-200">{b.catalog_quantity}</span>
                     </td>
                     <td className="w-28 py-2.5 px-2 text-right align-middle">
                       {editingWh === b.item_id ? (
@@ -1147,9 +1147,9 @@ export default function WarehousePage() {
               <div className="space-y-2">
                 <div
                   onClick={() => fileRef.current?.click()}
-                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-6 text-center transition hover:border-blue-400/40 hover:bg-white/[0.04]"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
                 >
-                  <FileSpreadsheet className="h-8 w-8 text-blue-400" />
+                  <FileSpreadsheet className="h-8 w-8 text-amber-400" />
                   <p className="text-xs font-medium text-foreground">Нажмите чтобы загрузить файл</p>
                   <p className="text-[10px] text-muted-foreground">.xlsx / .xls / .csv / .docx</p>
                 </div>
@@ -1206,7 +1206,7 @@ export default function WarehousePage() {
                     <button
                       type="button"
                       onClick={() => setStockMode('set')}
-                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-blue-500/20 border border-blue-500/40 text-blue-300' : 'border border-white/10 text-muted-foreground hover:bg-white/[0.04]'}`}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300' : 'border border-white/10 text-muted-foreground hover:bg-white/[0.04]'}`}
                     >
                       = Установить остаток
                     </button>
@@ -1228,7 +1228,7 @@ export default function WarehousePage() {
                 <Button
                   onClick={handleSave}
                   disabled={saving || !canSave}
-                  className={`w-full ${stockMode === 'set' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                  className={`w-full ${stockMode === 'set' ? 'bg-amber-600 hover:bg-amber-700' : ''}`}
                 >
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackagePlus className="mr-2 h-4 w-4" />}
                   {stockMode === 'set' ? 'Синхронизировать' : 'Добавить'} ({pendingLines.filter((l) => parseNum(l.quantity) > 0).length} поз.)
@@ -1328,7 +1328,7 @@ export default function WarehousePage() {
                                 )}
                               </td>
                               <td className="w-20 px-2 py-1.5 text-right align-top">
-                                <div className="text-sky-200 font-semibold">{m.new_catalog}</div>
+                                <div className="text-amber-200 font-semibold">{m.new_catalog}</div>
                                 <div className="text-[10px] text-muted-foreground">
                                   было {m.current_catalog}
                                   {m.catalog_changed && <span className="text-amber-300/80"> ↑</span>}

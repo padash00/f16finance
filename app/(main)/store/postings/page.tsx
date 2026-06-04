@@ -252,7 +252,7 @@ export default function StorePostingsPage() {
   return (
     <div className="app-page-wide space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-300">
           <Upload className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">

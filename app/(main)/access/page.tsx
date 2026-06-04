@@ -85,7 +85,7 @@ function accountStateLabel(state: AccountInfo['accountState']) {
   switch (state) {
     case 'active': return { label: 'Активен', color: 'text-emerald-400' }
     case 'invited': return { label: 'Приглашён', color: 'text-amber-400' }
-    case 'no_account': return { label: 'Нет аккаунта', color: 'text-gray-500' }
+    case 'no_account': return { label: 'Нет аккаунта', color: 'text-slate-500' }
     case 'no_email': return { label: 'Нет email', color: 'text-red-400' }
   }
 }
@@ -442,7 +442,7 @@ export default function AccessPage() {
       <AdminPageHeader
         title="Права доступа"
         description="Должности, права на страницы и аккаунты сотрудников"
-        accent="blue"
+        accent="amber"
         icon={<Shield className="h-5 w-5" aria-hidden />}
         toolbar={
           <div
@@ -483,12 +483,12 @@ export default function AccessPage() {
                 <Shield className="w-4 h-4 text-yellow-400" />
                 <h2 className="text-sm font-semibold text-yellow-300">Требуются таблицы в Supabase</h2>
               </div>
-              <p className="text-xs text-gray-400 mb-3">Выполните в Supabase → SQL Editor:</p>
+              <p className="text-xs text-slate-400 mb-3">Выполните в Supabase → SQL Editor:</p>
               <div className="relative">
-                <pre className="bg-gray-900 border border-gray-700 rounded-xl p-4 text-xs text-gray-300 overflow-x-auto">{SQL_POSITIONS}</pre>
+                <pre className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs text-slate-300 overflow-x-auto">{SQL_POSITIONS}</pre>
                 <button
                   onClick={() => { navigator.clipboard.writeText(SQL_POSITIONS); setPosCopied(true); setTimeout(() => setPosCopied(false), 2000) }}
-                  className="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+                  className="absolute top-2 right-2 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
                 >
                   {posCopied ? '✓ Скопировано' : 'Копировать'}
                 </button>
@@ -498,8 +498,8 @@ export default function AccessPage() {
 
           {/* Create new position */}
           {can('access.create_role') && (
-          <Card className="p-5 bg-gray-900/80 border-gray-800">
-            <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+          <Card className="p-5 bg-slate-900/80 border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
               <Plus className="w-4 h-4 text-emerald-400" />
               Создать новую должность
             </h2>
@@ -510,14 +510,14 @@ export default function AccessPage() {
                 value={newPosName}
                 onChange={e => setNewPosName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleCreatePosition()}
-                className="flex-1 min-w-40 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                className="flex-1 min-w-40 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
               />
               <input
                 type="text"
                 placeholder="Описание (необязательно)"
                 value={newPosDesc}
                 onChange={e => setNewPosDesc(e.target.value)}
-                className="flex-1 min-w-48 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                className="flex-1 min-w-48 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
               />
               <button
                 onClick={handleCreatePosition}
@@ -533,27 +533,27 @@ export default function AccessPage() {
 
           {/* Positions list */}
           {positionsLoading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
+            <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
               <Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Загрузка...</span>
             </div>
           ) : (
             <div className="space-y-2">
               {positions.map(pos => (
-                <Card key={pos.id} className="p-4 bg-gray-900/80 border-gray-800">
+                <Card key={pos.id} className="p-4 bg-slate-900/80 border-slate-800">
                   {editingPos?.id === pos.id ? (
                     <div className="flex gap-3 flex-wrap items-center">
                       <input
                         type="text"
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
-                        className="flex-1 min-w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        className="flex-1 min-w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
                       />
                       <input
                         type="text"
                         value={editDesc}
                         onChange={e => setEditDesc(e.target.value)}
                         placeholder="Описание"
-                        className="flex-1 min-w-48 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                        className="flex-1 min-w-48 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
                       />
                       <button
                         onClick={handleSaveEdit}
@@ -563,28 +563,28 @@ export default function AccessPage() {
                         {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                         Сохранить
                       </button>
-                      <button onClick={() => setEditingPos(null)} className="text-gray-600 hover:text-gray-400">
+                      <button onClick={() => setEditingPos(null)} className="text-slate-600 hover:text-slate-400">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-500/20">
-                          <Briefcase className="w-4 h-4 text-blue-400" />
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20">
+                          <Briefcase className="w-4 h-4 text-amber-400" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-white">{posLabel(pos)}</p>
-                            <span className="text-xs text-gray-600 font-mono">{pos.name}</span>
+                            <span className="text-xs text-slate-600 font-mono">{pos.name}</span>
                           </div>
-                          {pos.description && <p className="text-xs text-gray-500 truncate">{pos.description}</p>}
+                          {pos.description && <p className="text-xs text-slate-500 truncate">{pos.description}</p>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => { setTab('permissions'); setSelectedRole(pos.name) }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
                         >
                           <Lock className="w-3.5 h-3.5" />
                           Настроить права
@@ -592,7 +592,7 @@ export default function AccessPage() {
                         {can('access.edit_role') && (
                           <button
                             onClick={() => startEdit(pos)}
-                            className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 transition-colors"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -613,8 +613,8 @@ export default function AccessPage() {
               ))}
 
               {positions.length === 0 && !positionsLoading && (
-                <Card className="p-8 text-center bg-gray-900/80 border-gray-800">
-                  <p className="text-sm text-gray-500">Должностей пока нет. Создайте первую выше.</p>
+                <Card className="p-8 text-center bg-slate-900/80 border-slate-800">
+                  <p className="text-sm text-slate-500">Должностей пока нет. Создайте первую выше.</p>
                 </Card>
               )}
             </div>
@@ -637,10 +637,10 @@ export default function AccessPage() {
                 <h2 className="text-sm font-semibold text-yellow-300">Требуется таблица role_permissions в Supabase</h2>
               </div>
               <div className="relative">
-                <pre className="bg-gray-900 border border-gray-700 rounded-xl p-4 text-xs text-gray-300 overflow-x-auto">{SQL_PERMS}</pre>
+                <pre className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs text-slate-300 overflow-x-auto">{SQL_PERMS}</pre>
                 <button
                   onClick={() => { navigator.clipboard.writeText(SQL_PERMS); setPermsCopied(true); setTimeout(() => setPermsCopied(false), 2000) }}
-                  className="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg"
+                  className="absolute top-2 right-2 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg"
                 >
                   {permsCopied ? '✓ Скопировано' : 'Копировать'}
                 </button>
@@ -649,7 +649,7 @@ export default function AccessPage() {
           )}
 
           {permsLoading || positionsLoading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
+            <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
               <Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Загрузка...</span>
             </div>
           ) : (
@@ -666,12 +666,12 @@ export default function AccessPage() {
                       onClick={() => setSelectedRole(pos.name)}
                       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                         isSelected
-                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                          : 'bg-gray-900/50 border-gray-700 text-gray-500 hover:text-gray-300'
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                          : 'bg-slate-900/50 border-slate-700 text-slate-500 hover:text-slate-300'
                       }`}
                     >
                       {posLabel(pos)}
-                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${isSelected ? 'bg-white/10' : 'bg-gray-800'}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${isSelected ? 'bg-white/10' : 'bg-slate-800'}`}>
                         {count}/{totalCount}
                       </span>
                     </button>
@@ -682,7 +682,7 @@ export default function AccessPage() {
               {selectedRole && (
                 <>
                   {/* Info + bulk actions */}
-                  <div className="flex items-center gap-3 text-sm text-gray-400 flex-wrap">
+                  <div className="flex items-center gap-3 text-sm text-slate-400 flex-wrap">
                     <LockOpen className="w-4 h-4 text-emerald-400" />
                     <span>Доступно страниц: <span className="text-white font-semibold">{enabledCount}</span> из <span className="text-white font-semibold">{totalCount}</span></span>
                     <span className="flex items-center gap-2 ml-2 flex-wrap">
@@ -701,7 +701,7 @@ export default function AccessPage() {
                       {(selectedRole === 'manager' || selectedRole === 'marketer' || selectedRole === 'owner') && (
   <button
     onClick={() => resetToDefault(selectedRole)}
-    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
   >
     <RefreshCw className="w-3.5 h-3.5" /> Сбросить к стандарту
   </button>
@@ -712,8 +712,8 @@ export default function AccessPage() {
                   {/* Pages grid — ALL pages are toggleable */}
                   <div className="space-y-4">
                     {PAGE_GROUPS.map(group => (
-                      <Card key={group.group} className="p-4 bg-gray-900/80 border-gray-800">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{group.group}</h3>
+                      <Card key={group.group} className="p-4 bg-slate-900/80 border-slate-800">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{group.group}</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {group.pages.map(page => {
                             const enabled = isEnabled(selectedRole, page.path)
@@ -723,24 +723,24 @@ export default function AccessPage() {
                               <div
                                 key={page.path}
                                 className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${
-                                  enabled ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-900/40 border-gray-800 opacity-60'
+                                  enabled ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-900/40 border-slate-800 opacity-60'
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   {enabled
                                     ? <LockOpen className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                    : <Lock className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                                    : <Lock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                                   }
                                   <div className="min-w-0">
-                                    <p className="text-sm text-gray-200 truncate">{page.label}</p>
-                                    <p className="text-xs text-gray-600">{page.path}</p>
+                                    <p className="text-sm text-slate-200 truncate">{page.label}</p>
+                                    <p className="text-xs text-slate-600">{page.path}</p>
                                   </div>
                                 </div>
                                 <button
                                   onClick={() => togglePermission(selectedRole, page.path)}
                                   disabled={isSaving}
                                   className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                                    enabled ? 'bg-emerald-500' : 'bg-gray-700'
+                                    enabled ? 'bg-emerald-500' : 'bg-slate-700'
                                   } ${isSaving ? 'opacity-50' : 'cursor-pointer'}`}
                                 >
                                   <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -763,7 +763,7 @@ export default function AccessPage() {
       {tab === 'accounts' && (
         <>
           {accountsLoading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
+            <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
               <Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Загрузка...</span>
             </div>
           ) : (
@@ -774,7 +774,7 @@ export default function AccessPage() {
                 const genPwd = generatedPasswords.find(p => p.staffId === s.id)
 
                 return (
-                  <Card key={s.id} className="p-4 bg-gray-900/80 border-gray-800">
+                  <Card key={s.id} className="p-4 bg-slate-900/80 border-slate-800">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 bg-slate-700 rounded-xl flex items-center justify-center text-sm font-bold text-slate-300 shrink-0">
@@ -791,30 +791,30 @@ export default function AccessPage() {
                                   value={editingEmailValue}
                                   onChange={e => setEditingEmailValue(e.target.value)}
                                   onKeyDown={e => { if (e.key === 'Enter') saveEmail(s.id); if (e.key === 'Escape') setEditingEmailId(null) }}
-                                  className="text-xs bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white w-48 focus:outline-none focus:border-blue-500"
+                                  className="text-xs bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-white w-48 focus:outline-none focus:border-amber-500"
                                 />
                                 <button
                                   onClick={() => saveEmail(s.id)}
                                   disabled={savingEmailId === s.id}
-                                  className="px-2 py-1 text-xs bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 rounded-lg text-blue-300 transition-colors disabled:opacity-50"
+                                  className="px-2 py-1 text-xs bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 rounded-lg text-amber-300 transition-colors disabled:opacity-50"
                                 >
                                   {savingEmailId === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Сохранить'}
                                 </button>
-                                <button onClick={() => setEditingEmailId(null)} className="text-gray-600 hover:text-gray-400">
+                                <button onClick={() => setEditingEmailId(null)} className="text-slate-600 hover:text-slate-400">
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ) : can('access.change_email') ? (
                               <button
                                 onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
-                                className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+                                className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
                                 title="Изменить логин"
                               >
                                 <Pencil className="w-3 h-3" />
                                 {s.email || 'нет email'}
                               </button>
                             ) : (
-                              <span className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300">
+                              <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300">
                                 {s.email || 'нет email'}
                               </span>
                             )}
@@ -825,29 +825,29 @@ export default function AccessPage() {
                                 <select
                                   defaultValue={s.role || ''}
                                   onChange={e => saveStaffRole(s.id, e.target.value)}
-                                  className="text-xs bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-blue-500"
+                                  className="text-xs bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-amber-500"
                                 >
                                   <option value="">— выберите —</option>
                                   {allPositionNames.map(name => (
                                     <option key={name} value={name}>{BUILTIN_LABELS[name] ?? name}</option>
                                   ))}
                                 </select>
-                                {savingRoleId === s.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
-                                <button onClick={() => setChangingRoleId(null)} className="text-gray-600 hover:text-gray-400">
+                                {savingRoleId === s.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+                                <button onClick={() => setChangingRoleId(null)} className="text-slate-600 hover:text-slate-400">
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ) : can('access.manage_staff_roles') ? (
                               <button
                                 onClick={() => setChangingRoleId(s.id)}
-                                className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+                                className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
                                 title="Изменить должность"
                               >
                                 <Briefcase className="w-3 h-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </button>
                             ) : (
-                              <span className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300">
+                              <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300">
                                 <Briefcase className="w-3 h-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </span>
@@ -855,7 +855,7 @@ export default function AccessPage() {
 
                             <span className={`text-xs font-medium ${stateInfo.color}`}>{stateInfo.label}</span>
                             {account?.lastSignInAt && (
-                              <span className="text-xs text-gray-600">вход: {fmtDate(account.lastSignInAt)}</span>
+                              <span className="text-xs text-slate-600">вход: {fmtDate(account.lastSignInAt)}</span>
                             )}
                           </div>
                         </div>
@@ -866,7 +866,7 @@ export default function AccessPage() {
                           <button
                             onClick={() => sendInvite(s.id)}
                             disabled={sendingInviteId === s.id}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors disabled:opacity-50"
                           >
                             {sendingInviteId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                             {account?.accountState === 'no_account' || account?.accountState === 'no_email' ? 'Пригласить' : 'Сбросить пароль (email)'}
@@ -876,7 +876,7 @@ export default function AccessPage() {
                           <button
                             onClick={() => generatePassword(s.id)}
                             disabled={generatingId === s.id}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg text-xs text-blue-300 transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 rounded-lg text-xs text-amber-300 transition-colors disabled:opacity-50"
                           >
                             {generatingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
                             Новый пароль
@@ -892,37 +892,37 @@ export default function AccessPage() {
                     )}
 
                     {genPwd && (
-                      <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                             <span className="text-xs text-emerald-300 font-medium">Новый пароль установлен</span>
                           </div>
-                          <button onClick={() => setGeneratedPasswords(prev => prev.filter(p => p.staffId !== s.id))} className="text-gray-600 hover:text-gray-400">
+                          <button onClick={() => setGeneratedPasswords(prev => prev.filter(p => p.staffId !== s.id))} className="text-slate-600 hover:text-slate-400">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <code className={`flex-1 text-sm font-mono bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-700 text-white tracking-widest ${genPwd.visible ? '' : 'blur-sm select-none'}`}>
+                          <code className={`flex-1 text-sm font-mono bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 text-white tracking-widest ${genPwd.visible ? '' : 'blur-sm select-none'}`}>
                             {genPwd.password}
                           </code>
                           {can('access.reveal_password') && (
                             <button
                               onClick={() => setGeneratedPasswords(prev => prev.map(p => p.staffId === s.id ? { ...p, visible: !p.visible } : p))}
-                              className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 transition-colors"
                             >
                               {genPwd.visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           )}
                           <button
                             onClick={() => navigator.clipboard.writeText(genPwd.password)}
-                            className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 transition-colors"
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 transition-colors"
                           >
                             <Copy className="w-4 h-4" />
                           </button>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1.5">
-                          Аккаунт: <span className="text-gray-400">{genPwd.email}</span> · Скопируй и передай пользователю.
+                        <p className="text-xs text-slate-500 mt-1.5">
+                          Аккаунт: <span className="text-slate-400">{genPwd.email}</span> · Скопируй и передай пользователю.
                         </p>
                       </div>
                     )}
@@ -931,8 +931,8 @@ export default function AccessPage() {
               })}
 
               {staff.filter(s => s.is_active).length === 0 && (
-                <Card className="p-8 bg-gray-900/80 border-gray-800 text-center">
-                  <p className="text-sm text-gray-500">Активных сотрудников не найдено</p>
+                <Card className="p-8 bg-slate-900/80 border-slate-800 text-center">
+                  <p className="text-sm text-slate-500">Активных сотрудников не найдено</p>
                 </Card>
               )}
             </div>

@@ -267,7 +267,7 @@ const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: st
   warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
   danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertTriangle },
   opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Lightbulb },
-  info: { bg: 'bg-gray-800/30', border: 'border-white/5', text: 'text-gray-400', icon: Activity },
+  info: { bg: 'bg-slate-800/30', border: 'border-white/5', text: 'text-slate-400', icon: Activity },
 }
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
@@ -617,7 +617,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
     blue: 'from-blue-500 to-cyan-500',
     green: 'from-emerald-500 to-teal-500',
     red: 'from-rose-500 to-pink-500',
-    amber: 'from-amber-500 to-orange-500',
+    amber: 'from-amber-500 to-amber-500',
     violet: 'from-violet-500 to-purple-500',
   }
   
@@ -627,7 +627,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
       className={`relative overflow-hidden rounded-2xl backdrop-blur-xl border p-6 transition-all ${
         highlight 
           ? 'bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border-violet-500/30 shadow-lg shadow-violet-500/10' 
-          : 'bg-gray-900/40 border-white/5 hover:bg-gray-800/50'
+          : 'bg-slate-900/40 border-white/5 hover:bg-slate-800/50'
       } ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
@@ -640,15 +640,15 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
               trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : 
               trend < 0 ? 'bg-rose-500/20 text-rose-400' : 
-              'bg-gray-500/20 text-gray-400'
+              'bg-slate-500/20 text-slate-400'
             }`}>
               {trend > 0 ? '+' : ''}{trend}%
             </span>
           )}
         </div>
-        <p className="text-gray-400 text-sm mb-1">{title}</p>
+        <p className="text-slate-400 text-sm mb-1">{title}</p>
         <p className={`text-2xl font-bold mb-1 ${highlight ? 'text-white' : 'text-white'}`}>{value}</p>
-        {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
+        {subValue && <p className="text-xs text-slate-500">{subValue}</p>}
       </div>
     </div>
   )
@@ -669,7 +669,7 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-white mb-0.5">{insight.title}</p>
-          <p className="text-[11px] text-gray-400 line-clamp-2">{insight.description}</p>
+          <p className="text-[11px] text-slate-400 line-clamp-2">{insight.description}</p>
           {insight.metric && (
             <p className={`text-sm font-bold mt-1 ${styles.text}`}>{insight.metric}</p>
           )}
@@ -1921,7 +1921,7 @@ function WeeklyReportContent() {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
               <BarChart3 className="w-8 h-8 text-white" />
             </div>
-            <p className="text-gray-400">Загрузка недельной аналитики...</p>
+            <p className="text-slate-400">Загрузка недельной аналитики...</p>
           </div>
       </>
     )
@@ -1935,7 +1935,7 @@ function WeeklyReportContent() {
               <AlertTriangle className="w-8 h-8 text-rose-400" />
             </div>
             <h2 className="text-xl font-semibold text-white">Ошибка загрузки</h2>
-            <p className="text-gray-400 max-w-md">{error}</p>
+            <p className="text-slate-400 max-w-md">{error}</p>
             <Button onClick={handleRefresh} variant="outline" className="border-white/10">
               <RefreshCw className="w-4 h-4 mr-2" />
               Повторить
@@ -1956,7 +1956,7 @@ function WeeklyReportContent() {
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-              'bg-gray-900/80 border-white/10 text-white'
+              'bg-slate-900/80 border-white/10 text-white'
             }`}>
               <div className="text-sm font-medium">{toast.message}</div>
             </div>
@@ -2008,7 +2008,7 @@ function WeeklyReportContent() {
                       Экспорт
                       <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
-                    <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-white/10 bg-gray-900 py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
+                    <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-white/10 bg-slate-900 py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
                       <button
                         type="button"
                         onClick={handleDownloadExcel}
@@ -2045,7 +2045,7 @@ function WeeklyReportContent() {
           />
 
           {/* Week Navigation */}
-          <Card className="p-4 border-white/5 bg-gray-900/40 backdrop-blur-xl">
+          <Card className="p-4 border-white/5 bg-slate-900/40 backdrop-blur-xl">
             <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
@@ -2061,7 +2061,7 @@ function WeeklyReportContent() {
                 <span className="text-lg font-bold text-white block">
                   {formatRangeTitle(startDate, endDate)}
                 </span>
-                <span className="text-xs text-gray-500 mt-1 block">
+                <span className="text-xs text-slate-500 mt-1 block">
                   {isCurrentWeek ? 'Текущая неделя' : 'Архив'}
                 </span>
               </div>
@@ -2100,16 +2100,16 @@ function WeeklyReportContent() {
           )}
 
           {/* Filters Bar */}
-          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
+          <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-400">Фильтры:</span>
+                <Filter className="w-4 h-4 text-slate-400" />
+                <span className="text-sm text-slate-400">Фильтры:</span>
               </div>
 
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-white/10 text-sm hover:bg-gray-700/50 transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-white/10 text-sm hover:bg-slate-700/50 transition-colors"
               >
                 <Filter className="w-4 h-4" />
                 Расширенные
@@ -2124,9 +2124,9 @@ function WeeklyReportContent() {
                     type="checkbox"
                     checked={includeExtraInTotals}
                     onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
-                    className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                    className="rounded border-white/10 bg-slate-800/50 text-violet-500 focus:ring-violet-500/20"
                   />
-                  <span className="text-sm text-gray-300">Включить F16 Extra в итоги</span>
+                  <span className="text-sm text-slate-300">Включить F16 Extra в итоги</span>
                 </label>
               </div>
             )}
@@ -2177,7 +2177,7 @@ function WeeklyReportContent() {
               </div>
 
               {/* ===== ТАБЛИЦА РАЗБИВКИ ПО ТИПАМ ОПЛАТЫ ===== */}
-              <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-5">
+              <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-white">
                   <Scale className="w-4 h-4 text-violet-400" />
                   Разбивка по типам оплаты
@@ -2186,10 +2186,10 @@ function WeeklyReportContent() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-white/5">
-                        <th className="text-left py-2 pr-4 text-xs text-gray-500 font-medium">Тип</th>
-                        <th className="text-right py-2 px-3 text-xs text-gray-500 font-medium">Доходы</th>
-                        <th className="text-right py-2 px-3 text-xs text-gray-500 font-medium">Расходы</th>
-                        <th className="text-right py-2 pl-3 text-xs text-gray-500 font-medium">Сальдо</th>
+                        <th className="text-left py-2 pr-4 text-xs text-slate-500 font-medium">Тип</th>
+                        <th className="text-right py-2 px-3 text-xs text-slate-500 font-medium">Доходы</th>
+                        <th className="text-right py-2 px-3 text-xs text-slate-500 font-medium">Расходы</th>
+                        <th className="text-right py-2 pl-3 text-xs text-slate-500 font-medium">Сальдо</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -2207,7 +2207,7 @@ function WeeklyReportContent() {
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs text-white">
                           <span className="text-white">{formatMoneyCompact(totals.incomeKaspiOnline)}</span>
-                          <span className="text-gray-500 ml-1.5">({formatMoneyCompact(totals.incomeKaspi)}+{formatMoneyCompact(totals.incomeOnline)})</span>
+                          <span className="text-slate-500 ml-1.5">({formatMoneyCompact(totals.incomeKaspi)}+{formatMoneyCompact(totals.incomeOnline)})</span>
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs text-rose-400">{formatMoneyCompact(totals.expenseKaspi)}</td>
                         <td className={`py-2.5 pl-3 text-right text-xs font-semibold ${totals.netNonCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatMoneyCompact(totals.netNonCash)}</td>
@@ -2218,7 +2218,7 @@ function WeeklyReportContent() {
                             <CreditCard className="w-3.5 h-3.5" /> Карта
                           </td>
                           <td className="py-2.5 px-3 text-right text-xs text-white">{formatMoneyCompact(totals.incomeCard)}</td>
-                          <td className="py-2.5 px-3 text-right text-xs text-gray-500">—</td>
+                          <td className="py-2.5 px-3 text-right text-xs text-slate-500">—</td>
                           <td className="py-2.5 pl-3 text-right text-xs font-semibold text-emerald-400">{formatMoneyCompact(totals.netCard)}</td>
                         </tr>
                       )}
@@ -2235,63 +2235,63 @@ function WeeklyReportContent() {
 
               {/* Доходы и расходы по типам */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                <Card className="p-5 bg-slate-900/40 backdrop-blur-xl border-white/5">
                   <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-400" />
                     Доходы по типам
                   </h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Наличные</span>
+                      <span className="text-xs text-slate-400">Наличные</span>
                       <span className="text-sm font-medium text-emerald-400">{formatMoneyCompact(totals.incomeCash)}</span>
-                      <span className="text-xs text-gray-500">{totals.metrics.cashShare.toFixed(1)}%</span>
+                      <span className="text-xs text-slate-500">{totals.metrics.cashShare.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">{cashLabels.providerName}</span>
+                      <span className="text-xs text-slate-400">{cashLabels.providerName}</span>
                       <span className="text-sm font-medium text-blue-400">{formatMoneyCompact(totals.incomeKaspi)}</span>
-                      <span className="text-xs text-gray-500">{totals.metrics.kaspiShare.toFixed(1)}%</span>
+                      <span className="text-xs text-slate-500">{totals.metrics.kaspiShare.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Online</span>
+                      <span className="text-xs text-slate-400">Online</span>
                       <span className="text-sm font-medium text-violet-400">{formatMoneyCompact(totals.incomeOnline)}</span>
-                      <span className="text-xs text-gray-500">{totals.metrics.onlineShare.toFixed(1)}%</span>
+                      <span className="text-xs text-slate-500">{totals.metrics.onlineShare.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Карта</span>
+                      <span className="text-xs text-slate-400">Карта</span>
                       <span className="text-sm font-medium text-amber-400">{formatMoneyCompact(totals.incomeCard)}</span>
-                      <span className="text-xs text-gray-500">{totals.metrics.cardShare.toFixed(1)}%</span>
+                      <span className="text-xs text-slate-500">{totals.metrics.cardShare.toFixed(1)}%</span>
                     </div>
                     <div className="border-t border-white/5 pt-2 mt-2">
                       <div className="flex justify-between items-center font-semibold">
-                        <span className="text-xs text-gray-400">Всего доход</span>
+                        <span className="text-xs text-slate-400">Всего доход</span>
                         <span className="text-sm text-white">{formatMoneyCompact(totals.incomeTotal)}</span>
-                        <span className="text-xs text-gray-500">100%</span>
+                        <span className="text-xs text-slate-500">100%</span>
                       </div>
                     </div>
                   </div>
                 </Card>
 
-                <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                <Card className="p-5 bg-slate-900/40 backdrop-blur-xl border-white/5">
                   <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                     <TrendingDown className="w-4 h-4 text-rose-400" />
                     Расходы по типам
                   </h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">Наличные расходы</span>
+                      <span className="text-xs text-slate-400">Наличные расходы</span>
                       <span className="text-sm font-medium text-rose-400">{formatMoneyCompact(totals.expenseCash)}</span>
-                      <span className="text-xs text-gray-500">{totals.expenseTotal > 0 ? ((totals.expenseCash / totals.expenseTotal) * 100).toFixed(1) : 0}%</span>
+                      <span className="text-xs text-slate-500">{totals.expenseTotal > 0 ? ((totals.expenseCash / totals.expenseTotal) * 100).toFixed(1) : 0}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400">{cashLabels.providerName} расходы</span>
+                      <span className="text-xs text-slate-400">{cashLabels.providerName} расходы</span>
                       <span className="text-sm font-medium text-rose-400">{formatMoneyCompact(totals.expenseKaspi)}</span>
-                      <span className="text-xs text-gray-500">{totals.expenseTotal > 0 ? ((totals.expenseKaspi / totals.expenseTotal) * 100).toFixed(1) : 0}%</span>
+                      <span className="text-xs text-slate-500">{totals.expenseTotal > 0 ? ((totals.expenseKaspi / totals.expenseTotal) * 100).toFixed(1) : 0}%</span>
                     </div>
                     <div className="border-t border-white/5 pt-2 mt-2">
                       <div className="flex justify-between items-center font-semibold">
-                        <span className="text-xs text-gray-400">Всего расходов</span>
+                        <span className="text-xs text-slate-400">Всего расходов</span>
                         <span className="text-sm text-white">{formatMoneyCompact(totals.expenseTotal)}</span>
-                        <span className="text-xs text-gray-500">100%</span>
+                        <span className="text-xs text-slate-500">100%</span>
                       </div>
                     </div>
                   </div>
@@ -2299,7 +2299,7 @@ function WeeklyReportContent() {
               </div>
 
               {/* ===== ГРАФИК САЛЬДО ===== */}
-              <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <Card className="p-6 bg-slate-900/40 backdrop-blur-xl border-white/5">
                 <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-violet-400" />
                   Динамика сальдо (накопленное)
@@ -2325,7 +2325,7 @@ function WeeklyReportContent() {
 
               {/* Основной график доходов/расходов */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                <div className="lg:col-span-2 rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6">
                   <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-violet-400" />
                     Динамика за неделю
@@ -2335,7 +2335,7 @@ function WeeklyReportContent() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6">
                   <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
                     <PieChart className="w-5 h-5 text-rose-400" />
                     Структура расходов
@@ -2353,16 +2353,16 @@ function WeeklyReportContent() {
                             className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
                           />
-                          <span className="text-gray-300 truncate">{cat.name}</span>
+                          <span className="text-slate-300 truncate">{cat.name}</span>
                         </div>
                         <div className="text-right shrink-0">
                           <div>
                             <span className="text-white font-medium">{formatMoneyCompact(cat.value)}</span>
-                            <span className="text-gray-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
+                            <span className="text-slate-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
                           </div>
-                          <div className="text-[11px] text-gray-500 whitespace-nowrap">
+                          <div className="text-[11px] text-slate-500 whitespace-nowrap">
                             <span className="text-emerald-400/90">нал {formatMoneyCompact(cat.cash)}</span>
-                            <span className="text-gray-600 mx-1">·</span>
+                            <span className="text-slate-600 mx-1">·</span>
                             <span className="text-blue-400/90">kaspi {formatMoneyCompact(cat.kaspi)}</span>
                           </div>
                         </div>
@@ -2375,7 +2375,7 @@ function WeeklyReportContent() {
               {/* Bottom Section - По компаниям и метрики */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* By Company */}
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6">
                   <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
                     <Store className="w-5 h-5 text-blue-400" />
                     Выручка по точкам
@@ -2404,11 +2404,11 @@ function WeeklyReportContent() {
                   {extraCompanyId && (
                     <div className="mt-4 pt-4 border-t border-white/5">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-400">F16 Extra</span>
+                        <span className="text-sm text-slate-400">F16 Extra</span>
                         <span className="text-sm font-bold text-purple-400">
                           {formatMoneyFull(totals.extraTotal)}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-slate-500">
                           {includeExtraInTotals ? '(включено)' : '(отдельно)'}
                         </span>
                       </div>
@@ -2418,7 +2418,7 @@ function WeeklyReportContent() {
 
                 {/* Metrics Cards */}
                 <div className="space-y-4">
-                  <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6">
                     <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
                       <Landmark className="w-5 h-5 text-amber-400" />
                       Ключевые метрики
@@ -2426,25 +2426,25 @@ function WeeklyReportContent() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Расходы / Выручка</p>
+                        <p className="text-xs text-slate-500 mb-1">Расходы / Выручка</p>
                         <p className="text-2xl font-bold text-white">{totals.metrics.expenseRate.toFixed(1)}%</p>
-                        <p className="text-xs text-gray-500 mt-1">норма &lt; 70%</p>
+                        <p className="text-xs text-slate-500 mt-1">норма &lt; 70%</p>
                       </div>
                       <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Маржинальность</p>
+                        <p className="text-xs text-slate-500 mb-1">Маржинальность</p>
                         <p className={`text-2xl font-bold ${totals.metrics.profitMargin >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
                           {totals.metrics.profitMargin.toFixed(1)}%
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">цель &gt; 25%</p>
+                        <p className="text-xs text-slate-500 mt-1">цель &gt; 25%</p>
                       </div>
                       <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Сальдо наличные</p>
+                        <p className="text-xs text-slate-500 mb-1">Сальдо наличные</p>
                         <p className={`text-xl font-bold ${totals.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {formatMoneyCompact(totals.netCash)}
                         </p>
                       </div>
                       <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Сальдо безнал</p>
+                        <p className="text-xs text-slate-500 mb-1">Сальдо безнал</p>
                         <p className={`text-xl font-bold ${totals.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
                           {formatMoneyCompact(totals.netNonCash)}
                         </p>
@@ -2452,7 +2452,7 @@ function WeeklyReportContent() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6">
                     <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                       <Percent className="w-5 h-5 text-emerald-400" />
                       Структура выручки
@@ -2461,10 +2461,10 @@ function WeeklyReportContent() {
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Наличные</span>
+                          <span className="text-slate-400">Наличные</span>
                           <span className="text-white font-medium">{totals.metrics.cashShare.toFixed(1)}%</span>
                         </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-emerald-500 rounded-full"
                             style={{ width: `${totals.metrics.cashShare}%` }}
@@ -2473,10 +2473,10 @@ function WeeklyReportContent() {
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">{cashLabels.providerName}</span>
+                          <span className="text-slate-400">{cashLabels.providerName}</span>
                           <span className="text-white font-medium">{totals.metrics.kaspiShare.toFixed(1)}%</span>
                         </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-blue-500 rounded-full"
                             style={{ width: `${totals.metrics.kaspiShare}%` }}
@@ -2485,10 +2485,10 @@ function WeeklyReportContent() {
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Online</span>
+                          <span className="text-slate-400">Online</span>
                           <span className="text-white font-medium">{totals.metrics.onlineShare.toFixed(1)}%</span>
                         </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-violet-500 rounded-full"
                             style={{ width: `${totals.metrics.onlineShare}%` }}
@@ -2497,10 +2497,10 @@ function WeeklyReportContent() {
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Карта</span>
+                          <span className="text-slate-400">Карта</span>
                           <span className="text-white font-medium">{totals.metrics.cardShare.toFixed(1)}%</span>
                         </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-amber-500 rounded-full"
                             style={{ width: `${totals.metrics.cardShare}%` }}
@@ -2530,7 +2530,7 @@ function WeeklyReportContent() {
                     .map(([cat, sp]) => ({ cat, cash: sp.cash, kaspi: sp.kaspi, total: sp.cash + sp.kaspi }))
                     .sort((a, b) => b.total - a.total)
                   return (
-                    <div key={c.id} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-5">
+                    <div key={c.id} className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-5">
                       {/* Заголовок точки */}
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="font-semibold text-white flex items-center gap-2">
@@ -2548,30 +2548,30 @@ function WeeklyReportContent() {
                         <div className="space-y-1">
                           {s.cash > 0 && (
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-400">Наличные</span>
-                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.cash)}</span>
+                              <span className="text-slate-400">Наличные</span>
+                              <span className="text-slate-200 font-medium">{formatMoneyCompact(s.cash)}</span>
                             </div>
                           )}
                           {s.kaspi > 0 && (
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-400">{cashLabels.providerName}</span>
-                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span>
+                              <span className="text-slate-400">{cashLabels.providerName}</span>
+                              <span className="text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span>
                             </div>
                           )}
                           {s.online > 0 && (
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-400">Online</span>
-                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.online)}</span>
+                              <span className="text-slate-400">Online</span>
+                              <span className="text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span>
                             </div>
                           )}
                           {s.card > 0 && (
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-gray-400">Карта</span>
-                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.card)}</span>
+                              <span className="text-slate-400">Карта</span>
+                              <span className="text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span>
                             </div>
                           )}
                           <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1 mt-1">
-                            <span className="text-gray-300 font-medium">Итого доход</span>
+                            <span className="text-slate-300 font-medium">Итого доход</span>
                             <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
                           </div>
                         </div>
@@ -2581,32 +2581,32 @@ function WeeklyReportContent() {
                       <div className="mb-3">
                         <p className="text-xs text-rose-400 font-medium mb-2 uppercase tracking-wide">Расходы по категориям</p>
                         {sortedCats.length === 0 ? (
-                          <p className="text-xs text-gray-600">Нет расходов</p>
+                          <p className="text-xs text-slate-600">Нет расходов</p>
                         ) : (
                           <div className="space-y-1">
                             {sortedCats.map((row) => (
                               <div key={row.cat} className="flex justify-between items-start gap-2 text-xs">
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0 mt-1" />
-                                  <span className="text-gray-400 truncate">{row.cat}</span>
+                                  <span className="text-slate-400 truncate">{row.cat}</span>
                                 </div>
                                 <div className="text-right shrink-0">
                                   <div className="text-rose-300 font-medium">{formatMoneyCompact(row.total)}</div>
-                                  <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  <div className="text-[10px] text-slate-500 whitespace-nowrap">
                                     <span className="text-emerald-400/80">нал {formatMoneyCompact(row.cash)}</span>
-                                    <span className="text-gray-600 mx-0.5">·</span>
+                                    <span className="text-slate-600 mx-0.5">·</span>
                                     <span className="text-blue-400/80">kaspi {formatMoneyCompact(row.kaspi)}</span>
                                   </div>
                                 </div>
                               </div>
                             ))}
                             <div className="flex justify-between items-start gap-2 text-xs border-t border-white/5 pt-1 mt-1">
-                              <span className="text-gray-300 font-medium">Итого расход</span>
+                              <span className="text-slate-300 font-medium">Итого расход</span>
                               <div className="text-right shrink-0">
                                 <div className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</div>
-                                <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                <div className="text-[10px] text-slate-500 whitespace-nowrap">
                                   <span className="text-emerald-400/80">нал {formatMoneyCompact(s.expenseCash)}</span>
-                                  <span className="text-gray-600 mx-0.5">·</span>
+                                  <span className="text-slate-600 mx-0.5">·</span>
                                   <span className="text-blue-400/80">kaspi {formatMoneyCompact(s.expenseKaspi)}</span>
                                 </div>
                               </div>
@@ -2618,13 +2618,13 @@ function WeeklyReportContent() {
                       {/* САЛЬДО */}
                       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/5">
                         <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                          <p className="text-xs text-gray-500 mb-0.5">Сальдо нал</p>
+                          <p className="text-xs text-slate-500 mb-0.5">Сальдо нал</p>
                           <p className={`text-sm font-bold ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {s.netCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netCash)}
                           </p>
                         </div>
                         <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                          <p className="text-xs text-gray-500 mb-0.5">Сальдо безнал</p>
+                          <p className="text-xs text-slate-500 mb-0.5">Сальдо безнал</p>
                           <p className={`text-sm font-bold ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
                             {s.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netNonCash)}
                           </p>
@@ -2657,43 +2657,43 @@ function WeeklyReportContent() {
                       <div className="mb-3">
                         <p className="text-xs text-emerald-400 font-medium mb-2 uppercase tracking-wide">Доходы</p>
                         <div className="space-y-1">
-                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Наличные</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
-                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">{cashLabels.providerName}</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
-                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Online</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
-                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Карта</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
+                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Наличные</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
+                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">{cashLabels.providerName}</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
+                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Online</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
+                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Карта</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
                           <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
-                            <span className="text-gray-300 font-medium">Итого доход</span>
+                            <span className="text-slate-300 font-medium">Итого доход</span>
                             <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
                           </div>
                         </div>
                       </div>
                       <div className="mb-3">
                         <p className="text-xs text-rose-400 font-medium mb-2 uppercase tracking-wide">Расходы по категориям</p>
-                        {sortedCats.length === 0 ? <p className="text-xs text-gray-600">Нет расходов</p> : (
+                        {sortedCats.length === 0 ? <p className="text-xs text-slate-600">Нет расходов</p> : (
                           <div className="space-y-1">
                             {sortedCats.map((row) => (
                               <div key={row.cat} className="flex justify-between items-start gap-2 text-xs">
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0 mt-1" />
-                                  <span className="text-gray-400 truncate">{row.cat}</span>
+                                  <span className="text-slate-400 truncate">{row.cat}</span>
                                 </div>
                                 <div className="text-right shrink-0">
                                   <div className="text-rose-300 font-medium">{formatMoneyCompact(row.total)}</div>
-                                  <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  <div className="text-[10px] text-slate-500 whitespace-nowrap">
                                     <span className="text-emerald-400/80">нал {formatMoneyCompact(row.cash)}</span>
-                                    <span className="text-gray-600 mx-0.5">·</span>
+                                    <span className="text-slate-600 mx-0.5">·</span>
                                     <span className="text-blue-400/80">kaspi {formatMoneyCompact(row.kaspi)}</span>
                                   </div>
                                 </div>
                               </div>
                             ))}
                             <div className="flex justify-between items-start gap-2 text-xs border-t border-white/5 pt-1 mt-1">
-                              <span className="text-gray-300 font-medium">Итого расход</span>
+                              <span className="text-slate-300 font-medium">Итого расход</span>
                               <div className="text-right shrink-0">
                                 <div className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</div>
-                                <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                <div className="text-[10px] text-slate-500 whitespace-nowrap">
                                   <span className="text-emerald-400/80">нал {formatMoneyCompact(s.expenseCash)}</span>
-                                  <span className="text-gray-600 mx-0.5">·</span>
+                                  <span className="text-slate-600 mx-0.5">·</span>
                                   <span className="text-blue-400/80">kaspi {formatMoneyCompact(s.expenseKaspi)}</span>
                                 </div>
                               </div>
@@ -2703,11 +2703,11 @@ function WeeklyReportContent() {
                       </div>
                       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/5">
                         <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                          <p className="text-xs text-gray-500 mb-0.5">Сальдо нал</p>
+                          <p className="text-xs text-slate-500 mb-0.5">Сальдо нал</p>
                           <p className={`text-sm font-bold ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{s.netCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netCash)}</p>
                         </div>
                         <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
-                          <p className="text-xs text-gray-500 mb-0.5">Сальдо безнал</p>
+                          <p className="text-xs text-slate-500 mb-0.5">Сальдо безнал</p>
                           <p className={`text-sm font-bold ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{s.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netNonCash)}</p>
                         </div>
                       </div>
@@ -2730,26 +2730,26 @@ function WeeklyReportContent() {
                 )
                 return (
                   <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 flex flex-wrap gap-4 items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-300">Все точки</span>
+                    <span className="text-sm font-semibold text-slate-300">Все точки</span>
                     <div className="flex flex-wrap gap-6 text-sm">
                       <div className="text-center">
-                        <p className="text-xs text-gray-500">Доход</p>
+                        <p className="text-xs text-slate-500">Доход</p>
                         <p className="font-bold text-emerald-400">{formatMoneyCompact(tot.income)}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-gray-500">Расход</p>
+                        <p className="text-xs text-slate-500">Расход</p>
                         <p className="font-bold text-rose-400">{formatMoneyCompact(tot.expense)}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-gray-500">Сальдо нал</p>
+                        <p className="text-xs text-slate-500">Сальдо нал</p>
                         <p className={`font-bold ${tot.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{tot.netCash >= 0 ? '+' : ''}{formatMoneyCompact(tot.netCash)}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-gray-500">Сальдо безнал</p>
+                        <p className="text-xs text-slate-500">Сальдо безнал</p>
                         <p className={`font-bold ${tot.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{tot.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(tot.netNonCash)}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-gray-500">Прибыль</p>
+                        <p className="text-xs text-slate-500">Прибыль</p>
                         <p className={`font-bold ${tot.profit >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>{tot.profit >= 0 ? '+' : ''}{formatMoneyCompact(tot.profit)}</p>
                       </div>
                     </div>
@@ -2761,7 +2761,7 @@ function WeeklyReportContent() {
           )}
 
           {/* AI Weekly Report */}
-          <div className="rounded-2xl bg-gradient-to-br from-violet-900/20 via-gray-900/60 to-fuchsia-900/20 border border-violet-500/20 p-6">
+          <div className="rounded-2xl bg-gradient-to-br from-violet-900/20 via-slate-900/60 to-fuchsia-900/20 border border-violet-500/20 p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-violet-500/20 rounded-xl">
@@ -2769,7 +2769,7 @@ function WeeklyReportContent() {
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-white">AI Еженедельный отчёт</h2>
-                  <p className="text-xs text-gray-400">GPT анализирует данные недели и пишет полный финансовый отчёт</p>
+                  <p className="text-xs text-slate-400">GPT анализирует данные недели и пишет полный финансовый отчёт</p>
                 </div>
               </div>
               {can('weekly-report.ai_generate') && (
@@ -2794,7 +2794,7 @@ function WeeklyReportContent() {
               {aiReportLoading && can('weekly-report.ai_generate') ? (
                 <button
                   onClick={handleCancelAiReport}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-gray-200 hover:bg-white/10"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-slate-200 hover:bg-white/10"
                 >
                   Отменить
                 </button>
@@ -2803,11 +2803,11 @@ function WeeklyReportContent() {
 
             {aiReportLoading && !aiReport && (
               <div className="space-y-3">
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-5/6" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-4/5" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
-                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-3/4" />
+                <div className="h-3 bg-slate-800 rounded-full animate-pulse w-full" />
+                <div className="h-3 bg-slate-800 rounded-full animate-pulse w-5/6" />
+                <div className="h-3 bg-slate-800 rounded-full animate-pulse w-4/5" />
+                <div className="h-3 bg-slate-800 rounded-full animate-pulse w-full" />
+                <div className="h-3 bg-slate-800 rounded-full animate-pulse w-3/4" />
               </div>
             )}
 
@@ -2818,12 +2818,12 @@ function WeeklyReportContent() {
             {aiReport && (
               <div className="prose prose-invert prose-sm max-w-none">
                 {aiReportLoading ? <p className="mb-2 text-xs text-violet-300">AI пишет отчёт...</p> : null}
-                <pre className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
+                <pre className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
               </div>
             )}
 
             {!aiReport && !aiReportLoading && !aiReportError && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-slate-500">
                 Нажмите кнопку — GPT проанализирует данные недели ({formatDateRange(startDate, endDate)}) и составит подробный финансовый отчёт.
               </p>
             )}
@@ -2850,7 +2850,7 @@ export default function WeeklyReportPage() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
                 <CalendarDays className="w-8 h-8 text-white" />
               </div>
-              <p className="text-gray-400">Загрузка недельного баланса...</p>
+              <p className="text-slate-400">Загрузка недельного баланса...</p>
             </div>
         </>
       }

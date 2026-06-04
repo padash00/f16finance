@@ -178,7 +178,7 @@ export default function ExpensesDashboard() {
 
   return (
     <>
-        <div className="app-page max-w-7xl space-y-8">
+        <div className="app-page-wide space-y-8">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

@@ -939,7 +939,7 @@ function ShiftsPageContent() {
             <AdminPageHeader
               title="График смен"
               description="Расписание операторов, конфликты, быстрые действия"
-              accent="violet"
+              accent="amber"
               icon={<Users className="h-5 w-5" aria-hidden />}
               actions={
                 <>
@@ -1320,7 +1320,7 @@ function ShiftsPageContent() {
                                   item.status === 'sent'
                                     ? 'bg-emerald-500/15 text-emerald-300'
                                     : item.status === 'missing_telegram'
-                                      ? 'bg-sky-500/15 text-sky-300'
+                                      ? 'bg-amber-500/15 text-amber-300'
                                       : 'bg-rose-500/15 text-rose-300'
                                 }`}
                               >
@@ -1405,7 +1405,7 @@ function ShiftsPageContent() {
                                       ? 'bg-emerald-500/15 text-emerald-300'
                                       : request.status === 'dismissed'
                                         ? 'bg-white/10 text-muted-foreground'
-                                        : 'bg-sky-500/15 text-sky-300'
+                                        : 'bg-amber-500/15 text-amber-300'
                                 }`}
                               >
                                 {request.status === 'open'
@@ -1423,8 +1423,8 @@ function ShiftsPageContent() {
                             </div>
 
                             {request.lead_status === 'proposed' && (
-                              <div className="mt-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-sm text-sky-100">
-                                <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300/80">Предложение старшего</div>
+                              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-amber-100">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-amber-300/80">Предложение старшего</div>
                                 <div className="mt-1">
                                   {request.lead_operator_name || 'Старший'} предлагает:{' '}
                                   {request.lead_action === 'replace'
@@ -1433,7 +1433,7 @@ function ShiftsPageContent() {
                                       ? 'снять со смены'
                                       : 'оставить как есть'}
                                 </div>
-                                {request.lead_note ? <div className="mt-1 text-sky-100/90">{request.lead_note}</div> : null}
+                                {request.lead_note ? <div className="mt-1 text-amber-100/90">{request.lead_note}</div> : null}
                               </div>
                             )}
 
@@ -1756,7 +1756,7 @@ function EditableShiftCell({
     if (status === 'error') return 'bg-red-500/20'
     if (isConflict) return 'bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
     if (workflowState?.kind === 'issue') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
-    if (workflowState?.kind === 'resolved') return 'bg-sky-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
+    if (workflowState?.kind === 'resolved') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
     if (workflowState?.kind === 'dismissed') return 'bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
     if (workflowState?.kind === 'confirmed') return 'bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.24)]'
     if (isSelectedOperator) return 'bg-emerald-500/12 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)]'
@@ -1832,7 +1832,7 @@ function EditableShiftCell({
               : workflowState.kind === 'issue'
                 ? 'bg-amber-500/15 text-amber-300'
                 : workflowState.kind === 'resolved'
-                  ? 'bg-sky-500/15 text-sky-300'
+                  ? 'bg-amber-500/15 text-amber-300'
                   : 'bg-white/10 text-muted-foreground'
           }`}
         >

@@ -252,8 +252,8 @@ export default function StoreAnalyticsPage() {
   return (
     <div className="app-page-wide space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
-          <Store className="h-5 w-5 text-cyan-300" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+          <Store className="h-5 w-5 text-amber-300" />
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-semibold text-foreground">Аналитика точек</h1>
@@ -306,7 +306,7 @@ export default function StoreAnalyticsPage() {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_400px]">
         <Card className="border-white/10 bg-card/70 p-5">
           <div className="flex items-center gap-2">
-            <Boxes className="h-4 w-4 text-cyan-300" />
+            <Boxes className="h-4 w-4 text-amber-300" />
             <h2 className="text-lg font-semibold text-foreground">Сводка по витринам</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">Главные цифры по каждой точке без лишней детализации.</p>
@@ -435,7 +435,7 @@ export default function StoreAnalyticsPage() {
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_400px]">
           <Card className="border-white/10 bg-card/70 p-5">
             <div className="flex items-center gap-2">
-              <Boxes className="h-4 w-4 text-cyan-300" />
+              <Boxes className="h-4 w-4 text-amber-300" />
               <h2 className="text-lg font-semibold text-foreground">Складские запасы</h2>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Общая картина по подсобке.</p>

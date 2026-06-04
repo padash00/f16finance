@@ -226,14 +226,14 @@ export default function OperatorAchievementsPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(217,70,239,0.18),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
+      <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.18),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
               Мотивация и рейтинг
             </div>
             <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-white flex items-center gap-3 lg:text-4xl">
-              <Trophy className="w-8 h-8 text-fuchsia-400" />
+              <Trophy className="w-8 h-8 text-amber-400" />
               Достижения операторов
             </h1>
             <p className="text-sm text-slate-400 max-w-2xl">
@@ -275,7 +275,7 @@ export default function OperatorAchievementsPage() {
       )}
 
       {/* Сводка достижений */}
-      <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+      <Card className="p-5 bg-slate-900/40 backdrop-blur-xl border-white/5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-400" />
@@ -307,9 +307,9 @@ export default function OperatorAchievementsPage() {
       </Card>
 
       {/* Список операторов */}
-      <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+      <Card className="p-5 bg-slate-900/40 backdrop-blur-xl border-white/5">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-fuchsia-400" />
+          <Award className="w-4 h-4 text-amber-400" />
           Кто что получил
         </h3>
         {loading && computed.length === 0 ? (
@@ -326,10 +326,10 @@ export default function OperatorAchievementsPage() {
                 key={row.operatorId}
                 type="button"
                 onClick={() => setSelectedRow(row)}
-                className="text-left rounded-2xl border border-white/10 bg-gray-900/60 p-4 transition hover:border-fuchsia-400/30 hover:bg-gray-900/80"
+                className="text-left rounded-2xl border border-white/10 bg-slate-900/60 p-4 transition hover:border-amber-400/30 hover:bg-slate-900/80"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 overflow-hidden">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-amber-500/30 to-amber-600/30 overflow-hidden">
                     {row.photo_url ? (
                       <Image src={row.photo_url} alt={row.operatorName} width={40} height={40} className="rounded-full object-cover" />
                     ) : (
@@ -407,12 +407,12 @@ function OperatorAchievementsModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-white/5 rounded-t-2xl z-10 p-5">
+        <div className="sticky top-0 bg-slate-900 border-b border-white/5 rounded-t-2xl z-10 p-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 overflow-hidden">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-amber-500/30 to-amber-600/30 overflow-hidden">
               {row.photo_url ? (
                 <Image src={row.photo_url} alt={row.operatorName} width={56} height={56} className="rounded-2xl object-cover" />
               ) : (
@@ -487,7 +487,7 @@ function OperatorAchievementsModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-900 border-t border-white/5 rounded-b-2xl p-4 flex justify-end">
+        <div className="sticky bottom-0 bg-slate-900 border-t border-white/5 rounded-b-2xl p-4 flex justify-end">
           <Button variant="outline" size="sm" onClick={onClose} className="border-white/10">
             Закрыть
           </Button>

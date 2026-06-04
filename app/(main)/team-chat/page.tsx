@@ -180,11 +180,11 @@ function ChatContent() {
   }
 
   return (
-    <div className="app-page-wide space-y-4 max-w-4xl mx-auto">
+    <div className="app-page-tight space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-orange-500/10 rounded-xl">
-            <MessageSquare className="w-7 h-7 text-orange-300" />
+          <div className="p-3 bg-amber-500/10 rounded-xl">
+            <MessageSquare className="w-7 h-7 text-amber-300" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -223,7 +223,7 @@ function ChatContent() {
                   <span className="font-medium text-foreground">{p.sender_name}: </span>
                   <span className="text-muted-foreground">{p.message}</span>
                   {p.is_announcement && (
-                    <span className="ml-2 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300">
+                    <span className="ml-2 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
                       Объявление
                     </span>
                   )}
@@ -242,9 +242,9 @@ function ChatContent() {
 
       {/* Объявление модалка */}
       {showAnnounce && (
-        <Card className="p-4 border-orange-500/40 bg-orange-500/[0.04]">
+        <Card className="p-4 border-amber-500/40 bg-amber-500/[0.04]">
           <div className="flex items-center gap-2 mb-3">
-            <Megaphone className="w-4 h-4 text-orange-300" />
+            <Megaphone className="w-4 h-4 text-amber-300" />
             <h3 className="text-sm font-semibold text-foreground">Создать объявление</h3>
           </div>
           <textarea
@@ -252,7 +252,7 @@ function ChatContent() {
             onChange={e => setAnnounceText(e.target.value)}
             rows={3}
             placeholder="Объявление команде..."
-            className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-orange-500 mb-3"
+            className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-amber-500 mb-3"
           />
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowAnnounce(false)}>
@@ -260,7 +260,7 @@ function ChatContent() {
             </Button>
             <Button
               size="sm"
-              className="bg-orange-600 hover:bg-orange-700"
+              className="bg-amber-600 hover:bg-amber-700"
               onClick={() => send(true)}
               disabled={sending || !announceText.trim()}
             >
@@ -287,7 +287,7 @@ function ChatContent() {
                 key={m.id}
                 className={`group p-3 rounded-lg border ${
                   m.is_announcement
-                    ? 'bg-orange-500/[0.06] border-orange-500/30'
+                    ? 'bg-amber-500/[0.06] border-amber-500/30'
                     : 'bg-background/30 border-border/50'
                 }`}
               >
@@ -295,7 +295,7 @@ function ChatContent() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{m.sender_name}</span>
                     {m.is_announcement && (
-                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300">
+                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
                         Объявление
                       </span>
                     )}
@@ -372,7 +372,7 @@ function ChatContent() {
             }
           }}
           placeholder={contextType ? 'Написать в обсуждение...' : 'Сообщение команде...'}
-          className="flex-1 bg-input border border-border rounded-lg px-4 py-3 text-sm focus:border-orange-500"
+          className="flex-1 bg-input border border-border rounded-lg px-4 py-3 text-sm focus:border-amber-500"
         />
         <Button onClick={() => send(false)} disabled={sending || !draft.trim()}>
           <Send className="w-4 h-4" />

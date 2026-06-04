@@ -220,11 +220,11 @@ export default function KPIPage() {
           <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.20),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/25 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
                   KPI
                 </div>
                 <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-white flex items-center gap-3 lg:text-4xl">
-                  <Calculator className="w-8 h-8 text-indigo-400" />
+                  <Calculator className="w-8 h-8 text-amber-400" />
                   Прогноз выручки
                 </h1>
                 <div className="text-sm text-slate-400 flex flex-wrap items-center gap-2">
@@ -287,8 +287,8 @@ export default function KPIPage() {
                   <div className="text-xs text-muted-foreground mt-2">{monthLabel(-1)}</div>
                 </Card>
 
-                <Card className="p-5 bg-gradient-to-br from-indigo-950/40 to-[#0A0A0A] border-indigo-500/20 shadow-lg shadow-indigo-900/10">
-                  <div className="text-xs text-indigo-200 uppercase">План</div>
+                <Card className="p-5 bg-gradient-to-br from-amber-950/40 to-[#0A0A0A] border-amber-500/20 shadow-lg shadow-amber-900/10">
+                  <div className="text-xs text-amber-200 uppercase">План</div>
                   <div className="text-3xl font-bold mt-2">{money(totals.forecast)}</div>
                   <div className="mt-3 flex items-center justify-between">
                     <div className="text-xs text-muted-foreground">{targetLabel}</div>
@@ -331,7 +331,7 @@ export default function KPIPage() {
                           </div>
                         )}
                         <div className="pt-3 mt-3 border-t border-white/5 flex justify-between">
-                          <span className="text-indigo-200">План:</span>
+                          <span className="text-amber-200">План:</span>
                           <span className="font-mono text-white">{money(row.forecast)}</span>
                         </div>
                       </div>
@@ -343,7 +343,7 @@ export default function KPIPage() {
               {/* Clear explanation */}
               <Card className="p-5 bg-[#0A0A0A] border-white/5">
                 <div className="flex items-center gap-2 text-zinc-200 font-semibold">
-                  <Info className="w-4 h-4 text-indigo-400" />
+                  <Info className="w-4 h-4 text-amber-400" />
                   Как это понимать?
                 </div>
                 <div className="text-sm text-muted-foreground mt-2 leading-relaxed">

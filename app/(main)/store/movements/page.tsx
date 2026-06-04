@@ -96,9 +96,9 @@ function movementTypeClass(type: string) {
   if (type === 'transfer_cancel' || type === 'transfer_showcase_to_warehouse') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
   if (type === 'reservation') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200'
   if (type === 'reservation_release') return 'border-yellow-500/20 bg-yellow-500/5 text-yellow-300'
-  if (type === 'sale') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+  if (type === 'sale') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (type === 'debt') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (type === 'return') return 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+  if (type === 'return') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-200'
   if (type === 'posting') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
   if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-slate-300'
@@ -220,8 +220,8 @@ function StoreMovementsPageContent() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
-            <History className="h-5 w-5 text-violet-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <History className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">Журнал движений</h1>
@@ -253,9 +253,9 @@ function StoreMovementsPageContent() {
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Приёмок</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.receipts}</p>}
         </Card>
-        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Выдач на точку</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-blue-200">{stats.transfers}</p>}
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Выдач на точку</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.transfers}</p>}
         </Card>
         <Card className="border-white/10 bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Сумма</p>

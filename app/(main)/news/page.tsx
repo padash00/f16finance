@@ -90,7 +90,7 @@ export default function NewsPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-5 max-w-3xl mx-auto">
+    <div className="app-page-tight space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-orange-500/10 rounded-xl">

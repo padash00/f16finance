@@ -212,13 +212,13 @@ export default function AdvertisingPage() {
         title="Реклама на экране клиента"
         description="Видео и картинки крутятся на втором мониторе, когда касса простаивает между клиентами"
         icon={<Clapperboard className="h-5 w-5" />}
-        accent="blue"
+        accent="amber"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
-              className="h-9 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-slate-200 outline-none focus:border-blue-500/40"
+              className="h-9 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-slate-200 outline-none focus:border-amber-500/40"
             >
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -330,7 +330,7 @@ export default function AdvertisingPage() {
                         max={120}
                         value={ad.duration_sec || 8}
                         onChange={(e) => updateDuration(ad, Math.max(2, Number(e.target.value) || 8))}
-                        className="h-7 w-16 rounded border border-white/10 bg-white/[0.03] px-2 text-xs text-slate-200 outline-none focus:border-blue-500/40"
+                        className="h-7 w-16 rounded border border-white/10 bg-white/[0.03] px-2 text-xs text-slate-200 outline-none focus:border-amber-500/40"
                       />
                       сек
                     </label>

@@ -72,8 +72,8 @@ type DayRow = {
 function CashTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 text-xs shadow-xl">
-      <p className="text-gray-400 mb-2 font-medium">{label}</p>
+    <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs shadow-xl">
+      <p className="text-slate-400 mb-2 font-medium">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex justify-between gap-4">
           <span style={{ color: p.color }}>{p.name}</span>
@@ -238,7 +238,7 @@ export default function CashFlowPage() {
         <div className="app-page-wide space-y-6">
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/30 via-gray-900 to-blue-900/30 p-6 border border-emerald-500/20">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/30 via-slate-900 to-amber-900/30 p-6 border border-emerald-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
               <div className="flex items-center gap-3">
@@ -246,10 +246,10 @@ export default function CashFlowPage() {
                   <Activity className="w-8 h-8 text-emerald-400" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
                     Cash Flow
                   </h1>
-                  <p className="text-sm text-gray-400">Движение денег и баланс нарастающим итогом</p>
+                  <p className="text-sm text-slate-400">Движение денег и баланс нарастающим итогом</p>
                 </div>
               </div>
 
@@ -269,7 +269,7 @@ export default function CashFlowPage() {
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                           active
                             ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
-                            : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                            : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'
                         }`}
                       >
                         {label}
@@ -277,27 +277,27 @@ export default function CashFlowPage() {
                     )
                   })}
                 </div>
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
                   <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
                   <input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
+                    className="bg-transparent text-sm text-slate-200 outline-none w-[120px]"
                   />
-                  <span className="text-gray-500">—</span>
+                  <span className="text-slate-500">—</span>
                   <input
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
+                    className="bg-transparent text-sm text-slate-200 outline-none w-[120px]"
                   />
                 </div>
                 {companies.length > 0 && (
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-xl text-sm text-gray-200 outline-none"
+                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-xl text-sm text-slate-200 outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -311,7 +311,7 @@ export default function CashFlowPage() {
                   <button
                     onClick={downloadCSV}
                     disabled={dailyData.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 disabled:opacity-40 border border-gray-700 rounded-xl text-sm text-gray-200 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 hover:bg-slate-700/50 disabled:opacity-40 border border-slate-700 rounded-xl text-sm text-slate-200 transition-colors"
                   >
                     <Download className="w-4 h-4 text-emerald-400" />
                     Excel
@@ -323,33 +323,33 @@ export default function CashFlowPage() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4 bg-gray-900/80 border-emerald-500/20">
+            <Card className="p-4 bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-gray-400">Доходы</p>
+                <p className="text-xs text-slate-400">Доходы</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(stats.totalIncome)}</p>
             </Card>
-            <Card className="p-4 bg-gray-900/80 border-red-500/20">
+            <Card className="p-4 bg-slate-900/80 border-red-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
-                <p className="text-xs text-gray-400">Расходы</p>
+                <p className="text-xs text-slate-400">Расходы</p>
               </div>
               <p className="text-xl font-bold text-red-400">{fmtMoney(stats.totalExpenses)}</p>
             </Card>
-            <Card className={`p-4 bg-gray-900/80 ${stats.profit >= 0 ? 'border-blue-500/20' : 'border-red-500/30'}`}>
+            <Card className={`p-4 bg-slate-900/80 ${stats.profit >= 0 ? 'border-amber-500/20' : 'border-red-500/30'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Wallet className="w-4 h-4 text-blue-400" />
-                <p className="text-xs text-gray-400">Прибыль</p>
+                <Wallet className="w-4 h-4 text-amber-400" />
+                <p className="text-xs text-slate-400">Прибыль</p>
               </div>
-              <p className={`text-xl font-bold ${stats.profit >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+              <p className={`text-xl font-bold ${stats.profit >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
                 {fmtMoney(stats.profit)}
               </p>
             </Card>
-            <Card className="p-4 bg-gray-900/80 border-gray-700">
+            <Card className="p-4 bg-slate-900/80 border-slate-700">
               <div className="flex items-center gap-2 mb-2">
-                <Activity className="w-4 h-4 text-purple-400" />
-                <p className="text-xs text-gray-400">Маржа</p>
+                <Activity className="w-4 h-4 text-amber-400" />
+                <p className="text-xs text-slate-400">Маржа</p>
               </div>
               <p className={`text-xl font-bold ${stats.margin >= 20 ? 'text-emerald-400' : stats.margin >= 10 ? 'text-amber-400' : 'text-red-400'}`}>
                 {stats.margin.toFixed(1)}%
@@ -362,43 +362,43 @@ export default function CashFlowPage() {
 
           {/* AI Auto-Insights */}
           {can('cashflow.ai_analysis') && (
-            <Card className="p-5 bg-gray-900/80 border border-blue-500/20">
+            <Card className="p-5 bg-slate-900/80 border border-amber-500/20">
               <div className="flex items-center gap-2 mb-3">
-                <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                  <Sparkles className="w-4 h-4 text-blue-400" />
+                <div className="p-1.5 bg-amber-500/20 rounded-lg">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
                 </div>
                 <h2 className="text-sm font-semibold text-white">AI-анализ Cash Flow</h2>
-                {aiLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin ml-1" />}
+                {aiLoading && <Loader2 className="w-4 h-4 text-amber-400 animate-spin ml-1" />}
               </div>
 
               {aiLoading && (
                 <div className="space-y-2.5">
-                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-3/4" />
-                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
-                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-5/6" />
-                  <div className="h-3 bg-gray-800 rounded-full animate-pulse w-2/3" />
+                  <div className="h-3 bg-slate-800 rounded-full animate-pulse w-3/4" />
+                  <div className="h-3 bg-slate-800 rounded-full animate-pulse w-full" />
+                  <div className="h-3 bg-slate-800 rounded-full animate-pulse w-5/6" />
+                  <div className="h-3 bg-slate-800 rounded-full animate-pulse w-2/3" />
                 </div>
               )}
               {!aiLoading && aiText && (
-                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiText}</p>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{aiText}</p>
               )}
               {!aiLoading && !aiText && dailyData.length === 0 && !loading && (
-                <p className="text-sm text-gray-500">Нет данных за выбранный период</p>
+                <p className="text-sm text-slate-500">Нет данных за выбранный период</p>
               )}
             </Card>
           )}
 
           {/* Chart */}
-          <Card className="p-5 bg-gray-900/80 border-gray-800">
+          <Card className="p-5 bg-slate-900/80 border-slate-800">
             <h2 className="text-sm font-semibold text-white mb-1">Доходы vs Расходы</h2>
-            <p className="text-xs text-gray-500 mb-4">Синяя линия — баланс нарастающим итогом</p>
+            <p className="text-xs text-slate-500 mb-4">Синяя линия — баланс нарастающим итогом</p>
 
             {loading ? (
               <div className="h-64 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
               </div>
             ) : dailyData.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-gray-500 text-sm">Нет данных</div>
+              <div className="h-64 flex items-center justify-center text-slate-500 text-sm">Нет данных</div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={dailyData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
@@ -436,12 +436,12 @@ export default function CashFlowPage() {
 
           {/* Daily Table */}
           {dailyData.length > 0 && (
-            <Card className="p-5 bg-gray-900/80 border-gray-800">
+            <Card className="p-5 bg-slate-900/80 border-slate-800">
               <h2 className="text-sm font-semibold text-white mb-4">Таблица по дням</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-gray-500 border-b border-gray-800 text-xs uppercase tracking-wide">
+                    <tr className="text-slate-500 border-b border-slate-800 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 pr-4 font-medium">Дата</th>
                       <th className="text-right py-2 pr-4 font-medium">Доходы</th>
                       <th className="text-right py-2 pr-4 font-medium">Расходы</th>
@@ -453,22 +453,22 @@ export default function CashFlowPage() {
                     {dailyData.map((row) => (
                       <tr
                         key={row.date}
-                        className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${
+                        className={`border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors ${
                           row.profit < 0 ? 'bg-red-500/5' : ''
                         }`}
                       >
-                        <td className="py-2 pr-4 text-gray-300 whitespace-nowrap">{row.label}</td>
+                        <td className="py-2 pr-4 text-slate-300 whitespace-nowrap">{row.label}</td>
                         <td className="py-2 pr-4 text-right text-emerald-400 font-medium">
-                          {row.income > 0 ? fmtMoney(row.income) : <span className="text-gray-600">—</span>}
+                          {row.income > 0 ? fmtMoney(row.income) : <span className="text-slate-600">—</span>}
                         </td>
                         <td className="py-2 pr-4 text-right text-red-400 font-medium">
-                          {row.expenses > 0 ? fmtMoney(row.expenses) : <span className="text-gray-600">—</span>}
+                          {row.expenses > 0 ? fmtMoney(row.expenses) : <span className="text-slate-600">—</span>}
                         </td>
                         <td className={`py-2 pr-4 text-right font-semibold ${row.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {row.profit > 0 ? '+' : ''}
                           {fmtMoney(row.profit)}
                         </td>
-                        <td className={`py-2 text-right font-bold ${row.cumBalance >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                        <td className={`py-2 text-right font-bold ${row.cumBalance >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
                           {fmtMoney(row.cumBalance)}
                         </td>
                       </tr>

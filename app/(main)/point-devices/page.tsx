@@ -239,7 +239,7 @@ function CompanyAssignmentEditor({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-muted-foreground">
         <span>
-          В проекте: <b className="text-cyan-200">{assignments.length}</b> из {allCompanies.length} точек
+          В проекте: <b className="text-amber-200">{assignments.length}</b> из {allCompanies.length} точек
         </span>
         <span>Нажми «Добавить» или «Убрать», а «Настройки» откроют режимы конкретной точки.</span>
       </div>
@@ -261,7 +261,7 @@ function CompanyAssignmentEditor({
             key={c.id}
             className={`rounded-xl border transition ${
               selected
-                ? 'border-cyan-500/30 bg-cyan-500/5'
+                ? 'border-amber-500/30 bg-amber-500/5'
                 : 'border-white/10 bg-black/20'
             }`}
           >
@@ -270,7 +270,7 @@ function CompanyAssignmentEditor({
                 type="button"
                 onClick={() => toggle(c.id)}
                 className={`flex min-w-0 flex-1 items-center gap-2 text-sm text-left ${
-                  selected ? 'text-cyan-200' : 'text-muted-foreground hover:text-foreground'
+                  selected ? 'text-amber-200' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -292,7 +292,7 @@ function CompanyAssignmentEditor({
                     Настройки
                   </button>
                   <button type="button" onClick={() => toggle(c.id)}>
-                    <X className="h-3.5 w-3.5 text-cyan-400 hover:text-red-400" />
+                    <X className="h-3.5 w-3.5 text-amber-400 hover:text-red-400" />
                   </button>
                 </>
               ) : (
@@ -349,7 +349,7 @@ function CompanyAssignmentEditor({
                                 onClick={() => updateFlag(c.id, key, v)}
                                 className={`rounded-lg border px-2 py-1 transition ${
                                   val === v
-                                    ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-200'
+                                    ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
                                     : 'border-white/10 text-muted-foreground hover:border-white/20 hover:text-foreground'
                                 }`}
                               >
@@ -690,8 +690,8 @@ export default function PointDevicesPage() {
     <div className="app-page-wide space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
-          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-3">
-            <FolderOpen className="h-7 w-7 text-cyan-300" />
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
+            <FolderOpen className="h-7 w-7 text-amber-300" />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground">Проекты точек</h1>
@@ -717,7 +717,7 @@ export default function PointDevicesPage() {
       {can('point-devices.create') && (
         <Card className="border-border bg-card p-5">
           <div className="mb-4 flex items-center gap-2">
-            <Plus className="h-4 w-4 text-cyan-300" />
+            <Plus className="h-4 w-4 text-amber-300" />
             <h2 className="text-lg font-semibold text-foreground">Новый проект</h2>
           </div>
           <ProjectFormPanel
@@ -839,7 +839,7 @@ export default function PointDevicesPage() {
                           {project.companies.map((c) => (
                             <div key={c.id} className="space-y-0.5">
                               <div className="flex items-center gap-2 text-sm text-foreground">
-                                <Building2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                <Building2 className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                                 <span className="truncate">{c.name}{c.code ? ` (${c.code})` : ''}</span>
                               </div>
                               {c.point_mode && (
@@ -903,7 +903,7 @@ export default function PointDevicesPage() {
                             )}
                           </div>
                         </div>
-                        <code className="block break-all rounded-lg bg-black/40 px-3 py-2 text-xs text-cyan-200">
+                        <code className="block break-all rounded-lg bg-black/40 px-3 py-2 text-xs text-amber-200">
                           {tokenVisible
                             ? project.project_token
                             : `${project.project_token.slice(0, 6)}••••••••••${project.project_token.slice(-6)}`}
@@ -917,7 +917,7 @@ export default function PointDevicesPage() {
                             key={key}
                             className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
                               project.feature_flags[key as keyof PointFeatureFlags]
-                                ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200'
+                                ? 'border-amber-500/20 bg-amber-500/10 text-amber-200'
                                 : 'border-white/10 bg-white/5 text-muted-foreground line-through opacity-40'
                             }`}
                           >

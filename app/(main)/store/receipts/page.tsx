@@ -945,7 +945,7 @@ export default function StoreReceiptsPage() {
             <Button
               size="sm"
               onClick={() => setFormSheetOpen(true)}
-              className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
             >
               <PackagePlus className="h-3.5 w-3.5" />
               Новый документ
@@ -968,10 +968,10 @@ export default function StoreReceiptsPage() {
             <p className="mt-1 truncate text-xl font-semibold text-emerald-200" title={formatMoney(totalReceiptsAmount)}>{formatMoney(totalReceiptsAmount)}</p>
           )}
         </Card>
-        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Поставщиков</p>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Поставщиков</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : (
-            <p className="mt-1 text-xl font-semibold text-blue-200">{(data?.suppliers || []).length}</p>
+            <p className="mt-1 text-xl font-semibold text-amber-200">{(data?.suppliers || []).length}</p>
           )}
         </Card>
       </div>
@@ -1131,7 +1131,7 @@ export default function StoreReceiptsPage() {
                           return <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">Оплачен</span>
                         }
                         if (debt.status === 'written_off') {
-                          return <span className="inline-flex items-center rounded-full border border-gray-500/30 bg-gray-500/15 px-2 py-0.5 text-[10px] text-gray-200">Списан</span>
+                          return <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-2 py-0.5 text-[10px] text-slate-200">Списан</span>
                         }
                         const overdue = debt.due_date ? new Date(debt.due_date).getTime() < Date.now() : false
                         return (
@@ -1547,7 +1547,7 @@ export default function StoreReceiptsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                      className="h-8 bg-amber-600 hover:bg-amber-700"
                       onClick={applyAiParseResult}
                     >
                       Применить в форму

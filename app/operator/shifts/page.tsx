@@ -147,21 +147,21 @@ export default function OperatorShiftsPage() {
           title={`${formatRuDate(weekStart)} - ${formatRuDate(addDaysISO(weekStart, 6))}`}
           description="Здесь виден ваш график по точкам. Если неделя уже опубликована, можно подтвердить её или отправить замечание по конкретной смене."
           action={
-            <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => void load()}>
+            <Button type="button" variant="ghost" className="text-zinc-400 hover:text-zinc-100" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           }
         />
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
+          <Button type="button" variant="outline" className="border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
             <ChevronLeft className="h-4 w-4" />
             Прошлая
           </Button>
-          <Button type="button" variant="outline" className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" onClick={() => setWeekStart(currentWeek())}>
+          <Button type="button" variant="outline" className="border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]" onClick={() => setWeekStart(currentWeek())}>
             Текущая
           </Button>
-          <Button type="button" variant="outline" className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
+          <Button type="button" variant="outline" className="border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
             Следующая
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -180,7 +180,7 @@ export default function OperatorShiftsPage() {
 
       {loading ? (
         <OperatorPanel>
-          <div className="flex items-center gap-3 text-sm text-slate-300">
+          <div className="flex items-center gap-3 text-sm text-zinc-400">
             <Loader2 className="h-5 w-5 animate-spin" />
             Загружаю ваш график...
           </div>
@@ -202,8 +202,8 @@ export default function OperatorShiftsPage() {
             <OperatorPanel key={group.company.id}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-lg font-semibold text-white">{group.company.name || 'Точка'}</div>
-                  <div className="mt-1 text-sm text-slate-400">
+                  <div className="text-lg font-semibold text-zinc-100">{group.company.name || 'Точка'}</div>
+                  <div className="mt-1 text-sm text-zinc-500">
                     {group.company.code ? `Код: ${group.company.code}` : 'Код точки не указан'}
                   </div>
                 </div>
@@ -214,20 +214,20 @@ export default function OperatorShiftsPage() {
 
               <div className="mt-4 space-y-3">
                 {group.shifts.map((shift) => (
-                  <div key={`${group.company.id}:${shift.date}:${shift.shift_type}`} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
+                  <div key={`${group.company.id}:${shift.date}:${shift.shift_type}`} className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-zinc-100">
                           {formatRuDate(shift.date, 'full')} · {shiftLabel(shift.shift_type)}
                         </div>
-                        {shift.comment ? <div className="mt-1 text-xs text-slate-400">{shift.comment}</div> : null}
+                        {shift.comment ? <div className="mt-1 text-xs text-zinc-500">{shift.comment}</div> : null}
                       </div>
                       {group.response?.id ? (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="text-amber-200 hover:text-white"
+                          className="text-amber-200 hover:text-zinc-100"
                           onClick={() =>
                             setIssueDraft({
                               responseId: group.response!.id,
@@ -247,7 +247,7 @@ export default function OperatorShiftsPage() {
               </div>
 
               {openRequests.length > 0 ? (
-                <div className="mt-4 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4">
+                <div className="mt-4 rounded-none border border-amber-500/20 bg-amber-500/10 p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
                     <AlertTriangle className="h-4 w-4" />
                     Открытые замечания: {openRequests.length}
@@ -273,20 +273,20 @@ export default function OperatorShiftsPage() {
         })}
 
       {issueDraft ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/80 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
-          <form onSubmit={submitIssue} className="w-full max-w-lg rounded-[1.8rem] border border-white/10 bg-[#0b1324] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
-            <div className="text-lg font-semibold text-white">Сообщить о проблеме со сменой</div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/80 p-3 sm:items-center sm:justify-center">
+          <form onSubmit={submitIssue} className="w-full max-w-lg rounded-none border border-[#23262b] bg-[#0b1324] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+            <div className="text-lg font-semibold text-zinc-100">Сообщить о проблеме со сменой</div>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">
               {issueDraft.companyName || 'Точка'} · {formatRuDate(issueDraft.shiftDate, 'full')} · {shiftLabel(issueDraft.shiftType)}
             </p>
             <textarea
               value={issueReason}
               onChange={(event) => setIssueReason(event.target.value)}
-              className="mt-4 min-h-[120px] w-full rounded-[1.3rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none"
+              className="mt-4 min-h-[120px] w-full rounded-none border border-[#23262b] bg-[#0e0f10] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400/40 focus:outline-none"
               placeholder="Коротко опишите, что не совпадает или что нужно изменить"
             />
             <div className="mt-4 flex gap-2">
-              <Button type="button" variant="outline" className="flex-1 border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" onClick={() => { setIssueDraft(null); setIssueReason('') }}>
+              <Button type="button" variant="outline" className="flex-1 border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]" onClick={() => { setIssueDraft(null); setIssueReason('') }}>
                 Отмена
               </Button>
               <Button type="submit" className="flex-1" disabled={!issueReason.trim() || !!actionLoading}>

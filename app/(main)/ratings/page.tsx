@@ -36,7 +36,7 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-xl">🥇</span>
   if (rank === 2) return <span className="text-xl">🥈</span>
   if (rank === 3) return <span className="text-xl">🥉</span>
-  return <span className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-800 text-xs text-gray-400 font-bold">{rank}</span>
+  return <span className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-800 text-xs text-slate-400 font-bold">{rank}</span>
 }
 
 // ================== PAGE ==================
@@ -131,7 +131,7 @@ export default function RatingsPage() {
         <div className="app-page-wide space-y-6">
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-gray-900 to-orange-900/30 p-6 border border-amber-500/20">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-orange-900/30 p-6 border border-amber-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
               <div className="flex items-center gap-3">
@@ -139,10 +139,10 @@ export default function RatingsPage() {
                   <Trophy className="w-8 h-8 text-amber-400" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
                     Рейтинг операторов
                   </h1>
-                  <p className="text-sm text-gray-400">Лидерборд по выручке, сменам и среднему чеку</p>
+                  <p className="text-sm text-slate-400">Лидерборд по выручке, сменам и среднему чеку</p>
                 </div>
               </div>
 
@@ -158,32 +158,32 @@ export default function RatingsPage() {
                   }} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activePreset === p
                       ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                      : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                      : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'
                   }`}>
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
                 ))}
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
                   <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
                   <input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom') }}
-                    className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
+                    className="bg-transparent text-sm text-slate-200 outline-none w-[120px]"
                   />
-                  <span className="text-gray-500">—</span>
+                  <span className="text-slate-500">—</span>
                   <input
                     type="date"
                     value={dateTo}
                     onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom') }}
-                    className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
+                    className="bg-transparent text-sm text-slate-200 outline-none w-[120px]"
                   />
                 </div>
                 {companies.length > 0 && (
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-xl text-sm text-gray-200 outline-none"
+                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-xl text-sm text-slate-200 outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -197,24 +197,24 @@ export default function RatingsPage() {
 
           {/* Summary stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Card className="p-4 bg-gray-900/80 border-amber-500/20">
+            <Card className="p-4 bg-slate-900/80 border-amber-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <Users2 className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-gray-400">Операторов в рейтинге</p>
+                <p className="text-xs text-slate-400">Операторов в рейтинге</p>
               </div>
               <p className="text-xl font-bold text-amber-400">{leaderboard.length}</p>
             </Card>
-            <Card className="p-4 bg-gray-900/80 border-emerald-500/20">
+            <Card className="p-4 bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-gray-400">Суммарная выручка</p>
+                <p className="text-xs text-slate-400">Суммарная выручка</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(totalRevenue)}</p>
             </Card>
-            <Card className="p-4 bg-gray-900/80 border-blue-500/20 col-span-2 md:col-span-1">
+            <Card className="p-4 bg-slate-900/80 border-amber-500/20 col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-2">
-                <Medal className="w-4 h-4 text-blue-400" />
-                <p className="text-xs text-gray-400">Лидер периода</p>
+                <Medal className="w-4 h-4 text-amber-400" />
+                <p className="text-xs text-slate-400">Лидер периода</p>
               </div>
               <p className="text-xl font-bold text-white truncate">{leaderboard[0]?.name || '—'}</p>
               {leaderboard[0] && (
@@ -224,17 +224,17 @@ export default function RatingsPage() {
           </div>
 
           {/* Leaderboard */}
-          <Card className="p-5 bg-gray-900/80 border-gray-800">
+          <Card className="p-5 bg-slate-900/80 border-slate-800">
             <h2 className="text-sm font-semibold text-white mb-4">Таблица лидеров</h2>
 
             {/* Полный лоадер только при первой загрузке */}
             {loading && leaderboard.length === 0 ? (
-              <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
+              <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
                 <Loader2 className="w-5 h-5 animate-spin" />
                 <span className="text-sm">Загружаю данные...</span>
               </div>
             ) : leaderboard.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-600">
+              <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-600">
                 <Trophy className="w-8 h-8 opacity-30" />
                 <p className="text-sm">Нет данных за выбранный период</p>
               </div>
@@ -242,7 +242,7 @@ export default function RatingsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-gray-500 border-b border-gray-800 text-xs uppercase tracking-wide">
+                    <tr className="text-slate-500 border-b border-slate-800 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 pr-3 font-medium w-10">#</th>
                       <th className="text-left py-2 pr-4 font-medium">Оператор</th>
                       <th className="text-right py-2 pr-4 font-medium">Выручка</th>
@@ -259,25 +259,25 @@ export default function RatingsPage() {
                       return (
                         <tr
                           key={row.operatorId}
-                          className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${rank <= 3 && row.revenue > 0 ? 'bg-amber-500/3' : ''}`}
+                          className={`border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors ${rank <= 3 && row.revenue > 0 ? 'bg-amber-500/3' : ''}`}
                         >
                           <td className="py-3 pr-3">
                             <RankBadge rank={rank} />
                           </td>
                           <td className="py-3 pr-4">
                             <div>
-                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-gray-200' : rank === 3 && row.revenue > 0 ? 'text-orange-300' : 'text-gray-400'}`}>
+                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-slate-200' : rank === 3 && row.revenue > 0 ? 'text-orange-300' : 'text-slate-400'}`}>
                                 {row.name}
                               </p>
                               {row.revenue > 0 && (
                                 <div className="flex items-center gap-2 mt-1">
-                                  <div className="h-1 rounded-full bg-gray-800 flex-1 max-w-[120px]">
+                                  <div className="h-1 rounded-full bg-slate-800 flex-1 max-w-[120px]">
                                     <div
                                       className="h-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
                                       style={{ width: `${sharePercent}%` }}
                                     />
                                   </div>
-                                  <span className="text-xs text-gray-500">{sharePercent.toFixed(1)}%</span>
+                                  <span className="text-xs text-slate-500">{sharePercent.toFixed(1)}%</span>
                                 </div>
                               )}
                             </div>
@@ -285,12 +285,12 @@ export default function RatingsPage() {
                           <td className="py-3 pr-4 text-right">
                             {row.revenue > 0
                               ? <span className="font-bold text-emerald-400">{fmtMoney(row.revenue)}</span>
-                              : <span className="text-gray-600 text-xs">нет данных</span>
+                              : <span className="text-slate-600 text-xs">нет данных</span>
                             }
                           </td>
-                          <td className="py-3 pr-4 text-right text-gray-300">{row.shifts || '—'}</td>
-                          <td className="py-3 pr-4 text-right text-gray-300">{row.days || '—'}</td>
-                          <td className="py-3 pr-4 text-right text-blue-400 font-medium">
+                          <td className="py-3 pr-4 text-right text-slate-300">{row.shifts || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-slate-300">{row.days || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-amber-400 font-medium">
                             {row.avgCheck > 0 ? fmtMoney(row.avgCheck) : '—'}
                           </td>
                           <td className="py-3 text-right">
@@ -300,9 +300,9 @@ export default function RatingsPage() {
                                 const pct = (delta / row.prevRevenue) * 100
                                 if (delta > 0) return <span className="text-emerald-400 text-xs font-medium flex items-center justify-end gap-0.5"><ArrowUp className="w-3 h-3" />+{pct.toFixed(0)}%</span>
                                 if (delta < 0) return <span className="text-red-400 text-xs font-medium flex items-center justify-end gap-0.5"><ArrowDown className="w-3 h-3" />{pct.toFixed(0)}%</span>
-                                return <span className="text-gray-500 text-xs"><Minus className="w-3 h-3 inline" /></span>
+                                return <span className="text-slate-500 text-xs"><Minus className="w-3 h-3 inline" /></span>
                               })()
-                            ) : <span className="text-gray-600 text-xs">—</span>}
+                            ) : <span className="text-slate-600 text-xs">—</span>}
                           </td>
                         </tr>
                       )
@@ -315,17 +315,17 @@ export default function RatingsPage() {
 
           {/* Top 3 podium */}
           {leaderboard.filter(r => r.revenue > 0).length >= 3 && (
-            <Card className="p-5 bg-gray-900/80 border-amber-500/20">
+            <Card className="p-5 bg-slate-900/80 border-amber-500/20">
               <h2 className="text-sm font-semibold text-white mb-4">Подиум</h2>
               <div className="flex items-end justify-center gap-3">
                 {/* 2nd */}
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-20 h-20 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
                     <span className="text-3xl">🥈</span>
                   </div>
-                  <div className="w-24 h-16 bg-gray-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-gray-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
-                    <span className="text-xs text-gray-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
+                  <div className="w-24 h-16 bg-slate-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
+                    <span className="text-xs text-slate-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
+                    <span className="text-xs text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
                   </div>
                 </div>
                 {/* 1st */}
@@ -336,7 +336,7 @@ export default function RatingsPage() {
                   <div className="w-28 h-24 bg-amber-500/10 border border-amber-500/20 rounded-t-xl flex flex-col items-center justify-center gap-1">
                     <span className="text-xs text-amber-300 font-semibold truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[0]?.name}</span>
                     <span className="text-sm font-bold text-emerald-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[0]?.revenue ?? 0)}</span>
-                    <span className="text-xs text-gray-500">{leaderboard.filter(r => r.revenue > 0)[0]?.shifts} смен</span>
+                    <span className="text-xs text-slate-500">{leaderboard.filter(r => r.revenue > 0)[0]?.shifts} смен</span>
                   </div>
                 </div>
                 {/* 3rd */}
@@ -346,7 +346,7 @@ export default function RatingsPage() {
                   </div>
                   <div className="w-24 h-12 bg-orange-500/5 rounded-t-xl flex flex-col items-center justify-center gap-1">
                     <span className="text-xs text-orange-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[2]?.name}</span>
-                    <span className="text-xs text-gray-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
                   </div>
                 </div>
               </div>

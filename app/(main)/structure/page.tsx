@@ -168,8 +168,8 @@ function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'man
     tone === 'owner'
       ? 'from-amber-500/20 to-orange-500/15 border-amber-500/20'
       : tone === 'manager'
-        ? 'from-cyan-500/15 to-blue-500/10 border-cyan-500/20'
-        : 'from-pink-500/15 to-fuchsia-500/10 border-pink-500/20'
+        ? 'from-amber-500/15 to-amber-500/10 border-amber-500/20'
+        : 'from-amber-500/15 to-amber-500/10 border-amber-500/20'
 
   return (
     <Card className={`border bg-gradient-to-br ${toneClass} p-5 text-white shadow-[0_18px_44px_rgba(0,0,0,0.18)]`}>
@@ -183,7 +183,7 @@ function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'man
           </div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3 shrink-0">
-          {member.role === 'owner' ? <Crown className="h-5 w-5 text-amber-300" /> : <ShieldCheck className="h-5 w-5 text-cyan-300" />}
+          {member.role === 'owner' ? <Crown className="h-5 w-5 text-amber-300" /> : <ShieldCheck className="h-5 w-5 text-amber-300" />}
         </div>
       </div>
 
@@ -236,7 +236,7 @@ function OperatorChip({
           </div>
         </div>
         {isPrimary ? (
-          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300 shrink-0">
+          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-300 shrink-0">
             main
           </span>
         ) : null}
@@ -366,13 +366,13 @@ function OrgNode({
 }) {
   const colorMap = {
     amber:   'border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-orange-500/10 shadow-amber-500/10',
-    violet:  'border-violet-400/40 bg-gradient-to-br from-violet-500/20 to-purple-500/10 shadow-violet-500/10',
-    cyan:    'border-cyan-400/40 bg-gradient-to-br from-cyan-500/20 to-blue-500/10 shadow-cyan-500/10',
+    violet:  'border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-500/10 shadow-amber-500/10',
+    cyan:    'border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-amber-600/10 shadow-amber-500/10',
     emerald: 'border-emerald-400/40 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 shadow-emerald-500/10',
     slate:   'border-white/10 bg-white/[0.04] shadow-black/20',
   }
   const labelColor = {
-    amber: 'text-amber-400', violet: 'text-violet-400', cyan: 'text-cyan-400',
+    amber: 'text-amber-400', violet: 'text-amber-400', cyan: 'text-amber-400',
     emerald: 'text-emerald-400', slate: 'text-slate-500',
   }
   const sizeMap = {
@@ -431,7 +431,7 @@ function OrgChart({
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-        <Network className="h-5 w-5 text-cyan-300" />
+        <Network className="h-5 w-5 text-amber-300" />
         Организационная схема
       </h2>
 
@@ -474,7 +474,7 @@ function OrgChart({
                         name={getPersonName(m)}
                         color="violet"
                         size="md"
-                        icon={<ShieldCheck className="h-3.5 w-3.5 text-violet-400" />}
+                        icon={<ShieldCheck className="h-3.5 w-3.5 text-amber-400" />}
                       />
                     ))}
                   </div>
@@ -593,7 +593,7 @@ function OrgChart({
                         name={getPersonName(m)}
                         color="violet"
                         size="md"
-                        icon={<Sparkles className="h-3.5 w-3.5 text-violet-400" />}
+                        icon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
                       />
                     ))}
                   </div>
@@ -807,8 +807,8 @@ export default function StructurePage() {
           <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_32%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.3)] sm:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
-                <div className="mb-4 inline-flex rounded-2xl bg-cyan-400/10 p-4">
-                  <Network className="h-7 w-7 text-cyan-300" />
+                <div className="mb-4 inline-flex rounded-2xl bg-amber-400/10 p-4">
+                  <Network className="h-7 w-7 text-amber-300" />
                 </div>
                 <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Структура команды</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
@@ -831,11 +831,11 @@ export default function StructurePage() {
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Руководители</div>
-                  <div className="mt-1 text-2xl font-semibold text-cyan-300">{managers.length}</div>
+                  <div className="mt-1 text-2xl font-semibold text-amber-300">{managers.length}</div>
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Маркетинг</div>
-                  <div className="mt-1 text-2xl font-semibold text-pink-300">{marketers.length}</div>
+                  <div className="mt-1 text-2xl font-semibold text-amber-300">{marketers.length}</div>
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Операторы</div>
@@ -848,7 +848,7 @@ export default function StructurePage() {
           {loading && staff.length === 0 ? (
             <Card className="border-white/10 bg-slate-950/65 p-8 text-white">
               <div className="flex items-center gap-3 text-slate-300">
-                <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+                <Loader2 className="h-5 w-5 animate-spin text-amber-300" />
                 Загружаем оргструктуру...
               </div>
             </Card>
@@ -893,7 +893,7 @@ export default function StructurePage() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="ФИО, телефон, email..."
-                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 pl-9 pr-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 pl-9 pr-3 text-sm text-white outline-none focus:border-amber-400/50"
                       />
                     </div>
                   </div>
@@ -902,7 +902,7 @@ export default function StructurePage() {
                     <select
                       value={companyFilter}
                       onChange={(event) => setCompanyFilter(event.target.value)}
-                      className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                      className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-amber-400/50"
                     >
                       <option value="all">Все точки</option>
                       {companies.map((company) => (
@@ -917,7 +917,7 @@ export default function StructurePage() {
                     <select
                       value={roleFilter}
                       onChange={(event) => setRoleFilter(event.target.value as 'all' | CompanyOperatorRole)}
-                      className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                      className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-amber-400/50"
                     >
                       <option value="all">Все роли</option>
                       <option value="operator">Оператор</option>
@@ -941,7 +941,7 @@ export default function StructurePage() {
                     </Button>
                     {/* Чипы — компактно показывают что выбрано */}
                     {searchQuery && (
-                      <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs">
+                      <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
                         🔍 «{searchQuery}»
                       </span>
                     )}
@@ -951,7 +951,7 @@ export default function StructurePage() {
                       </span>
                     )}
                     {roleFilter !== 'all' && (
-                      <span className="px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs">
+                      <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
                         👔 {COMPANY_ROLE_LABEL[roleFilter as CompanyOperatorRole]}
                       </span>
                     )}
@@ -976,7 +976,7 @@ export default function StructurePage() {
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-white">
-                      <BriefcaseBusiness className="h-4 w-4 text-cyan-300" />
+                      <BriefcaseBusiness className="h-4 w-4 text-amber-300" />
                       <h3 className="font-semibold">Руководители</h3>
                     </div>
                     {managers.length > 0 ? (
@@ -994,7 +994,7 @@ export default function StructurePage() {
 
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-white">
-                      <Sparkles className="h-4 w-4 text-pink-300" />
+                      <Sparkles className="h-4 w-4 text-amber-300" />
                       <h3 className="font-semibold">Маркетинг</h3>
                     </div>
                     {marketers.length > 0 ? (
@@ -1014,7 +1014,7 @@ export default function StructurePage() {
 
               <section className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-cyan-300" />
+                  <Building2 className="h-5 w-5 text-amber-300" />
                   <h2 className="text-xl font-semibold text-white">Операционная структура по точкам</h2>
                 </div>
 
@@ -1061,7 +1061,7 @@ export default function StructurePage() {
                   <div className="grid gap-4 xl:grid-cols-2">
                     <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
                       <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-5 w-5 text-cyan-300" />
+                        <ShieldCheck className="h-5 w-5 text-amber-300" />
                         <h2 className="text-xl font-semibold">Старшие по точкам</h2>
                       </div>
                       <div className="mt-4 space-y-3">
@@ -1081,7 +1081,7 @@ export default function StructurePage() {
                                   </div>
                                 </div>
                                 {assignment.is_primary ? (
-                                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-cyan-300">
+                                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-amber-300">
                                     main
                                   </span>
                                 ) : null}
@@ -1110,7 +1110,7 @@ export default function StructurePage() {
 
                     <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-pink-300" />
+                        <Sparkles className="h-5 w-5 text-amber-300" />
                         <h2 className="text-xl font-semibold">Рост в staff</h2>
                       </div>
                       <div className="mt-4 space-y-3">
@@ -1192,7 +1192,7 @@ export default function StructurePage() {
                             ),
                           )
                         }
-                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-amber-400/50"
                       >
                         <option value="">Выберите точку</option>
                         {companies.map((company) => (
@@ -1214,7 +1214,7 @@ export default function StructurePage() {
                             ),
                           )
                         }
-                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-amber-400/50"
                       >
                         <option value="operator">Оператор</option>
                         <option value="senior_operator">Старший оператор</option>
@@ -1259,7 +1259,7 @@ export default function StructurePage() {
                     }
                     rows={2}
                     placeholder="Комментарий по роли или точке"
-                    className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/50"
+                    className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-amber-400/50"
                   />
                 </div>
               ))}
