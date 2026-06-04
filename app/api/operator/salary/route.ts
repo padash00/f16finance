@@ -225,7 +225,7 @@ export async function GET(request: Request) {
       operator: mapOperatorMeta(context.operator),
     })
 
-    const [paymentsRes, allocationsRes, adjustmentsRes, debtsRes, recentWeeksRes] = await Promise.all([
+    const [paymentsRes, allocationsRes, adjustmentsRes, debtsRes, recentWeeksRes, debtItemsRes] = await Promise.all([
       supabase
         .from('operator_salary_week_payments')
         .select('id,payment_date,cash_amount,kaspi_amount,total_amount,comment,status,created_at')
@@ -258,6 +258,13 @@ export async function GET(request: Request) {
         .eq('operator_id', context.operator.id)
         .order('week_start', { ascending: false })
         .limit(8),
+      supabase
+        .from('point_debt_items')
+        .select('id,item_name,barcode,quantity,unit_price,total_amount,comment,company_id,client_name,week_start,status,created_at')
+        .eq('operator_id', context.operator.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(200),
     ])
 
     if (paymentsRes.error) throw paymentsRes.error
@@ -265,6 +272,8 @@ export async function GET(request: Request) {
     if (adjustmentsRes.error) throw adjustmentsRes.error
     if (debtsRes.error) throw debtsRes.error
     if (recentWeeksRes.error) throw recentWeeksRes.error
+    // point_debt_items может отсутствовать/быть недоступной на старых базах — не роняем кабинет
+    const debtItemRows = debtItemsRes.error ? [] : (debtItemsRes.data || [])
 
     const companyIds = [
       ...new Set(
@@ -272,6 +281,7 @@ export async function GET(request: Request) {
           ...(allocationsRes.data || []).map((item: any) => item.company_id),
           ...(adjustmentsRes.data || []).map((item: any) => item.company_id),
           ...(debtsRes.data || []).map((item: any) => item.company_id),
+          ...debtItemRows.map((item: any) => item.company_id),
         ].filter(Boolean),
       ),
     ]
@@ -334,6 +344,22 @@ export async function GET(request: Request) {
         seniorityBonusTotal: snapshot.summary.seniorityBonusTotal,
         autoBonusTotal: snapshot.summary.autoBonusTotal,
         shiftsCount: snapshot.summary.shiftsCount,
+        shifts: ((snapshot.summary as any).shifts || []).map((s: any) => ({
+          date: s.date,
+          shift: s.shift,
+          companyName: s.companyName || null,
+          totalIncome: roundMoney(Number(s.totalIncome || 0)),
+          cash: roundMoney(Number(s.cash || 0)),
+          kaspi: roundMoney(Number(s.kaspi || 0)),
+          online: roundMoney(Number(s.online || 0)),
+          card: roundMoney(Number(s.card || 0)),
+          baseSalary: roundMoney(Number(s.baseSalary || 0)),
+          seniorityBonus: roundMoney(Number(s.seniorityBonus || 0)),
+          seniorityPercent: Number(s.seniorityPercent || 0),
+          autoBonus: roundMoney(Number(s.autoBonus || 0)),
+          roleBonus: roundMoney(Number(s.roleBonus || 0)),
+          salary: roundMoney(Number(s.salary || 0)),
+        })),
         allocations: (allocationsRes.data || []).map((item: any) => ({
           companyId: String(item.company_id),
           companyName: companyMap.get(String(item.company_id))?.name || null,
@@ -370,6 +396,19 @@ export async function GET(request: Request) {
           date: item.date || item.week_start || null,
         })),
       },
+      debtItems: debtItemRows.map((d: any) => ({
+        id: String(d.id),
+        itemName: d.item_name || 'Товар',
+        barcode: d.barcode || null,
+        quantity: Number(d.quantity || 0),
+        unitPrice: roundMoney(Number(d.unit_price || 0)),
+        totalAmount: roundMoney(Number(d.total_amount || 0)),
+        clientName: d.client_name || null,
+        comment: d.comment || null,
+        weekStart: d.week_start || null,
+        createdAt: d.created_at || null,
+        companyName: d.company_id ? companyMap.get(String(d.company_id))?.name || null : null,
+      })),
       recentWeeks: (recentWeeksRes.data || []).map((item: any) => ({
         id: String(item.id),
         weekStart: item.week_start,
