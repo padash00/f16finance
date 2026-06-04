@@ -362,7 +362,21 @@ export async function POST(request: Request) {
       if (mode === 'set') {
         // v8: склад и витрина независимы. Валидация warehouse vs catalog больше не имеет смысла.
 
-        // SET mode: upsert warehouse to exact quantities
+        // SET mode: upsert warehouse to exact quantities.
+        // Движение пишем как ДЕЛЬТУ (изменение), а не абсолют — иначе баланс
+        // не сходится с историей движений. Сначала читаем текущие остатки.
+        const setIds = resolvedItems.map((i) => i.item_id)
+        const beforeQty = new Map<string, number>()
+        for (let i = 0; i < setIds.length; i += 500) {
+          const slice = setIds.slice(i, i + 500)
+          const { data: curRows } = await supabase
+            .from('inventory_balances')
+            .select('item_id, quantity')
+            .eq('location_id', warehouse.id)
+            .in('item_id', slice)
+          for (const r of curRows || []) beforeQty.set(String((r as any).item_id), Number((r as any).quantity) || 0)
+        }
+
         const upserts = resolvedItems.map((item) => ({
           location_id: warehouse.id,
           item_id: item.item_id,
@@ -376,13 +390,15 @@ export async function POST(request: Request) {
         if (upsertErr) throw upsertErr
 
         const movements = resolvedItems
-          .filter((item) => item.quantity > 0)
-          .map((item) => ({
+          .map((item) => ({ item, delta: item.quantity - (beforeQty.get(item.item_id) || 0) }))
+          .filter(({ delta }) => Math.abs(delta) > 0.0005)
+          .map(({ item, delta }) => ({
             item_id: item.item_id,
             movement_type: 'set_stock',
-            quantity: item.quantity,
+            quantity: Math.abs(delta),
             unit_cost: item.unit_cost,
-            to_location_id: warehouse.id,
+            from_location_id: delta < 0 ? warehouse.id : null,
+            to_location_id: delta > 0 ? warehouse.id : null,
             reference_type: 'warehouse_set',
             reference_id: null,
             comment: String(body.comment || '').trim() || 'Синхронизация подсобки',
@@ -449,17 +465,27 @@ export async function POST(request: Request) {
 
       // v8: склад и витрина независимы. Валидация warehouse vs catalog больше не нужна.
 
+      const { data: beforeRow } = await supabase
+        .from('inventory_balances')
+        .select('quantity')
+        .eq('location_id', warehouse.id)
+        .eq('item_id', itemId)
+        .maybeSingle()
+      const beforeWh = Number((beforeRow as any)?.quantity) || 0
+
       const { error: upsertErr } = await supabase
         .from('inventory_balances')
         .upsert({ location_id: warehouse.id, item_id: itemId, quantity: qty, updated_at: now }, { onConflict: 'location_id,item_id' })
       if (upsertErr) throw upsertErr
 
-      if (qty > 0) {
+      const whDelta = qty - beforeWh
+      if (Math.abs(whDelta) > 0.0005) {
         const { error: mErr } = await supabase.from('inventory_movements').insert({
           item_id: itemId,
           movement_type: 'inventory_adjustment',
-          quantity: qty,
-          to_location_id: warehouse.id,
+          quantity: Math.abs(whDelta),
+          from_location_id: whDelta < 0 ? warehouse.id : null,
+          to_location_id: whDelta > 0 ? warehouse.id : null,
           reference_type: 'warehouse_set',
           reference_id: null,
           comment: String(body.comment || '').trim() || 'Установка остатка подсобки',
@@ -619,6 +645,19 @@ export async function POST(request: Request) {
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
 
+      // Текущие остатки — для дельта-движений (движение = изменение, не абсолют)
+      const bgIds = rows.map((r) => r.item_id)
+      const bgBefore = new Map<string, number>()
+      for (let i = 0; i < bgIds.length; i += 500) {
+        const slice = bgIds.slice(i, i + 500)
+        const { data: curRows } = await supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .eq('location_id', warehouse.id)
+          .in('item_id', slice)
+        for (const r of curRows || []) bgBefore.set(String((r as any).item_id), Number((r as any).quantity) || 0)
+      }
+
       // Upsert warehouse balances
       const warehouseUpserts = rows.map((r) => ({
         location_id: warehouse.id,
@@ -631,14 +670,16 @@ export async function POST(request: Request) {
         .upsert(warehouseUpserts, { onConflict: 'location_id,item_id' })
       if (whErr) throw whErr
 
-      // Audit movements
+      // Движения = дельта изменения остатка
       const movements = rows
-        .filter((r) => r.new_warehouse > 0)
-        .map((r) => ({
+        .map((r) => ({ r, delta: r.new_warehouse - (bgBefore.get(r.item_id) || 0) }))
+        .filter(({ delta }) => Math.abs(delta) > 0.0005)
+        .map(({ r, delta }) => ({
           item_id: r.item_id,
           movement_type: 'inventory_adjustment',
-          quantity: r.new_warehouse,
-          to_location_id: warehouse.id,
+          quantity: Math.abs(delta),
+          from_location_id: delta < 0 ? warehouse.id : null,
+          to_location_id: delta > 0 ? warehouse.id : null,
           reference_type: 'backroom_bulk',
           reference_id: null,
           comment: 'Загрузка подсобки из Excel',
