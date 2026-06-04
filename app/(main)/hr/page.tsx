@@ -769,7 +769,7 @@ export default function HrPage() {
       ) : viewMode === 'table' ? (
         <Card className="bg-slate-900/60 border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[780px] text-sm">
               <thead className="bg-slate-800/40 text-[11px] uppercase tracking-wider text-slate-500 sticky top-0">
                 <tr>
                   <th className="text-left px-3 py-2 w-8"></th>

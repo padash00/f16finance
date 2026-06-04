@@ -135,7 +135,7 @@ export default function ShiftReportsPage() {
 
       <Card className="overflow-hidden border-white/10">
         <AdminTableViewport>
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead className={adminTableStickyTheadClass}>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-2">Точка</th>

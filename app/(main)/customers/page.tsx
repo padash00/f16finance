@@ -402,7 +402,7 @@ export default function CustomersPage() {
           ) : (
             <div className="relative overflow-hidden rounded-none border-0 bg-transparent">
               <div ref={tableContainerRef} className="max-h-[min(70vh,40rem)] overflow-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[820px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-white/10">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Клиент</th>

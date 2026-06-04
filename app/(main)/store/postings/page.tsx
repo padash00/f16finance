@@ -488,7 +488,7 @@ export default function StorePostingsPage() {
             <p className="text-sm text-muted-foreground">Пока нет оприходований.</p>
           ) : (
             <div className="overflow-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="py-2 pl-2 pr-2 font-normal">Дата</th>

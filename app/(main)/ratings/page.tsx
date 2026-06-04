@@ -240,7 +240,7 @@ export default function RatingsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="text-slate-500 border-b border-slate-800 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 pr-3 font-medium w-10">#</th>

@@ -632,7 +632,7 @@ export default function OperatorsPage() {
               maxHeight="min(70vh, 40rem)"
               className="rounded-none border-0 border-b border-white/10 bg-transparent"
             >
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-white/5">
                     <th className="py-3 px-4 w-8">

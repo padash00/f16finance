@@ -432,7 +432,7 @@ export default function StoreAbcPage() {
           <div className="p-6 text-sm text-muted-foreground">Нет данных по выбранным фильтрам.</div>
         ) : (
           <div className="max-h-[600px] overflow-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[780px] text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-14 py-2.5 pl-4 pr-2 font-normal">Класс</th>

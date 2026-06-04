@@ -876,7 +876,7 @@ export default function WarehousePage() {
           </div>
         ) : (
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-10 py-2.5 pl-4 pr-2">
@@ -1304,7 +1304,7 @@ export default function WarehousePage() {
 
                 {warehouseFileMatched.length > 0 && (
                   <div className="max-h-[50vh] overflow-auto rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04]">
-                    <table className="w-full text-[11px]">
+                    <table className="w-full min-w-[480px] text-[11px]">
                       <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
                         <tr className="text-left text-muted-foreground">
                           <th className="px-2 py-1.5 font-normal">Товар</th>

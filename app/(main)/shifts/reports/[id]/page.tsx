@@ -752,7 +752,7 @@ export default function ShiftReportDetailPage({
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[1000px] text-sm">
                 <thead className="bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="w-6 px-2 py-2"></th>
@@ -889,7 +889,7 @@ export default function ShiftReportDetailPage({
               Возвраты • {returns.length}
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-3 py-2">Время</th>

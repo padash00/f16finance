@@ -872,7 +872,7 @@ export function CatalogPageContent() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-border/60 bg-muted/30">
                       <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Название</th>

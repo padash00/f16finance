@@ -1583,7 +1583,7 @@ function ScheduleGrid({
             maxHeight="min(56vh, 32rem)"
             className="rounded-none border-0 border-t border-border bg-transparent"
           >
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead className={`${adminTableStickyTheadClass} !normal-case [&_th]:align-middle`}>
                 <tr>
                   <th className="w-24 border-b border-border bg-muted/10 p-3 text-left text-sm font-medium normal-case text-muted-foreground">

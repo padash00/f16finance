@@ -461,7 +461,7 @@ export default function PointDebtsPage() {
       ) : null}
 
       <AdminTableViewport maxHeight="min(70vh, 40rem)">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[900px] text-sm">
             <thead className={adminTableStickyTheadClass}>
               <tr>
                 <th className="px-2 py-3 text-center w-10">
@@ -564,7 +564,7 @@ export default function PointDebtsPage() {
             </p>
           </div>
           <AdminTableViewport maxHeight="min(50vh, 22rem)">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[720px] text-sm">
               <thead className={adminTableStickyTheadClass}>
                 <tr>
                   <th className="px-4 py-3 text-left">Должник</th>

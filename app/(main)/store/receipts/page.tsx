@@ -1059,7 +1059,7 @@ export default function StoreReceiptsPage() {
               </div>
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[840px] text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
@@ -1686,7 +1686,7 @@ export default function StoreReceiptsPage() {
                   </div>
                 ) : null}
                 <div className="overflow-auto rounded-xl border border-white/10">
-                  <table className="w-full table-fixed text-sm">
+                  <table className="w-full min-w-[560px] table-fixed text-sm">
                     <thead className="bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>

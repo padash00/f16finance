@@ -319,7 +319,7 @@ function StoreMovementsPageContent() {
               </div>
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-36 py-2.5 pl-4 pr-2 font-normal">Дата</th>

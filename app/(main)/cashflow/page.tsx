@@ -439,7 +439,7 @@ export default function CashFlowPage() {
             <Card className="p-5 bg-slate-900/80 border-slate-800">
               <h2 className="text-sm font-semibold text-white mb-4">Таблица по дням</h2>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="text-slate-500 border-b border-slate-800 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 pr-4 font-medium">Дата</th>
