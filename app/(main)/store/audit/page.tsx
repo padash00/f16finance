@@ -166,7 +166,7 @@ export default function StoreAuditPage() {
   // ── Список ───────────────────────────────────────────────────────────────
   if (view === 'list') {
     return (
-      <div className="space-y-4">
+      <div className="app-page-wide space-y-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
             <ClipboardList className="h-5 w-5" />
@@ -224,7 +224,7 @@ export default function StoreAuditPage() {
   // ── Создание ────────────────────────────────────────────────────────────
   if (view === 'create') {
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className="app-page-tight space-y-4">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setView('list')} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> Назад</Button>
           <h1 className="text-lg font-semibold text-foreground">Новый аудит-акт</h1>
@@ -301,7 +301,7 @@ export default function StoreAuditPage() {
   const isOpen = detail?.act.status === 'open'
   const hasConflicts = isOpen && !closeReport && rows.some((r) => r.conflict)
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="app-page-tight space-y-4">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => { setView('list'); void loadActs() }} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> К списку</Button>
         <h1 className="text-lg font-semibold text-foreground">Аудит-акт</h1>

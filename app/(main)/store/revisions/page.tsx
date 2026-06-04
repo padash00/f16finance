@@ -677,8 +677,8 @@ export default function StoreRevisionsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
-            <ScanSearch className="h-5 w-5 text-cyan-300" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <ScanSearch className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-foreground">Ревизии</h1>
@@ -708,7 +708,7 @@ export default function StoreRevisionsPage() {
             onClick={() => {
               setFormSheetOpen(true)
             }}
-            className="h-9 gap-1.5 bg-cyan-600 hover:bg-cyan-700"
+            className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
           >
             <ClipboardCheck className="h-3.5 w-3.5" />
             Новый акт
@@ -862,7 +862,7 @@ export default function StoreRevisionsPage() {
                         </span>
                       </td>
                       <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
-                        <span className={`text-sm font-semibold ${purchaseAmount > 0 ? 'text-cyan-200' : 'text-muted-foreground'}`}>
+                        <span className={`text-sm font-semibold ${purchaseAmount > 0 ? 'text-amber-200' : 'text-muted-foreground'}`}>
                           {purchaseAmount > 0 ? `${Math.round(purchaseAmount).toLocaleString('ru-RU')} ₸` : '—'}
                         </span>
                       </td>
@@ -904,7 +904,7 @@ export default function StoreRevisionsPage() {
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-cyan-300" />
+              <ClipboardCheck className="h-5 w-5 text-amber-300" />
               Новый акт ревизии
             </DialogTitle>
             <DialogDescription>
@@ -1005,7 +1005,7 @@ export default function StoreRevisionsPage() {
                 </div>
                 <div className="h-2 overflow-hidden rounded-full border border-white/10 bg-white/[0.03]">
                   <div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all"
+                    className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all"
                     style={{
                       width: `${Math.min(100, (lines.length / Math.max(1, selectedBalances.length)) * 100)}%`,
                     }}
@@ -1039,11 +1039,11 @@ export default function StoreRevisionsPage() {
                   ? 'border-rose-500/40 bg-rose-500/10'
                   : scanFeedback?.kind === 'ok'
                     ? 'border-emerald-500/30 bg-emerald-500/[0.05]'
-                    : 'border-cyan-500/20 bg-cyan-500/[0.03]'
+                    : 'border-amber-500/20 bg-amber-500/[0.03]'
               }`}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <ScanLine className="h-4 w-4 text-cyan-300" />
+                <ScanLine className="h-4 w-4 text-amber-300" />
                 <Input
                   ref={scanInputRef}
                   value={scanInput}
@@ -1089,7 +1089,7 @@ export default function StoreRevisionsPage() {
                 )}
               </div>
               {locationId && barcodeSuggestions.length > 0 ? (
-                <div className="mt-1 rounded-xl border border-cyan-500/20 bg-white/[0.02] p-1.5">
+                <div className="mt-1 rounded-xl border border-amber-500/20 bg-white/[0.02] p-1.5">
                   <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                     Похожие штрихкоды ({barcodeSuggestions.length})
                   </div>
@@ -1107,13 +1107,13 @@ export default function StoreRevisionsPage() {
                           key={item.id}
                           type="button"
                           onClick={() => addItemByScan(item)}
-                          className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-cyan-500/10"
+                          className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-amber-500/10"
                         >
                           <div className="min-w-0">
                             <div className="truncate text-sm text-foreground">{item.name}</div>
                             <div className="font-mono text-[11px] text-muted-foreground">
                               {before}
-                              <span className="rounded bg-cyan-500/25 px-0.5 text-cyan-100">{match}</span>
+                              <span className="rounded bg-amber-500/25 px-0.5 text-amber-100">{match}</span>
                               {after}
                             </div>
                           </div>
