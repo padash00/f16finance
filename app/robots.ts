@@ -28,7 +28,6 @@ const PRIVATE_PATHS = [
   '/profitability',
   '/goals',
   '/operators',
-  '/kpi',
   '/tasks',
   '/shifts',
   '/debug',

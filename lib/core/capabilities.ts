@@ -791,16 +791,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
-        id: 'kpi',
-        path: '/kpi',
-        extraPaths: ['/kpi/plans'],
-        label: 'KPI и планы',
-        capabilities: [
-          { id: 'kpi.view', label: 'Просмотр KPI', severity: 'low' },
-          { id: 'kpi.generate_collective_plans', label: 'Сгенерировать коллективные планы', severity: 'high' },
-        ],
-      },
-      {
         id: 'goals',
         path: '/goals',
         label: 'Цели',

@@ -116,8 +116,6 @@ export const ADMIN_PATHS = [
   '/operators',
   '/operators/*',
   '/operator-analytics',
-  '/kpi',
-  '/kpi/*',
   '/tasks',
   '/shifts',
   '/shifts/*',
@@ -185,8 +183,6 @@ const MANAGER_PATHS = [
   '/store',
   '/store/*',
   '/tax',
-  '/kpi',
-  '/kpi/*',
 ] as const
 
 const MARKETER_PATHS = ['/welcome', '/tasks'] as const
@@ -232,8 +228,6 @@ const OWNER_PATHS = [
   '/operator-analytics',
   '/staff',
   '/hr',
-  '/kpi',
-  '/kpi/*',
   '/tasks',
   '/shifts',
   '/shifts/*',
@@ -498,8 +492,6 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/operators/*', label: 'Профиль оператора' },
       { path: '/operator-analytics', label: 'Аналитика операторов' },
       { path: '/ratings', label: 'Рейтинг операторов' },
-      { path: '/kpi', label: 'KPI' },
-      { path: '/kpi/plans', label: 'Планы KPI' },
       { path: '/birthdays', label: 'Дни рождения' },
       { path: '/stations/*', label: 'Станции проекта' },
     ],

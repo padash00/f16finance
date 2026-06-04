@@ -49,7 +49,6 @@ export function KeyboardShortcuts() {
       { keys: 'g j', label: 'Журнал заявок', href: '/store/requests-journal' },
       { keys: 'g o', label: 'Операторы', href: '/operators' },
       { keys: 'g t', label: 'Задачи', href: '/tasks' },
-      { keys: 'g k', label: 'KPI', href: '/kpi' },
       { keys: 'g p', label: 'POS', href: '/pos' },
     ]
     return all.filter((item) => visibleHrefs.has(item.href))
