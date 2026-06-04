@@ -189,6 +189,12 @@ export default function OperatorHomePage() {
           description="Проверить контакты, закреплённые точки и перейти в настройки, если нужно обновить данные."
           href="/operator/profile"
         />
+        <OperatorSectionCard
+          eyebrow="Быстрый переход"
+          title="Ревизия"
+          description="Назначенные акты ревизии: считайте свою секцию вслепую прямо с телефона."
+          href="/operator/audit"
+        />
       </div>
 
       <OperatorPanel>

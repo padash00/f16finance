@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ClipboardCheck, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Smartphone, Trash2 } from 'lucide-react'
+import { ClipboardCheck, ClipboardList, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Smartphone, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -717,6 +717,12 @@ export default function StoreRevisionsPage() {
             <Link href="/store/revisions/scan">
               <Smartphone className="h-3.5 w-3.5" />
               Сканер с телефона
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
+            <Link href="/store/audit">
+              <ClipboardList className="h-3.5 w-3.5" />
+              Аудит-акт
             </Link>
           </Button>
         </div>
