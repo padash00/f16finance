@@ -578,6 +578,7 @@ export default function ProfitabilityPage() {
   const [showManualInputs, setShowManualInputs] = useState(false)
   const [investorCompanyId, setInvestorCompanyId] = useState<string>('')
   const [investorExporting, setInvestorExporting] = useState(false)
+  const [allPointsExporting, setAllPointsExporting] = useState(false)
   const [branchReportCompanyId, setBranchReportCompanyId] = useState<string>('')
   const [branchReportPartners, setBranchReportPartners] = useState<Array<{ name: string; percent: string }>>([])
   const [branchReportIncludeCapex, setBranchReportIncludeCapex] = useState(true)
@@ -755,6 +756,104 @@ export default function ProfitabilityPage() {
     }
     return result
   }, [rows, companies, incomes, expenses, expenseCategories])
+
+  // Полный P&L по каждой точке за ВЕСЬ выбранный период (агрегат месяцев).
+  const byCompanyPeriod = useMemo(() => {
+    const acc = new Map<string, any>()
+    for (const inner of byMonthByCompany.values()) {
+      for (const [cid, c] of inner) {
+        const e = acc.get(cid) || {
+          company_id: cid, name: c.name,
+          revenue: 0, cashRevenue: 0, cashlessRevenue: 0, cogs: 0, operating: 0, posCom: 0,
+          payroll: 0, payrollTaxes: 0, otherOperating: 0, ebitda: 0, depreciation: 0,
+          amortization: 0, operatingProfit: 0, financialExpenses: 0, incomeTax: 0, nonOperating: 0, netProfit: 0,
+        }
+        e.revenue += c.revenue; e.cashRevenue += c.cashRevenue; e.cashlessRevenue += c.cashlessRevenue
+        e.cogs += c.cogs; e.operating += c.operating; e.posCom += c.posCom
+        e.payroll += c.payroll; e.payrollTaxes += c.payrollTaxes; e.otherOperating += c.otherOperating || 0
+        e.ebitda += c.ebitda; e.depreciation += c.depreciation; e.amortization += c.amortization
+        e.operatingProfit += c.operatingProfit; e.financialExpenses += c.financialExpenses
+        e.incomeTax += c.incomeTax; e.nonOperating += c.nonOperating; e.netProfit += c.netProfit
+        acc.set(cid, e)
+      }
+    }
+    const totalRev = Array.from(acc.values()).reduce((s, c) => s + c.revenue, 0)
+    return Array.from(acc.values())
+      .map((c) => ({
+        ...c,
+        grossProfit: c.revenue - c.cogs,
+        share: totalRev > 0 ? c.revenue / totalRev : 0,
+        margin: c.revenue > 0 ? (c.netProfit / c.revenue) * 100 : 0,
+        ebitdaMargin: c.revenue > 0 ? (c.ebitda / c.revenue) * 100 : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+  }, [byMonthByCompany])
+
+  // Выгрузка Excel: сводный лист «все точки» + лист помесячно на каждую точку.
+  const handleExportAllPoints = async () => {
+    if (byCompanyPeriod.length === 0) return
+    setAllPointsExporting(true)
+    try {
+      const period = `${monthLabel(monthFrom)} — ${monthLabel(monthTo)}`
+      const generated = new Date().toLocaleString('ru-RU')
+      const wb = createWorkbook()
+      const t = byCompanyPeriod.reduce((a, c) => ({
+        revenue: a.revenue + c.revenue, cashRevenue: a.cashRevenue + c.cashRevenue, cashlessRevenue: a.cashlessRevenue + c.cashlessRevenue,
+        cogs: a.cogs + c.cogs, operating: a.operating + c.operating, posCom: a.posCom + c.posCom,
+        payroll: a.payroll + c.payroll, payrollTaxes: a.payrollTaxes + c.payrollTaxes,
+        ebitda: a.ebitda + c.ebitda, netProfit: a.netProfit + c.netProfit,
+      }), { revenue: 0, cashRevenue: 0, cashlessRevenue: 0, cogs: 0, operating: 0, posCom: 0, payroll: 0, payrollTaxes: 0, ebitda: 0, netProfit: 0 })
+      buildStyledSheet(wb, 'Сводка по точкам', 'P&L по точкам — сравнение', `Период: ${period} | Сгенерирован: ${generated}`, [
+        { header: 'Точка', key: 'name', width: 28, type: 'text' },
+        { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
+        { header: 'Нал', key: 'cashRevenue', width: 14, type: 'money' },
+        { header: 'Безнал', key: 'cashlessRevenue', width: 14, type: 'money' },
+        { header: 'COGS', key: 'cogs', width: 14, type: 'money' },
+        { header: 'Операц.', key: 'operating', width: 14, type: 'money' },
+        { header: 'POS-комис.', key: 'posCom', width: 14, type: 'money' },
+        { header: 'ФОТ+налоги', key: 'payrollAll', width: 14, type: 'money' },
+        { header: 'EBITDA', key: 'ebitda', width: 14, type: 'money' },
+        { header: 'Чистая прибыль', key: 'netProfit', width: 16, type: 'money' },
+        { header: 'Маржа', key: 'margin', width: 10, type: 'percent' },
+        { header: 'Доля выручки', key: 'share', width: 12, type: 'percent' },
+      ], [
+        ...byCompanyPeriod.map((c) => ({
+          name: c.name, revenue: c.revenue, cashRevenue: c.cashRevenue, cashlessRevenue: c.cashlessRevenue,
+          cogs: c.cogs, operating: c.operating, posCom: c.posCom, payrollAll: c.payroll + c.payrollTaxes,
+          ebitda: c.ebitda, netProfit: c.netProfit, margin: c.margin, share: c.share * 100,
+        })),
+        { _isTotals: true, name: 'ИТОГО', revenue: t.revenue, cashRevenue: t.cashRevenue, cashlessRevenue: t.cashlessRevenue, cogs: t.cogs, operating: t.operating, posCom: t.posCom, payrollAll: t.payroll + t.payrollTaxes, ebitda: t.ebitda, netProfit: t.netProfit, margin: t.revenue ? (t.netProfit / t.revenue) * 100 : 0, share: 100 },
+      ])
+      const usedNames = new Set<string>(['Сводка по точкам'])
+      for (const co of byCompanyPeriod) {
+        const monthly = rows
+          .map((r) => {
+            const c = byMonthByCompany.get(r.month)?.get(co.company_id)
+            return c ? { month: monthLabel(r.month), revenue: c.revenue, cogs: c.cogs, operating: c.operating, payrollAll: c.payroll + c.payrollTaxes, ebitda: c.ebitda, netProfit: c.netProfit, margin: c.margin } : null
+          })
+          .filter(Boolean) as any[]
+        if (monthly.length === 0) continue
+        let safeName = (co.name || 'Точка').slice(0, 28).replace(/[\\/?*[\]:]/g, ' ').trim() || 'Точка'
+        while (usedNames.has(safeName)) safeName = (safeName + '·').slice(0, 31)
+        usedNames.add(safeName)
+        buildStyledSheet(wb, safeName, `${co.name} — помесячно`, `Период: ${period}`, [
+          { header: 'Месяц', key: 'month', width: 18, type: 'text' },
+          { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
+          { header: 'COGS', key: 'cogs', width: 14, type: 'money' },
+          { header: 'Операц.', key: 'operating', width: 14, type: 'money' },
+          { header: 'ФОТ+налоги', key: 'payrollAll', width: 14, type: 'money' },
+          { header: 'EBITDA', key: 'ebitda', width: 14, type: 'money' },
+          { header: 'Чистая', key: 'netProfit', width: 16, type: 'money' },
+          { header: 'Маржа', key: 'margin', width: 10, type: 'percent' },
+        ], monthly)
+      }
+      downloadWorkbook(wb, `Точки_P&L_${monthFrom}_${monthTo}.xlsx`)
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось выгрузить отчёт по точкам')
+    } finally {
+      setAllPointsExporting(false)
+    }
+  }
 
   const handleInvestorExport = async () => {
     if (!investorCompanyId) return
@@ -1551,6 +1650,84 @@ export default function ProfitabilityPage() {
               </div>
             </div>
           </Card>
+
+          {/* ═══ ПО ТОЧКАМ ЗА ПЕРИОД (агрегат, не один месяц) + выгрузка ═══ */}
+          {byCompanyPeriod.length > 0 && (
+            <Card className="border-border bg-card p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Landmark className="h-4 w-4 text-amber-400" />
+                    По точкам за период — {monthLabel(monthFrom)} — {monthLabel(monthTo)}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">Полный P&amp;L по каждой точке за весь выбранный период. Ручные оверрайды (POS, ФОТ, налоги) разнесены по доле выручки.</p>
+                </div>
+                <Button size="sm" variant="outline" className="shrink-0 gap-1.5" disabled={allPointsExporting} onClick={() => void handleExportAllPoints()}>
+                  <Download className="h-4 w-4" /> {allPointsExporting ? 'Выгрузка…' : 'Все точки (Excel)'}
+                </Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1100px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="px-3 py-2.5">Точка</th>
+                      <th className="px-3 py-2.5 text-right">Выручка</th>
+                      <th className="px-3 py-2.5 text-right">Нал</th>
+                      <th className="px-3 py-2.5 text-right">Безнал</th>
+                      <th className="px-3 py-2.5 text-right">COGS</th>
+                      <th className="px-3 py-2.5 text-right">Опер.</th>
+                      <th className="px-3 py-2.5 text-right">ФОТ+нал.</th>
+                      <th className="px-3 py-2.5 text-right">EBITDA</th>
+                      <th className="px-3 py-2.5 text-right">Чистая</th>
+                      <th className="px-3 py-2.5 text-right">Маржа</th>
+                      <th className="px-3 py-2.5 text-right">Доля</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byCompanyPeriod.map((c) => (
+                      <tr key={c.company_id} className="border-b border-border/50 hover:bg-white/[0.03]">
+                        <td className="px-3 py-2.5 font-medium text-foreground">{c.name}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{money(c.revenue)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.cashRevenue)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.cashlessRevenue)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.cogs)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.operating)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.payroll + c.payrollTaxes)}</td>
+                        <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${c.ebitda >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(c.ebitda)}</td>
+                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${c.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(c.netProfit)}</td>
+                        <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${c.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{c.margin >= 0 ? '+' : ''}{c.margin.toFixed(1)}%</td>
+                        <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">{(c.share * 100).toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                    {(() => {
+                      const t = byCompanyPeriod.reduce((acc, c) => ({
+                        revenue: acc.revenue + c.revenue, cashRevenue: acc.cashRevenue + c.cashRevenue, cashlessRevenue: acc.cashlessRevenue + c.cashlessRevenue,
+                        cogs: acc.cogs + c.cogs, operating: acc.operating + c.operating,
+                        payroll: acc.payroll + c.payroll, payrollTaxes: acc.payrollTaxes + c.payrollTaxes,
+                        ebitda: acc.ebitda + c.ebitda, netProfit: acc.netProfit + c.netProfit,
+                      }), { revenue: 0, cashRevenue: 0, cashlessRevenue: 0, cogs: 0, operating: 0, payroll: 0, payrollTaxes: 0, ebitda: 0, netProfit: 0 })
+                      const margin = t.revenue ? (t.netProfit / t.revenue) * 100 : 0
+                      return (
+                        <tr className="border-t-2 border-amber-500/20 bg-amber-500/5 font-medium">
+                          <td className="px-3 py-2.5 text-foreground">ИТОГО</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-foreground">{money(t.revenue)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.cashRevenue)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.cashlessRevenue)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.cogs)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.operating)}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.payroll + t.payrollTaxes)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums ${t.ebitda >= 0 ? 'text-amber-200' : 'text-rose-300'}`}>{money(t.ebitda)}</td>
+                          <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${t.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-300'}`}>{money(t.netProfit)}</td>
+                          <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
+                          <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">100%</td>
+                        </tr>
+                      )
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
           {/* ═══ BY COMPANY (распределение ОПиУ по точкам за месяц) ═══ */}
           {byCompany.length > 0 && (
