@@ -1,9 +1,27 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ClipboardList, Loader2, Save } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
+import { ArrowLeft, Camera, ClipboardList, Flashlight, Loader2, Save } from 'lucide-react'
 
 import { OperatorEmptyState, OperatorPanel, OperatorSectionHeading } from '@/components/operator/operator-mobile-ui'
+
+let audioCtx: AudioContext | null = null
+function beep(ok: boolean) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)()
+    const o = audioCtx.createOscillator()
+    const g = audioCtx.createGain()
+    o.connect(g)
+    g.connect(audioCtx.destination)
+    o.frequency.value = ok ? 880 : 220
+    g.gain.value = 0.05
+    o.start()
+    o.stop(audioCtx.currentTime + (ok ? 0.08 : 0.18))
+  } catch {
+    /* звук необязателен */
+  }
+}
 
 type ActRow = { act_id: string; locationName: string; comment: string | null; opened_at: string; sectionLabel: string }
 type ItemRow = { item_id: string; name: string; barcode: string | null; unit: string | null; counted: number | null }
@@ -21,6 +39,85 @@ export default function OperatorAuditPage() {
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  const [scanning, setScanning] = useState(false)
+  const [torchOn, setTorchOn] = useState(false)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const controlsRef = useRef<IScannerControls | null>(null)
+  const trackRef = useRef<MediaStreamTrack | null>(null)
+  const lastScan = useRef<{ code: string; t: number }>({ code: '', t: 0 })
+
+  const itemByBarcode = useMemo(() => {
+    const m = new Map<string, ItemRow>()
+    for (const it of items) if (it.barcode) m.set(String(it.barcode).trim(), it)
+    return m
+  }, [items])
+
+  const handleScan = useCallback(
+    (raw: string) => {
+      const code = String(raw || '').trim()
+      if (!code) return
+      const now = Date.now()
+      if (lastScan.current.code === code && now - lastScan.current.t < 1500) return
+      lastScan.current = { code, t: now }
+      const it = itemByBarcode.get(code)
+      if (!it) {
+        beep(false)
+        return
+      }
+      beep(true)
+      setHighlightId(it.item_id)
+      const el = document.getElementById(`audit-input-${it.item_id}`) as HTMLInputElement | null
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setTimeout(() => el.focus(), 250)
+      }
+    },
+    [itemByBarcode],
+  )
+
+  useEffect(() => {
+    if (!scanning) return
+    let cancelled = false
+    const reader = new BrowserMultiFormatReader()
+    void (async () => {
+      try {
+        const controls = await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } } }, videoRef.current as HTMLVideoElement, (res) => {
+          if (res) handleScan(res.getText())
+        })
+        if (cancelled) controls.stop()
+        else {
+          controlsRef.current = controls
+          const stream = (videoRef.current?.srcObject as MediaStream | null) || null
+          trackRef.current = stream?.getVideoTracks?.()[0] || null
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setError('Камера недоступна: ' + (e?.message || ''))
+          setScanning(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+      controlsRef.current?.stop()
+      controlsRef.current = null
+      trackRef.current = null
+      setTorchOn(false)
+    }
+  }, [scanning, handleScan])
+
+  const toggleTorch = async () => {
+    const track = trackRef.current
+    if (!track) return
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !torchOn } as any] })
+      setTorchOn((v) => !v)
+    } catch {
+      /* фонарик не поддерживается устройством */
+    }
+  }
 
   const loadActs = useCallback(async () => {
     setLoading(true)
@@ -137,6 +234,24 @@ export default function OperatorAuditPage() {
 
       {error ? <div className="border border-rose-500/40 bg-rose-500/[0.06] p-3 font-mono text-[12px] text-rose-300">{error}</div> : null}
 
+      {/* Камера: скан штрихкода → подсветит и сфокусирует нужный товар */}
+      {!itemsLoading && items.length > 0 ? (
+        <div className="border border-[#23262b] bg-[#0e0f10]">
+          {scanning ? (
+            <div className="relative aspect-[5/3] w-full overflow-hidden bg-black">
+              <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="h-20 w-3/4 border-2 border-amber-400/80" /></div>
+              <div className="absolute right-2 top-2 flex gap-2">
+                <button type="button" onClick={() => void toggleTorch()} className={`border p-2 ${torchOn ? 'border-amber-400 text-amber-300' : 'border-white/20 text-white'}`} aria-label="Фонарик"><Flashlight className="h-4 w-4" /></button>
+                <button type="button" onClick={() => setScanning(false)} className="border border-white/20 px-2 py-2 font-mono text-xs text-white">Стоп</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setScanning(true)} className="flex w-full items-center justify-center gap-2 py-3 font-mono text-[12px] uppercase tracking-wide text-amber-300"><Camera className="h-4 w-4" /> Сканировать камерой</button>
+          )}
+        </div>
+      ) : null}
+
       {itemsLoading ? (
         <div className="flex items-center gap-3 border border-[#23262b] bg-[#0e0f10] p-4 font-mono text-[13px] uppercase text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка товаров…</div>
       ) : items.length === 0 ? (
@@ -150,11 +265,13 @@ export default function OperatorAuditPage() {
                 {it.barcode ? <div className="font-mono text-[10px] text-zinc-600 tabular-nums">{it.barcode}</div> : null}
               </div>
               <input
+                id={`audit-input-${it.item_id}`}
                 value={edits[it.item_id] ?? ''}
                 onChange={(e) => setEdits((p) => ({ ...p, [it.item_id]: e.target.value }))}
+                onFocus={() => setHighlightId(it.item_id)}
                 inputMode="decimal"
                 placeholder="0"
-                className="w-20 shrink-0 border border-[#23262b] bg-black px-2 py-2 text-center font-mono text-lg font-bold tabular-nums text-amber-400 focus:border-amber-400/50 focus:outline-none"
+                className={`w-20 shrink-0 border bg-black px-2 py-2 text-center font-mono text-lg font-bold tabular-nums text-amber-400 focus:outline-none ${highlightId === it.item_id ? 'border-amber-400' : 'border-[#23262b] focus:border-amber-400/50'}`}
               />
             </div>
           ))}

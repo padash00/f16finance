@@ -99,6 +99,28 @@ export async function GET(request: Request) {
         }
       })
 
+      // прогресс по операторам (сколько из своей секции посчитал каждый)
+      const itemCat = new Map(((items as any).data || []).map((i: any) => [String(i.id), i.category_id ? String(i.category_id) : null]))
+      const snapItemIds = snapRows.map((r) => String(r.item_id))
+      const opCats = new Map<string, { all: boolean; cats: Set<string> }>()
+      for (const a of (assigns.data || []) as any[]) {
+        const op = String(a.operator_id)
+        const e = opCats.get(op) || { all: false, cats: new Set<string>() }
+        if (!a.category_id) e.all = true
+        else e.cats.add(String(a.category_id))
+        opCats.set(op, e)
+      }
+      const countedByOp = new Map<string, number>()
+      for (const r of countRows) {
+        const op = String(r.counted_by || '')
+        if (op) countedByOp.set(op, (countedByOp.get(op) || 0) + 1)
+      }
+      const progress = Array.from(opCats.entries()).map(([op, sec]) => ({
+        operatorName: opName.get(op) || 'Оператор',
+        counted: countedByOp.get(op) || 0,
+        total: snapItemIds.filter((id) => sec.all || (itemCat.get(id) && sec.cats.has(itemCat.get(id) as string))).length,
+      }))
+
       return json({
         ok: true,
         data: {
@@ -112,6 +134,7 @@ export async function GET(request: Request) {
             categoryName: a.category_id ? catName.get(String(a.category_id)) || null : 'Вся локация',
             label: a.label || null,
           })),
+          progress,
           totalItems: snapRows.length,
           countedItems: countRows.length,
           report,
@@ -286,9 +309,38 @@ export async function POST(request: Request) {
       })
 
       await supabase.from('inventory_audit_acts').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: actorUserId, stocktake_id: (result as any)?.stocktake_id || (result as any)?.id || null }).eq('id', actId)
-      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: 'close', payload: { counted: countRows.length } })
 
-      return json({ ok: true, data: { stocktake_id: (result as any)?.stocktake_id || null, report } })
+      // Опция: недостачу повесить долгом на ответственного оператора (удержится из ЗП).
+      let debtsCreated = 0
+      if (body?.assignDebt === true) {
+        const itemIds = countRows.map((r: any) => String(r.item_id))
+        const { data: costItems } = itemIds.length ? await supabase.from('inventory_items').select('id, default_purchase_price').in('id', itemIds) : { data: [] as any[] }
+        const costBy = new Map(((costItems as any[]) || []).map((i: any) => [String(i.id), num((i as any).default_purchase_price)]))
+        const { data: locRow } = await supabase.from('inventory_locations').select('company_id').eq('id', locationId).maybeSingle()
+        const companyId = (locRow as any)?.company_id || null
+        const d = new Date()
+        const dow = (d.getUTCDay() + 6) % 7
+        const weekStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow)).toISOString().slice(0, 10)
+        const today = new Date().toISOString().slice(0, 10)
+        const shortByOp = new Map<string, number>()
+        for (const r of countRows as any[]) {
+          const variance = num(r.counted_qty) - (expectedBy.get(String(r.item_id)) ?? 0)
+          const op = String(r.counted_by || '')
+          if (variance < 0 && op) shortByOp.set(op, (shortByOp.get(op) || 0) + -variance * (costBy.get(String(r.item_id)) || 0))
+        }
+        const debtRows = Array.from(shortByOp.entries())
+          .filter(([, amt]) => amt > 0.5)
+          .map(([op, amt]) => ({ company_id: companyId, operator_id: op, amount: Math.round(amt), comment: `Недостача по аудит-акту ${actId.slice(0, 8)}`, client_name: 'Недостача (ревизия)', status: 'active', week_start: weekStart, date: today, created_by: actorUserId }))
+        if (debtRows.length) {
+          const { error: debtErr } = await supabase.from('debts').insert(debtRows)
+          if (!debtErr) debtsCreated = debtRows.length
+          else await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/audit.close:debts', message: debtErr.message })
+        }
+      }
+
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: 'close', payload: { counted: countRows.length, debtsCreated } })
+
+      return json({ ok: true, data: { stocktake_id: (result as any)?.stocktake_id || null, report, debtsCreated } })
     }
 
     // ── Отменить акт ──────────────────────────────────────────────────────────

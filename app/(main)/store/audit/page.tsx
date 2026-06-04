@@ -19,6 +19,7 @@ type Detail = {
   act: { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null }
   location: Loc | null
   assignments: Array<{ id: string; operatorName: string; categoryName: string | null }>
+  progress?: Array<{ operatorName: string; counted: number; total: number }>
   totalItems: number
   countedItems: number
   report: ReportRow[]
@@ -44,6 +45,8 @@ export default function StoreAuditPage() {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [detailId, setDetailId] = useState('')
   const [closing, setClosing] = useState(false)
+  const [assignDebt, setAssignDebt] = useState(false)
+  const [debtsCreated, setDebtsCreated] = useState<number | null>(null)
   const [closeReport, setCloseReport] = useState<Array<{ name?: string; item_id: string; counted: number; expected: number; variance: number; final: number; soldAfter: number }> | null>(null)
 
   const loadActs = useCallback(async () => {
@@ -123,12 +126,13 @@ export default function StoreAuditPage() {
     setClosing(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId }) })
+      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка закрытия')
       const rep = (j?.data?.report || []) as any[]
       const named = rep.map((r) => ({ ...r, name: detail?.report.find((x) => x.item_id === r.item_id)?.name || r.item_id }))
       setCloseReport(named)
+      setDebtsCreated(Number(j?.data?.debtsCreated || 0))
       await loadActs()
       await openDetail(detailId)
     } catch (e: any) {
@@ -296,18 +300,44 @@ export default function StoreAuditPage() {
               </div>
               <div className="text-right text-xs text-muted-foreground tabular-nums">посчитано {detail.countedItems} из {detail.totalItems}</div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {detail.assignments.map((a) => (
-                <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
-                  <Users className="h-3 w-3" /> {a.operatorName} · {a.categoryName || 'Вся локация'}
-                </span>
-              ))}
-            </div>
+            {/* Прогресс по операторам */}
+            {detail.progress && detail.progress.length > 0 ? (
+              <div className="space-y-2">
+                {detail.progress.map((p, i) => (
+                  <div key={i}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-foreground"><Users className="h-3 w-3 text-muted-foreground" /> {p.operatorName}</span>
+                      <span className="text-muted-foreground tabular-nums">{p.counted} / {p.total}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-white/[0.05]">
+                      <div className="h-full bg-amber-500 transition-all" style={{ width: `${p.total ? Math.min(100, (p.counted / p.total) * 100) : 0}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {detail.assignments.map((a) => (
+                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
+                    <Users className="h-3 w-3" /> {a.operatorName} · {a.categoryName || 'Вся локация'}
+                  </span>
+                ))}
+              </div>
+            )}
             {isOpen ? (
-              <Button onClick={closeAct} disabled={closing || detail.countedItems === 0} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
-                {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-                Закрыть акт и провести
-              </Button>
+              <div className="space-y-2 border-t border-white/5 pt-3">
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={assignDebt} onChange={(e) => setAssignDebt(e.target.checked)} className="h-4 w-4 accent-amber-500" />
+                  Повесить недостачу долгом на ответственных (удержится из зарплаты)
+                </label>
+                <Button onClick={closeAct} disabled={closing || detail.countedItems === 0} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
+                  {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                  Закрыть акт и провести
+                </Button>
+              </div>
+            ) : null}
+            {debtsCreated && debtsCreated > 0 ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Создано долгов: {debtsCreated} — удержатся из зарплаты ответственных.</div>
             ) : null}
           </Card>
 
