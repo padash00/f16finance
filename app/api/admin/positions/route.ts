@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAllCapabilityIds } from '@/lib/core/capabilities'
-import { invalidateCapabilitiesCache } from '@/lib/server/capabilities'
+import { invalidateCapabilitiesCache, requireStaffCapability } from '@/lib/server/capabilities'
 import { invalidateRoleMatrixCache } from '@/lib/server/role-hydration'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -47,9 +47,9 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    // Управление ролями (в т.ч. seed:'open' = роль со всеми правами) —
-    // только владелец/суперадмин. Иначе любой staff мог поднять себе права.
-    if (!access.isSuperAdmin && access.staffRole !== 'owner') return json({ error: 'forbidden' }, 403)
+    // Управление ролями (в т.ч. seed:'open') — staff + право access.manage_staff_roles.
+    const denied = await requireStaffCapability(access, 'access.manage_staff_roles')
+    if (denied) return denied
 
     const body = await req.json().catch(() => null)
     const action = body?.action

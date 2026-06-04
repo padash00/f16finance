@@ -42,6 +42,11 @@ function periodLabel(from: string, to: string): string {
 export async function POST(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access.response
+  // Налоговая форма 910 — финансовый документ. Нет отдельной capability →
+  // роль-гейт: владелец/менеджер/суперадмин (операторы/гости отсекаются).
+  if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
 
   const body = (await request.json().catch(() => null)) as Body | null
   if (!body?.period?.from || !body?.period?.to) {

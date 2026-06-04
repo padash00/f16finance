@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
@@ -12,9 +13,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-      return json({ error: 'forbidden' }, 403)
-    }
+    const denied = await requireStaffCapability(access, 'operators.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const operatorId = url.searchParams.get('operator_id') || ''
@@ -83,9 +83,8 @@ export async function PATCH(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-      return json({ error: 'forbidden' }, 403)
-    }
+    const denied = await requireStaffCapability(access, 'operators.view')
+    if (denied) return denied
 
     const body = await req.json().catch(() => null)
     const operatorId = String(body?.operator_id || '').trim()

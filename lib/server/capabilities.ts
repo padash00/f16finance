@@ -144,6 +144,24 @@ export async function requireCapability(
 }
 
 /**
+ * Staff-only + capability для admin-роутов.
+ *
+ * Сначала отсекает НЕ-staff (операторы/гости заходят с role='other' без
+ * staffMember и иначе проходили бы проверки), затем гранулярно проверяет
+ * capability. Так оператор не попадёт в админский контур, даже если по
+ * текущему сиду у роли 'other' формально выданы все права.
+ */
+export async function requireStaffCapability(
+  access: AccessLike,
+  capability: string,
+): Promise<Response | null> {
+  if (!access.isSuperAdmin && !access.staffMember) {
+    return NextResponse.json({ error: 'forbidden', reason: 'staff-only' }, { status: 403 })
+  }
+  return requireCapability(access, capability)
+}
+
+/**
  * Проверить право без возврата HTTP-ответа.
  * Удобно когда нужно условно показать секцию или поле в ответе API.
  */

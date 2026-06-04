@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireCapability } from '@/lib/server/capabilities'
+import { requireCapability, requireStaffCapability } from '@/lib/server/capabilities'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -202,6 +202,9 @@ export async function POST(req: Request) {
     }
 
     if (body.entity === 'staff') {
+      // Создание/правка сотрудника (вкл. смену role) — staff + управление ролями.
+      const deniedStaff = await requireStaffCapability(access, 'access.manage_staff_roles')
+      if (deniedStaff) return deniedStaff
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
         const { data, error } = await supabase.from('staff').insert([

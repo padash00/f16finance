@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { addDaysISO } from '@/lib/core/date'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { splitIncomeKaspiByCalendarDay, type ReportIncomeCalendarRow } from '@/lib/reports/income-calendar-kaspi'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -58,6 +59,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireStaffCapability(access, 'kpi.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10)
@@ -343,6 +346,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireStaffCapability(access, 'kpi.view')
+    if (denied) return denied
 
     const body = await req.json().catch(() => null)
     const companyId: string | null = body?.company_id || null

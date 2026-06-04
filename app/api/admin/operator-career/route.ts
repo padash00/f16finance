@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { normalizeStaffRole } from '@/lib/core/access'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -19,8 +20,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+    const denied = await requireStaffCapability(access, 'operators.view')
+    if (denied) return denied
 
     const { searchParams } = new URL(req.url)
     const operatorId = searchParams.get('operatorId')?.trim()
@@ -51,8 +52,9 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+    // Повышение оператора в staff-роль = эскалация. Staff + право operators.promote.
+    const denied = await requireStaffCapability(access, 'operators.promote')
+    if (denied) return denied
 
     const body = (await req.json().catch(() => null)) as { action?: string; payload?: PromotePayload } | null
     if (body?.action !== 'promoteOperator' || !body.payload) {

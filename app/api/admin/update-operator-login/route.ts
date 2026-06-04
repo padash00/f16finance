@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { toOperatorAuthEmail } from '@/lib/core/auth'
@@ -9,10 +10,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    // Смена логина оператора = смена его email в Auth → захват/блокировка входа.
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    const denied = await requireStaffCapability(access, 'operators.edit_login')
+    if (denied) return denied
 
     const body = await request.json().catch(() => null)
     const { operatorId, username } = body ?? {}

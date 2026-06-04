@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -6,9 +7,8 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    const denied = await requireStaffCapability(access, 'goals.view')
+    if (denied) return denied
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
@@ -31,9 +31,8 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    const denied = await requireStaffCapability(access, 'goals.view')
+    if (denied) return denied
     const body = await request.json()
     const { period, target_income, target_expense, note } = body
     if (!period) return NextResponse.json({ error: 'period required' }, { status: 400 })

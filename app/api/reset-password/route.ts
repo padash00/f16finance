@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -7,11 +8,9 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    // Сброс пароля любому пользователю = захват аккаунта. Разрешаем только
-    // владельцу/менеджеру/суперадмину (операторы и гости отсекаются).
-    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    // Staff-only + право operators.reset_password (операторы/гости отсекаются).
+    const denied = await requireStaffCapability(access, 'operators.reset_password')
+    if (denied) return denied
     const actorUserId = access.user?.id || null
 
     const body = await request.json().catch(() => null)
