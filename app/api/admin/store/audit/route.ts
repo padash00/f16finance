@@ -84,18 +84,28 @@ export async function GET(request: Request) {
       const catName = new Map(((cats as any).data || []).map((c: any) => [String(c.id), c.name as string]))
       const expectedBy = new Map(snapRows.map((r) => [String(r.item_id), num(r.expected_qty)]))
 
-      // отчёт по позициям (расхождение раскрывается только когда есть подсчёт)
-      const report = countRows.map((r) => {
-        const expected = expectedBy.get(String(r.item_id)) ?? 0
-        const counted = num(r.counted_qty)
+      // счёты сгруппированы по товару (в режиме double их может быть несколько)
+      const countsByItem = new Map<string, Array<{ qty: number; by: string | null; at: string }>>()
+      for (const r of countRows) {
+        const id = String(r.item_id)
+        const l = countsByItem.get(id) || []
+        l.push({ qty: num(r.counted_qty), by: r.counted_by ? String(r.counted_by) : null, at: String(r.counted_at) })
+        countsByItem.set(id, l)
+      }
+      const report = Array.from(countsByItem.entries()).map(([itemId, list]) => {
+        const expected = expectedBy.get(itemId) ?? 0
+        const distinct = Array.from(new Set(list.map((x) => x.qty)))
+        const conflict = distinct.length > 1
+        const counted = list.reduce((a, b) => (b.at > a.at ? b : a)).qty
         return {
-          item_id: String(r.item_id),
-          name: itemName.get(String(r.item_id)) || 'Товар',
+          item_id: itemId,
+          name: itemName.get(itemId) || 'Товар',
           expected,
           counted,
           variance: counted - expected,
-          countedBy: r.counted_by ? opName.get(String(r.counted_by)) || null : null,
-          counted_at: r.counted_at,
+          conflict,
+          counts: list.map((x) => ({ qty: x.qty, by: x.by ? opName.get(x.by) || null : null })),
+          countedBy: list.length === 1 && list[0].by ? opName.get(list[0].by) || null : null,
         }
       })
 
@@ -136,7 +146,7 @@ export async function GET(request: Request) {
           })),
           progress,
           totalItems: snapRows.length,
-          countedItems: countRows.length,
+          countedItems: countsByItem.size,
           report,
         },
       })
@@ -211,7 +221,7 @@ export async function POST(request: Request) {
 
       const { data: act, error: actErr } = await supabase
         .from('inventory_audit_acts')
-        .insert({ company_id: companyId, location_id: locationId, status: 'open', comment: String(body?.comment || '').trim() || null, opened_by: actorUserId })
+        .insert({ company_id: companyId, location_id: locationId, status: 'open', mode: body?.mode === 'double' ? 'double' : 'single', comment: String(body?.comment || '').trim() || null, opened_by: actorUserId })
         .select('id, opened_at')
         .single()
       if (actErr) throw actErr
@@ -285,19 +295,35 @@ export async function POST(request: Request) {
         movesByItem.set(itemId, list)
       }
 
+      const actMode = String((act as any).mode || 'single')
+      // группируем счёты по товару (в double их несколько — от разных операторов)
+      const grouped = new Map<string, Array<{ qty: number; at: string }>>()
+      for (const r of countRows) {
+        const id = String(r.item_id)
+        const l = grouped.get(id) || []
+        l.push({ qty: num(r.counted_qty), at: String(r.counted_at) })
+        grouped.set(id, l)
+      }
+      const conflicts: string[] = []
       const stocktakeItems: Array<{ item_id: string; actual_qty: number; comment: string | null }> = []
       const report: Array<{ item_id: string; counted: number; expected: number; variance: number; soldAfter: number; final: number }> = []
-      for (const r of countRows) {
-        const itemId = String(r.item_id)
-        const counted = num(r.counted_qty)
+      for (const [itemId, list] of grouped) {
+        const distinct = Array.from(new Set(list.map((x) => x.qty)))
+        if (distinct.length > 1 && actMode === 'double') {
+          conflicts.push(itemId)
+          continue
+        }
+        const latest = list.reduce((a, b) => (b.at > a.at ? b : a))
+        const counted = latest.qty
         const expected = expectedBy.get(itemId) ?? 0
-        const countedAt = String(r.counted_at)
-        // изменения остатка ПОСЛЕ того, как позицию посчитали
         let deltaAfter = 0
-        for (const m of movesByItem.get(itemId) || []) if (m.at > countedAt) deltaAfter += m.delta
+        for (const m of movesByItem.get(itemId) || []) if (m.at > latest.at) deltaAfter += m.delta
         const final = Math.max(0, counted + deltaAfter)
         stocktakeItems.push({ item_id: itemId, actual_qty: final, comment: null })
         report.push({ item_id: itemId, counted, expected, variance: counted - expected, soldAfter: -Math.min(0, deltaAfter), final })
+      }
+      if (conflicts.length > 0) {
+        return json({ error: 'unresolved-conflicts', message: `Расхождение между счётчиками: ${conflicts.length} поз. Нужен пересчёт или решение владельца.`, conflicts }, 409)
       }
 
       const result = await postInventoryStocktake(supabase as any, {
@@ -348,6 +374,27 @@ export async function POST(request: Request) {
       const actId = String(body?.act_id || '').trim()
       if (!UUID_RE.test(actId)) return json({ error: 'act-required' }, 400)
       await supabase.from('inventory_audit_acts').update({ status: 'cancelled', closed_at: new Date().toISOString(), closed_by: actorUserId }).eq('id', actId).eq('status', 'open')
+      return json({ ok: true })
+    }
+
+    // ── Пересчёт позиции: удаляем счёты, операторы считают заново ─────────────
+    if (action === 'recount') {
+      const actId = String(body?.act_id || '').trim()
+      const itemId = String(body?.item_id || '').trim()
+      if (!UUID_RE.test(actId) || !UUID_RE.test(itemId)) return json({ error: 'bad-params' }, 400)
+      await supabase.from('inventory_audit_counts').delete().eq('act_id', actId).eq('item_id', itemId)
+      return json({ ok: true })
+    }
+
+    // ── Решить расхождение: зафиксировать итоговое количество ──────────────────
+    if (action === 'resolve') {
+      const actId = String(body?.act_id || '').trim()
+      const itemId = String(body?.item_id || '').trim()
+      if (!UUID_RE.test(actId) || !UUID_RE.test(itemId)) return json({ error: 'bad-params' }, 400)
+      const qty = Math.max(0, num(body?.qty))
+      await supabase.from('inventory_audit_counts').delete().eq('act_id', actId).eq('item_id', itemId)
+      const { error } = await supabase.from('inventory_audit_counts').insert({ act_id: actId, item_id: itemId, counted_qty: qty, counted_by: null, counted_at: new Date().toISOString() })
+      if (error) throw error
       return json({ ok: true })
     }
 

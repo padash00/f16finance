@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       .filter((r: any) => UUID_RE.test(r.item_id))
     if (rows.length === 0) return json({ error: 'counts-invalid' }, 400)
 
-    const { error } = await supabase.from('inventory_audit_counts').upsert(rows, { onConflict: 'act_id,item_id' })
+    const { error } = await supabase.from('inventory_audit_counts').upsert(rows, { onConflict: 'act_id,item_id,counted_by' })
     if (error) throw error
     return json({ ok: true, data: { saved: rows.length } })
   } catch (error: any) {

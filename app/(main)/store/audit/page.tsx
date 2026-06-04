@@ -14,7 +14,7 @@ type Loc = { id: string; name: string; location_type: string; company?: { name?:
 type ActListRow = { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null; locationName: string; totalItems: number; countedItems: number }
 type FormData = { operators: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
 type Assignment = { operator_id: string; category_id: string | null }
-type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; countedBy: string | null }
+type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
 type Detail = {
   act: { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null }
   location: Loc | null
@@ -40,6 +40,7 @@ export default function StoreAuditPage() {
   const [formData, setFormData] = useState<FormData | null>(null)
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [comment, setComment] = useState('')
+  const [mode, setMode] = useState<'single' | 'double'>('single')
   const [creating, setCreating] = useState(false)
 
   const [detail, setDetail] = useState<Detail | null>(null)
@@ -107,7 +108,7 @@ export default function StoreAuditPage() {
       const res = await fetch('/api/admin/store/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', location_id: locationId, comment, assignments: assignments.filter((a) => a.operator_id) }),
+        body: JSON.stringify({ action: 'create', location_id: locationId, comment, mode, assignments: assignments.filter((a) => a.operator_id) }),
       })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.error || 'Ошибка создания')
@@ -142,6 +143,15 @@ export default function StoreAuditPage() {
     }
   }
 
+  const recountItem = async (itemId: string) => {
+    await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'recount', act_id: detailId, item_id: itemId }) })
+    await openDetail(detailId)
+  }
+  const resolveItem = async (itemId: string, qty: number) => {
+    await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resolve', act_id: detailId, item_id: itemId, qty }) })
+    await openDetail(detailId)
+  }
+
   const totals = useMemo(() => {
     const rows = closeReport || detail?.report || []
     let short = 0
@@ -170,7 +180,7 @@ export default function StoreAuditPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Обновить
             </Button>
-            <Button size="sm" onClick={() => { setView('create'); setLocationId(''); setAssignments([]); setComment('') }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
+            <Button size="sm" onClick={() => { setView('create'); setLocationId(''); setAssignments([]); setComment(''); setMode('single') }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
               <Plus className="h-3.5 w-3.5" />
               Новый акт
             </Button>
@@ -232,6 +242,15 @@ export default function StoreAuditPage() {
             </Select>
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Режим подсчёта</Label>
+            <div className="flex border border-white/10">
+              <button type="button" onClick={() => setMode('single')} className={`flex-1 px-3 py-2 text-xs transition ${mode === 'single' ? 'bg-amber-500/15 text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Обычный</button>
+              <button type="button" onClick={() => setMode('double')} className={`flex-1 border-l border-white/10 px-3 py-2 text-xs transition ${mode === 'double' ? 'bg-amber-500/15 text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Двойной слепой</button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{mode === 'double' ? 'Назначьте 2 операторов на одну секцию — посчитают независимо, расхождение пойдёт на пересчёт.' : 'Один оператор на секцию.'}</p>
+          </div>
+
           {locationId && !formData ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка операторов…</div> : null}
 
           {formData ? (
@@ -278,8 +297,9 @@ export default function StoreAuditPage() {
   }
 
   // ── Детали / закрытие ────────────────────────────────────────────────────
-  const rows = closeReport || detail?.report || []
+  const rows: any[] = (closeReport || detail?.report || []) as any[]
   const isOpen = detail?.act.status === 'open'
+  const hasConflicts = isOpen && !closeReport && rows.some((r) => r.conflict)
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-center gap-2">
@@ -330,7 +350,8 @@ export default function StoreAuditPage() {
                   <input type="checkbox" checked={assignDebt} onChange={(e) => setAssignDebt(e.target.checked)} className="h-4 w-4 accent-amber-500" />
                   Повесить недостачу долгом на ответственных (удержится из зарплаты)
                 </label>
-                <Button onClick={closeAct} disabled={closing || detail.countedItems === 0} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
+                {hasConflicts ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">Есть расхождения между счётчиками — решите их (примите значение или на пересчёт), затем закрывайте.</div> : null}
+                <Button onClick={closeAct} disabled={closing || detail.countedItems === 0 || hasConflicts} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
                   {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   Закрыть акт и провести
                 </Button>
@@ -356,17 +377,34 @@ export default function StoreAuditPage() {
               <div className="space-y-1">
                 {rows
                   .slice()
-                  .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
-                  .map((r) => (
-                    <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-sm last:border-0">
-                      <span className="min-w-0 truncate text-foreground">{(r as any).name || r.name}</span>
-                      <div className="flex items-center gap-4 tabular-nums">
-                        {!isOpen || closeReport ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
-                        <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
-                        <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                  .sort((a, b) => (b.conflict ? 1 : 0) - (a.conflict ? 1 : 0) || Math.abs(b.variance) - Math.abs(a.variance))
+                  .map((r) =>
+                    r.conflict && isOpen && !closeReport ? (
+                      <div key={r.item_id} className="border-b border-white/5 py-2 last:border-0">
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="min-w-0 truncate text-foreground">{r.name}</span>
+                          <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">расхождение</span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          {(r.counts || []).map((c: any, i: number) => (
+                            <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-white/10 px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-300">
+                              {c.by || 'счёт'}: {fmt(c.qty)}
+                            </button>
+                          ))}
+                          <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ) : (
+                      <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-sm last:border-0">
+                        <span className="min-w-0 truncate text-foreground">{r.name}</span>
+                        <div className="flex items-center gap-4 tabular-nums">
+                          {!isOpen || closeReport ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
+                          <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
+                          <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                        </div>
+                      </div>
+                    ),
+                  )}
               </div>
             )}
           </Card>
