@@ -252,6 +252,11 @@ export default function PrintClient() {
     <>
       <style jsx global>{`
         :root { color-scheme: light; }
+        /* Печать фонов: Chrome/puppeteer не печатает background без этого на КАЖДОМ элементе. */
+        *, *::before, *::after {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
         @media screen {
           .print-shell {
             padding: 24px 16px;
