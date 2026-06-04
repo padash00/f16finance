@@ -1867,7 +1867,7 @@ function IncomeRowFull({
 
   return (
     <div className={`p-4 hover:bg-slate-700/30 transition-colors ${isExtra ? 'bg-yellow-500/5' : ''}`}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <div className={`p-2 rounded-lg ${row.shift === 'day' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`}>
             {row.shift === 'day' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-400" />}
@@ -1888,8 +1888,8 @@ function IncomeRowFull({
           </div>
         </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-4 text-sm">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
             {row.cash_amount > 0 && (
               <div className="text-right">
                 <div className="text-[10px] text-slate-500">Нал</div>

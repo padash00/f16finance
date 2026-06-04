@@ -2155,7 +2155,7 @@ function ListTab({
   return (
     <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
       <div ref={tableContainerRef} className="max-h-[72vh] overflow-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[820px]">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-700 bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
               <th className="px-4 py-3 text-left">Дата</th>
