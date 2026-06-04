@@ -375,19 +375,24 @@ export async function POST(request: Request) {
           .upsert(upserts, { onConflict: 'location_id,item_id' })
         if (upsertErr) throw upsertErr
 
-        const movements = resolvedItems.map((item) => ({
-          item_id: item.item_id,
-          movement_type: 'set_stock',
-          quantity: item.quantity,
-          unit_cost: item.unit_cost,
-          to_location_id: warehouse.id,
-          reference_type: 'warehouse_set',
-          reference_id: null,
-          comment: String(body.comment || '').trim() || 'Синхронизация подсобки',
-          created_by: actorUserId,
-          created_at: now,
-        }))
-        await supabase.from('inventory_movements').insert(movements)
+        const movements = resolvedItems
+          .filter((item) => item.quantity > 0)
+          .map((item) => ({
+            item_id: item.item_id,
+            movement_type: 'set_stock',
+            quantity: item.quantity,
+            unit_cost: item.unit_cost,
+            to_location_id: warehouse.id,
+            reference_type: 'warehouse_set',
+            reference_id: null,
+            comment: String(body.comment || '').trim() || 'Синхронизация подсобки',
+            actor_user_id: actorUserId,
+            created_at: now,
+          }))
+        if (movements.length) {
+          const { error: mErr } = await supabase.from('inventory_movements').insert(movements)
+          if (mErr) await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/warehouse.set:movements', message: mErr.message })
+        }
 
         await writeAuditLog(supabase, {
           actorUserId,
@@ -449,17 +454,20 @@ export async function POST(request: Request) {
         .upsert({ location_id: warehouse.id, item_id: itemId, quantity: qty, updated_at: now }, { onConflict: 'location_id,item_id' })
       if (upsertErr) throw upsertErr
 
-      await supabase.from('inventory_movements').insert({
-        item_id: itemId,
-        movement_type: 'inventory_adjustment',
-        quantity: qty,
-        to_location_id: warehouse.id,
-        reference_type: 'warehouse_set',
-        reference_id: null,
-        comment: String(body.comment || '').trim() || 'Установка остатка подсобки',
-        created_by: actorUserId,
-        created_at: now,
-      })
+      if (qty > 0) {
+        const { error: mErr } = await supabase.from('inventory_movements').insert({
+          item_id: itemId,
+          movement_type: 'inventory_adjustment',
+          quantity: qty,
+          to_location_id: warehouse.id,
+          reference_type: 'warehouse_set',
+          reference_id: null,
+          comment: String(body.comment || '').trim() || 'Установка остатка подсобки',
+          actor_user_id: actorUserId,
+          created_at: now,
+        })
+        if (mErr) await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/warehouse.setWarehouse:movement', message: mErr.message })
+      }
 
       await writeAuditLog(supabase, {
         actorUserId,
@@ -634,11 +642,12 @@ export async function POST(request: Request) {
           reference_type: 'backroom_bulk',
           reference_id: null,
           comment: 'Загрузка подсобки из Excel',
-          created_by: actorUserId,
+          actor_user_id: actorUserId,
           created_at: now,
         }))
       if (movements.length) {
-        await supabase.from('inventory_movements').insert(movements)
+        const { error: mErr } = await supabase.from('inventory_movements').insert(movements)
+        if (mErr) await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/warehouse.backroom:movements', message: mErr.message })
       }
 
       await writeAuditLog(supabase, {

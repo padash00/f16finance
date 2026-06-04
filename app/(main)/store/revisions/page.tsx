@@ -137,6 +137,10 @@ export default function StoreRevisionsPage() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const [linesFilter, setLinesFilter] = useState<'all' | 'mismatch'>('all')
   const [hasDraft, setHasDraft] = useState(false)
+  const [liveActive, setLiveActive] = useState(false)
+  const [liveLog, setLiveLog] = useState<{ id: string; name: string; delta: number }[]>([])
+  const liveSinceRef = useRef<string | null>(null)
+  const liveSeenRef = useRef<Set<string>>(new Set())
 
   const load = async (signal?: AbortSignal, opts?: { soft?: boolean }) => {
     const soft = Boolean(opts?.soft)
@@ -216,6 +220,88 @@ export default function StoreRevisionsPage() {
     if (!formSheetOpen || !locationId) return
     const id = window.setTimeout(() => scanInputRef.current?.focus(), 80)
     return () => window.clearTimeout(id)
+  }, [formSheetOpen, locationId])
+
+  // ── Живая ревизия ─────────────────────────────────────────────────────────
+  // Пока открыта форма ревизии, опрашиваем продажи/долги/возвраты по локации.
+  // «Систему» (ожидаемый остаток) обновляем живьём, а «Факт» по уже посчитанным
+  // товарам автоматически корректируем на то, что ушло во время подсчёта.
+  useEffect(() => {
+    if (!formSheetOpen || !locationId) {
+      setLiveActive(false)
+      return
+    }
+    setLiveActive(true)
+    liveSinceRef.current = new Date().toISOString()
+    liveSeenRef.current = new Set()
+    setLiveLog([])
+    let cancelled = false
+
+    const tick = async () => {
+      try {
+        const since = liveSinceRef.current || ''
+        const resp = await fetch(
+          `/api/admin/store/revisions/live?location_id=${encodeURIComponent(locationId)}&since=${encodeURIComponent(since)}`,
+          { cache: 'no-store' },
+        )
+        if (!resp.ok) return
+        const jsonResp = await resp.json().catch(() => null)
+        const payload = jsonResp?.data
+        if (cancelled || !payload) return
+
+        // 1) Свежие остатки → обновляем «Систему»
+        const freshBalances: Array<{ item_id: string; quantity: number }> = payload.balances || []
+        if (freshBalances.length) {
+          const qtyByItem = new Map(freshBalances.map((b) => [String(b.item_id), Number(b.quantity || 0)]))
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              balances: (prev.balances || []).map((b) =>
+                b.location_id === locationId && qtyByItem.has(String(b.item_id))
+                  ? { ...b, quantity: qtyByItem.get(String(b.item_id)) as number }
+                  : b,
+              ),
+            }
+          })
+        }
+
+        // 2) Новые движения → корректируем «Факт» уже посчитанных товаров
+        const movements: Array<{ id: string; item_id: string; item_name: string; delta: number }> =
+          payload.movements || []
+        const deltaByItem = new Map<string, number>()
+        const newLog: { id: string; name: string; delta: number }[] = []
+        for (const m of movements) {
+          if (liveSeenRef.current.has(m.id)) continue
+          liveSeenRef.current.add(m.id)
+          deltaByItem.set(m.item_id, (deltaByItem.get(m.item_id) || 0) + m.delta)
+          newLog.push({ id: m.id, name: m.item_name, delta: m.delta })
+        }
+        if (deltaByItem.size) {
+          setLines((prev) =>
+            prev.map((ln) => {
+              const d = deltaByItem.get(ln.item_id)
+              if (!d) return ln
+              const next = Math.max(0, parseQty(ln.actual_qty) + d)
+              return { ...ln, actual_qty: formatQty(next) }
+            }),
+          )
+          setLiveLog((prev) => [...newLog, ...prev].slice(0, 6))
+        }
+
+        if (payload.now) liveSinceRef.current = String(payload.now)
+      } catch {
+        // тихо игнорируем — ревизию не ломаем
+      }
+    }
+
+    void tick()
+    const interval = window.setInterval(tick, 4000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      setLiveActive(false)
+    }
   }, [formSheetOpen, locationId])
 
   // ── Черновик ревизии в localStorage ───────────────────────────────────────
@@ -869,6 +955,31 @@ export default function StoreRevisionsPage() {
                 {selectedBalances.length ? ` / ${selectedBalances.length}` : ''}
               </span>
             </div>
+
+            {/* Живая ревизия: магазин работает во время подсчёта */}
+            {liveActive && (
+              <div className="space-y-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
+                <div className="flex items-center gap-2 text-emerald-200">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                  </span>
+                  <span className="font-medium">Живая ревизия — продажи учитываются автоматически</span>
+                </div>
+                {liveLog.length > 0 && (
+                  <div className="flex flex-col gap-0.5 text-emerald-100/80">
+                    {liveLog.map((ev) => (
+                      <div key={ev.id} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{ev.name || 'товар'}</span>
+                        <span className={ev.delta < 0 ? 'text-rose-300' : 'text-emerald-300'}>
+                          {ev.delta > 0 ? '+' : ''}{formatQty(ev.delta)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Прогресс-бар */}
             {selectedBalances.length > 0 && (
