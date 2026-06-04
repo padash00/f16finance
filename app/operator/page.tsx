@@ -166,7 +166,7 @@ export default function OperatorHomePage() {
         <OperatorMetricCard label="Точки ответственности" value={data.counters.leadPoints} icon={BadgeCheck} tone="emerald" hint="Показывает закреплённые точки, если вы старший." />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <OperatorSectionCard
           eyebrow="Быстрый переход"
           title="Мои смены"

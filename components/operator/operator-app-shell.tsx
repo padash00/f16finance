@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ComponentType, ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, MonitorSmartphone, Wallet } from 'lucide-react'
 
 import { supabase } from '@/lib/supabaseClient'
@@ -118,6 +118,7 @@ function isActivePath(pathname: string, href: string) {
 
 export function OperatorAppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const [operatorName, setOperatorName] = useState<string | null>(null)
   const currentMeta = metaByPath.find((item) => item.match(pathname)) || metaByPath[0]
   const activeItem = navItems.find((item) => isActivePath(pathname, item.href)) || navItems[0]
 
@@ -125,8 +126,15 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
     let cancelled = false
     void (async () => {
       const res = await fetch('/api/operator/profile', { cache: 'no-store', credentials: 'same-origin' })
-      const json = (await res.json().catch(() => null)) as { error?: string } | null
-      if (cancelled || res.ok) return
+      const json = (await res.json().catch(() => null)) as
+        | { error?: string; operator?: { name?: string; short_name?: string } }
+        | null
+      if (cancelled) return
+      if (res.ok) {
+        const nm = json?.operator?.short_name || json?.operator?.name || null
+        if (nm) setOperatorName(nm)
+        return
+      }
       const code = json?.error
       if (code === 'operator-inactive' || code === 'operator-auth-disabled') {
         await supabase.auth.signOut().catch(() => null)
@@ -140,23 +148,16 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,165,80,0.16),transparent_26%),linear-gradient(180deg,#07101c_0%,#0b1324_48%,#040814_100%)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:px-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top,0px))]">
-        <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl sm:rounded-[2rem] sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200 sm:text-[11px]">
-                Операторский контур
-              </div>
-              <h1 className="mt-3 text-xl font-semibold tracking-tight text-white sm:mt-4 sm:text-2xl">{currentMeta.title}</h1>
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">{currentMeta.subtitle}</p>
+      <div className="mx-auto flex w-full max-w-7xl">
+        {/* Боковое меню — только десктоп */}
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 px-4 py-6 lg:flex">
+          <div className="px-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200">
+              Оператор
             </div>
-            <div className="self-start rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-left sm:text-right">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Раздел</div>
-              <div className="mt-1 text-sm font-medium text-white">{activeItem.shortLabel}</div>
-            </div>
+            <div className="mt-3 truncate text-base font-semibold text-white">{operatorName || 'Кабинет'}</div>
           </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
+          <nav className="mt-6 flex flex-1 flex-col gap-1" aria-label="Меню оператора">
             {navItems.map((item) => {
               const active = isActivePath(pathname, item.href)
               const Icon = item.icon
@@ -165,25 +166,68 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                    'flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm font-medium transition',
                     active
                       ? 'border-amber-400/25 bg-amber-400/10 text-amber-200'
-                      : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white',
+                      : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white',
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-[1.15rem] w-[1.15rem] shrink-0" />
                   {item.label}
                 </Link>
               )
             })}
-          </div>
-        </div>
+          </nav>
+        </aside>
 
-        <div className="mt-4 flex-1">{children}</div>
+        {/* Основной контент */}
+        <div className="flex min-h-screen w-full min-w-0 flex-1 flex-col px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:px-5 lg:px-8 lg:pb-10 lg:pt-8">
+          <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl sm:rounded-[2rem] sm:p-5 lg:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200 sm:text-[11px] lg:hidden">
+                  Операторский контур
+                </div>
+                <h1 className="mt-3 text-xl font-semibold tracking-tight text-white sm:mt-4 sm:text-2xl lg:mt-0 lg:text-3xl">{currentMeta.title}</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 lg:text-base">{currentMeta.subtitle}</p>
+              </div>
+              <div className="self-start rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-left sm:text-right">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Раздел</div>
+                <div className="mt-1 text-sm font-medium text-white">{activeItem.shortLabel}</div>
+              </div>
+            </div>
+
+            {/* Чип-навигация — мобильный/планшет, на десктопе её заменяет боковое меню */}
+            <div className="mt-4 flex flex-wrap gap-2 lg:hidden">
+              {navItems.map((item) => {
+                const active = isActivePath(pathname, item.href)
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                      active
+                        ? 'border-amber-400/25 bg-amber-400/10 text-amber-200'
+                        : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white',
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="mt-4 flex-1 lg:mt-6">{children}</div>
+        </div>
       </div>
 
+      {/* Нижнее плавающее меню — только мобильный/планшет */}
       <nav
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 lg:hidden"
         style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom, 0px))' }}
         aria-label="Основная навигация"
       >

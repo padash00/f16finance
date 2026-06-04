@@ -266,7 +266,7 @@ export default function OperatorSalaryMobilePage() {
 
       {!loading && data ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <OperatorMetricCard label="К выплате" value={formatMoney(data.week.remainingAmount)} icon={DollarSign} tone="emerald" hint={`Статус недели: ${weekStatusLabel(data.week.status)}`} />
             <OperatorMetricCard label="Выплачено" value={formatMoney(data.week.paidAmount)} icon={CreditCard} tone="blue" hint={`Начислено за неделю: ${formatMoney(data.week.netAmount)}`} />
             <OperatorMetricCard label="Смен отработано" value={String(data.week.shiftsCount ?? shifts.length)} icon={Calendar} tone="violet" hint={shifts.length ? `Оборот: ${formatMoney(shifts.reduce((s, x) => s + x.totalIncome, 0))}` : undefined} />
@@ -300,7 +300,7 @@ export default function OperatorSalaryMobilePage() {
           {/* ── По сменам ─────────────────────────────────────────────────── */}
           <OperatorPanel>
             <OperatorSectionHeading title="По сменам" description="Каждая смена: оборот точки и из чего вышла оплата за смену." />
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
               {shifts.length === 0 ? (
                 <OperatorEmptyState title="Смен пока нет" description="За эту неделю по вам ещё нет отработанных смен с оборотом." />
               ) : (
@@ -344,7 +344,7 @@ export default function OperatorSalaryMobilePage() {
               <OperatorPill tone="red">Всего долг: {formatMoney(debtItemsTotal)}</OperatorPill>
               <OperatorPill tone="amber">Позиций: {debtItems.length}</OperatorPill>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 grid gap-2 lg:grid-cols-2">
               {debtItems.length === 0 ? (
                 <OperatorEmptyState title="Долгов по товарам нет" description="За вами не числится товаров, взятых в долг. Отлично!" />
               ) : (
