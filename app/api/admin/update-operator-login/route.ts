@@ -9,6 +9,10 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    // Смена логина оператора = смена его email в Auth → захват/блокировка входа.
+    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
 
     const body = await request.json().catch(() => null)
     const { operatorId, username } = body ?? {}

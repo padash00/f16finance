@@ -48,6 +48,10 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    // Оценка стоимости бизнеса — крайне чувствительно: только владелец/суперадмин.
+    if (!access.isSuperAdmin && access.staffRole !== 'owner') {
+      return json({ error: 'forbidden' }, 403)
+    }
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
     if (!supabase) return json({ error: 'no admin supabase' }, 500)

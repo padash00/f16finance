@@ -6,6 +6,9 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
@@ -28,6 +31,9 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    if (!access.isSuperAdmin && access.staffRole !== 'owner' && access.staffRole !== 'manager') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
     const body = await request.json()
     const { period, target_income, target_expense, note } = body
     if (!period) return NextResponse.json({ error: 'period required' }, { status: 400 })
