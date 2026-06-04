@@ -295,7 +295,7 @@ export function InventoryForecastPageContent() {
           {loading ? (
             <div className="space-y-0">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-7 gap-4 border-b border-white/5 px-4 py-3">
+                <div key={i} className="grid grid-cols-3 gap-2 border-b border-white/5 px-4 py-3 sm:grid-cols-7 sm:gap-4">
                   <Skeleton className="h-4 w-32" />
                   <Skeleton className="h-4 w-20" />
                   <Skeleton className="h-4 w-14 justify-self-end" />

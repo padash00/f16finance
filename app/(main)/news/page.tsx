@@ -162,7 +162,7 @@ export default function NewsPage() {
                   </div>
                 </div>
                 {canPublish && (
-                  <button onClick={() => remove(post.id)} className="text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100">
+                  <button onClick={() => remove(post.id)} className="text-muted-foreground opacity-100 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}

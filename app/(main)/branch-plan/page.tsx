@@ -993,7 +993,7 @@ export default function BranchPlanPage() {
             const total = unit * num(c.quantity)
             return (
               <div key={c.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
-                <div className="grid grid-cols-[minmax(0,1.4fr)_120px_180px_180px_auto] gap-2 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_120px_180px_180px_auto] gap-2 items-end">
                   <div className="space-y-1">
                     <Label className="text-[10px]">Название</Label>
                     <Input value={c.name} placeholder="Премиум ПК" onChange={(e) => setDraft((d) => ({ ...d, pc_configs: d.pc_configs.map((x) => x.id === c.id ? { ...x, name: e.target.value } : x) }))} />
@@ -1129,7 +1129,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 space-y-2">
           {draft.capex.map((r, idx) => (
-            <div key={r.id} className="grid grid-cols-[minmax(0,1.6fr)_130px_90px_140px_auto] gap-2 items-end">
+            <div key={r.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_130px_90px_140px_auto] gap-2 items-end">
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">Статья</Label> : null}
                 <Input value={r.name} placeholder="Геймерское кресло" onChange={(e) => setDraft((d) => ({ ...d, capex: d.capex.map((x) => x.id === r.id ? { ...x, name: e.target.value } : x) }))} />
@@ -1173,7 +1173,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 space-y-2">
           {draft.tariffs.map((t, idx) => (
-            <div key={t.id} className="grid grid-cols-[minmax(0,1fr)_90px_90px_110px_80px_auto] gap-2 items-end">
+            <div key={t.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_90px_90px_110px_80px_auto] gap-2 items-end">
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">Название</Label> : null}
                 <Input value={t.name} placeholder="2+1" onChange={(e) => setDraft((d) => ({ ...d, tariffs: d.tariffs.map((x) => x.id === t.id ? { ...x, name: e.target.value } : x) }))} />
@@ -1218,7 +1218,7 @@ export default function BranchPlanPage() {
         <div className="mt-3 space-y-3">
           {draft.zones.map((z) => (
             <div key={z.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
-              <div className="grid grid-cols-[minmax(0,1.4fr)_110px_130px_auto] gap-2 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_110px_130px_auto] gap-2 items-end">
                 <div className="space-y-1">
                   <Label className="text-[10px]">Название</Label>
                   <Input value={z.name} placeholder="Премиум" onChange={(e) => setDraft((d) => ({ ...d, zones: d.zones.map((x) => x.id === z.id ? { ...x, name: e.target.value } : x) }))} />
@@ -1305,7 +1305,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 space-y-2">
           {draft.opex.map((r, idx) => (
-            <div key={r.id} className="grid grid-cols-[minmax(0,1.4fr)_140px_140px_140px_auto] gap-2 items-end">
+            <div key={r.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_140px_140px_140px_auto] gap-2 items-end">
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">Статья</Label> : null}
                 <Input value={r.name} placeholder="Аренда" onChange={(e) => setDraft((d) => ({ ...d, opex: d.opex.map((x) => x.id === r.id ? { ...x, name: e.target.value } : x) }))} />

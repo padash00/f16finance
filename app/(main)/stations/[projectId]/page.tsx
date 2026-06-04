@@ -507,9 +507,9 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   const stationsOff = localStations.filter(s => s.grid_x == null || s.grid_y == null)
 
   return (
-    <div className="flex gap-4">
+    <div className="flex flex-col gap-4 lg:flex-row">
       {/* Left: grid */}
-      <div className="flex flex-col gap-3">
+      <div className="flex min-w-0 flex-col gap-3 overflow-x-auto">
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <span className="text-muted-foreground">
             Расставьте зоны, станции и декор, затем нажмите «Сохранить карту». Новый декор и удаление — сразу на сервере.

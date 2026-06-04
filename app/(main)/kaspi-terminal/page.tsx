@@ -455,7 +455,7 @@ function ReconciliationView({
               Допуск ±{tolerance.toLocaleString('ru-RU')} ₸ — расхождения в пределах допуска считаются совпадением.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-3 min-w-[360px]">
+          <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
               <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Терминал</p>
               <p className="text-sm font-bold text-blue-300">{fmt(totals.terminal)}</p>

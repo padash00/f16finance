@@ -1244,7 +1244,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDrag
       )}
     >
       {/* Кнопки действий */}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+      <div className="absolute top-2 right-2 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         {task.operator_telegram && (
           <button
             onClick={(e) => {

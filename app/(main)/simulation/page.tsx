@@ -369,7 +369,7 @@ export default function SimulationPage() {
         ) : (
           <div className="mt-3 space-y-2">
             {tariffs.map((t, idx) => (
-              <div key={t.id} className="grid grid-cols-[minmax(0,1fr)_90px_90px_110px_80px_auto] gap-2 items-end">
+              <div key={t.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_90px_90px_110px_80px_auto] gap-2 items-end">
                 <div className="space-y-1">
                   {idx === 0 ? <Label className="text-[10px]">Название</Label> : null}
                   <Input value={t.name} placeholder="2+1" onChange={(e) => setTariffs((cur) => cur.map((x) => x.id === t.id ? { ...x, name: e.target.value } : x))} />
@@ -422,7 +422,7 @@ export default function SimulationPage() {
           <div className="mt-3 space-y-3">
             {zones.map((z) => (
               <div key={z.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
-                <div className="grid grid-cols-[minmax(0,1.4fr)_130px_100px_120px_auto] gap-2 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_130px_100px_120px_auto] gap-2 items-end">
                   <div className="space-y-1">
                     <Label className="text-[10px]">Название зоны</Label>
                     <Input value={z.name} placeholder="Премиум" onChange={(e) => setZones((cur) => cur.map((x) => x.id === z.id ? { ...x, name: e.target.value } : x))} />

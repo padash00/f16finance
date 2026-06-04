@@ -304,7 +304,7 @@ function ChatContent() {
                       <span className="text-[10px] text-muted-foreground italic">ред.</span>
                     )}
                   </div>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     {m.pinned_until && new Date(m.pinned_until).getTime() > Date.now() ? (
                       <button
                         className="text-xs text-amber-300 hover:underline"

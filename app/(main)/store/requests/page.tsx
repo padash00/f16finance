@@ -706,8 +706,8 @@ function StoreRequestsPageContent() {
                   {request.comment ? <p className="mt-2 text-sm text-muted-foreground">{request.comment}</p> : null}
                 </div>
 
-                <div className="space-y-3 px-4 py-3">
-                  <table className="w-full text-sm">
+                <div className="space-y-3 overflow-x-auto px-4 py-3">
+                  <table className="w-full min-w-[560px] text-sm">
                     <thead>
                       <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                         <th className="py-2 pr-2 font-normal">Товар</th>

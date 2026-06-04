@@ -251,7 +251,7 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div className="app-page max-w-[1600px] space-y-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shrink-0">
             <ClipboardList className="w-6 h-6 text-emerald-300" />
