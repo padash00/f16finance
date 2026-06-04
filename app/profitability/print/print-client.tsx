@@ -199,21 +199,21 @@ export default function PrintClient() {
       key: 'profit',
       label: 'Прибыль',
       amount: Math.max(0, displayedNetProfit),
-      color: displayedNetProfit >= 0 ? '#f59e0b' : '#94a3b8',
+      color: displayedNetProfit >= 0 ? '#22c55e' : '#94a3b8',
       percent: report.turnover > 0 ? (Math.max(0, displayedNetProfit) / report.turnover) * 100 : 0,
     },
     {
       key: 'expenses',
       label: 'Расходы',
       amount: displayedExpensesTotal,
-      color: '#475569',
+      color: '#f97316',
       percent: report.turnover > 0 ? (displayedExpensesTotal / report.turnover) * 100 : 0,
     },
     {
       key: 'tax',
       label: 'Налог',
       amount: report.turnoverTax,
-      color: '#fb7185',
+      color: '#ef4444',
       percent: report.turnover > 0 ? (report.turnoverTax / report.turnover) * 100 : 0,
     },
   ]
@@ -303,74 +303,54 @@ export default function PrintClient() {
         <div className="doc-paper mx-auto max-w-[820px] bg-white text-slate-900 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
           <div className="px-8 py-6 print:px-6 print:py-4">
 
-            {/* Шапка */}
-            <header className="flex items-end justify-between border-b-2 border-amber-500 pb-3 mb-4 keep">
+            {/* Шапка — тёмная плашка во всю ширину документа */}
+            <header className="-mx-8 -mt-6 mb-4 flex items-start justify-between bg-slate-900 px-8 py-5 keep print:-mx-6 print:-mt-4 print:px-6">
               <div>
-                <div className="text-[9px] font-bold uppercase tracking-[0.22em] text-amber-700">
-                  Управленческий отчёт · Orda Control
-                </div>
-                <h1 className="mt-1 text-2xl font-extrabold tracking-tight leading-none">
-                  {report.company.name}
+                <h1 className="text-xl font-extrabold uppercase tracking-tight leading-none text-white">
+                  Управленческий отчёт
                 </h1>
+                <div className="mt-1.5 text-[10px] text-slate-300">
+                  {report.company.name} · <span className="capitalize">{fmtPeriod(report.period.from, report.period.to)}</span> · сформирован {new Date().toLocaleDateString('ru-RU')}
+                </div>
               </div>
               <div className="text-right">
-                <div className="text-[15px] font-semibold capitalize text-slate-700">
-                  {fmtPeriod(report.period.from, report.period.to)}
-                </div>
-                <div className="text-[9px] text-slate-400">
-                  Сформирован {new Date().toLocaleDateString('ru-RU')}
-                </div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">Orda Control</div>
+                <div className="mt-1 text-[9px] text-slate-400">страница 1 / 2</div>
               </div>
             </header>
 
-            {/* Топ-строка: оборот + налог + чистая прибыль */}
-            <section className="grid grid-cols-3 gap-3 mb-4 keep">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-700">Оборот</div>
-                <div className="mt-0.5 text-xl font-extrabold tabular-nums leading-tight">
-                  {fmtMoney(report.turnover)} <span className="text-sm font-semibold text-emerald-700">₸</span>
-                </div>
-              </div>
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-                <div className="text-[9px] font-bold uppercase tracking-wider text-rose-700">
-                  Налог {(report.turnoverTaxRate * 100).toFixed(0)}%
-                </div>
-                <div className="mt-0.5 text-xl font-extrabold tabular-nums leading-tight">
-                  −{fmtMoney(report.turnoverTax)} <span className="text-sm font-semibold text-rose-700">₸</span>
-                </div>
-              </div>
-              <div className={
-                'rounded-xl px-4 py-3 border-2 ' +
-                (displayedNetProfit >= 0 ? 'border-amber-500 bg-amber-50' : 'border-rose-500 bg-rose-50')
-              }>
-                <div className={'text-[9px] font-bold uppercase tracking-wider ' + (displayedNetProfit >= 0 ? 'text-amber-800' : 'text-rose-700')}>
-                  Чистая прибыль
-                </div>
-                <div className={'mt-0.5 text-xl font-extrabold tabular-nums leading-tight ' + (displayedNetProfit >= 0 ? 'text-amber-900' : 'text-rose-700')}>
-                  {fmtMoney(displayedNetProfit)} <span className="text-sm font-semibold">₸</span>
-                </div>
-              </div>
+            {/* Главный вывод месяца */}
+            <section className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 keep">
+              <h2 className="text-[13px] font-bold text-slate-900">Главный вывод месяца</h2>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-slate-500">
+                За период <span className="capitalize">{fmtPeriod(report.period.from, report.period.to)}</span> чистая прибыль составила {fmtMoney(displayedNetProfit)} ₸ при рентабельности {profitMargin.toFixed(1)}%.
+                {displayedExpenses[0] && displayedExpensesTotal > 0
+                  ? ` Основная нагрузка на расходы — ${displayedExpenses[0].category}: ${fmtMoney(displayedExpenses[0].amount)} ₸, или ${((displayedExpenses[0].amount / displayedExpensesTotal) * 100).toFixed(1)}% всех расходов.`
+                  : ''}
+              </p>
             </section>
 
-            {/* KPI-полоска */}
-            <section className="grid grid-cols-3 gap-3 mb-3 keep">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Рентабельность</div>
-                <div className={'text-[15px] font-bold tabular-nums leading-tight ' + (profitMargin >= 0 ? 'text-amber-700' : 'text-rose-700')}>
-                  {profitMargin.toFixed(1)}%
-                </div>
+            {/* 4 карточки: оборот · расходы · налог · чистая прибыль */}
+            <section className="mb-4 grid grid-cols-4 gap-3 keep">
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500">Оборот</div>
+                <div className="mt-1 text-lg font-extrabold tabular-nums leading-tight text-slate-900">{fmtMoney(report.turnover)} <span className="text-xs font-semibold text-slate-500">₸</span></div>
+                <div className="mt-0.5 text-[8.5px] text-slate-400">100% входящего оборота</div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Доля расходов</div>
-                <div className="text-[15px] font-bold tabular-nums leading-tight text-slate-700">
-                  {expensesShare.toFixed(1)}%
-                </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[8.5px] font-bold uppercase tracking-wider text-orange-600">Расходы</div>
+                <div className="mt-1 text-lg font-extrabold tabular-nums leading-tight text-orange-600">{fmtMoney(displayedExpensesTotal)} <span className="text-xs font-semibold">₸</span></div>
+                <div className="mt-0.5 text-[8.5px] text-slate-400">{expensesShare.toFixed(1)}% от оборота</div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Налоговая нагрузка</div>
-                <div className="text-[15px] font-bold tabular-nums leading-tight text-rose-700">
-                  {taxShare.toFixed(1)}%
-                </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div className="text-[8.5px] font-bold uppercase tracking-wider text-rose-600">Налог {(report.turnoverTaxRate * 100).toFixed(0)}%</div>
+                <div className="mt-1 text-lg font-extrabold tabular-nums leading-tight text-rose-600">{fmtMoney(report.turnoverTax)} <span className="text-xs font-semibold">₸</span></div>
+                <div className="mt-0.5 text-[8.5px] text-slate-400">{taxShare.toFixed(1)}% нагрузка</div>
+              </div>
+              <div className={'rounded-xl border-2 px-4 py-3 ' + (displayedNetProfit >= 0 ? 'border-lime-400 bg-lime-50' : 'border-rose-500 bg-rose-50')}>
+                <div className={'text-[8.5px] font-bold uppercase tracking-wider ' + (displayedNetProfit >= 0 ? 'text-lime-700' : 'text-rose-700')}>Чистая прибыль</div>
+                <div className={'mt-1 text-lg font-extrabold tabular-nums leading-tight ' + (displayedNetProfit >= 0 ? 'text-lime-700' : 'text-rose-700')}>{fmtMoney(displayedNetProfit)} <span className="text-xs font-semibold">₸</span></div>
+                <div className={'mt-0.5 text-[8.5px] ' + (displayedNetProfit >= 0 ? 'text-lime-600' : 'text-rose-500')}>Рентабельность {profitMargin.toFixed(1)}%</div>
               </div>
             </section>
 
@@ -416,6 +396,15 @@ export default function PrintClient() {
                 </div>
               </section>
             ) : null}
+
+            {/* Формула P&L — тёмный блок */}
+            <section className="mb-4 rounded-xl bg-slate-900 px-5 py-3.5 keep">
+              <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-400">Формула P&amp;L</div>
+              <div className="mt-1.5 text-[11px] text-slate-300">Оборот {fmtMoney(report.turnover)} ₸</div>
+              <div className="text-[11px] text-slate-300">Минус налог {fmtMoney(report.turnoverTax)} ₸ и расходы {fmtMoney(displayedExpensesTotal)} ₸</div>
+              <div className="mt-1 text-[13px] font-bold text-lime-400">= чистая прибыль {fmtMoney(displayedNetProfit)} ₸</div>
+              <div className="mt-2 text-[9px] text-slate-400">Контрольная доля 10% от чистой прибыли: {fmtMoney(Math.round(displayedNetProfit * 0.1))} ₸</div>
+            </section>
 
             {/* Разбивка оборота — горизонтальный bar */}
             <section className="mb-4 keep">
