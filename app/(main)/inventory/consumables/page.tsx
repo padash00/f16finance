@@ -296,7 +296,7 @@ export function ConsumablesPageContent() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4 p-4 md:p-6">
+    <div className="app-page-wide space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">

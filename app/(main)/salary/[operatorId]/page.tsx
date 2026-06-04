@@ -242,7 +242,7 @@ function OperatorSalaryDetailPageContent() {
 
   return (
     <>
-        <div className="mx-auto w-full max-w-[1800px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
+        <div className="app-page-wide space-y-4">
 
           <AdminPageHeader
             backHref="/salary"

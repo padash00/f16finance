@@ -151,7 +151,7 @@ export function InventoryForecastPageContent() {
   ]
 
   return (
-    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+    <div className="app-page-wide space-y-4">
       <div className="flex flex-wrap items-center gap-3 md:items-start md:justify-between">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
