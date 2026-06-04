@@ -122,6 +122,13 @@ export async function requireCapability(
 ): Promise<Response | null> {
   if (access.isSuperAdmin) return null
 
+  // requireCapability вызывается ТОЛЬКО в admin-роутах. Не-staff (операторы
+  // заходят как role='other', гости) не должны их проходить — даже если сид
+  // выдал роли 'other' все права. Operators работают через /api/operator/*.
+  if (!access.staffMember) {
+    return NextResponse.json({ error: 'forbidden', reason: 'staff-only' }, { status: 403 })
+  }
+
   const userId = access.user?.id
   if (!userId) {
     return NextResponse.json(

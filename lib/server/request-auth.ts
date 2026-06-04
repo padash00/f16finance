@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-import { normalizeStaffRole, staffRoleHasCapability, type StaffCapability, type StaffRole } from '@/lib/core/access'
+import { normalizeStaffRole, type StaffCapability, type StaffRole } from '@/lib/core/access'
 import { resolveRequestAuthPersona, type RequestAuthPersonaKind } from '@/lib/server/auth-persona'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { fetchLinkedCustomersForUser, type LinkedCustomerRow } from '@/lib/server/linked-customers'
@@ -277,20 +277,14 @@ export async function requireStaffCapabilityRequest(request: Request, capability
     return null
   }
 
-  // Старая капабилити-матрица в STAFF_ROLE_MATRIX (захардкоженная, без UI настройки).
-  // Заменена на новую систему через requireCapability(access, '<page>.<action>')
-  // и middleware с проверкой <page>.view.
-  // Здесь пропускаем любого staff — реальная защита идёт в API через
-  // requireCapability и в proxy.ts через capability-page check.
-  if (context.staffRole) {
-    return null
+  // Не-staff (операторы заходят как role='other' без staffMember, гости) — закрываем.
+  // Раньше здесь пропускался ЛЮБОЙ staffRole, включая операторов (role='other'),
+  // т.е. проверка была no-op. Теперь требуется реальный staffMember.
+  if (!context.staffMember) {
+    return NextResponse.json({ error: 'forbidden', reason: 'staff-only' }, { status: 403 })
   }
-
-  // Не staff (operator/customer) — закрываем.
-  if (!staffRoleHasCapability(context.staffRole, capability)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  }
-
+  // staff проходит; гранулярную проверку права делает requireCapability в самих роутах.
+  void capability
   return null
 }
 
