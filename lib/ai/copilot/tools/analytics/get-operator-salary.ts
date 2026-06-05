@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedOperatorRows } from '../../query-helpers'
 
 function thisWeekStart(): string {
   const now = new Date()
@@ -27,7 +28,7 @@ export const getOperatorSalaryTool: CopilotTool = {
       required: true,
       description: 'ID оператора',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', true).order('name')
+        const data = await scopedOperatorRows(ctx)
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },

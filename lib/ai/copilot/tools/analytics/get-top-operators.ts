@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedOperatorRows } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -41,7 +42,7 @@ export const getTopOperatorsTool: CopilotTool = {
     const today = todayISO()
     const from = period === 'month' ? addDaysISO(today, -29) : addDaysISO(today, -6)
 
-    const { data: ops } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', true)
+    const ops = await scopedOperatorRows(ctx)
     const opMap = new Map((ops || []).map((o: any) => [String(o.id), o]))
 
     const { data: incomes } = await ctx.supabase

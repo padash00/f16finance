@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const getCustomerInfoTool: CopilotTool = {
   name: 'get_customer_info',
@@ -19,7 +20,10 @@ export const getCustomerInfoTool: CopilotTool = {
       required: true,
       description: 'Кто',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('customers').select('id, name, phone').order('name')
+        let q = ctx.supabase.from('customers').select('id, name, phone').order('name')
+        const ids = await scopedCompanyIds(ctx)
+        if (ids) q = q.in('company_id', ids)
+        const { data } = await q
         return (data || []).map((c: any) => ({ value: c.id, label: `${c.name}${c.phone ? ` (${c.phone})` : ''}` }))
       },
     },

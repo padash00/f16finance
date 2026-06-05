@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const blockOperatorTool: CopilotTool = {
@@ -20,7 +21,7 @@ export const blockOperatorTool: CopilotTool = {
       required: true,
       description: 'ID активного оператора',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', true).order('name')
+        const data = await scopedOperatorRows(ctx)
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },
@@ -37,6 +38,9 @@ export const blockOperatorTool: CopilotTool = {
     const reason = String(input.reason || '').trim()
     if (!operatorId || !reason) return { ok: false, message: 'Нужны оператор и причина.' }
 
+    // Блокировать можно только оператора своей организации.
+    const allowed = await scopedOperatorIds(ctx)
+    if (allowed && !allowed.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
     const { data: op, error: getErr } = await ctx.supabase.from('operators').select('id, name').eq('id', operatorId).single()
     if (getErr || !op) return { ok: false, message: 'Оператор не найден.' }
 
@@ -71,7 +75,10 @@ export const unblockOperatorTool: CopilotTool = {
       required: true,
       description: 'ID заблокированного оператора',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', false).order('name')
+        let q = ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', false).order('name')
+        const ids = await scopedOperatorIds(ctx)
+        if (ids) q = q.in('id', ids)
+        const { data } = await q
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },
@@ -79,6 +86,8 @@ export const unblockOperatorTool: CopilotTool = {
   handler: async (input, ctx) => {
     const operatorId = String(input.operator_id || '')
     if (!operatorId) return { ok: false, message: 'Не выбран оператор.' }
+    const allowed = await scopedOperatorIds(ctx)
+    if (allowed && !allowed.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
     const { data: op, error: getErr } = await ctx.supabase.from('operators').select('id, name').eq('id', operatorId).single()
     if (getErr || !op) return { ok: false, message: 'Оператор не найден.' }
 

@@ -68,6 +68,36 @@ export async function companyOptions(
   return opts?.allLabel ? [{ value: '', label: opts.allLabel }, ...list] : list
 }
 
+/**
+ * ID операторов своей организации (через operator_company_assignments → companies).
+ * null = без ограничения (супер-админ / нет организации).
+ */
+export async function scopedOperatorIds(
+  ctx: { supabase: any; organizationId?: string | null },
+): Promise<string[] | null> {
+  const companyIds = await scopedCompanyIds(ctx)
+  if (!companyIds) return null
+  const { data } = await ctx.supabase
+    .from('operator_company_assignments')
+    .select('operator_id')
+    .in('company_id', companyIds)
+  return Array.from(new Set((data || []).map((a: any) => String(a.operator_id))))
+}
+
+/**
+ * Активные операторы своей организации (id, name, short_name), по имени.
+ * Заменяет прямой `from('operators').select(...).eq('is_active', true).order('name')`.
+ */
+export async function scopedOperatorRows(
+  ctx: { supabase: any; organizationId?: string | null },
+): Promise<Array<{ id: string; name: string; short_name: string | null }>> {
+  let q = ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', true).order('name')
+  const ids = await scopedOperatorIds(ctx)
+  if (ids) q = q.in('id', ids)
+  const { data } = await q
+  return (data || []) as Array<{ id: string; name: string; short_name: string | null }>
+}
+
 export async function resolveOperatorNames(
   supabase: any,
   rows: Array<{ operator_id?: string | null }>,
