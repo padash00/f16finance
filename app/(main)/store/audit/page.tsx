@@ -97,6 +97,19 @@ export default function StoreAuditPage() {
     else setError(j?.error || 'Ошибка загрузки акта')
   }, [])
 
+  // Живой опрос: пока открыта деталь НЕзакрытого акта — каждые 4с тихо подтягиваем
+  // подсчёты операторов и прогресс (без мигания), чтобы видеть подсчёт в реальном времени.
+  useEffect(() => {
+    if (view !== 'detail' || !detailId || detail?.act.status !== 'open') return
+    const t = setInterval(() => {
+      fetch(`/api/admin/store/audit?act=${encodeURIComponent(detailId)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => { if (j?.data) setDetail(j.data) })
+        .catch(() => {})
+    }, 4000)
+    return () => clearInterval(t)
+  }, [view, detailId, detail?.act.status])
+
   const createAct = async () => {
     if (!locationId || assignments.filter((a) => a.operator_id).length === 0) {
       setError('Выберите локацию и хотя бы одного оператора')
