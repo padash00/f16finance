@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { renderWeeklyHTML, PDF_OPTIONS } from '@/lib/reports/orda-weekly-template'
+import { buildWeeklyContract, type WeeklyActData } from '@/lib/reports/build-weekly-contract'
 
 // Vercel: PDF-генерация может занять 10-20 секунд (cold start chromium).
 export const maxDuration = 60
@@ -27,10 +29,25 @@ export async function GET(req: Request) {
     const to = (url.searchParams.get('to') || '').trim()
     if (!from || !to) return json({ error: 'from, to обязательны' }, 400)
 
-    // Печатаем standalone-страницу акта (она сама тянет /api/admin/weekly-act).
-    const printUrl = new URL('/weekly-report/act-print', url.origin)
-    printUrl.searchParams.set('from', from)
-    printUrl.searchParams.set('to', to)
+    // Данные акта из журнала (weekly-act). Server-side с пробросом cookies для авторизации.
+    const cookieHeader = req.headers.get('cookie') || ''
+    const actUrl = new URL('/api/admin/weekly-act', url.origin)
+    actUrl.searchParams.set('from', from)
+    actUrl.searchParams.set('to', to)
+    const actRes = await fetch(actUrl.toString(), {
+      headers: cookieHeader ? { cookie: cookieHeader } : {},
+      cache: 'no-store',
+    })
+    const actJson = await actRes.json().catch(() => null)
+    if (!actRes.ok || !actJson?.data) {
+      throw new Error(actJson?.error || `weekly-act HTTP ${actRes.status}`)
+    }
+
+    // JSON-контракт → HTML по шаблону orda-weekly-template.
+    const generated = new Date().toLocaleString('ru-RU')
+    const contract = buildWeeklyContract(actJson.data as WeeklyActData, generated)
+    const fontCss = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Manrope:wght@700;800&display=swap');"
+    const html = renderWeeklyHTML(contract, { fontCss })
 
     const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
       import('puppeteer-core'),
@@ -42,38 +59,10 @@ export async function GET(req: Request) {
       headless: true,
     })
     const page = await browser.newPage()
+    await page.setContent(html, { waitUntil: 'load', timeout: 30_000 })
+    try { await page.evaluate(() => (document as any).fonts?.ready) } catch { /* шрифты не критичны */ }
 
-    // Пробрасываем cookies — без них print-страница не пройдёт авторизацию при фетче данных.
-    const cookieHeader = req.headers.get('cookie') || ''
-    if (cookieHeader) {
-      const hostname = url.hostname
-      const cookies = cookieHeader
-        .split(';')
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .map((pair) => {
-          const eqIdx = pair.indexOf('=')
-          if (eqIdx < 0) return null
-          const name = pair.slice(0, eqIdx).trim()
-          const value = pair.slice(eqIdx + 1).trim()
-          if (!name) return null
-          return { name, value, domain: hostname, path: '/' }
-        })
-        .filter((c): c is { name: string; value: string; domain: string; path: string } => c !== null)
-      if (cookies.length > 0) await page.setCookie(...cookies)
-    }
-
-    await page.goto(printUrl.toString(), { waitUntil: 'networkidle0', timeout: 30_000 })
-    await page.waitForSelector('.act-paper', { timeout: 12_000 })
-    // Печатаем как ЭКРАН — иначе теряются фоны/рамки.
-    await page.emulateMediaType('screen')
-
-    const pdfBuffer = await page.pdf({
-      landscape: true,
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' },
-    })
+    const pdfBuffer = await page.pdf(PDF_OPTIONS as any)
 
     const filename = `Akt_${from}_${to}.pdf`
     return new NextResponse(pdfBuffer as any, {
