@@ -667,7 +667,7 @@ export default function ProfitabilityPage() {
     const result = new Map<string, Map<string, any>>()
     for (const row of rows) {
       const m = row.month
-      type Agg = { company_id: string; name: string; revenue: number; cashRevenue: number; cashlessRevenue: number; cogs: number; operating: number; posComJ: number; payrollJ: number; payrollTaxJ: number; incomeTaxJ: number; depreciationJ: number; financialJ: number; nonOpJ: number }
+      type Agg = { company_id: string; name: string; revenue: number; cashRevenue: number; cashlessRevenue: number; cogs: number; operating: number; posComJ: number; payrollJ: number; payrollTaxJ: number; incomeTaxJ: number; depreciationJ: number; financialJ: number; nonOpJ: number; capexJ: number; profitDistJ: number }
       const aggs = new Map<string, Agg>()
       for (const c of companies) {
         aggs.set(String(c.id), {
@@ -675,7 +675,7 @@ export default function ProfitabilityPage() {
           revenue: 0, cashRevenue: 0, cashlessRevenue: 0,
           cogs: 0, operating: 0,
           posComJ: 0, payrollJ: 0, payrollTaxJ: 0, incomeTaxJ: 0,
-          depreciationJ: 0, financialJ: 0, nonOpJ: 0,
+          depreciationJ: 0, financialJ: 0, nonOpJ: 0, capexJ: 0, profitDistJ: 0,
         })
       }
       // Бакет для строк БЕЗ компании (company_id=null) — раньше они молча пропускались.
@@ -684,7 +684,7 @@ export default function ProfitabilityPage() {
         revenue: 0, cashRevenue: 0, cashlessRevenue: 0,
         cogs: 0, operating: 0,
         posComJ: 0, payrollJ: 0, payrollTaxJ: 0, incomeTaxJ: 0,
-        depreciationJ: 0, financialJ: 0, nonOpJ: 0,
+        depreciationJ: 0, financialJ: 0, nonOpJ: 0, capexJ: 0, profitDistJ: 0,
       })
       for (const ir of incomes) {
         if (!ir.date.startsWith(m)) continue
@@ -713,7 +713,8 @@ export default function ProfitabilityPage() {
         else if (group === 'financial_expenses') a.financialJ += amount
         else if (group === 'non_operating') a.nonOpJ += amount
         else if (group === 'depreciation') a.depreciationJ += amount
-        else if (group === 'capex' || group === 'profit_distribution') { /* вне P&L */ }
+        else if (group === 'capex') a.capexJ += amount
+        else if (group === 'profit_distribution') a.profitDistJ += amount
         else a.operating += amount
       }
       const sumRevenue = Array.from(aggs.values()).reduce((s, a) => s + a.revenue, 0)
@@ -749,6 +750,7 @@ export default function ProfitabilityPage() {
           depreciation, amortization, operatingProfit,
           financialExpenses: a.financialJ, ebt,
           incomeTax, nonOperating: a.nonOpJ, netProfit, margin,
+          capex: a.capexJ, profitDistribution: a.profitDistJ,
         })
       }
       result.set(m, inner)
@@ -766,6 +768,7 @@ export default function ProfitabilityPage() {
           revenue: 0, cashRevenue: 0, cashlessRevenue: 0, cogs: 0, operating: 0, posCom: 0,
           payroll: 0, payrollTaxes: 0, otherOperating: 0, ebitda: 0, depreciation: 0,
           amortization: 0, operatingProfit: 0, financialExpenses: 0, incomeTax: 0, nonOperating: 0, netProfit: 0,
+          capex: 0, profitDistribution: 0,
         }
         e.revenue += c.revenue; e.cashRevenue += c.cashRevenue; e.cashlessRevenue += c.cashlessRevenue
         e.cogs += c.cogs; e.operating += c.operating; e.posCom += c.posCom
@@ -773,6 +776,7 @@ export default function ProfitabilityPage() {
         e.ebitda += c.ebitda; e.depreciation += c.depreciation; e.amortization += c.amortization
         e.operatingProfit += c.operatingProfit; e.financialExpenses += c.financialExpenses
         e.incomeTax += c.incomeTax; e.nonOperating += c.nonOperating; e.netProfit += c.netProfit
+        e.capex += c.capex || 0; e.profitDistribution += c.profitDistribution || 0
         acc.set(cid, e)
       }
     }
@@ -782,6 +786,7 @@ export default function ProfitabilityPage() {
       .map((c) => ({
         ...c,
         grossProfit: c.revenue - c.cogs,
+        ebt: c.operatingProfit - c.financialExpenses,
         share: totalRev > 0 ? c.revenue / totalRev : 0,
         margin: c.revenue > 0 ? (c.netProfit / c.revenue) * 100 : 0,
         ebitdaMargin: c.revenue > 0 ? (c.ebitda / c.revenue) * 100 : 0,
@@ -1756,6 +1761,78 @@ export default function ProfitabilityPage() {
                 </table>
               </div>
             </Card>
+          )}
+
+          {/* ═══ ДЕТАЛЬНАЯ ОПиУ ПО КАЖДОЙ ТОЧКЕ ═══ */}
+          {byCompanyPeriod.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                <BarChart2 className="h-4 w-4 text-emerald-400" />
+                Детальная ОПиУ по каждой точке
+              </h2>
+              {byCompanyPeriod.map((c) => {
+                const fcf = c.netProfit - (c.capex || 0) - (c.profitDistribution || 0)
+                return (
+                  <details key={c.company_id || 'none'} className="group">
+                    <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-white/5">
+                      <span className="flex items-center gap-2">
+                        <Landmark className="h-4 w-4 text-amber-400" />
+                        {c.name}
+                        <span className="text-xs font-normal text-muted-foreground">· выручка {money(c.revenue)} · чистая {money(c.netProfit)}</span>
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <Card className="mt-2 overflow-hidden border-border bg-card p-0">
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {[
+                            { label: 'Выручка', value: c.revenue, kind: 'pos' as const, big: true },
+                            ...(c.cogs > 0 ? [
+                              { label: 'COGS (Себестоимость)', value: -c.cogs, kind: 'neg' as const },
+                              { label: 'Валовая прибыль', value: c.grossProfit, kind: 'subtotal' as const },
+                            ] : []),
+                            { label: 'Операционные расходы', value: -c.operating, kind: 'neg' as const },
+                            { label: `Комиссия ${cashLabels.pos} / эквайринг`, value: -c.posCom, kind: 'neg' as const },
+                            { label: 'Фонд оплаты труда', value: -c.payroll, kind: 'neg' as const },
+                            { label: 'Налоги на зарплату', value: -c.payrollTaxes, kind: 'neg' as const },
+                            { label: 'Прочие операционные', value: -c.otherOperating, kind: 'neg' as const },
+                            { label: 'EBITDA', value: c.ebitda, kind: 'subtotal' as const },
+                            { label: 'Износ', value: -c.depreciation, kind: 'neg' as const },
+                            { label: 'Амортизация', value: -c.amortization, kind: 'neg' as const },
+                            { label: 'Опер. прибыль (EBIT)', value: c.operatingProfit, kind: 'subtotal' as const },
+                            { label: 'Финансовые расходы (% по кредитам)', value: -c.financialExpenses, kind: 'neg' as const },
+                            { label: 'EBT', value: c.ebt, kind: 'subtotal' as const },
+                            { label: 'Налог на прибыль / 3%', value: -c.incomeTax, kind: 'neg' as const },
+                            { label: 'Неоперационные / разовые', value: -c.nonOperating, kind: 'neg' as const },
+                            { label: 'Чистая прибыль', value: c.netProfit, kind: 'final' as const },
+                          ].map(({ label, value, kind, big }) => (
+                            <tr key={label} className={`border-b border-border last:border-b-0 ${kind === 'subtotal' ? 'bg-white/[0.02]' : ''} ${kind === 'final' ? 'border-t-2 border-emerald-500/20 bg-emerald-500/5' : ''}`}>
+                              <td className={`px-4 py-2.5 ${kind === 'subtotal' ? 'font-medium text-foreground' : kind === 'final' ? 'font-semibold text-emerald-200' : big ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{label}</td>
+                              <td className={`px-4 py-2.5 text-right tabular-nums ${kind === 'final' ? 'font-bold text-emerald-200' : kind === 'subtotal' ? 'font-semibold text-foreground' : value >= 0 ? 'text-foreground' : 'text-rose-300'}`}>{money(value)}</td>
+                            </tr>
+                          ))}
+                          {(c.capex > 0 || c.profitDistribution > 0) && (
+                            <>
+                              <tr className="border-t-2 border-amber-500/20 bg-amber-500/[0.04]"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wider text-amber-400/70">Справочно — вне P&L</td></tr>
+                              {c.capex > 0 && (
+                                <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">CAPEX (покупка активов)</td><td className="px-4 py-2.5 text-right tabular-nums text-amber-300">−{money(c.capex)}</td></tr>
+                              )}
+                              {c.profitDistribution > 0 && (
+                                <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">Распределение прибыли</td><td className="px-4 py-2.5 text-right tabular-nums text-violet-300">−{money(c.profitDistribution)}</td></tr>
+                              )}
+                              <tr className="bg-amber-500/[0.04]">
+                                <td className="px-4 py-2.5 font-medium text-foreground">FCF (после CAPEX + распределения)</td>
+                                <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${fcf >= 0 ? 'text-amber-200' : 'text-rose-300'}`}>{money(fcf)}</td>
+                              </tr>
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </Card>
+                  </details>
+                )
+              })}
+            </div>
           )}
 
           {/* ═══ BY COMPANY за месяц — убрано по запросу (дублировало таблицу за период) ═══ */}
