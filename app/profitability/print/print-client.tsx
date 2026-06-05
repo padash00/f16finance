@@ -69,6 +69,8 @@ export default function PrintClient() {
   const overrideStaffRaw = params.get('payroll_staff')
   const overrideOpsRaw = params.get('payroll_ops')
   const note = (params.get('note') || '').trim()
+  // pdf=1 → режим серверной генерации (puppeteer): прячем тулбар, фон белый, документ во всю ширину.
+  const pdfMode = params.get('pdf') === '1'
   const overrideStaff = overrideStaffRaw != null && overrideStaffRaw !== ''
     ? Math.max(0, Math.round(Number(overrideStaffRaw)) || 0)
     : null
@@ -285,11 +287,18 @@ export default function PrintClient() {
           .doc-paper .capex-item,
           .doc-paper .capex-category { page-break-inside: avoid; break-inside: avoid; }
         }
+        /* Серверный PDF (puppeteer emulateMediaType screen): убрать рамку экрана, документ во всю страницу. */
+        .print-shell.pdf-mode { padding: 0 !important; background: #fff !important; min-height: 0 !important; }
+        .print-shell.pdf-mode .doc-paper { max-width: none !important; width: 100% !important; box-shadow: none !important; }
+        /* Не рвать секции/строки на странице — действует и в screen-режиме puppeteer. */
+        .doc-paper .keep,
+        .doc-paper .capex-item,
+        .doc-paper .capex-category { break-inside: avoid; page-break-inside: avoid; }
       `}</style>
 
-      <div className="print-shell">
-        {/* Toolbar — только на экране */}
-        <div className="no-print mx-auto mb-4 flex max-w-[820px] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+      <div className={'print-shell' + (pdfMode ? ' pdf-mode' : '')}>
+        {/* Toolbar — только на экране (в pdf-режиме скрыт) */}
+        <div className={`${pdfMode ? 'hidden ' : ''}no-print mx-auto mb-4 flex max-w-[820px] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm`}>
           <div className="text-sm text-slate-600">
             <span className="font-semibold text-slate-900">{report.company.name}</span>
             {' · '}

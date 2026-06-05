@@ -42,6 +42,7 @@ export async function GET(req: Request) {
 
     // Собираем URL print-страницы. Хост берём из текущего запроса.
     const printUrl = new URL('/profitability/print', url.origin)
+    printUrl.searchParams.set('pdf', '1') // режим без тулбара/серого фона + screen-стили для цветной печати
     printUrl.searchParams.set('company_id', companyId)
     printUrl.searchParams.set('from', monthFrom)
     printUrl.searchParams.set('to', monthTo)
@@ -91,6 +92,11 @@ export async function GET(req: Request) {
 
     // Доп. ожидание — на случай если внутри страницы ещё рендерятся данные после networkidle.
     await page.waitForSelector('.doc-paper', { timeout: 10_000 })
+
+    // КЛЮЧЕВОЕ: печатаем как ЭКРАН, а не print-медиа. В print-медиа Chrome не
+    // выводил фоны (тёмная шапка, карточки, цветная полоса выходили белыми).
+    // В screen-режиме PDF получается точь-в-точь как открытая в браузере страница.
+    await page.emulateMediaType('screen')
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
