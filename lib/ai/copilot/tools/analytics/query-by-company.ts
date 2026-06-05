@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyRows } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -41,7 +42,7 @@ export const queryByCompanyTool: CopilotTool = {
     const today = todayISO()
     const from = period === 'week' ? addDaysISO(today, -6) : addDaysISO(today, -29)
 
-    const { data: companies } = await ctx.supabase.from('companies').select('id, name, code').order('name')
+    const companies = await scopedCompanyRows(ctx)
     if (!companies || companies.length === 0) return { ok: true, message: 'Точек нет.' }
 
     const [incRes, expRes] = await Promise.all([

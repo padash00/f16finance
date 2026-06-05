@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const updateCompanyTool: CopilotTool = {
@@ -19,10 +20,7 @@ export const updateCompanyTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'ID точки',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code, address').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
     { name: 'new_name', label: 'Новое название', type: 'string', required: false, description: 'Если меняем' },
     { name: 'new_code', label: 'Новый код', type: 'string', required: false, description: 'Если меняем' },
@@ -38,7 +36,14 @@ export const updateCompanyTool: CopilotTool = {
     if (input.new_address) update.address = String(input.new_address).trim()
     if (Object.keys(update).length === 0) return { ok: false, message: 'Нечего менять.' }
 
-    const { error } = await ctx.supabase.from('companies').update(update).eq('id', companyId)
+    // Менять можно только точку своей организации.
+    let chkQ = ctx.supabase.from('companies').select('id').eq('id', companyId)
+    if (ctx.organizationId) chkQ = chkQ.eq('organization_id', ctx.organizationId)
+    const { data: chk } = await chkQ.maybeSingle()
+    if (!chk) return { ok: false, message: 'Точка не найдена.' }
+    let updQ = ctx.supabase.from('companies').update(update).eq('id', companyId)
+    if (ctx.organizationId) updQ = updQ.eq('organization_id', ctx.organizationId)
+    const { error } = await updQ
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }
 
     try {

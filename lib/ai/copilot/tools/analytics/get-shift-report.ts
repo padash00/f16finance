@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { resolveOperatorNames } from '../../query-helpers'
+import { companyOptions, resolveOperatorNames } from '../../query-helpers'
 
 export const getShiftReportTool: CopilotTool = {
   name: 'get_shift_report',
@@ -26,10 +26,7 @@ export const getShiftReportTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'Какая точка',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
   ],
   handler: async (input, ctx) => {

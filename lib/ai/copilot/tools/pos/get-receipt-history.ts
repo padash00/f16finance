@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 
 export const getReceiptHistoryTool: CopilotTool = {
   name: 'get_receipt_history',
@@ -25,10 +26,7 @@ export const getReceiptHistoryTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Если не указано — все точки',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
   ],
   handler: async (input, ctx) => {
@@ -42,7 +40,12 @@ export const getReceiptHistoryTool: CopilotTool = {
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(50)
-    if (companyId) query = query.eq('company_id', companyId)
+    if (companyId) {
+      query = query.eq('company_id', companyId)
+    } else {
+      const ids = await scopedCompanyIds(ctx)
+      if (ids) query = query.in('company_id', ids)
+    }
 
     const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }

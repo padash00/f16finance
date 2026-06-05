@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -26,20 +27,25 @@ export const getKpiStatusTool: CopilotTool = {
     const dayOfMonth = d.getDate()
     const totalDays = lastDay.getDate()
 
-    // Получаем планы по компаниям из таблицы (если есть kpi_plans)
-    const { data: plans } = await ctx.supabase
+    // Получаем планы по компаниям из таблицы (если есть kpi_plans) — только своей организации.
+    const kpiScopeIds = await scopedCompanyIds(ctx)
+    let plansQ = ctx.supabase
       .from('kpi_plans')
       .select('company_id, target_amount, period_start, period_end, kind')
       .eq('kind', 'monthly_revenue')
       .lte('period_start', today)
       .gte('period_end', today)
       .limit(20)
+    if (kpiScopeIds) plansQ = plansQ.in('company_id', kpiScopeIds)
+    const { data: plans } = await plansQ
 
     if (!plans || plans.length === 0) {
       return { ok: true, message: 'На текущий месяц планы KPI не установлены.' }
     }
 
-    const { data: companies } = await ctx.supabase.from('companies').select('id, name')
+    let companiesQ = ctx.supabase.from('companies').select('id, name')
+    if (ctx.organizationId) companiesQ = companiesQ.eq('organization_id', ctx.organizationId)
+    const { data: companies } = await companiesQ
     const companyMap = new Map((companies || []).map((c: any) => [String(c.id), c]))
 
     const lines: string[] = [`🎯 KPI на ${monthStart} — ${monthEnd} (день ${dayOfMonth} из ${totalDays}):\n`]

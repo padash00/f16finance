@@ -5,6 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 const TELEGRAM_API = 'https://api.telegram.org'
@@ -98,13 +99,7 @@ export const broadcastToOperatorsTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Если выбрано — только операторам этой точки. Иначе всем.',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return [
-          { value: '', label: '📢 Всем операторам' },
-          ...(data || []).map((c: any) => ({ value: c.id, label: '📍 ' + c.name + (c.code ? ` (${c.code})` : '') })),
-        ]
-      },
+      getOptions: async (ctx) => companyOptions(ctx, { allLabel: '📢 Всем операторам' }),
     },
     {
       name: 'message',
