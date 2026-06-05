@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -32,13 +33,7 @@ export const addExpenseTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'ID компании/точки',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({
-          value: c.id,
-          label: c.name + (c.code ? ` (${c.code})` : ''),
-        }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
     {
       name: 'category',

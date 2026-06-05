@@ -37,6 +37,20 @@ export async function scopedCompanyIds(
 }
 
 /**
+ * Сырые строки компаний своей организации (id, name, code), отсортированы по имени.
+ * Для выпадашек, где нужен кастомный формат метки — заменяет прямой
+ * `from('companies').select('id, name, code').order('name')`.
+ */
+export async function scopedCompanyRows(
+  ctx: { supabase: any; organizationId?: string | null },
+): Promise<Array<{ id: string; name: string; code: string | null }>> {
+  let q = ctx.supabase.from('companies').select('id, name, code').order('name')
+  if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+  const { data } = await q
+  return (data || []) as Array<{ id: string; name: string; code: string | null }>
+}
+
+/**
  * Опции выпадашки «Точка» для copilot-инструментов — только компании своей
  * организации. allLabel (если задан) добавляет первую опцию «Все точки».
  */

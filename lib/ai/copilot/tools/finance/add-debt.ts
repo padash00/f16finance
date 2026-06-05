@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const addDebtTool: CopilotTool = {
@@ -19,10 +20,7 @@ export const addDebtTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'Какая точка',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
     { name: 'client_name', label: 'Кто должен', type: 'string', required: true, description: 'Имя клиента' },
     { name: 'amount', label: 'Сумма (₸)', type: 'number', required: true, description: 'Сколько должен' },
