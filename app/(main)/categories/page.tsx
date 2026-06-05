@@ -30,6 +30,24 @@ import {
   Wallet,
 } from 'lucide-react'
 
+// Цвет по финансовой группе — чтобы категории читались с первого взгляда.
+const GROUP_STYLE: Record<string, { text: string; bg: string; border: string }> = {
+  revenue: { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
+  cogs: { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
+  operating: { text: 'text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/25' },
+  pos_commission: { text: 'text-violet-300', bg: 'bg-violet-500/10', border: 'border-violet-500/25' },
+  payroll: { text: 'text-blue-300', bg: 'bg-blue-500/10', border: 'border-blue-500/25' },
+  payroll_advance: { text: 'text-blue-300', bg: 'bg-blue-500/10', border: 'border-blue-500/25' },
+  payroll_tax: { text: 'text-indigo-300', bg: 'bg-indigo-500/10', border: 'border-indigo-500/25' },
+  income_tax: { text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/25' },
+  financial_expenses: { text: 'text-fuchsia-300', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/25' },
+  non_operating: { text: 'text-orange-300', bg: 'bg-orange-500/10', border: 'border-orange-500/25' },
+  depreciation: { text: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-500/25' },
+  capex: { text: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/25' },
+  profit_distribution: { text: 'text-purple-300', bg: 'bg-purple-500/10', border: 'border-purple-500/25' },
+}
+const groupStyle = (g: string | null) => GROUP_STYLE[g || 'operating'] || { text: 'text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20' }
+
 type Category = {
   id: string
   name: string
@@ -260,16 +278,20 @@ export default function CategoriesPage() {
                   ) : (
                     <div className="flex justify-between items-start relative z-10">
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Tag className="w-4 h-4 text-accent opacity-70" />
-                          <h3 className="font-bold text-foreground">{cat.name}</h3>
+                        <div className="mb-2 flex items-center gap-2.5">
+                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${groupStyle(cat.accounting_group).bg} ${groupStyle(cat.accounting_group).border} ${groupStyle(cat.accounting_group).text}`}>
+                            <Tag className="h-4 w-4" />
+                          </span>
+                          <h3 className="truncate font-bold text-foreground">{cat.name}</h3>
                         </div>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 text-muted-foreground border border-white/10">
-                          {cat.type || 'Общее'}
-                        </span>
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-accent/10 text-accent border border-accent/20">
-                          {getFinancialGroupLabel(cat.accounting_group)}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex items-center rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {cat.type || 'Общее'}
+                          </span>
+                          <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[10px] font-medium ${groupStyle(cat.accounting_group).bg} ${groupStyle(cat.accounting_group).border} ${groupStyle(cat.accounting_group).text}`}>
+                            {getFinancialGroupLabel(cat.accounting_group)}
+                          </span>
+                        </div>
                         {cat.monthly_budget && cat.monthly_budget > 0 ? (
                           (() => {
                             const budget = Number(cat.monthly_budget || 0)
@@ -318,7 +340,7 @@ export default function CategoriesPage() {
                           })()
                         ) : null}
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                         {can('categories.edit') && (
                           <Button size="icon" variant="ghost" className="h-8 w-8 hover:text-accent" onClick={() => startEdit(cat)}>
                             <Pencil className="w-4 h-4" />
@@ -332,7 +354,7 @@ export default function CategoriesPage() {
                       </div>
                     </div>
                   )}
-                  <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-accent/5 rounded-full blur-2xl pointer-events-none" />
+                  <div className={`pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full blur-2xl ${groupStyle(cat.accounting_group).bg}`} />
                 </Card>
               ))}
             </div>
@@ -529,17 +551,11 @@ export default function CategoriesPage() {
               const count = countByGroup[group.value] || 0
               const catsInGroup = categories.filter(c => (c.accounting_group || 'operating') === group.value)
               return (
-                <Card key={group.value} className="p-4 border-border bg-card/60 hover:bg-white/5 transition-colors">
+                <Card key={group.value} className={`border-l-2 border-white/[0.08] bg-white/[0.025] p-4 transition-colors hover:bg-white/[0.05] ${groupStyle(group.value).border}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${
-                          group.kind === 'off_chain'
-                            ? (group.value === 'profit_distribution'
-                              ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30')
-                            : 'bg-accent/15 text-accent border-accent/20'
-                        }`}>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${groupStyle(group.value).bg} ${groupStyle(group.value).text} ${groupStyle(group.value).border}`}>
                           {group.label}
                         </span>
                         {group.kind === 'off_chain' && (
