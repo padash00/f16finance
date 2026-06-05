@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -17,7 +18,7 @@ function addDaysISO(iso: string, diff: number): string {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
 
-async function sumRevenue(supabase: any, from: string, to: string, companyId?: string): Promise<number> {
+async function sumRevenue(supabase: any, from: string, to: string, companyId?: string, companyIds?: string[] | null): Promise<number> {
   let q = supabase
     .from('incomes')
     .select('cash_amount, kaspi_amount, card_amount, online_amount')
@@ -25,6 +26,7 @@ async function sumRevenue(supabase: any, from: string, to: string, companyId?: s
     .lte('date', to)
     .range(0, 9999)
   if (companyId) q = q.eq('company_id', companyId)
+  else if (companyIds) q = q.in('company_id', companyIds)
   const { data } = await q
   let total = 0
   for (const r of (data || []) as any[]) {
@@ -57,13 +59,7 @@ export const comparePeriodsTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Фильтр',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return [
-          { value: '', label: '📍 Все точки' },
-          ...(data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') })),
-        ]
-      },
+      getOptions: async (ctx) => companyOptions(ctx, { allLabel: '📍 Все точки' }),
     },
   ],
   handler: async (input, ctx) => {
@@ -77,9 +73,10 @@ export const comparePeriodsTool: CopilotTool = {
     const prevTo = addDaysISO(currentFrom, -1)
     const prevFrom = addDaysISO(prevTo, -days)
 
+    const scopeIds = companyId ? null : await scopedCompanyIds(ctx)
     const [current, previous] = await Promise.all([
-      sumRevenue(ctx.supabase, currentFrom, currentTo, companyId),
-      sumRevenue(ctx.supabase, prevFrom, prevTo, companyId),
+      sumRevenue(ctx.supabase, currentFrom, currentTo, companyId, scopeIds),
+      sumRevenue(ctx.supabase, prevFrom, prevTo, companyId, scopeIds),
     ])
 
     const diff = current - previous

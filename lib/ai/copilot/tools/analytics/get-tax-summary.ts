@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -54,12 +55,16 @@ export const getTaxSummaryTool: CopilotTool = {
       to = today
     }
 
-    const { data } = await ctx.supabase
+    let taxQ = ctx.supabase
       .from('incomes')
       .select('cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', from)
       .lte('date', to)
       .range(0, 49999)
+    // Налоговая база — только по компаниям своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids) taxQ = taxQ.in('company_id', ids)
+    const { data } = await taxQ
 
     let revenue = 0
     for (const r of (data || []) as any[]) {

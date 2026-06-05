@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 
 export const queryLowStockTool: CopilotTool = {
   name: 'query_low_stock',
@@ -18,13 +19,7 @@ export const queryLowStockTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Фильтр по точке. Если не указан — все.',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return [
-          { value: '', label: '📍 Все точки' },
-          ...(data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') })),
-        ]
-      },
+      getOptions: async (ctx) => companyOptions(ctx, { allLabel: '📍 Все точки' }),
     },
   ],
   handler: async (input, ctx) => {
@@ -36,7 +31,12 @@ export const queryLowStockTool: CopilotTool = {
       .select('id, company_id, location_type')
       .eq('location_type', 'point_display')
       .eq('is_active', true)
-    if (companyId) locQuery = locQuery.eq('company_id', companyId)
+    if (companyId) {
+      locQuery = locQuery.eq('company_id', companyId)
+    } else {
+      const ids = await scopedCompanyIds(ctx)
+      if (ids) locQuery = locQuery.in('company_id', ids)
+    }
 
     const { data: locations, error: locErr } = await locQuery
     if (locErr) return { ok: false, message: `Ошибка: ${locErr.message}` }

@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -58,10 +59,7 @@ export const compareCompaniesTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'Первая точка для сравнения',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
     {
       name: 'company_b',
@@ -69,10 +67,7 @@ export const compareCompaniesTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'Вторая точка для сравнения',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return (data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
     {
       name: 'period',
