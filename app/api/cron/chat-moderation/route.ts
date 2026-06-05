@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 import { generateAiText } from '@/lib/ai/provider'
 
 export const runtime = 'nodejs'
@@ -70,12 +71,8 @@ function safeParse(text: string): AIVerdict[] {
 }
 
 export async function GET(request: Request) {
-  // Защита от внешнего вызова: разрешаем Vercel cron header или x-cron-secret
-  const url = new URL(request.url)
-  const cronSecret = process.env.CRON_SECRET
-  const headerSecret = request.headers.get('x-cron-secret')
-  const isVercelCron = request.headers.get('user-agent')?.includes('vercel-cron')
-  if (cronSecret && headerSecret !== cronSecret && !isVercelCron && url.searchParams.get('secret') !== cronSecret) {
+  // Защита от внешнего вызова: только валидный CRON_SECRET (Bearer/header/query).
+  if (!verifyCronRequest(request)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
 

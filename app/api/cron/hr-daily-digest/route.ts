@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server'
 
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 
 export const runtime = 'nodejs'
 
@@ -54,11 +55,8 @@ async function sendTelegram(chatId: string, text: string): Promise<void> {
 }
 
 export async function GET(request: Request) {
-  // Защита: секрет должен совпадать
-  const url = new URL(request.url)
-  const provided = request.headers.get('x-cron-secret') || url.searchParams.get('secret')
-  const expected = process.env.CRON_SECRET
-  if (expected && provided !== expected) {
+  // Защита: только валидный CRON_SECRET (Bearer/header/query).
+  if (!verifyCronRequest(request)) {
     return json({ error: 'unauthorized' }, 401)
   }
 

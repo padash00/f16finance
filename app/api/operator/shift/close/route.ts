@@ -87,12 +87,20 @@ export async function POST(request: Request) {
 
   const { data: open } = await supabase
     .from('point_shifts')
-    .select('id')
+    .select('id, operator_id')
     .eq('company_id', companyId)
     .eq('status', 'open')
     .maybeSingle()
 
   if (!open) return json({ error: 'point-shift-no-open' }, 409)
+  // Закрыть смену может только тот кассир, который её открыл.
+  const shiftOwner = (open as any).operator_id as string | null
+  if (shiftOwner && shiftOwner !== staffId) {
+    return json(
+      { error: 'point-shift-not-owner', message: 'Эту смену открыл другой кассир — закрыть может только он.' },
+      403,
+    )
+  }
   const shiftId = (open as any).id as string
 
   const checklistGuard = await getMissingBlockingChecklists(supabase as any, companyId, shiftId)

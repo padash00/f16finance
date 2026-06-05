@@ -24,6 +24,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { verifyCronRequest } from '@/lib/server/cron-auth'
 
 export const runtime = 'nodejs'
 
@@ -52,9 +53,7 @@ function toIso(d: Date): string {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const provided = request.headers.get('x-cron-secret') || url.searchParams.get('secret')
-  const expected = process.env.CRON_SECRET
-  if (expected && provided !== expected) {
+  if (!verifyCronRequest(request)) {
     return json({ error: 'unauthorized' }, 401)
   }
 
