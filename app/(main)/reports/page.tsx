@@ -11,7 +11,7 @@ import {
   memo
 } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
 import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
@@ -1774,123 +1774,54 @@ function ReportsContent() {
       ? (includeExtraInTotals ? 'Все компании (включая Extra)' : 'Все компании (без Extra)')
       : companyName(companyFilter)
     const period = `${dateFrom} — ${dateTo}`
-    const wb = createWorkbook()
-    const topCompany = incomeByCompanyData[0]
-    const topExpense = expenseByCategoryData[0]
-
-    await buildDashboardSheet(wb, {
-      sheetName: 'Дашборд',
-      title: 'Финансовый дашборд',
-      subtitle: `Период: ${period} | Компания: ${companyLabel}`,
-      metrics: [
-        { label: 'Выручка', value: formatMoneyFull(totals.totalIncome), hint: `Было ${formatMoneyCompact(totalsPrev.totalIncome)}`, tone: 'good' },
-        { label: 'Расходы', value: formatMoneyFull(totals.totalExpense), hint: `Было ${formatMoneyCompact(totalsPrev.totalExpense)}`, tone: 'warn' },
-        { label: 'Прибыль', value: formatMoneyFull(totals.profit), hint: getPercentageChange(totals.profit, totalsPrev.profit), tone: totals.profit >= 0 ? 'good' : 'danger' },
-        { label: 'Средний чек', value: formatMoneyFull(totals.avgTransaction), hint: `${totals.transactionCount} транзакций`, tone: 'neutral' },
+    const finData = {
+      meta: { title: 'Финансовый отчёт', period, company: companyLabel, generated: new Date().toLocaleString('ru-RU') },
+      kpi: {
+        revenue: totals.totalIncome,
+        revenuePrev: totalsPrev.totalIncome,
+        expense: totals.totalExpense,
+        expensePrev: totalsPrev.totalExpense,
+        profit: totals.profit,
+        profitPrev: totalsPrev.profit,
+        avgCheck: totals.avgTransaction,
+        txns: totals.transactionCount,
+      },
+      summary: [
+        { section: 'ОСНОВНЫЕ ПОКАЗАТЕЛИ' },
+        { label: 'Выручка', cur: totals.totalIncome, prev: totalsPrev.totalIncome },
+        { label: 'Расходы', cur: totals.totalExpense, prev: totalsPrev.totalExpense },
+        { label: 'Прибыль', cur: totals.profit, prev: totalsPrev.profit, strong: true },
+        { section: 'СТРУКТУРА ДОХОДОВ' },
+        { label: 'Наличные', cur: totals.incomeCash, prev: totalsPrev.incomeCash },
+        { label: 'Безналичный доход', cur: totals.incomeNonCash, prev: totalsPrev.incomeNonCash },
+        { label: 'Online', cur: totals.incomeOnline, prev: totalsPrev.incomeOnline },
+        { label: 'Card', cur: totals.incomeCard, prev: totalsPrev.incomeCard },
       ],
-      charts: [
-        {
-          title: 'Выручка по компаниям',
-          subtitle: 'Топ компаний за период',
-          type: 'bar',
-          tone: 'good',
-          valueFormat: 'money',
-          points: incomeByCompanyData.slice(0, 6).map((item) => ({
-            label: item.name,
-            value: item.value,
-          })),
-        },
-        {
-          title: 'Расходы по категориям',
-          subtitle: 'Ключевые статьи затрат',
-          type: 'bar',
-          tone: 'warn',
-          valueFormat: 'money',
-          points: expenseByCategoryData.slice(0, 6).map((item) => ({
-            label: item.name,
-            value: item.amount,
-          })),
-        },
-      ],
-        highlights: [
-        `Ночной Безналичный в отчёте делится по календарным суткам, если в доходах заполнено «Безналичный до 00:00»; иначе суточное распределение может быть неточным.`,
-        `Сравнение с прошлым периодом: выручка ${getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)}, прибыль ${getPercentageChange(totals.profit, totalsPrev.profit)}.`,
-        topCompany ? `Лидер по выручке: ${topCompany.name} (${formatMoneyCompact(topCompany.value)}).` : 'Лидер по выручке не определён: нет данных по компаниям.',
-        topExpense ? `Главная статья расходов: ${topExpense.name} (${formatMoneyCompact(topExpense.amount)}).` : 'Главная статья расходов не определена: нет данных по расходам.',
-      ],
-    })
-
-    // Sheet 1: Summary
-    buildStyledSheet(wb, 'Сводка', 'Финансовый отчёт', `Период: ${period} | Компания: ${companyLabel}`, [
-      { header: 'Показатель', key: 'label', width: 28, type: 'text' },
-      { header: 'Текущий период', key: 'current', width: 20, type: 'money' },
-      { header: 'Прошлый период', key: 'prev', width: 20, type: 'money' },
-      { header: 'Изменение', key: 'change', width: 14, type: 'text', align: 'right' },
-    ], [
-      { _isSection: true, _sectionLabel: 'ОСНОВНЫЕ ПОКАЗАТЕЛИ' },
-      { label: 'Выручка', current: totals.totalIncome, prev: totalsPrev.totalIncome, change: getPercentageChange(totals.totalIncome, totalsPrev.totalIncome) },
-      { label: 'Расходы', current: totals.totalExpense, prev: totalsPrev.totalExpense, change: getPercentageChange(totals.totalExpense, totalsPrev.totalExpense) },
-      { label: 'Прибыль', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
-      { _isTotals: true, label: 'ИТОГО ПРИБЫЛЬ', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
-      { _isSection: true, _sectionLabel: 'СТРУКТУРА ДОХОДОВ' },
-      { label: 'Наличные (доход)', current: totals.incomeCash, prev: totalsPrev.incomeCash, change: getPercentageChange(totals.incomeCash, totalsPrev.incomeCash) },
-      { label: `${cashLabels.providerName} (доход)`, current: totals.incomeKaspi, prev: totalsPrev.incomeKaspi, change: getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi) },
-      { label: 'Online (доход)', current: totals.incomeOnline, prev: totalsPrev.incomeOnline, change: getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline) },
-      { label: 'Card (доход)', current: totals.incomeCard, prev: totalsPrev.incomeCard, change: getPercentageChange(totals.incomeCard, totalsPrev.incomeCard) },
-      { label: 'Безнал (доход)', current: totals.incomeNonCash, prev: totalsPrev.incomeNonCash, change: getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash) },
-    ])
-
-    // Sheet 2: By company
-    const coRows = incomeByCompanyData.map(c => ({ name: c.name, value: c.value, cash: c.cash, kaspi: c.kaspi, online: c.online, card: c.card, count: c.count }))
-    const coTot = coRows.reduce((a, r) => ({ value: a.value + r.value, cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, count: a.count + r.count }), { value: 0, cash: 0, kaspi: 0, online: 0, card: 0, count: 0 })
-    coRows.push({ _isTotals: true, name: 'ИТОГО', ...coTot } as any)
-    buildStyledSheet(wb, 'По компаниям', 'Доходы по компаниям', `Период: ${period}`, [
-      { header: 'Компания', key: 'name', width: 24, type: 'text' },
-      { header: 'Выручка', key: 'value', width: 18, type: 'money' },
-      { header: 'Наличные', key: 'cash', width: 16, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 16, type: 'money' },
-      { header: 'Online', key: 'online', width: 16, type: 'money' },
-      { header: 'Card', key: 'card', width: 16, type: 'money' },
-      { header: 'Транзакций', key: 'count', width: 13, type: 'number', align: 'right' },
-    ], coRows)
-
-    // Sheet 3: Expenses by category
-    const expRows = expenseByCategoryData.map(c => ({ name: c.name, amount: c.amount, pct: c.percentage }))
-    expRows.push({ _isTotals: true, name: 'ИТОГО', amount: totals.totalExpense, pct: 100 } as any)
-    buildStyledSheet(wb, 'Расходы', 'Расходы по категориям', `Период: ${period}`, [
-      { header: 'Категория', key: 'name', width: 30, type: 'text' },
-      { header: 'Сумма', key: 'amount', width: 18, type: 'money' },
-      { header: '% от общих', key: 'pct', width: 14, type: 'percent' },
-    ], expRows)
-
-    // Sheet 4: Detailed operations
-    const detailRows = filteredRows.map(r => ({
-      date: r.date,
-      type: r.type === 'income' ? 'Доход' : 'Расход',
-      company: r.companyName,
-      category: r.category || r.shift || '',
-      amount: Math.round(r.amount),
-      cash: Math.round(r.cashAmount),
-      kaspi: Math.round(r.kaspiAmount),
-      online: r.type === 'income' ? Math.round(r.onlineAmount || 0) : 0,
-      card: r.type === 'income' ? Math.round(r.cardAmount || 0) : 0,
-      note: r.zone || r.comment || '',
-    }))
-    buildStyledSheet(wb, 'Операции', 'Детальные операции', `Период: ${period} | Строк: ${detailRows.length}`, [
-      { header: 'Дата', key: 'date', width: 12, type: 'text' },
-      { header: 'Тип', key: 'type', width: 10, type: 'text' },
-      { header: 'Компания', key: 'company', width: 20, type: 'text' },
-      { header: 'Категория/Смена', key: 'category', width: 22, type: 'text' },
-      { header: 'Сумма', key: 'amount', width: 16, type: 'money' },
-      { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
-      { header: 'Online', key: 'online', width: 14, type: 'money' },
-      { header: 'Card', key: 'card', width: 14, type: 'money' },
-      { header: 'Примечание', key: 'note', width: 22, type: 'text' },
-    ], detailRows)
-
-    await downloadWorkbook(wb, `financial_report_${dateFrom}_${dateTo}.xlsx`)
-    showToast('Excel отчёт скачан', 'success')
+      byCompany: incomeByCompanyData.map((c) => ({
+        name: c.name,
+        revenue: c.value,
+        cash: c.cash,
+        cashless: (c.kaspi || 0) + (c.online || 0) + (c.card || 0),
+        online: c.online,
+        card: c.card,
+        txns: c.count,
+      })),
+      expenses: expenseByCategoryData.map((e) => ({ name: e.name, amount: e.amount })),
+      operations: filteredRows.map((r) => ({
+        date: r.date,
+        type: r.type === 'income' ? 'Доход' : 'Расход',
+        company: r.companyName,
+        cat: r.category || r.shift || '',
+        amount: Math.round(r.amount),
+        cash: Math.round(r.cashAmount),
+        cashless: Math.round((r.kaspiAmount || 0) + (r.type === 'income' ? (r.onlineAmount || 0) + (r.cardAmount || 0) : 0)),
+        online: r.type === 'income' ? Math.round(r.onlineAmount || 0) : 0,
+        card: r.type === 'income' ? Math.round(r.cardAmount || 0) : 0,
+        note: r.zone || r.comment || '',
+      })),
+    }
+    await downloadReportPdf('finreport', finData, `Finansovyy_otchet_${dateFrom}_${dateTo}`)
+    showToast('PDF отчёт скачан', 'success')
   }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
 
   const handleDownloadExcel = handleDownloadCSV
@@ -2043,7 +1974,7 @@ function ReportsContent() {
                     <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-slate-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                       <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4" />
-                        Скачать Excel
+                        Скачать PDF
                       </button>
                       <button onClick={() => window.print()} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
                         <span className="text-base leading-none">🖨</span>
