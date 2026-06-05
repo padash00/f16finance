@@ -145,6 +145,30 @@ export async function GET(req: Request) {
     }
     turnover = round2(turnover)
 
+    // Общая выручка ВСЕХ точек за период — чтобы разнести админ-ФОТ по доле этой точки.
+    // Раньше вся админ-зарплата клалась целиком на КАЖДУЮ точку → Ramen/Extra ложно убыточны
+    // и три отчёта нельзя было складывать (админка считалась трижды).
+    let totalTurnover = 0
+    {
+      let page = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('incomes')
+          .select('cash_amount, kaspi_amount, online_amount, card_amount')
+          .gte('date', fromDate)
+          .lte('date', toDate)
+          .range(page * 1000, page * 1000 + 999)
+        if (error) throw error
+        const chunk = (data || []) as any[]
+        for (const r of chunk) {
+          totalTurnover += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.online_amount || 0) + Number(r.card_amount || 0)
+        }
+        if (chunk.length < 1000) break
+        page += 1
+      }
+    }
+    const staffShare = totalTurnover > 0 ? turnover / totalTurnover : 0
+
     // Маппинг category name → accounting_group.
     const accountingGroupByName = new Map<string, string>()
     for (const row of (categoriesRes.data || []) as any[]) {
@@ -287,10 +311,12 @@ export async function GET(req: Request) {
       }
     }
 
+    // Админ-ФОТ разносим по доле выручки точки (а не целиком на каждую).
+    const staffAllocated = staffAccruedTotal * staffShare
     const payrollAccrued = {
-      staff: Math.round(staffAccruedTotal),
+      staff: Math.round(staffAllocated),
       operators: Math.round(operatorsAccruedTotal),
-      total: Math.round(staffAccruedTotal + operatorsAccruedTotal),
+      total: Math.round(staffAllocated + operatorsAccruedTotal),
     }
 
     return json({
