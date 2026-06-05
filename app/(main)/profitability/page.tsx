@@ -90,6 +90,7 @@ export default function ProfitabilityPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [inputTab, setInputTab] = useState<InputTab>('revenue')
   const [whatIf, setWhatIf] = useState({ revenueAdj: 0, expenseAdj: 0 })
+  const [tab, setTab] = useState<'overview' | 'monthly' | 'points' | 'reports' | 'settings'>('overview')
 
   const months = useMemo(() => buildMonths(monthFrom, monthTo), [monthFrom, monthTo])
 
@@ -1107,10 +1108,30 @@ export default function ProfitabilityPage() {
         </div>
       )}
 
+      {/* ═══ TABS ═══ */}
+      <div className="flex flex-wrap gap-1.5 border-b border-border pb-2">
+        {([
+          ['overview', 'Обзор'],
+          ['monthly', 'Помесячно'],
+          ['points', 'По точкам'],
+          ['reports', 'Отчёты'],
+          ['settings', 'Настройки'],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === key ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {loading && !selected ? (
         <Card className="border-border bg-card p-12 text-center text-muted-foreground animate-pulse">Загружаем данные ОПиУ…</Card>
       ) : selected ? (
         <>
+          {tab === 'overview' && (<>
           {/* ═══ HERO KPI cards — выручка, EBITDA, опер.прибыль, чистая ═══ */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {(() => {
@@ -1344,6 +1365,8 @@ export default function ProfitabilityPage() {
             </Card>
           </details>
 
+          </>)}
+          {tab === 'monthly' && (<>
           {/* ═══ MONTHLY HISTORY TABLE ═══ */}
           {rows.length > 1 && (
             <Card className="border-border bg-card p-5">
@@ -1394,6 +1417,8 @@ export default function ProfitabilityPage() {
             </Card>
           )}
 
+          </>)}
+          {tab === 'reports' && (<>
           {/* ═══ УПРАВЛЕНЧЕСКИЙ ОТЧЁТ ПО ТОЧКЕ (PDF) — детальный, без других точек ═══ */}
           <Card className="border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-rose-500/[0.03] p-5">
             <div className="space-y-4">
@@ -1654,6 +1679,8 @@ export default function ProfitabilityPage() {
             </div>
           </Card>
 
+          </>)}
+          {tab === 'points' && (<>
           {/* ═══ ПО ТОЧКАМ ЗА ПЕРИОД (агрегат, не один месяц) + выгрузка ═══ */}
           {byCompanyPeriod.length > 0 && (
             <Card className="border-border bg-card p-5">
@@ -1812,6 +1839,8 @@ export default function ProfitabilityPage() {
             </Card>
           )}
 
+          </>)}
+          {tab === 'settings' && (<>
           {/* ═══ ALERTS (kaspi daily corrections) ═══ */}
           {selected.hasRevenueOverride ? (
             <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-100">
@@ -1887,6 +1916,7 @@ export default function ProfitabilityPage() {
               </div>
             )}
           </Card>
+          </>)}
         </>
       ) : null}
     </div>
