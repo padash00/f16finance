@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 
 export const runtime = 'nodejs'
 
@@ -30,7 +31,23 @@ export async function GET(request: Request) {
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+  // Скоуп: можно смотреть профиль только коллег своей организации.
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+
   if (operatorId) {
+    // Оператор должен быть назначен на компанию своей организации.
+    if (scope.allowedCompanyIds) {
+      const { data: assign } = await supabase
+        .from('operator_company_assignments')
+        .select('operator_id')
+        .eq('operator_id', operatorId)
+        .in('company_id', scope.allowedCompanyIds)
+        .limit(1)
+      if (!assign || assign.length === 0) return json({ error: 'Оператор не найден' }, 404)
+    }
     const { data: op, error: opErr } = await supabase
       .from('operators')
       .select('id, name, short_name, telegram_chat_id, is_active')
@@ -64,6 +81,25 @@ export async function GET(request: Request) {
 
   // staff/owner
   if (userId) {
+    // Цель должна состоять в той же организации, что и запрашивающий.
+    if (!access.isSuperAdmin) {
+      const { data: myOrgs } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', access.user?.id || '')
+        .eq('status', 'active')
+      const myOrgIds = (myOrgs || []).map((r: any) => r.organization_id).filter(Boolean)
+      if (myOrgIds.length > 0) {
+        const { data: shared } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .in('organization_id', myOrgIds)
+          .limit(1)
+        if (!shared || shared.length === 0) return json({ error: 'Пользователь не найден' }, 404)
+      }
+    }
     const { data: staff } = await supabase
       .from('staff')
       .select('id, full_name, role, email, phone')

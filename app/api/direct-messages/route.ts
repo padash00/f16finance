@@ -92,6 +92,27 @@ export async function POST(request: Request) {
   }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+  // Получатель должен быть в той же организации (защита от межтенантных ЛС).
+  const { data: senderOrgs } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', access.user.id)
+    .eq('status', 'active')
+  const senderOrgIds = (senderOrgs || []).map((r: any) => r.organization_id).filter(Boolean)
+  if (senderOrgIds.length > 0) {
+    const { data: sharedOrg } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', recipientUserId)
+      .eq('status', 'active')
+      .in('organization_id', senderOrgIds)
+      .limit(1)
+    if (!sharedOrg || sharedOrg.length === 0) {
+      return json({ error: 'Получатель недоступен' }, 403)
+    }
+  }
+
   const { senderName, senderRole } = await resolveSender(access, supabase)
   const recipientName = await resolveRecipientName(supabase, recipientUserId)
 
