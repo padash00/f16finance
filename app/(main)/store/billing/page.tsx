@@ -5,7 +5,7 @@ import { Download, Loader2, Receipt, FileText, Wallet, X } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -379,8 +379,6 @@ export default function BillingPage() {
 
   const exportDebtsExcel = async () => {
     try {
-      const wb = createWorkbook('Orda Control')
-
       const now = Date.now()
       const ageBucket = (createdAt: string | null | undefined) => {
         if (!createdAt) return '—'
@@ -409,53 +407,22 @@ export default function BillingPage() {
         total: Number(d.total_amount || 0),
       }))
 
-      buildStyledSheet(
-        wb,
-        'Долги',
-        'Долги поставщикам',
-        `Всего ${sheetRows.length} строк, на ${formatMoney(sheetRows.reduce((s, r) => s + r.total, 0))} ₸`,
-        [
-          { key: 'supplier', header: 'Поставщик', type: 'text', width: 32 },
-          { key: 'bin_iin', header: 'БИН/ИИН', type: 'text', width: 16 },
-          { key: 'invoice', header: 'Накладная', type: 'text', width: 18 },
-          { key: 'received_at', header: 'Дата приёмки', type: 'text', width: 14 },
-          { key: 'due_date', header: 'Срок оплаты', type: 'text', width: 14 },
-          { key: 'status', header: 'Статус', type: 'text', width: 12 },
-          { key: 'is_consignment', header: 'Реализация', type: 'text', width: 12 },
-          { key: 'aging', header: 'Возраст', type: 'text', width: 14 },
-          { key: 'total', header: 'Сумма', type: 'money', width: 16 },
+      await downloadReportPdf('table', {
+        meta: { title: 'Долги поставщикам', generated: new Date().toLocaleDateString('ru-RU') },
+        columns: [
+          { key: 'supplier', label: 'Поставщик' },
+          { key: 'bin_iin', label: 'БИН/ИИН' },
+          { key: 'invoice', label: 'Накладная' },
+          { key: 'received_at', label: 'Дата приёмки' },
+          { key: 'due_date', label: 'Срок оплаты' },
+          { key: 'status', label: 'Статус' },
+          { key: 'is_consignment', label: 'Реализация' },
+          { key: 'aging', label: 'Возраст' },
+          { key: 'total', label: 'Сумма', align: 'right' },
         ],
-        sheetRows,
-      )
-
-      // Aging summary by bucket
-      const buckets = new Map<string, { count: number; total: number }>()
-      for (const r of sheetRows) {
-        if (r.status !== 'Открыт' && r.status !== 'Просрочен') continue
-        const cur = buckets.get(r.aging) || { count: 0, total: 0 }
-        cur.count += 1
-        cur.total += r.total
-        buckets.set(r.aging, cur)
-      }
-      const bucketRows = ['0–30 дней', '31–60 дней', '60+ дней'].map((b) => ({
-        bucket: b,
-        count: buckets.get(b)?.count || 0,
-        total: buckets.get(b)?.total || 0,
-      }))
-      buildStyledSheet(
-        wb,
-        'Старение',
-        'Старение долгов',
-        'Распределение открытых долгов по возрасту',
-        [
-          { key: 'bucket', header: 'Возраст', type: 'text', width: 18 },
-          { key: 'count', header: 'Долгов', type: 'number', width: 12 },
-          { key: 'total', header: 'Сумма', type: 'money', width: 18 },
-        ],
-        bucketRows,
-      )
-
-      await downloadWorkbook(wb, `supplier-debts-${new Date().toISOString().slice(0, 10)}.xlsx`)
+        rows: sheetRows,
+        total: { total: sheetRows.reduce((s, r) => s + r.total, 0) },
+      }, `Dolgi_postavshchikam_${new Date().toISOString().slice(0, 10)}`)
     } catch (err: any) {
       setError(err?.message || 'Не удалось сформировать отчёт')
     }

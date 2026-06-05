@@ -31,7 +31,7 @@ import {
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 type ShiftDetail = {
   id: string
@@ -295,32 +295,29 @@ export default function ShiftReportDetailPage({
 
   async function exportExcel() {
     if (!shift) return
-    const wb = createWorkbook()
     const dateOpen = new Date(shift.opened_at).toLocaleDateString('ru-RU')
     const dateClose = shift.closed_at
       ? new Date(shift.closed_at).toLocaleDateString('ru-RU')
       : '—'
     const subtitle = `${shift.company?.name || '—'} • ${SHIFT_TYPE_LABEL[shift.shift_type] || shift.shift_type}`
-    const info = `Период: ${dateOpen} → ${dateClose} | Чеков: ${sales.length} | Возвратов: ${returns.length}`
-
-    buildStyledSheet(
-      wb,
-      'Продажи',
-      subtitle,
-      info,
-      [
-        { header: 'Время', key: 'time', width: 18, type: 'text' },
-        { header: 'Состав', key: 'composition', width: 50, type: 'text' },
-        { header: 'Оператор', key: 'operator', width: 22, type: 'text' },
-        { header: 'Клиент', key: 'customer', width: 22, type: 'text' },
-        { header: 'Оплата', key: 'payment', width: 14, type: 'text' },
-        { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
-        { header: 'Безналичный', key: 'kaspi', width: 14, type: 'money' },
-        { header: 'Скидка', key: 'discount', width: 12, type: 'money' },
-        { header: 'Итого', key: 'total', width: 14, type: 'money' },
-        { header: 'Комментарий', key: 'comment', width: 28, type: 'text' },
+    const dateForFile =
+      (shift.closed_at || shift.opened_at).slice(0, 10) || new Date().toISOString().slice(0, 10)
+    const companyCode = shift.company?.code || shift.company?.name || 'shift'
+    await downloadReportPdf('table', {
+      meta: { title: `Смена — ${subtitle}`, period: `${dateOpen} → ${dateClose}`, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'time', label: 'Время' },
+        { key: 'composition', label: 'Состав' },
+        { key: 'operator', label: 'Оператор' },
+        { key: 'customer', label: 'Клиент' },
+        { key: 'payment', label: 'Оплата' },
+        { key: 'cash', label: 'Наличные', align: 'right' },
+        { key: 'kaspi', label: 'Безналичный', align: 'right' },
+        { key: 'discount', label: 'Скидка', align: 'right' },
+        { key: 'total', label: 'Итого', align: 'right' },
+        { key: 'comment', label: 'Комментарий' },
       ],
-      sales.map((s) => ({
+      rows: sales.map((s) => ({
         time: fmtDateTime(s.sold_at),
         composition: (s.items || [])
           .map((it) => {
@@ -338,65 +335,7 @@ export default function ShiftReportDetailPage({
         total: Number(s.total_amount || 0),
         comment: s.comment || '',
       })),
-    )
-
-    if (returns.length > 0) {
-      buildStyledSheet(
-        wb,
-        'Возвраты',
-        subtitle,
-        `Возвратов: ${returns.length}`,
-        [
-          { header: 'Время', key: 'time', width: 18, type: 'text' },
-          { header: 'Состав', key: 'composition', width: 50, type: 'text' },
-          { header: 'Оплата', key: 'payment', width: 14, type: 'text' },
-          { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
-          { header: 'Безналичный', key: 'kaspi', width: 14, type: 'money' },
-          { header: 'Итого', key: 'total', width: 14, type: 'money' },
-          { header: 'Комментарий', key: 'comment', width: 28, type: 'text' },
-        ],
-        returns.map((r) => ({
-          time: fmtDateTime(r.returned_at),
-          composition: (r.items || [])
-            .map((it) => {
-              const name = itemName(it)
-              return Number(it.quantity || 0) > 1 ? `${name}×${it.quantity}` : name
-            })
-            .join(', '),
-          payment: paymentLabel(r.payment_method),
-          cash: Number(r.cash_amount || 0),
-          kaspi: Number(r.kaspi_amount || 0),
-          total: Number(r.total_amount || 0),
-          comment: r.comment || '',
-        })),
-      )
-    }
-
-    if (topItems.length > 0) {
-      buildStyledSheet(
-        wb,
-        'Топ товаров',
-        subtitle,
-        `Топ ${topItems.length} по выручке`,
-        [
-          { header: '#', key: 'rank', width: 6, type: 'number', align: 'right' },
-          { header: 'Товар', key: 'name', width: 40, type: 'text' },
-          { header: 'Кол-во', key: 'qty', width: 12, type: 'number', align: 'right' },
-          { header: 'Сумма', key: 'amount', width: 16, type: 'money' },
-        ],
-        topItems.map((t, i) => ({
-          rank: i + 1,
-          name: t.name,
-          qty: t.qty,
-          amount: t.amount,
-        })),
-      )
-    }
-
-    const dateForFile =
-      (shift.closed_at || shift.opened_at).slice(0, 10) || new Date().toISOString().slice(0, 10)
-    const companyCode = shift.company?.code || shift.company?.name || 'shift'
-    await downloadWorkbook(wb, `shift_${companyCode}_${dateForFile}.xlsx`)
+    }, `Smena_${companyCode}_${dateForFile}`)
   }
 
   const load = async () => {
