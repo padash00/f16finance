@@ -236,6 +236,30 @@ export async function POST(request: Request) {
       if (!receiptRow) return json({ error: 'receipt-not-found' }, 404)
       await ensureInventoryLocationAccess(supabase as any, String(receiptRow.location_id), inventoryScope)
 
+      // Долг поставщику, созданный этой приёмкой. Если по нему есть оплаты —
+      // нельзя отменять (иначе потеряем платежи). Проверяем ДО сторно склада.
+      const { data: linkedDebt } = await supabase
+        .from('supplier_debts')
+        .select('id')
+        .eq('receipt_id', receiptId)
+        .maybeSingle()
+      if (linkedDebt) {
+        const { data: debtPays } = await supabase
+          .from('supplier_debt_payments')
+          .select('id')
+          .eq('debt_id', (linkedDebt as any).id)
+          .limit(1)
+        if (debtPays && debtPays.length > 0) {
+          return json(
+            {
+              error: 'cancel-debt-has-payments',
+              message: 'Нельзя отменить: по долгу за эту приёмку есть оплаты. Сначала отмените/верните оплаты.',
+            },
+            409,
+          )
+        }
+      }
+
       const { error: rpcErr } = await supabase.rpc('inventory_cancel_receipt', {
         p_receipt_id: receiptId,
         p_reason: reason,
@@ -257,6 +281,17 @@ export async function POST(request: Request) {
           )
         }
         throw rpcErr
+      }
+
+      // Сторнируем авто-расход и долг поставщику, созданные приёмкой —
+      // иначе после отмены в учёте «висит» расход/долг за несуществующий приход.
+      await supabase
+        .from('expenses')
+        .delete()
+        .eq('source_type', 'inventory_receipt')
+        .eq('source_id', receiptId)
+      if (linkedDebt) {
+        await supabase.from('supplier_debts').delete().eq('id', (linkedDebt as any).id)
       }
 
       await writeAuditLog(supabase as any, {
