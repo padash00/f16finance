@@ -350,27 +350,26 @@ export default function PrintClient() {
                   <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
                     Фонд оплаты труда
                   </h2>
-                  <span className="text-[9px] text-slate-500">из расходов · группа ФОТ (Зарплата + Аванс)</span>
+                  <span className="text-[9px] text-slate-500">из расходов · все статьи группы ФОТ</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-wrap gap-2">
                   {report.expenses
                     .filter((e) => isPayrollGroup(e.accountingGroup))
                     .sort((a, b) => b.amount - a.amount)
-                    .slice(0, 2)
                     .map((e) => (
-                      <div key={e.category} className="rounded-lg border border-blue-200 bg-white px-3 py-1.5">
+                      <div key={e.category} className="min-w-[130px] flex-1 rounded-lg border border-blue-200 bg-white px-3 py-1.5">
                         <div className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">{e.category}</div>
                         <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
                           {fmtMoney(e.amount)} <span className="text-[10px] text-slate-500">₸</span>
                         </div>
                       </div>
                     ))}
-                  <div className="rounded-lg border-2 border-blue-400 bg-blue-100 px-3 py-1.5">
+                  <div className="min-w-[130px] flex-1 rounded-lg border-2 border-blue-400 bg-blue-100 px-3 py-1.5">
                     <div className="text-[9px] font-bold uppercase tracking-wider text-blue-800">Итого ФОТ</div>
                     <div className="mt-0.5 text-[15px] font-extrabold tabular-nums text-blue-900">
                       {fmtMoney(payrollTotal)} <span className="text-[10px] font-semibold">₸</span>
                     </div>
-                    <div className="text-[8.5px] text-blue-700">из расходов, включено в P&amp;L</div>
+                    <div className="text-[8.5px] text-blue-700">сумма всех статей ФОТ</div>
                   </div>
                 </div>
               </section>
