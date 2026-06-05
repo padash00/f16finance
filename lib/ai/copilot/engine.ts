@@ -660,11 +660,15 @@ async function callLLM(
   // Это даёт боту контекст бизнеса: имена операторов, особые правила, приоритеты.
   let memoryHint = ''
   try {
-    const { data: memories } = await ctx.supabase
+    const memQ = ctx.supabase
       .from('ai_memory')
       .select('key, value')
       .order('created_at', { ascending: false })
       .limit(30)
+    // Скоуп по организации — иначе в системный промпт попадут факты чужих компаний.
+    const { data: memories } = await (ctx.organizationId
+      ? memQ.eq('organization_id', ctx.organizationId)
+      : memQ.is('organization_id', null))
     if (memories && memories.length > 0) {
       memoryHint = '\n\nЗАПОМНЕННЫЕ ФАКТЫ (используй при необходимости):\n' +
         memories.map((m: any) => `- ${m.key}: ${m.value}`).join('\n')

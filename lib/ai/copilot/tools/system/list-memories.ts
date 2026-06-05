@@ -13,11 +13,15 @@ export const listMemoriesTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
-    const { data, error } = await ctx.supabase
+    const listQ = ctx.supabase
       .from('ai_memory')
       .select('id, key, value, created_at')
       .order('created_at', { ascending: false })
       .limit(50)
+    // Только факты своей организации.
+    const { data, error } = await (ctx.organizationId
+      ? listQ.eq('organization_id', ctx.organizationId)
+      : listQ.is('organization_id', null))
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '🧠 AI пока ничего не запомнил.' }
 

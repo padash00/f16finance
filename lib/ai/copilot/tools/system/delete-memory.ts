@@ -20,7 +20,8 @@ export const deleteMemoryTool: CopilotTool = {
       required: true,
       description: 'Что удалить',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('ai_memory').select('id, key, value').order('created_at', { ascending: false }).limit(50)
+        const optQ = ctx.supabase.from('ai_memory').select('id, key, value').order('created_at', { ascending: false }).limit(50)
+        const { data } = await (ctx.organizationId ? optQ.eq('organization_id', ctx.organizationId) : optQ.is('organization_id', null))
         return (data || []).map((m: any) => ({ value: m.id, label: `${m.key}: ${String(m.value).slice(0, 30)}` }))
       },
     },
@@ -29,8 +30,12 @@ export const deleteMemoryTool: CopilotTool = {
     const memoryId = String(input.memory_id || '')
     if (!memoryId) return { ok: false, message: 'Не выбран факт.' }
 
-    const { data: before } = await ctx.supabase.from('ai_memory').select('key').eq('id', memoryId).single()
-    const { error } = await ctx.supabase.from('ai_memory').delete().eq('id', memoryId)
+    // Удалять/читать можно только факты своей организации (не по чужому id).
+    const beforeQ = ctx.supabase.from('ai_memory').select('key').eq('id', memoryId)
+    const { data: before } = await (ctx.organizationId ? beforeQ.eq('organization_id', ctx.organizationId) : beforeQ.is('organization_id', null)).single()
+    if (!before) return { ok: false, message: 'Факт не найден.' }
+    const delQ = ctx.supabase.from('ai_memory').delete().eq('id', memoryId)
+    const { error } = await (ctx.organizationId ? delQ.eq('organization_id', ctx.organizationId) : delQ.is('organization_id', null))
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }
 
     try {
