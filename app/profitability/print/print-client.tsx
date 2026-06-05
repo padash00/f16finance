@@ -148,39 +148,14 @@ export default function PrintClient() {
     )
   }
 
-  // Управленческий учёт: payroll/payroll_advance из expenses заменяем
-  // на синтетическую строку «Зарплата (начислено)» с суммой по начислениям,
-  // а не по фактическим выплатам. payroll_tax остаётся как есть.
-  // Если в URL передан ручной override — приоритет за ним.
-  const apiPayroll = report.payrollAccrued || null
-  const payrollAccrued = (overrideStaff !== null || overrideOps !== null)
-    ? {
-        staff: overrideStaff !== null ? overrideStaff : (apiPayroll?.staff ?? 0),
-        operators: overrideOps !== null ? overrideOps : (apiPayroll?.operators ?? 0),
-        total:
-          (overrideStaff !== null ? overrideStaff : (apiPayroll?.staff ?? 0)) +
-          (overrideOps !== null ? overrideOps : (apiPayroll?.operators ?? 0)),
-      }
-    : apiPayroll
+  // ВСЁ строго из журнала расходов по категориям — никаких «начислено» из зарплатного
+  // модуля. Категории уже разнесены по фин-группам; ФОТ = группа payroll (Зарплата + Аванс).
   const isPayrollGroup = (group: string) => group === 'payroll' || group === 'payroll_advance'
-  const nonPayrollExpenses = report.expenses.filter((e) => !isPayrollGroup(e.accountingGroup))
-  const accruedLine: ExpenseLine | null = payrollAccrued && payrollAccrued.total > 0
-    ? {
-        category: 'Зарплата (начислено)',
-        amount: payrollAccrued.total,
-        accountingGroup: 'payroll',
-        cashAmount: 0,
-        kaspiAmount: 0,
-        count: 0,
-        comments: [],
-      }
-    : null
-  const displayedExpenses: ExpenseLine[] = (accruedLine
-    ? [accruedLine, ...nonPayrollExpenses]
-    : nonPayrollExpenses
-  ).sort((a, b) => b.amount - a.amount)
+  const displayedExpenses: ExpenseLine[] = [...report.expenses].sort((a, b) => b.amount - a.amount)
   const displayedExpensesTotal = Math.round(displayedExpenses.reduce((s, e) => s + e.amount, 0))
   const displayedNetProfit = Math.round(report.turnover - report.turnoverTax - displayedExpensesTotal)
+  // ФОТ из журнала (Зарплата + Аванс) — для блока «Фонд оплаты труда».
+  const payrollTotal = Math.round(report.expenses.filter((e) => isPayrollGroup(e.accountingGroup)).reduce((s, e) => s + e.amount, 0))
 
   const partnersPayouts = partners.map((p) => ({
     ...p,
@@ -369,43 +344,33 @@ export default function PrintClient() {
             </section>
 
             {/* Детализация ФОТ — по факту начисления, не по выплатам */}
-            {payrollAccrued && payrollAccrued.total > 0 ? (
+            {payrollTotal > 0 ? (
               <section className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 px-3 py-2 keep">
                 <div className="mb-1.5 flex items-baseline justify-between">
                   <h2 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-700">
-                    Фонд оплаты труда (начислено)
+                    Фонд оплаты труда
                   </h2>
-                  <span className="text-[9px] text-slate-500">
-                    по факту начисления за период
-                  </span>
+                  <span className="text-[9px] text-slate-500">из расходов · группа ФОТ (Зарплата + Аванс)</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-lg border border-blue-200 bg-white px-3 py-1.5">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">
-                      Адм. сотрудники
-                    </div>
-                    <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
-                      {fmtMoney(payrollAccrued.staff)} <span className="text-[10px] text-slate-500">₸</span>
-                    </div>
-                    <div className="text-[8.5px] text-slate-400">оклады с учётом дат изменений</div>
-                  </div>
-                  <div className="rounded-lg border border-blue-200 bg-white px-3 py-1.5">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">
-                      Операторы по сменам
-                    </div>
-                    <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
-                      {fmtMoney(payrollAccrued.operators)} <span className="text-[10px] text-slate-500">₸</span>
-                    </div>
-                    <div className="text-[8.5px] text-slate-400">смены × ставки + премии − штрафы</div>
-                  </div>
+                  {report.expenses
+                    .filter((e) => isPayrollGroup(e.accountingGroup))
+                    .sort((a, b) => b.amount - a.amount)
+                    .slice(0, 2)
+                    .map((e) => (
+                      <div key={e.category} className="rounded-lg border border-blue-200 bg-white px-3 py-1.5">
+                        <div className="text-[9px] font-semibold uppercase tracking-wider text-blue-700">{e.category}</div>
+                        <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
+                          {fmtMoney(e.amount)} <span className="text-[10px] text-slate-500">₸</span>
+                        </div>
+                      </div>
+                    ))}
                   <div className="rounded-lg border-2 border-blue-400 bg-blue-100 px-3 py-1.5">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-blue-800">
-                      Итого ФОТ
-                    </div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-blue-800">Итого ФОТ</div>
                     <div className="mt-0.5 text-[15px] font-extrabold tabular-nums text-blue-900">
-                      {fmtMoney(payrollAccrued.total)} <span className="text-[10px] font-semibold">₸</span>
+                      {fmtMoney(payrollTotal)} <span className="text-[10px] font-semibold">₸</span>
                     </div>
-                    <div className="text-[8.5px] text-blue-700">включено в расходы ниже</div>
+                    <div className="text-[8.5px] text-blue-700">из расходов, включено в P&amp;L</div>
                   </div>
                 </div>
               </section>
