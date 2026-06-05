@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
       .select('id, name, phone, card_number, loyalty_points, total_spent, visits_count')
       .eq('company_id', companyId)
       .eq('is_active', true)
-      .or(`name.ilike.%${q}%,phone.ilike.%${q}%,card_number.ilike.%${q}%`)
+      .or(`name.ilike.%${sanitizeOrFilterValue(q)}%,phone.ilike.%${sanitizeOrFilterValue(q)}%,card_number.ilike.%${sanitizeOrFilterValue(q)}%`)
       .order('total_spent', { ascending: false })
       .limit(5)
 

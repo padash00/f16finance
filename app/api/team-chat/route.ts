@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { checkProfanity } from '@/lib/ai/profanity-filter'
 
 export const runtime = 'nodejs'
@@ -51,9 +52,9 @@ export async function GET(request: Request) {
   }
 
   if (q) {
-    // ILIKE по тексту сообщения и имени отправителя
-    const escaped = q.replace(/[%_]/g, (c) => `\\${c}`)
-    query = query.or(`message.ilike.%${escaped}%,sender_name.ilike.%${escaped}%`)
+    // ILIKE по тексту сообщения и имени отправителя (с защитой от .or()-инъекции)
+    const safe = sanitizeOrFilterValue(q)
+    query = query.or(`message.ilike.%${safe}%,sender_name.ilike.%${safe}%`)
   }
 
   const { data, error } = await query
