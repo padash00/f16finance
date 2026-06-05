@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2, Printer, X } from 'lucide-react'
+import { Download, Loader2, Printer, X } from 'lucide-react'
 
 type IncomeAgg = { cash: number; kaspi: number; online: number; card: number; total: number }
 type ExpenseCat = { category: string; amount: number }
@@ -23,7 +23,7 @@ type CompanyBlock = {
   daily: DailyRow[]
   expense_rows: ExpenseRow[]
 }
-type ActData = {
+export type ActData = {
   from: string
   to: string
   days: string[]
@@ -69,6 +69,31 @@ export function WeeklyActPrint({
   const [data, setData] = useState<ActData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  const downloadPdf = async () => {
+    setDownloading(true)
+    try {
+      const res = await fetch(`/api/admin/weekly-act/pdf?from=${from}&to=${to}`, { cache: 'no-store' })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error || `Ошибка ${res.status}`)
+      }
+      const blob = await res.blob()
+      const objUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objUrl
+      a.download = `Akt_${from}_${to}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(objUrl)
+    } catch (e: any) {
+      alert(e?.message || 'Не удалось скачать PDF')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -112,6 +137,14 @@ export function WeeklyActPrint({
         <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 print:hidden">
           <h3 className="text-sm font-semibold text-slate-900">Недельный акт</h3>
           <div className="flex gap-1">
+            <button
+              onClick={downloadPdf}
+              disabled={loading || !!error || downloading}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {downloading ? 'Готовим…' : 'Скачать PDF'}
+            </button>
             <button
               onClick={() => window.print()}
               disabled={loading || !!error}
@@ -158,7 +191,7 @@ export function WeeklyActPrint({
   )
 }
 
-function ActBody({ data }: { data: ActData }) {
+export function ActBody({ data }: { data: ActData }) {
   const t = data.totals
   const year = new Date(data.to + 'T00:00:00').getFullYear()
   return (
