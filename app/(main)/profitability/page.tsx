@@ -1062,13 +1062,16 @@ export default function ProfitabilityPage() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
             <CalendarDays className="h-4 w-4 text-emerald-400" />
-            <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="bg-transparent outline-none" />
+            <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
             <span className="text-muted-foreground">—</span>
-            <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="bg-transparent outline-none" />
+            <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
           </div>
-          <Button variant="outline" size="sm" onClick={() => { const closed = closedMonthDefaults(); setMonthFrom(closed.from); setMonthTo(closed.to) }}>
-            4 закрытых
-          </Button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => { const c = closedMonthDefaults(); setMonthFrom(c.from); setMonthTo(c.to) }}>4 мес</Button>
+            <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(shiftMonth(last, -5)); setMonthTo(last) }}>6 мес</Button>
+            <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(shiftMonth(last, -11)); setMonthTo(last) }}>12 мес</Button>
+            <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(`${last.slice(0, 4)}-01`); setMonthTo(last) }}>Год</Button>
+          </div>
         </div>
       </div>
 
