@@ -15,6 +15,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, scopedCompanyIds, scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -52,11 +53,7 @@ export const giveAdvanceTool: CopilotTool = {
       description: 'ID оператора. Если пользователь сказал имя — найди в списке операторов и подставь ID.',
       extractHint: 'Айгерим, Алима',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
-          .from('operators')
-          .select('id, name, short_name')
-          .eq('is_active', true)
-          .order('name')
+        const data = await scopedOperatorRows(ctx)
         return (data || []).map((op: any) => ({
           value: op.id,
           label: op.short_name || op.name,
@@ -69,16 +66,7 @@ export const giveAdvanceTool: CopilotTool = {
       type: 'select',
       required: true,
       description: 'ID компании/точки',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
-          .from('companies')
-          .select('id, name, code')
-          .order('name')
-        return (data || []).map((c: any) => ({
-          value: c.id,
-          label: c.name + (c.code ? ` (${c.code})` : ''),
-        }))
-      },
+      getOptions: async (ctx) => companyOptions(ctx),
     },
     {
       name: 'amount',
@@ -120,6 +108,11 @@ export const giveAdvanceTool: CopilotTool = {
 
     const today = todayISO()
     const weekStart = weekStartISO(today)
+
+    // Аванс можно выдать только оператору и точке своей организации.
+    const [allowedOps, allowedCos] = await Promise.all([scopedOperatorIds(ctx), scopedCompanyIds(ctx)])
+    if (allowedOps && !allowedOps.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
+    if (allowedCos && !allowedCos.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     const cashAmount = method === 'cash' ? amount : 0
     const kaspiAmount = method === 'kaspi' ? amount : 0

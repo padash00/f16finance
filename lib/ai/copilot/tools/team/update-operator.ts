@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const updateOperatorTool: CopilotTool = {
@@ -20,7 +21,7 @@ export const updateOperatorTool: CopilotTool = {
       required: true,
       description: 'ID оператора',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('operators').select('id, name, short_name').eq('is_active', true).order('name')
+        const data = await scopedOperatorRows(ctx)
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },
@@ -55,6 +56,9 @@ export const updateOperatorTool: CopilotTool = {
     if (!newName && !newShortName && !newPhone) {
       return { ok: false, message: 'Нечего менять.' }
     }
+    // Менять можно только оператора своей организации.
+    const allowed = await scopedOperatorIds(ctx)
+    if (allowed && !allowed.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
 
     const opUpdates: Record<string, string> = {}
     if (newName) opUpdates.name = newName

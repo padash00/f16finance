@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const adjustLoyaltyTool: CopilotTool = {
@@ -20,10 +21,13 @@ export const adjustLoyaltyTool: CopilotTool = {
       required: true,
       description: 'ID клиента',
       getOptions: async (ctx) => {
-        const { data } = await ctx.supabase
+        let q = ctx.supabase
           .from('customers')
           .select('id, name, phone, loyalty_points')
           .order('name')
+        const ids = await scopedCompanyIds(ctx)
+        if (ids) q = q.in('company_id', ids)
+        const { data } = await q
         return (data || []).map((c: any) => ({
           value: c.id,
           label: `${c.name}${c.phone ? ` (${c.phone})` : ''} · ${c.loyalty_points || 0} баллов`,
@@ -51,11 +55,14 @@ export const adjustLoyaltyTool: CopilotTool = {
     const reason = String(input.reason || '').trim()
     if (!customerId || delta === 0 || !reason) return { ok: false, message: 'Не хватает данных.' }
 
-    const { data: customer } = await ctx.supabase
+    // Клиент должен принадлежать своей организации (нельзя править чужие баллы по id).
+    let custQ = ctx.supabase
       .from('customers')
       .select('id, name, loyalty_points')
       .eq('id', customerId)
-      .single()
+    const custScope = await scopedCompanyIds(ctx)
+    if (custScope) custQ = custQ.in('company_id', custScope)
+    const { data: customer } = await custQ.single()
     if (!customer) return { ok: false, message: 'Клиент не найден.' }
 
     const newPoints = Number(customer.loyalty_points || 0) + delta
