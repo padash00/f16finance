@@ -56,7 +56,8 @@ function normalizePayload(payload: ExpensePayload) {
 function validatePayload(payload: ExpensePayload | null | undefined) {
   if (!payload?.date?.trim()) return 'Дата обязательна'
   if (!payload.company_id?.trim()) return 'Компания обязательна'
-  if (!payload.operator_id?.trim()) return 'Оператор обязателен'
+  // Оператор необязателен: расходы вроде аренды/интернета/зарплат бывают без оператора
+  // (в UI есть пункт «Без оператора», в данных такие расходы уже есть).
   if (!payload.category?.trim()) return 'Категория обязательна'
 
   const cash = Number(payload.cash_amount || 0)

@@ -1521,10 +1521,11 @@ export default function ExpensesPage() {
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Компания</label>
                 <select
-                  value={editExpenseCompanyId}
+                  value={editExpenseCompanyId || ''}
                   onChange={(e) => setEditExpenseCompanyId(e.target.value)}
                   className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
                 >
+                  <option value="">— выберите компанию —</option>
                   {companies.map((company) => (
                     <option key={company.id} value={company.id}>
                       {company.name}
