@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   FINANCIAL_GROUP_OPTIONS,
@@ -219,7 +220,7 @@ export default function CategoriesPage() {
               {loading && <div className="col-span-2 text-center py-10 text-muted-foreground animate-pulse">Загрузка...</div>}
 
               {!loading && filteredCategories.map((cat) => (
-                <Card key={cat.id} className={`p-4 border-border bg-card neon-glow group relative overflow-hidden transition-all ${editingId === cat.id ? 'ring-2 ring-accent' : 'hover:bg-white/5'}`}>
+                <Card key={cat.id} className={`group relative overflow-hidden border-white/[0.08] bg-white/[0.025] p-4 transition-all ${editingId === cat.id ? 'ring-2 ring-amber-500/40' : 'hover:border-white/20 hover:bg-white/[0.05]'}`}>
                   {editingId === cat.id ? (
                     <div className="space-y-3 relative z-10">
                       <div>
@@ -234,10 +235,12 @@ export default function CategoriesPage() {
                       </div>
                       <div>
                         <label className="text-[10px] text-muted-foreground">Финансовая группа</label>
-                        <select value={editAccountingGroup} onChange={e => setEditAccountingGroup(e.target.value as FinancialGroup)}
-                          className="w-full bg-input border border-border rounded px-2 py-1 text-xs">
-                          {FINANCIAL_GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                        <Select value={editAccountingGroup} onValueChange={(v) => setEditAccountingGroup(v as FinancialGroup)}>
+                          <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {FINANCIAL_GROUP_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
                         <label className="text-[10px] text-muted-foreground">Месячный бюджет (₸)</label>
@@ -338,7 +341,7 @@ export default function CategoriesPage() {
           {/* Форма создания */}
           {can('categories.create') && (
           <div className="lg:col-span-1">
-            <Card className="p-6 border-border bg-card neon-glow sticky top-6">
+            <Card className="sticky top-6 border-white/[0.08] bg-white/[0.03] p-6">
               <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border">
                 <div className="p-2 bg-accent/10 rounded-lg text-accent">
                   <Plus className="w-5 h-5" />
@@ -364,10 +367,12 @@ export default function CategoriesPage() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Финансовая группа</label>
-                  <select value={newAccountingGroup} onChange={e => setNewAccountingGroup(e.target.value as FinancialGroup)}
-                    className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm focus:border-accent transition-colors">
-                    {FINANCIAL_GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  <Select value={newAccountingGroup} onValueChange={(v) => setNewAccountingGroup(v as FinancialGroup)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FINANCIAL_GROUP_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     {FINANCIAL_GROUP_OPTIONS.find(o => o.value === newAccountingGroup)?.description}
                   </p>
