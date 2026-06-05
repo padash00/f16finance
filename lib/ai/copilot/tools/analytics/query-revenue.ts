@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -43,13 +44,7 @@ export const queryRevenueTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Фильтр по точке. Если не указан — все.',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return [
-          { value: '', label: '📍 Все точки' },
-          ...(data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') })),
-        ]
-      },
+      getOptions: async (ctx) => companyOptions(ctx, { allLabel: '📍 Все точки' }),
     },
   ],
   handler: async (input, ctx) => {
@@ -74,7 +69,13 @@ export const queryRevenueTool: CopilotTool = {
       .gte('date', from)
       .lte('date', to)
       .range(0, 9999)
-    if (companyId) query = query.eq('company_id', companyId)
+    if (companyId) {
+      query = query.eq('company_id', companyId)
+    } else {
+      // «Все точки» = только точки своей организации (мультитенантный скоуп).
+      const ids = await scopedCompanyIds(ctx)
+      if (ids) query = query.in('company_id', ids)
+    }
 
     const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка запроса: ${error.message}` }

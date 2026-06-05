@@ -18,6 +18,42 @@ export async function resolveCompanyNames(
   return map
 }
 
+/**
+ * ID компаний активной организации пользователя.
+ * Возвращает null = без ограничения (супер-админ или нет активной организации) —
+ * вызывающий тогда не фильтрует. Иначе массив id для `.in('company_id', ids)`.
+ * Это основа мультитенантной изоляции копилота: данные одного владельца
+ * не должны утекать другому.
+ */
+export async function scopedCompanyIds(
+  ctx: { supabase: any; organizationId?: string | null; isSuperAdmin?: boolean },
+): Promise<string[] | null> {
+  if (!ctx.organizationId) return null
+  const { data } = await ctx.supabase
+    .from('companies')
+    .select('id')
+    .eq('organization_id', ctx.organizationId)
+  return (data || []).map((c: any) => String(c.id))
+}
+
+/**
+ * Опции выпадашки «Точка» для copilot-инструментов — только компании своей
+ * организации. allLabel (если задан) добавляет первую опцию «Все точки».
+ */
+export async function companyOptions(
+  ctx: { supabase: any; organizationId?: string | null },
+  opts?: { allLabel?: string },
+): Promise<Array<{ value: string; label: string }>> {
+  let q = ctx.supabase.from('companies').select('id, name, code').order('name')
+  if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+  const { data } = await q
+  const list = (data || []).map((c: any) => ({
+    value: String(c.id),
+    label: c.name + (c.code ? ` (${c.code})` : ''),
+  }))
+  return opts?.allLabel ? [{ value: '', label: opts.allLabel }, ...list] : list
+}
+
 export async function resolveOperatorNames(
   supabase: any,
   rows: Array<{ operator_id?: string | null }>,

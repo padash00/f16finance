@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { resolveCompanyNames } from '../../query-helpers'
+import { companyOptions, resolveCompanyNames, scopedCompanyIds } from '../../query-helpers'
 
 export const getOverdueDebtsTool: CopilotTool = {
   name: 'get_active_debts',
@@ -19,13 +19,7 @@ export const getOverdueDebtsTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Фильтр по точке',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return [
-          { value: '', label: '📍 Все точки' },
-          ...(data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') })),
-        ]
-      },
+      getOptions: async (ctx) => companyOptions(ctx, { allLabel: '📍 Все точки' }),
     },
   ],
   handler: async (input, ctx) => {
@@ -37,7 +31,12 @@ export const getOverdueDebtsTool: CopilotTool = {
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(30)
-    if (companyId) q = q.eq('company_id', companyId)
+    if (companyId) {
+      q = q.eq('company_id', companyId)
+    } else {
+      const ids = await scopedCompanyIds(ctx)
+      if (ids) q = q.in('company_id', ids)
+    }
 
     const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }

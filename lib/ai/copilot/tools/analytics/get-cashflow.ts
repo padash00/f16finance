@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -42,13 +43,7 @@ export const getCashflowTool: CopilotTool = {
       type: 'select',
       required: false,
       description: 'Фильтр',
-      getOptions: async (ctx) => {
-        const { data } = await ctx.supabase.from('companies').select('id, name, code').order('name')
-        return [
-          { value: '', label: '📍 Все точки' },
-          ...(data || []).map((c: any) => ({ value: c.id, label: c.name + (c.code ? ` (${c.code})` : '') })),
-        ]
-      },
+      getOptions: async (ctx) => companyOptions(ctx, { allLabel: '📍 Все точки' }),
     },
   ],
   handler: async (input, ctx) => {
@@ -76,6 +71,13 @@ export const getCashflowTool: CopilotTool = {
     if (companyId) {
       incQ = incQ.eq('company_id', companyId)
       expQ = expQ.eq('company_id', companyId)
+    } else {
+      // «Все точки» = только точки своей организации.
+      const ids = await scopedCompanyIds(ctx)
+      if (ids) {
+        incQ = incQ.in('company_id', ids)
+        expQ = expQ.in('company_id', ids)
+      }
     }
 
     const [incRes, expRes] = await Promise.all([incQ, expQ])
