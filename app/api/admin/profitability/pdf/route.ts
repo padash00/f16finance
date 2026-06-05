@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { renderReportHTML, PDF_OPTIONS } from '@/lib/reports/orda-report-template'
+import { buildProfitabilityContract, type BranchData } from '@/lib/reports/build-profitability-contract'
 
 // Vercel: PDF-генерация может занять 10-20 секунд (cold start chromium).
 export const maxDuration = 60
@@ -40,78 +42,54 @@ export async function GET(req: Request) {
       return json({ error: 'company_id, from, to обязательны' }, 400)
     }
 
-    // Собираем URL print-страницы. Хост берём из текущего запроса.
-    const printUrl = new URL('/profitability/print', url.origin)
-    printUrl.searchParams.set('pdf', '1') // режим без тулбара/серого фона + screen-стили для цветной печати
-    printUrl.searchParams.set('company_id', companyId)
-    printUrl.searchParams.set('from', monthFrom)
-    printUrl.searchParams.set('to', monthTo)
-    if (partnersRaw) printUrl.searchParams.set('partners', partnersRaw)
-    if (!includeCapex) printUrl.searchParams.set('capex', '0')
-    if (payrollStaffOverride) printUrl.searchParams.set('payroll_staff', payrollStaffOverride)
-    if (payrollOpsOverride) printUrl.searchParams.set('payroll_ops', payrollOpsOverride)
-    if (note) printUrl.searchParams.set('note', note.slice(0, 2000))
+    // Данные точки строго из журнала (branch-report). Тянем server-side, пробрасывая cookies для авторизации.
+    const cookieHeader = req.headers.get('cookie') || ''
+    const brUrl = new URL('/api/admin/profitability/branch-report', url.origin)
+    brUrl.searchParams.set('company_id', companyId)
+    brUrl.searchParams.set('from', monthFrom)
+    brUrl.searchParams.set('to', monthTo)
+    const brRes = await fetch(brUrl.toString(), {
+      headers: cookieHeader ? { cookie: cookieHeader } : {},
+      cache: 'no-store',
+    })
+    const brJson = await brRes.json().catch(() => null)
+    if (!brRes.ok || !brJson?.ok || !brJson?.data) {
+      throw new Error(brJson?.error || `branch-report HTTP ${brRes.status}`)
+    }
+
+    // JSON-контракт → HTML по единому шаблону orda-report-template.
+    const generated = new Date().toLocaleDateString('ru-RU')
+    const contract = buildProfitabilityContract(brJson.data as BranchData, generated)
+    if (!includeCapex) (contract as any).capex = undefined
+    // Шрифты онлайн (Inter + Manrope с кириллицей).
+    const fontCss = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Manrope:wght@700;800&display=swap');"
+    const html = renderReportHTML(contract, { fontCss })
 
     // Динамические импорты — чтобы Vercel не паковал chromium в обычные routes.
     const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
       import('puppeteer-core'),
       import('@sparticuz/chromium-min'),
     ])
-
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(CHROMIUM_PACK_URL),
       headless: true,
     })
-
     const page = await browser.newPage()
+    await page.setContent(html, { waitUntil: 'load', timeout: 30_000 })
+    // Дождаться шрифтов (иначе цифры могут отрисоваться запасным шрифтом).
+    try { await page.evaluate(() => (document as any).fonts?.ready) } catch { /* шрифты не критичны */ }
 
-    // Пробрасываем cookies текущего пользователя — без них print-страница не пройдёт авторизацию.
-    const cookieHeader = req.headers.get('cookie') || ''
-    if (cookieHeader) {
-      const hostname = url.hostname
-      const cookies = cookieHeader
-        .split(';')
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .map((pair) => {
-          const eqIdx = pair.indexOf('=')
-          if (eqIdx < 0) return null
-          const name = pair.slice(0, eqIdx).trim()
-          const value = pair.slice(eqIdx + 1).trim()
-          if (!name) return null
-          return { name, value, domain: hostname, path: '/' }
-        })
-        .filter((c): c is { name: string; value: string; domain: string; path: string } => c !== null)
-      if (cookies.length > 0) {
-        await page.setCookie(...cookies)
-      }
-    }
+    const pdfBuffer = await page.pdf(PDF_OPTIONS as any)
 
-    await page.goto(printUrl.toString(), { waitUntil: 'networkidle0', timeout: 30_000 })
-
-    // Доп. ожидание — на случай если внутри страницы ещё рендерятся данные после networkidle.
-    await page.waitForSelector('.doc-paper', { timeout: 10_000 })
-
-    // КЛЮЧЕВОЕ: печатаем как ЭКРАН, а не print-медиа. В print-медиа Chrome не
-    // выводил фоны (тёмная шапка, карточки, цветная полоса выходили белыми).
-    // В screen-режиме PDF получается точь-в-точь как открытая в браузере страница.
-    await page.emulateMediaType('screen')
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
-      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
-    })
-
-    const filename = `profitability-${monthFrom}${monthFrom !== monthTo ? `_${monthTo}` : ''}.pdf`
+    const safeName = (contract.name || 'report').replace(/[^\p{L}\p{N}_-]+/gu, '_')
+    const filename = `Orda_${safeName}_${monthFrom}${monthFrom !== monthTo ? `_${monthTo}` : ''}.pdf`
 
     return new NextResponse(pdfBuffer as any, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
         'Cache-Control': 'no-store',
       },
     })
