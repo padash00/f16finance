@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag } from 'lucide-react'
 
@@ -198,31 +198,33 @@ function parseWiponExcel(file: File): Promise<ImportRow[]> {
   })
 }
 
-async function exportToExcel(items: CatalogItem[], filename = 'catalog.xlsx') {
-  const wb = createWorkbook()
+async function exportToExcel(items: CatalogItem[], filename = 'Katalog') {
   const today = new Date().toLocaleDateString('ru-RU')
-  buildStyledSheet(wb, 'Каталог', 'Каталог товаров и услуг', `Экспорт: ${today} | Позиций: ${items.length}`, [
-    { header: 'Название', key: 'name', width: 30, type: 'text' },
-    { header: 'Штрихкод', key: 'barcode', width: 16, type: 'text' },
-    { header: 'Категория', key: 'category', width: 18, type: 'text' },
-    { header: 'Тип', key: 'type', width: 10, type: 'text' },
-    { header: 'Цена продажи', key: 'salePrice', width: 16, type: 'money' },
-    { header: 'Цена закупки', key: 'purchasePrice', width: 16, type: 'money' },
-    { header: 'Единица', key: 'unit', width: 10, type: 'text' },
-    { header: 'Остаток', key: 'balance', width: 12, type: 'number', align: 'right' },
-    { header: 'Активен', key: 'active', width: 10, type: 'text' },
-  ], items.map(item => ({
-    name: item.name,
-    barcode: item.barcode || '',
-    category: item.category?.name || '',
-    type: item.item_type === 'product' ? 'Товар' : 'Услуга',
-    salePrice: item.sale_price,
-    purchasePrice: item.default_purchase_price,
-    unit: item.unit || '',
-    balance: item.total_balance,
-    active: item.is_active ? 'Да' : 'Нет',
-  })))
-  await downloadWorkbook(wb, filename)
+  await downloadReportPdf('table', {
+    meta: { title: 'Каталог товаров и услуг', generated: today },
+    columns: [
+      { key: 'name', label: 'Название' },
+      { key: 'barcode', label: 'Штрихкод' },
+      { key: 'category', label: 'Категория' },
+      { key: 'type', label: 'Тип' },
+      { key: 'salePrice', label: 'Цена продажи', align: 'right' },
+      { key: 'purchasePrice', label: 'Цена закупки', align: 'right' },
+      { key: 'unit', label: 'Единица' },
+      { key: 'balance', label: 'Остаток', align: 'right' },
+      { key: 'active', label: 'Активен' },
+    ],
+    rows: items.map(item => ({
+      name: item.name,
+      barcode: item.barcode || '',
+      category: item.category?.name || '',
+      type: item.item_type === 'product' ? 'Товар' : 'Услуга',
+      salePrice: item.sale_price,
+      purchasePrice: item.default_purchase_price,
+      unit: item.unit || '',
+      balance: item.total_balance,
+      active: item.is_active ? 'Да' : 'Нет',
+    })),
+  }, filename.replace(/\.xlsx$/, ''))
 }
 
 // ─── ItemForm ──────────────────────────────────────────────────────────────────

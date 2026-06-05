@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Card } from '@/components/ui/card'
@@ -149,18 +149,20 @@ export default function CashFlowPage() {
   }, [dailyData])
 
   const downloadCSV = async () => {
-    const wb = createWorkbook()
     const period = `${dateFrom} — ${dateTo}`
     const cfRows = dailyData.map(r => ({ date: r.date, income: r.income, expenses: r.expenses, profit: r.profit, balance: r.cumBalance }))
-    cfRows.push({ _isTotals: true, date: 'ИТОГО', income: stats.totalIncome, expenses: stats.totalExpenses, profit: stats.profit, balance: stats.finalBalance } as any)
-    buildStyledSheet(wb, 'Cash Flow', 'Движение денег (Cash Flow)', `Период: ${period} | Дней: ${dailyData.length}`, [
-      { header: 'Дата', key: 'date', width: 13, type: 'text' },
-      { header: 'Доходы', key: 'income', width: 16, type: 'money' },
-      { header: 'Расходы', key: 'expenses', width: 16, type: 'money' },
-      { header: 'Прибыль за день', key: 'profit', width: 18, type: 'money' },
-      { header: 'Баланс накоп.', key: 'balance', width: 18, type: 'money' },
-    ], cfRows)
-    await downloadWorkbook(wb, `cashflow_${dateFrom}_${dateTo}.xlsx`)
+    await downloadReportPdf('table', {
+      meta: { title: 'Движение денег (Cash Flow)', period, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'date', label: 'Дата' },
+        { key: 'income', label: 'Доходы', align: 'right' },
+        { key: 'expenses', label: 'Расходы', align: 'right' },
+        { key: 'profit', label: 'Прибыль за день', align: 'right' },
+        { key: 'balance', label: 'Баланс накоп.', align: 'right' },
+      ],
+      rows: cfRows,
+      total: { date: 'ИТОГО', income: stats.totalIncome, expenses: stats.totalExpenses, profit: stats.profit, balance: stats.finalBalance },
+    }, `Cashflow_${dateFrom}_${dateTo}`)
   }
 
   // ---- Page snapshot for AI ----

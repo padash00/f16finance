@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { FileSpreadsheet, RefreshCw, Download, TrendingUp, ShoppingCart, Tag, Percent } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -47,7 +47,6 @@ function dayName(dateStr: string) {
 }
 
 async function downloadCSV(daily: DailyRow[], totals: Totals, year: number, month: number) {
-  const wb = createWorkbook()
   const monthName = new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
   const dataRows = daily.map(d => ({
     date: d.date,
@@ -60,19 +59,22 @@ async function downloadCSV(daily: DailyRow[], totals: Totals, year: number, mont
     online: d.online,
     discount: d.discount,
   }))
-  dataRows.push({ _isTotals: true, date: 'ИТОГО', dayName: '', count: totals.count, total: totals.total, cash: totals.cash, kaspi: totals.kaspi, card: totals.card, online: totals.online, discount: totals.discount } as any)
-  buildStyledSheet(wb, 'Отчёт', `Месячный отчёт — ${monthName}`, `Период: ${year}-${String(month).padStart(2, '0')} | Дней: ${daily.length}`, [
-    { header: 'Дата', key: 'date', width: 13, type: 'text' },
-    { header: 'День', key: 'dayName', width: 8, type: 'text' },
-    { header: 'Продаж', key: 'count', width: 10, type: 'number', align: 'right' },
-    { header: 'Выручка', key: 'total', width: 16, type: 'money' },
-    { header: 'Наличные', key: 'cash', width: 15, type: 'money' },
-    { header: 'Безналичный', key: 'kaspi', width: 15, type: 'money' },
-    { header: 'Карта', key: 'card', width: 15, type: 'money' },
-    { header: 'Онлайн', key: 'online', width: 15, type: 'money' },
-    { header: 'Скидки', key: 'discount', width: 13, type: 'money' },
-  ], dataRows)
-  await downloadWorkbook(wb, `otchet_${year}_${String(month).padStart(2, '0')}.xlsx`)
+  await downloadReportPdf('table', {
+    meta: { title: `Месячный отчёт — ${monthName}`, generated: new Date().toLocaleString('ru-RU') },
+    columns: [
+      { key: 'date', label: 'Дата' },
+      { key: 'dayName', label: 'День' },
+      { key: 'count', label: 'Продаж', align: 'right' },
+      { key: 'total', label: 'Выручка', align: 'right' },
+      { key: 'cash', label: 'Наличные', align: 'right' },
+      { key: 'kaspi', label: 'Безналичный', align: 'right' },
+      { key: 'card', label: 'Карта', align: 'right' },
+      { key: 'online', label: 'Онлайн', align: 'right' },
+      { key: 'discount', label: 'Скидки', align: 'right' },
+    ],
+    rows: dataRows,
+    total: { date: 'ИТОГО', count: totals.count, total: totals.total, cash: totals.cash, kaspi: totals.kaspi, card: totals.card, online: totals.online, discount: totals.discount },
+  }, `Otchet_${year}_${String(month).padStart(2, '0')}`)
 }
 
 function getMonthName(month: number) {

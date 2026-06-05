@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -176,7 +176,6 @@ export function AbcAnalysisPageContent() {
 
   // Export Excel
   async function exportCsv() {
-    const wb = createWorkbook()
     const today = new Date().toLocaleDateString('ru-RU')
     const abcRows = filtered.map((item, idx) => ({
       num: idx + 1,
@@ -190,19 +189,22 @@ export function AbcAnalysisPageContent() {
       margin: item.margin,
       marginPct: item.margin_percent,
     }))
-    buildStyledSheet(wb, 'ABC-анализ', 'ABC-анализ товаров', `Экспорт: ${today} | Позиций: ${filtered.length}`, [
-      { header: '#', key: 'num', width: 6, type: 'number', align: 'right' },
-      { header: 'Класс', key: 'cls', width: 8, type: 'text', align: 'center' },
-      { header: 'Наименование', key: 'name', width: 30, type: 'text' },
-      { header: 'Категория', key: 'category', width: 18, type: 'text' },
-      { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
-      { header: '% от итого', key: 'revPct', width: 12, type: 'percent' },
-      { header: 'Кол-во', key: 'qty', width: 10, type: 'number', align: 'right' },
-      { header: 'Сделок', key: 'transactions', width: 10, type: 'number', align: 'right' },
-      { header: 'Маржа', key: 'margin', width: 16, type: 'money' },
-      { header: 'Маржа %', key: 'marginPct', width: 12, type: 'percent' },
-    ], abcRows)
-    await downloadWorkbook(wb, `abc_analysis_${new Date().toISOString().split('T')[0]}.xlsx`)
+    await downloadReportPdf('table', {
+      meta: { title: 'ABC-анализ товаров', generated: today },
+      columns: [
+        { key: 'num', label: '#', align: 'right' },
+        { key: 'cls', label: 'Класс' },
+        { key: 'name', label: 'Наименование' },
+        { key: 'category', label: 'Категория' },
+        { key: 'revenue', label: 'Выручка', align: 'right' },
+        { key: 'revPct', label: '% от итого', align: 'right' },
+        { key: 'qty', label: 'Кол-во', align: 'right' },
+        { key: 'transactions', label: 'Сделок', align: 'right' },
+        { key: 'margin', label: 'Маржа', align: 'right' },
+        { key: 'marginPct', label: 'Маржа %', align: 'right' },
+      ],
+      rows: abcRows,
+    }, `ABC_analiz_${new Date().toISOString().split('T')[0]}`)
   }
 
   // Open price edit
