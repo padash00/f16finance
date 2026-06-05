@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from "@/lib/excel/styled-export"
+import { downloadReportPdf } from "@/lib/client/download-pdf"
 import { FloatingAssistant } from "@/components/ai/floating-assistant"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -420,7 +420,6 @@ export default function AIAnalysisPage() {
 
   const handleExport = async () => {
     if (!analysis) return
-    const wb = createWorkbook()
     const period = `${analysis.dataRangeStart} — ${analysis.dataRangeEnd}`
     const dataRows = analysis.chartData.map((d) => ({
       date: d.date,
@@ -436,28 +435,24 @@ export default function AIAnalysisPage() {
       planned_expense: Math.round(d.planned_expense || 0),
       margin_pct: Number((d.margin ?? safeMargin(d.profit ?? d.income - d.expense, d.income)).toFixed(2)),
     }))
-    buildStyledSheet(
-      wb,
-      "Аналитика",
-      "AI-разбор",
-      `Период: ${period} | Строк: ${dataRows.length}`,
-      [
-        { header: "Дата", key: "date", width: 12, type: "text" },
-        { header: "Тип", key: "type", width: 10, type: "text" },
-        { header: "Доход", key: "income", width: 16, type: "money" },
-        { header: "Расход", key: "expense", width: 16, type: "money" },
-        { header: "Прибыль", key: "profit", width: 16, type: "money" },
-        { header: "Нал", key: "income_cash", width: 14, type: "money" },
-        { header: "Безналичный", key: "income_kaspi", width: 14, type: "money" },
-        { header: "Card", key: "income_card", width: 14, type: "money" },
-        { header: "Online", key: "income_online", width: 14, type: "money" },
-        { header: "План доход", key: "planned_income", width: 16, type: "money" },
-        { header: "План расход", key: "planned_expense", width: 16, type: "money" },
-        { header: "Маржа %", key: "margin_pct", width: 12, type: "percent" },
+    await downloadReportPdf("table", {
+      meta: { title: "AI-разбор", period, generated: new Date().toLocaleString("ru-RU") },
+      columns: [
+        { key: "date", label: "Дата" },
+        { key: "type", label: "Тип" },
+        { key: "income", label: "Доход", align: "right" },
+        { key: "expense", label: "Расход", align: "right" },
+        { key: "profit", label: "Прибыль", align: "right" },
+        { key: "income_cash", label: "Нал", align: "right" },
+        { key: "income_kaspi", label: "Безнал", align: "right" },
+        { key: "income_card", label: "Card", align: "right" },
+        { key: "income_online", label: "Online", align: "right" },
+        { key: "planned_income", label: "План доход", align: "right" },
+        { key: "planned_expense", label: "План расход", align: "right" },
+        { key: "margin_pct", label: "Маржа %", align: "right" },
       ],
-      dataRows,
-    )
-    await downloadWorkbook(wb, `ai-analysis-${analysis.dataRangeStart}_to_${analysis.dataRangeEnd}.xlsx`)
+      rows: dataRows,
+    }, `AI_analiz_${analysis.dataRangeStart}_to_${analysis.dataRangeEnd}`)
   }
 
   const dataSource = bundle?.dataSourceNote || DATA_SOURCE_NOTE

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, memo, useCallback, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -1628,24 +1628,7 @@ function OperatorAnalyticsContent() {
   }, [dateFrom, dateTo, selectedCompanyIds, activeOperatorIds, showToast])
 
   const handleDownloadCSV = useCallback(async () => {
-    const wb = createWorkbook()
     const period = `${dateFrom} — ${dateTo}`
-
-    // Sheet 1: Summary
-    buildStyledSheet(wb, 'Сводка', 'Аналитика операторов — Сводка', `Период: ${period}`, [
-      { header: 'Показатель', key: 'label', width: 28, type: 'text' },
-      { header: 'Значение', key: 'value', width: 20, type: 'money' },
-    ], [
-      { label: 'Общая выручка', value: Math.round(analytics.totalsFiltered.turnover) },
-      { label: 'Всего смен', value: analytics.totalsFiltered.shifts },
-      { label: 'Средняя смена', value: Math.round(avgPerShiftOverall) },
-      { label: 'Премии', value: Math.round(analytics.totalPlus) },
-      { label: 'Штрафы и долги', value: Math.round(totalPenalties) },
-      { label: 'Авансы', value: Math.round(analytics.totalAdvances) },
-      { _isTotals: true, label: 'Чистый эффект', value: Math.round(analytics.totalsFiltered.netEffect) },
-    ])
-
-    // Sheet 2: Detailed operators
     const opRows = analytics.rows.map(op => ({
       name: op.operatorName,
       shifts: op.shifts,
@@ -1664,27 +1647,29 @@ function OperatorAnalyticsContent() {
       net: Math.round(op.netEffect),
     }))
     const tot = opRows.reduce((a, r) => ({ turnover: a.turnover + r.turnover, cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, debts: a.debts + r.debts, fines: a.fines + r.fines, bonuses: a.bonuses + r.bonuses, advances: a.advances + r.advances, net: a.net + r.net }), { turnover: 0, cash: 0, kaspi: 0, online: 0, card: 0, debts: 0, fines: 0, bonuses: 0, advances: 0, net: 0 })
-    opRows.push({ _isTotals: true, name: 'ИТОГО', shifts: analytics.totalsFiltered.shifts, days: 0, avgShift: 0, share: 100, ...tot } as any)
-    buildStyledSheet(wb, 'Операторы', 'Аналитика операторов', `Период: ${period}`, [
-      { header: 'Оператор', key: 'name', width: 24, type: 'text' },
-      { header: 'Смен', key: 'shifts', width: 8, type: 'number', align: 'right' },
-      { header: 'Дней', key: 'days', width: 8, type: 'number', align: 'right' },
-      { header: 'Выручка', key: 'turnover', width: 16, type: 'money' },
-      { header: 'Ср. смена', key: 'avgShift', width: 14, type: 'money' },
-      { header: 'Доля %', key: 'share', width: 10, type: 'percent' },
-      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
-      { header: 'Безналичный', key: 'kaspi', width: 14, type: 'money' },
-      { header: 'Online', key: 'online', width: 14, type: 'money' },
-      { header: 'Карта', key: 'card', width: 14, type: 'money' },
-      { header: 'Долги', key: 'debts', width: 13, type: 'money' },
-      { header: 'Штрафы', key: 'fines', width: 13, type: 'money' },
-      { header: 'Премии', key: 'bonuses', width: 13, type: 'money' },
-      { header: 'Авансы', key: 'advances', width: 13, type: 'money' },
-      { header: 'Чистый эффект', key: 'net', width: 16, type: 'money' },
-    ], opRows)
-
-    await downloadWorkbook(wb, `operators_${dateFrom}_${dateTo}.xlsx`)
-    showToast('Excel отчёт скачан', 'success')
+    await downloadReportPdf('table', {
+      meta: { title: 'Аналитика операторов', period, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'name', label: 'Оператор' },
+        { key: 'shifts', label: 'Смен', align: 'right' },
+        { key: 'days', label: 'Дней', align: 'right' },
+        { key: 'turnover', label: 'Выручка', align: 'right' },
+        { key: 'avgShift', label: 'Ср. смена', align: 'right' },
+        { key: 'share', label: 'Доля %', align: 'right' },
+        { key: 'cash', label: 'Нал', align: 'right' },
+        { key: 'kaspi', label: 'Безнал', align: 'right' },
+        { key: 'online', label: 'Online', align: 'right' },
+        { key: 'card', label: 'Карта', align: 'right' },
+        { key: 'debts', label: 'Долги', align: 'right' },
+        { key: 'fines', label: 'Штрафы', align: 'right' },
+        { key: 'bonuses', label: 'Премии', align: 'right' },
+        { key: 'advances', label: 'Авансы', align: 'right' },
+        { key: 'net', label: 'Чистый эффект', align: 'right' },
+      ],
+      rows: opRows,
+      total: tot,
+    }, `Operatory_analitika_${dateFrom}_${dateTo}`)
+    showToast('PDF отчёт скачан', 'success')
   }, [analytics, dateFrom, dateTo, avgPerShiftOverall, totalPenalties, showToast])
 
   // Loading states
