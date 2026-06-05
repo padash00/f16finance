@@ -366,6 +366,7 @@ export default function IncomePage() {
     operatorId: operatorFilter !== 'all' && operatorFilter !== 'none' ? operatorFilter : undefined,
     operatorNull: operatorFilter === 'none',
     payFilter: payFilter !== 'all' ? payFilter : undefined,
+    fetchAll: true, // грузить ВСЕ страницы (иначе db-max-rows режет до 1000 и ранние даты пропадают)
   })
 
   // Локальная копия для оптимистичных обновлений (inline edit, delete)
