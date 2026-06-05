@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { resolveStation, generateToken, sha256 } from '../../_lib/auth'
 
 export async function POST(req: NextRequest) {
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
     .from('customers')
     .select('id, name, phone, kiosk_balance, auth_user_id')
     .eq('is_active', true)
-    .or(`phone.eq.${username},card_number.eq.${username}`)
+    .or(`phone.eq.${sanitizeOrFilterValue(username)},card_number.eq.${sanitizeOrFilterValue(username)}`)
     .limit(1)
 
   if (searchErr) {

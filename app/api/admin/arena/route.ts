@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
@@ -668,7 +669,7 @@ export async function POST(request: Request) {
       const { data: customer, error: findErr } = await supabase
         .from('customers')
         .select('id, name, phone, card_number, kiosk_balance')
-        .or(`phone.eq.${q},card_number.eq.${q}`)
+        .or(`phone.eq.${sanitizeOrFilterValue(q)},card_number.eq.${sanitizeOrFilterValue(q)}`)
         .maybeSingle()
 
       if (findErr) throw findErr
@@ -691,7 +692,7 @@ export async function POST(request: Request) {
       const { data, error } = await supabase
         .from('customers')
         .select('id, name, phone, card_number, kiosk_balance')
-        .or(`phone.ilike.%${q.trim()}%,card_number.ilike.%${q.trim()}%,name.ilike.%${q.trim()}%`)
+        .or(`phone.ilike.%${sanitizeOrFilterValue(q)}%,card_number.ilike.%${sanitizeOrFilterValue(q)}%,name.ilike.%${sanitizeOrFilterValue(q)}%`)
         .limit(10)
       if (error) throw error
       return json({ ok: true, data: data || [] })

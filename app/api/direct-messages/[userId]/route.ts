@@ -24,6 +24,10 @@ export async function GET(
 
   const { userId: otherUserId } = await params
   if (!otherUserId) return json({ error: 'userId обязателен' }, 400)
+  // otherUserId попадает в .or() — должен быть строго UUID (защита от PostgREST-инъекции).
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(otherUserId)) {
+    return json({ error: 'invalid userId' }, 400)
+  }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const me = access.user.id

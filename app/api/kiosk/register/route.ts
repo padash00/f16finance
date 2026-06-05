@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { isIP } from 'node:net'
 
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     const { data: station, error: findError } = await admin
       .from('arena_stations')
       .select('id, name, station_code, provisioning_key_hash, point_project_id')
-      .or(`station_code.eq.${stationCode},name.eq.${stationCode}`)
+      .or(`station_code.eq.${sanitizeOrFilterValue(stationCode)},name.eq.${sanitizeOrFilterValue(stationCode)}`)
       .limit(1)
       .maybeSingle()
     if (findError) throw findError

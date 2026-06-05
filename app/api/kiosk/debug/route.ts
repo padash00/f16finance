@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
 function json(data: unknown, status = 200) {
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
   if (id) {
     q = q.eq('id', id)
   } else {
-    q = q.or(`station_code.eq.${code},name.eq.${code}`)
+    q = q.or(`station_code.eq.${sanitizeOrFilterValue(code)},name.eq.${sanitizeOrFilterValue(code)}`)
   }
 
   const { data: station, error } = await q.maybeSingle()
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
   if (id) {
     q = q.eq('id', id)
   } else {
-    q = q.or(`station_code.eq.${code},name.eq.${code}`)
+    q = q.or(`station_code.eq.${sanitizeOrFilterValue(code)},name.eq.${sanitizeOrFilterValue(code)}`)
   }
 
   const { data: station, error } = await q.maybeSingle()

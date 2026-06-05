@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { isIP } from 'node:net'
 
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
     if (stationId) {
       q = q.eq('id', stationId)
     } else {
-      q = q.or(`station_code.eq.${stationCode},name.eq.${stationCode}`)
+      q = q.or(`station_code.eq.${sanitizeOrFilterValue(stationCode)},name.eq.${sanitizeOrFilterValue(stationCode)}`)
     }
 
     const { data: row, error: findError } = await q.maybeSingle()
