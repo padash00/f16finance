@@ -102,49 +102,39 @@ export default function ProfitabilityPage() {
     const load = async () => {
       setLoading(true); setError(null)
       try {
-        const endpoints = {
-          incomes: `/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=5000`,
-          expenses: `/api/admin/expenses?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=2000`,
-          categories: '/api/admin/expense-categories',
-          inputs: `/api/admin/profitability?from=${monthFrom}&to=${monthTo}&includeKaspiDaily=1`,
+        const incBase = `/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}`
+        const expBase = `/api/admin/expenses?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}`
+        // db-max-rows режет до 1000 строк за запрос — поэтому догружаем ВСЕ страницы,
+        // иначе при большом периоде расчёт идёт по неполным данным.
+        const fetchAllPages = async (base: string): Promise<any[]> => {
+          const all: any[] = []
+          let page = 0
+          while (true) {
+            const res = await fetch(`${base}&page=${page}&page_size=1000`)
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}))
+              throw new Error(body?.error || `Загрузка не удалась (HTTP ${res.status})`)
+            }
+            const body = await res.json()
+            const chunk = (body.data || []) as any[]
+            all.push(...chunk)
+            if (chunk.length < 1000) break
+            page += 1
+          }
+          return all
         }
-        const [incomeRes, expenseRes, categoriesRes, inputsRes] = await Promise.all([
-          fetch(endpoints.incomes),
-          fetch(endpoints.expenses),
-          fetch(endpoints.categories),
-          fetch(endpoints.inputs),
+        const [incomesAll, expensesAll, categoriesRes, inputsRes] = await Promise.all([
+          fetchAllPages(incBase),
+          fetchAllPages(expBase),
+          fetch('/api/admin/expense-categories'),
+          fetch(`/api/admin/profitability?from=${monthFrom}&to=${monthTo}&includeKaspiDaily=1`),
         ])
-        const checkFail = async (name: keyof typeof endpoints, res: Response) => {
-          if (res.ok) return
-          // Сначала пробуем JSON, потом text — ответ может быть не JSON (Vercel 500/timeout, middleware reject)
-          const rawText = await res.clone().text().catch(() => '')
-          let body: any = null
-          try { body = JSON.parse(rawText) } catch { /* not JSON */ }
-          const apiMsg = body?.error || body?.detail || body?.hint || body?.message || ''
-          // Если ответ — не JSON, показываем первые 200 символов тела (обычно текст ошибки от Vercel/прокси)
-          const textPreview = !body && rawText ? rawText.slice(0, 200) : ''
-          const full = `[${name} → ${res.status} ${res.statusText}] ${apiMsg || textPreview || 'без деталей в ответе'}`
-          // eslint-disable-next-line no-console
-          console.error('Profitability API fail:', {
-            name,
-            url: endpoints[name],
-            status: res.status,
-            statusText: res.statusText,
-            contentType: res.headers.get('content-type'),
-            body: body || rawText.slice(0, 1000),
-          })
-          throw new Error(full)
-        }
-        await checkFail('incomes', incomeRes)
-        await checkFail('expenses', expenseRes)
-        await checkFail('categories', categoriesRes)
-        await checkFail('inputs', inputsRes)
-        const incomePayload = (await incomeRes.json()) as { data?: IncomeRow[] }
-        const expensePayload = (await expenseRes.json()) as { data?: ExpenseRow[] }
+        if (!categoriesRes.ok) throw new Error(`Категории: HTTP ${categoriesRes.status}`)
+        if (!inputsRes.ok) throw new Error(`Профит-инпуты: HTTP ${inputsRes.status}`)
         const categoriesPayload = (await categoriesRes.json()) as { data?: ExpenseCategoryRow[] }
         const payload = (await inputsRes.json()) as { items?: ProfitabilityInputRow[]; kaspiDaily?: KaspiDailyPayload }
-        setIncomes((incomePayload.data || []) as IncomeRow[])
-        setExpenses((expensePayload.data || []) as ExpenseRow[])
+        setIncomes(incomesAll as IncomeRow[])
+        setExpenses(expensesAll as ExpenseRow[])
         setExpenseCategories(
           Object.fromEntries(
             (((categoriesPayload.data || []) as ExpenseCategoryRow[]).map((row) => [
@@ -688,6 +678,14 @@ export default function ProfitabilityPage() {
           depreciationJ: 0, financialJ: 0, nonOpJ: 0,
         })
       }
+      // Бакет для строк БЕЗ компании (company_id=null) — раньше они молча пропускались.
+      aggs.set('', {
+        company_id: '', name: 'Без компании',
+        revenue: 0, cashRevenue: 0, cashlessRevenue: 0,
+        cogs: 0, operating: 0,
+        posComJ: 0, payrollJ: 0, payrollTaxJ: 0, incomeTaxJ: 0,
+        depreciationJ: 0, financialJ: 0, nonOpJ: 0,
+      })
       for (const ir of incomes) {
         if (!ir.date.startsWith(m)) continue
         const a = aggs.get(String(ir.company_id || ''))
@@ -780,6 +778,7 @@ export default function ProfitabilityPage() {
     }
     const totalRev = Array.from(acc.values()).reduce((s, c) => s + c.revenue, 0)
     return Array.from(acc.values())
+      .filter((c) => c.company_id !== '' || c.revenue !== 0 || c.cogs !== 0 || c.operating !== 0 || c.payroll !== 0 || c.payrollTaxes !== 0 || c.posCom !== 0)
       .map((c) => ({
         ...c,
         grossProfit: c.revenue - c.cogs,
@@ -1759,8 +1758,8 @@ export default function ProfitabilityPage() {
             </Card>
           )}
 
-          {/* ═══ BY COMPANY (распределение ОПиУ по точкам за месяц) ═══ */}
-          {byCompany.length > 0 && (
+          {/* ═══ BY COMPANY за месяц — убрано по запросу (дублировало таблицу за период) ═══ */}
+          {false && byCompany.length > 0 && (
             <Card className="border-border bg-card p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div>
