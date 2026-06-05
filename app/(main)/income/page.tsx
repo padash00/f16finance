@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -788,7 +788,6 @@ export default function IncomePage() {
 
   // Экспорт Excel
   const downloadCSV = async () => {
-    const wb = createWorkbook()
     const period = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : DateUtils.todayISO()
     const incRows = displayRows.map(r => ({
       date: r.date,
@@ -803,20 +802,23 @@ export default function IncomePage() {
       total: (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0),
       comment: r.comment || '',
     }))
-    buildStyledSheet(wb, 'Доходы', 'Доходы', `Период: ${period} | Строк: ${incRows.length}`, [
-      { header: 'Дата', key: 'date', width: 12, type: 'text' },
-      { header: 'Компания', key: 'company', width: 20, type: 'text' },
-      { header: 'Оператор', key: 'operator', width: 20, type: 'text' },
-      { header: 'Смена', key: 'shift', width: 10, type: 'text' },
-      { header: 'Зона', key: 'zone', width: 10, type: 'text' },
-      { header: 'Cash', key: 'cash', width: 14, type: 'money' },
-      { header: cashLabels.pos, key: 'kaspi', width: 14, type: 'money' },
-      { header: cashLabels.online, key: 'online', width: 14, type: 'money' },
-      { header: 'Card', key: 'card', width: 14, type: 'money' },
-      { header: 'Итого', key: 'total', width: 16, type: 'money' },
-      { header: 'Комментарий', key: 'comment', width: 22, type: 'text' },
-    ], incRows)
-    await downloadWorkbook(wb, `incomes_${DateUtils.todayISO()}.xlsx`)
+    await downloadReportPdf('table', {
+      meta: { title: 'Доходы', period, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'date', label: 'Дата' },
+        { key: 'company', label: 'Компания' },
+        { key: 'operator', label: 'Оператор' },
+        { key: 'shift', label: 'Смена' },
+        { key: 'zone', label: 'Зона' },
+        { key: 'cash', label: 'Cash', align: 'right' },
+        { key: 'kaspi', label: cashLabels.pos, align: 'right' },
+        { key: 'online', label: cashLabels.online, align: 'right' },
+        { key: 'card', label: 'Card', align: 'right' },
+        { key: 'total', label: 'Итого', align: 'right' },
+        { key: 'comment', label: 'Комментарий' },
+      ],
+      rows: incRows,
+    }, `Dohody_${DateUtils.todayISO()}`)
     logIncomeEvent({
       entityType: 'income-export',
       entityId: `export:${DateUtils.todayISO()}`,

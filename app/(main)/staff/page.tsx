@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
 import Link from 'next/link'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card, CardContent } from '@/components/ui/card'
@@ -496,22 +496,24 @@ export default function StaffPageSmart() {
   }
 
   const handleExport = async () => {
-    const wb = createWorkbook()
     const staffRows = filteredStaff.map(s => ({
       name: s.full_name,
       role: ROLE_LABEL[s.role as StaffRole]?.label || '',
       salary: s.monthly_salary || 0,
       status: s.is_active ? 'Активен' : 'Архив',
     }))
-    const total = staffRows.reduce((acc, r) => acc + r.salary, 0)
-    staffRows.push({ _isTotals: true, name: 'ИТОГО', role: '', salary: total, status: '' } as any)
-    buildStyledSheet(wb, 'Сотрудники', 'Административные сотрудники', `Всего: ${filteredStaff.length}`, [
-      { header: 'Сотрудник', key: 'name', width: 28, type: 'text' },
-      { header: 'Роль', key: 'role', width: 18, type: 'text' },
-      { header: 'Оклад', key: 'salary', width: 16, type: 'money' },
-      { header: 'Статус', key: 'status', width: 12, type: 'text' },
-    ], staffRows)
-    await downloadWorkbook(wb, `staff_${monthYM}.xlsx`)
+    const totalSalary = staffRows.reduce((acc, r) => acc + r.salary, 0)
+    await downloadReportPdf('table', {
+      meta: { title: 'Сотрудники', generated: new Date().toLocaleDateString('ru-RU') },
+      columns: [
+        { key: 'name', label: 'Сотрудник' },
+        { key: 'role', label: 'Роль' },
+        { key: 'salary', label: 'Оклад', align: 'right' },
+        { key: 'status', label: 'Статус' },
+      ],
+      rows: staffRows,
+      total: { salary: totalSalary },
+    }, `Sotrudniki_${monthYM}`)
   }
 
   return (

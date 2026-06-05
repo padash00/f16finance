@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -712,7 +712,6 @@ export default function ExpensesPage() {
 
   // Export
   const downloadCSV = async () => {
-    const wb = createWorkbook()
     const period = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : DateUtils.todayISO()
     const expRows = rows.map(r => ({
       date: r.date,
@@ -723,16 +722,19 @@ export default function ExpensesPage() {
       total: rowTotal(r),
       comment: r.comment ?? '',
     }))
-    buildStyledSheet(wb, 'Расходы', 'Расходы', `Период: ${period} | Строк: ${expRows.length}`, [
-      { header: 'Дата', key: 'date', width: 12, type: 'text' },
-      { header: 'Компания', key: 'company', width: 22, type: 'text' },
-      { header: 'Категория', key: 'category', width: 26, type: 'text' },
-      { header: 'Cash', key: 'cash', width: 14, type: 'money' },
-      { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
-      { header: 'Итого', key: 'total', width: 15, type: 'money' },
-      { header: 'Комментарий', key: 'comment', width: 24, type: 'text' },
-    ], expRows)
-    await downloadWorkbook(wb, `expenses_${DateUtils.todayISO()}.xlsx`)
+    await downloadReportPdf('table', {
+      meta: { title: 'Расходы', period, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'date', label: 'Дата' },
+        { key: 'company', label: 'Компания' },
+        { key: 'category', label: 'Категория' },
+        { key: 'cash', label: 'Cash', align: 'right' },
+        { key: 'kaspi', label: cashLabels.providerName, align: 'right' },
+        { key: 'total', label: 'Итого', align: 'right' },
+        { key: 'comment', label: 'Комментарий' },
+      ],
+      rows: expRows,
+    }, `Rashody_${DateUtils.todayISO()}`)
     logExpenseEvent({
       entityType: 'expense-export',
       entityId: `export:${DateUtils.todayISO()}`,

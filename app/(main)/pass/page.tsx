@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getPublicAppUrl } from '@/lib/core/app-url'
@@ -280,27 +280,29 @@ export default function AccessPage() {
 
   // Экспорт в Excel
   const exportToCSV = async () => {
-    const wb = createWorkbook()
     const today = new Date().toLocaleDateString('ru-RU')
-    buildStyledSheet(wb, 'Операторы', 'Данные для входа операторов', `Экспорт: ${today} | Операторов: ${operators.length}`, [
-      { header: 'Имя', key: 'name', width: 24, type: 'text' },
-      { header: 'Логин', key: 'username', width: 20, type: 'text' },
-      { header: 'Пароль', key: 'password', width: 16, type: 'text' },
-      { header: 'Телефон', key: 'phone', width: 16, type: 'text' },
-      { header: 'Email', key: 'email', width: 24, type: 'text' },
-      { header: 'Telegram ID', key: 'telegram', width: 16, type: 'text' },
-      { header: 'Ссылка для входа', key: 'link', width: 30, type: 'text' },
-    ], operators.map(op => ({
-      name: op.short_name || op.name,
-      username: op.username ?? '',
-      password: newPasswords[op.id] || '••••••••',
-      phone: op.phone || '',
-      email: op.email || '',
-      telegram: op.telegram_chat_id || '',
-      link: `${publicAppUrl}/login`,
-    })))
-    await downloadWorkbook(wb, `operators_${new Date().toISOString().split('T')[0]}.xlsx`)
-    setSuccess('Excel файл скачан')
+    await downloadReportPdf('table', {
+      meta: { title: 'Данные для входа операторов', generated: today },
+      columns: [
+        { key: 'name', label: 'Имя' },
+        { key: 'username', label: 'Логин' },
+        { key: 'password', label: 'Пароль' },
+        { key: 'phone', label: 'Телефон' },
+        { key: 'email', label: 'Email' },
+        { key: 'telegram', label: 'Telegram ID' },
+        { key: 'link', label: 'Ссылка для входа' },
+      ],
+      rows: operators.map(op => ({
+        name: op.short_name || op.name,
+        username: op.username ?? '',
+        password: newPasswords[op.id] || '••••••••',
+        phone: op.phone || '',
+        email: op.email || '',
+        telegram: op.telegram_chat_id || '',
+        link: `${publicAppUrl}/login`,
+      })),
+    }, `Operatory_${new Date().toISOString().split('T')[0]}`)
+    setSuccess('PDF файл скачан')
     setTimeout(() => setSuccess(null), 3000)
   }
 

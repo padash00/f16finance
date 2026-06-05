@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 import { AdminPageHeader, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Badge } from '@/components/ui/badge'
@@ -278,30 +278,32 @@ export default function CustomersPage() {
   }
 
   async function exportExcel() {
-    const wb = createWorkbook()
     const today = new Date().toLocaleDateString('ru-RU')
-    buildStyledSheet(wb, 'Клиенты', 'База клиентов', `Экспорт: ${today} | Всего: ${customers.length}`, [
-      { header: 'Имя', key: 'name', width: 28, type: 'text' },
-      { header: 'Телефон', key: 'phone', width: 16, type: 'text' },
-      { header: 'Карта', key: 'card', width: 16, type: 'text' },
-      { header: 'Email', key: 'email', width: 24, type: 'text' },
-      { header: 'Баллы', key: 'points', width: 12, type: 'number', align: 'right' },
-      { header: 'Потрачено (₸)', key: 'spent', width: 18, type: 'money' },
-      { header: 'Визиты', key: 'visits', width: 10, type: 'number', align: 'right' },
-      { header: 'Компания', key: 'company', width: 20, type: 'text' },
-      { header: 'Дата добавления', key: 'created', width: 16, type: 'text' },
-    ], customers.map(c => ({
-      name: c.name,
-      phone: c.phone || '',
-      card: c.card_number || '',
-      email: c.email || '',
-      points: c.loyalty_points,
-      spent: c.total_spent,
-      visits: c.visits_count,
-      company: c.company?.name || '',
-      created: formatDate(c.created_at),
-    })))
-    await downloadWorkbook(wb, `clients_${new Date().toISOString().split('T')[0]}.xlsx`)
+    await downloadReportPdf('table', {
+      meta: { title: 'База клиентов', generated: today },
+      columns: [
+        { key: 'name', label: 'Имя' },
+        { key: 'phone', label: 'Телефон' },
+        { key: 'card', label: 'Карта' },
+        { key: 'email', label: 'Email' },
+        { key: 'points', label: 'Баллы', align: 'right' },
+        { key: 'spent', label: 'Потрачено ₸', align: 'right' },
+        { key: 'visits', label: 'Визиты', align: 'right' },
+        { key: 'company', label: 'Компания' },
+        { key: 'created', label: 'Добавлен' },
+      ],
+      rows: customers.map(c => ({
+        name: c.name,
+        phone: c.phone || '',
+        card: c.card_number || '',
+        email: c.email || '',
+        points: c.loyalty_points,
+        spent: c.total_spent,
+        visits: c.visits_count,
+        company: c.company?.name || '',
+        created: formatDate(c.created_at),
+      })),
+    }, `Klienty_${new Date().toISOString().split('T')[0]}`)
   }
 
   return (
