@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   CalendarDays,
@@ -196,9 +196,7 @@ export default function PointDebtsPage() {
 
   const downloadExcel = async () => {
     if (!data) return
-    const wb = createWorkbook()
     const rows = items.map((r) => ({
-      id: r.id,
       debtor: r.debtor_name,
       company: r.company_name,
       point: r.point_device_name || '—',
@@ -212,56 +210,25 @@ export default function PointDebtsPage() {
       created: r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—',
       source: r.source || '—',
     }))
-    buildStyledSheet(
-      wb,
-      'Долги точки',
-      'Долги с точки (позиции)',
-      `Неделя ${data.weekStart} — ${data.weekEnd} · строк: ${items.length} · сумма: ${money(data.totals.amount)}`,
-      [
-        { header: 'ID позиции', key: 'id', width: 38, type: 'text' },
-        { header: 'Должник', key: 'debtor', width: 22, type: 'text' },
-        { header: 'Компания / точка учёта', key: 'company', width: 20, type: 'text' },
-        { header: 'Устройство точки', key: 'point', width: 18, type: 'text' },
-        { header: 'Товар', key: 'item', width: 28, type: 'text' },
-        { header: 'Штрихкод', key: 'barcode', width: 16, type: 'text' },
-        { header: 'Кол-во', key: 'qty', width: 8, type: 'number', align: 'right' },
-        { header: 'Цена', key: 'unit', width: 12, type: 'money' },
-        { header: 'Сумма', key: 'total', width: 12, type: 'money' },
-        { header: 'Комментарий', key: 'comment', width: 24, type: 'text' },
-        { header: 'Оформил', key: 'cashier', width: 18, type: 'text' },
-        { header: 'Создано', key: 'created', width: 20, type: 'text' },
-        { header: 'Источник', key: 'source', width: 14, type: 'text' },
+    await downloadReportPdf('table', {
+      meta: { title: 'Долги с точки', period: `Неделя ${data.weekStart} — ${data.weekEnd}`, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'debtor', label: 'Должник' },
+        { key: 'company', label: 'Компания' },
+        { key: 'point', label: 'Точка' },
+        { key: 'item', label: 'Товар' },
+        { key: 'barcode', label: 'Штрихкод' },
+        { key: 'qty', label: 'Кол-во', align: 'right' },
+        { key: 'unit', label: 'Цена', align: 'right' },
+        { key: 'total', label: 'Сумма', align: 'right' },
+        { key: 'comment', label: 'Комментарий' },
+        { key: 'cashier', label: 'Оформил' },
+        { key: 'created', label: 'Создано' },
+        { key: 'source', label: 'Источник' },
       ],
       rows,
-    )
-    if (legacyRows.length > 0) {
-      const leg = legacyRows.map((r) => ({
-        id: r.id,
-        debtor: r.debtor_name,
-        company: r.company_name,
-        amount: Math.round(r.amount * 100) / 100,
-        source: r.source || '—',
-        comment: r.comment || '—',
-        created: r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—',
-      }))
-      buildStyledSheet(
-        wb,
-        'debts агрегат',
-        'Таблица debts (не point-client)',
-        `Неделя ${data.weekStart}: PyQt и прочие источники без строк point_debt_items · ${legacyRows.length} шт. · ${money(data.legacyTotals?.amount ?? 0)}`,
-        [
-          { header: 'ID debts', key: 'id', width: 38, type: 'text' },
-          { header: 'Должник', key: 'debtor', width: 22, type: 'text' },
-          { header: 'Компания', key: 'company', width: 20, type: 'text' },
-          { header: 'Сумма', key: 'amount', width: 14, type: 'money' },
-          { header: 'Источник', key: 'source', width: 14, type: 'text' },
-          { header: 'Комментарий', key: 'comment', width: 28, type: 'text' },
-          { header: 'Создано', key: 'created', width: 20, type: 'text' },
-        ],
-        leg,
-      )
-    }
-    await downloadWorkbook(wb, `point_debts_${data.weekStart}.xlsx`)
+      total: { total: data.totals.amount },
+    }, `Dolgi_tochki_${data.weekStart}`)
   }
 
   const markPaidSelected = async () => {

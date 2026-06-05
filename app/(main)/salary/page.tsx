@@ -2,7 +2,7 @@
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -938,7 +938,6 @@ export default function SalaryPage() {
   }
 
   const downloadSalaryCSV = async () => {
-    const wb = createWorkbook()
     const opRows = (data?.operators || []).map(({ operator, week }) => ({
       name: getOperatorDisplayName(operator),
       shifts: week.shiftsCount,
@@ -954,22 +953,25 @@ export default function SalaryPage() {
       status: statusMeta(week.status).label,
     }))
     const tot = opRows.reduce((a, r) => ({ gross: a.gross + r.gross, net: a.net + r.net, paid: a.paid + r.paid, remaining: a.remaining + r.remaining }), { gross: 0, net: 0, paid: 0, remaining: 0 })
-    opRows.push({ _isTotals: true, name: 'ИТОГО', shifts: opRows.length, gross: tot.gross, autoBonus: 0, bonus: 0, fine: 0, debt: 0, advance: 0, net: tot.net, paid: tot.paid, remaining: tot.remaining, status: '' } as any)
-    buildStyledSheet(wb, 'Зарплаты', 'Ведомость зарплат', `Неделя: ${weekStart} | Операторов: ${(data?.operators || []).length}`, [
-      { header: 'Оператор', key: 'name', width: 26, type: 'text' },
-      { header: 'Смен', key: 'shifts', width: 8, type: 'number', align: 'right' },
-      { header: 'Начислено', key: 'gross', width: 15, type: 'money' },
-      { header: 'Авто-бонус', key: 'autoBonus', width: 14, type: 'money' },
-      { header: 'Бонус', key: 'bonus', width: 13, type: 'money' },
-      { header: 'Штраф', key: 'fine', width: 13, type: 'money' },
-      { header: 'Долг', key: 'debt', width: 13, type: 'money' },
-      { header: 'Аванс', key: 'advance', width: 13, type: 'money' },
-      { header: 'К выплате', key: 'net', width: 14, type: 'money' },
-      { header: 'Выплачено', key: 'paid', width: 14, type: 'money' },
-      { header: 'Остаток', key: 'remaining', width: 14, type: 'money' },
-      { header: 'Статус', key: 'status', width: 12, type: 'text' },
-    ], opRows)
-    await downloadWorkbook(wb, `salary_${weekStart}.xlsx`)
+    await downloadReportPdf('table', {
+      meta: { title: 'Ведомость зарплат', period: `Неделя ${weekStart}`, generated: new Date().toLocaleString('ru-RU') },
+      columns: [
+        { key: 'name', label: 'Оператор' },
+        { key: 'shifts', label: 'Смен', align: 'right' },
+        { key: 'gross', label: 'Начислено', align: 'right' },
+        { key: 'autoBonus', label: 'Авто-бонус', align: 'right' },
+        { key: 'bonus', label: 'Бонус', align: 'right' },
+        { key: 'fine', label: 'Штраф', align: 'right' },
+        { key: 'debt', label: 'Долг', align: 'right' },
+        { key: 'advance', label: 'Аванс', align: 'right' },
+        { key: 'net', label: 'К выплате', align: 'right' },
+        { key: 'paid', label: 'Выплачено', align: 'right' },
+        { key: 'remaining', label: 'Остаток', align: 'right' },
+        { key: 'status', label: 'Статус' },
+      ],
+      rows: opRows,
+      total: { gross: tot.gross, net: tot.net, paid: tot.paid, remaining: tot.remaining },
+    }, `Zarplata_${weekStart}`)
   }
 
   return (
