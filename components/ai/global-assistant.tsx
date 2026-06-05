@@ -22,6 +22,9 @@ const HIDDEN_PATH_PREFIXES = [
   '/auth',
   '/setup-required',
   '/unauthorized',
+  // Print/PDF-страницы — ассистент не должен попадать в выгрузку
+  '/profitability/print',
+  '/weekly-report/act-print',
   // Публичные маркетинговые страницы — AI-консультант там не нужен
   '/club-management-system',
   '/operator-salary-system',
