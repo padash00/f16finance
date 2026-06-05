@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const createCustomerTool: CopilotTool = {
@@ -41,9 +42,13 @@ export const createCustomerTool: CopilotTool = {
     const birthDate = String(input.birth_date || '').trim() || null
     if (!name) return { ok: false, message: 'Имя обязательно.' }
 
+    // Привязываем клиента к компании своей организации (иначе он «ничей»).
+    const orgCompanies = await scopedCompanyIds(ctx)
+    const companyId = orgCompanies && orgCompanies.length > 0 ? orgCompanies[0] : null
+
     const { data, error } = await ctx.supabase
       .from('customers')
-      .insert([{ name, phone, birth_date: birthDate, loyalty_points: 0 }])
+      .insert([{ name, phone, birth_date: birthDate, loyalty_points: 0, company_id: companyId }])
       .select('id, name')
       .single()
     if (error) return { ok: false, message: `Не удалось создать: ${error.message}` }

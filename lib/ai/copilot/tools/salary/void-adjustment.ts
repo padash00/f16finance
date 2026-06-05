@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedOperatorIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const voidAdjustmentTool: CopilotTool = {
@@ -33,13 +34,17 @@ export const voidAdjustmentTool: CopilotTool = {
         const weekStart = fmt(monday)
         const weekEnd = fmt(sunday)
 
-        const { data, error } = await ctx.supabase
+        let adjQ = ctx.supabase
           .from('operator_salary_adjustments')
           .select('id, date, kind, amount, comment, status, voided_at, operator_id')
           .gte('date', weekStart)
           .lte('date', weekEnd)
           .order('date', { ascending: false })
           .limit(100)
+        // Только корректировки операторов своей организации.
+        const allowedOpIds = await scopedOperatorIds(ctx)
+        if (allowedOpIds) adjQ = adjQ.in('operator_id', allowedOpIds)
+        const { data, error } = await adjQ
 
         if (error) {
           console.error('[copilot] void-adjustment getOptions ERROR:', JSON.stringify(error))
@@ -88,6 +93,18 @@ export const voidAdjustmentTool: CopilotTool = {
     const id = String(input.adjustment_id || '')
     const reason = String(input.reason || '').trim()
     if (!id || !reason) return { ok: false, message: 'Нужны корректировка и причина.' }
+
+    // Отменять можно только корректировку оператора своей организации.
+    const voidAllowedOps = await scopedOperatorIds(ctx)
+    if (voidAllowedOps) {
+      const { data: adj } = await ctx.supabase
+        .from('operator_salary_adjustments')
+        .select('id, operator_id')
+        .eq('id', id)
+        .in('operator_id', voidAllowedOps)
+        .maybeSingle()
+      if (!adj) return { ok: false, message: 'Корректировка не найдена.' }
+    }
 
     // Сначала пробуем со status (новая схема)
     let { error } = await ctx.supabase

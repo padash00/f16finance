@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedOperatorIds } from '../../query-helpers'
 
 function daysUntilBirthday(birthDate: string, now: Date): number | null {
   const [, m, d] = birthDate.split('-').map(Number)
@@ -22,10 +23,13 @@ export const getBirthdaysTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
-    const { data } = await ctx.supabase
+    let bdQ = ctx.supabase
       .from('operators')
       .select('id, name, short_name, operator_profiles(full_name, birth_date)')
       .eq('is_active', true)
+    const bdIds = await scopedOperatorIds(ctx)
+    if (bdIds) bdQ = bdQ.in('id', bdIds)
+    const { data } = await bdQ
 
     const now = new Date()
     const items: Array<{ name: string; days: number; date: string }> = []

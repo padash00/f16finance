@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds, scopedOperatorIds } from '../../query-helpers'
 
 export const getTeamInfoTool: CopilotTool = {
   name: 'get_team_info',
@@ -13,14 +14,19 @@ export const getTeamInfoTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
+    const [opIds, coIds] = await Promise.all([scopedOperatorIds(ctx), scopedCompanyIds(ctx)])
+    let opsQ = ctx.supabase.from('operators').select('id, is_active')
+    if (opIds) opsQ = opsQ.in('id', opIds)
+    let leadsQ = ctx.supabase
+      .from('operator_company_assignments')
+      .select('id')
+      .eq('is_active', true)
+      .in('role_in_company', ['senior_cashier', 'senior_operator'])
+    if (coIds) leadsQ = leadsQ.in('company_id', coIds)
     const [{ data: ops }, { data: staff }, { data: leads }] = await Promise.all([
-      ctx.supabase.from('operators').select('id, is_active'),
+      opsQ,
       ctx.supabase.from('staff').select('id, role'),
-      ctx.supabase
-        .from('operator_company_assignments')
-        .select('id')
-        .eq('is_active', true)
-        .in('role_in_company', ['senior_cashier', 'senior_operator']),
+      leadsQ,
     ])
 
     const activeOps = (ops || []).filter((o: any) => o.is_active).length
