@@ -50,7 +50,7 @@ SuperAdmin (`isSuperAdmin`) обходит все ограничения.
 │   │   ├── kiosk/        — API для kiosk
 │   │   ├── pos/          — API для POS
 │   │   ├── operator/     — API для личного кабинета оператора
-│   │   ├── ai/           — Claude AI (чат, прогнозы, анализ)
+│   │   ├── ai/           — AI (OpenAI gpt-4o-mini): чат-копилот, прогнозы, анализ
 │   │   └── cron/         — крон-джобы (Telegram отчёты, напоминания)
 │   ├── operator/         — страницы личного кабинета оператора
 │   ├── (client)/         — клиентский портал
@@ -71,7 +71,7 @@ SuperAdmin (`isSuperAdmin`) обходит все ограничения.
 │   │   ├── organizations.ts      — resolveCompanyScope()
 │   │   └── repositories/         — data-access функции
 │   ├── domain/           — бизнес-логика (salary.ts)
-│   ├── ai/               — Claude API интеграция
+│   ├── ai/               — AI-интеграция (OpenAI, провайдер в lib/ai/provider.ts)
 │   └── ...
 ├── desktop/
 │   ├── operator/         — Electron operator app (v2.3.x)
@@ -180,6 +180,6 @@ export async function POST(request: Request) {
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
-ANTHROPIC_API_KEY          # для AI фич
+OPENAI_API_KEY             # для AI фич (provider: OpenAI, модель gpt-4o-mini; OPENAI_MODEL — опц.)
 TELEGRAM_BOT_TOKEN         # для Telegram отчётов
 ```
