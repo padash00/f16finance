@@ -706,12 +706,18 @@ async function callLLM(
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,
-        // gpt-5+ требуют max_completion_tokens вместо max_tokens.
-        // gpt-4o-mini и старше поддерживают оба варианта.
-        max_completion_tokens: 800,
-        // gpt-5+ требует temperature=1 (только дефолт). Старые модели
-        // умнее на низкой температуре для tool-calling.
-        ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0.1 }),
+        // Reasoning-модели (gpt-5*) ТРАТЯТ часть токенов на внутреннее
+        // размышление. С лимитом 800 весь бюджет уходил в reasoning, и на
+        // ответ/выбор инструмента не оставалось → бот «молчал/тупил».
+        // Даём больше бюджета для gpt-5; для обычных моделей хватает меньше.
+        max_completion_tokens: MODEL.startsWith('gpt-5') ? 4000 : 1000,
+        // gpt-5: temperature не поддерживается (только дефолт), зато есть
+        // reasoning_effort. Для выбора инструмента глубокое размышление не нужно —
+        // 'low' = быстрее, дешевле и оставляет токены на сам ответ.
+        // Обычные модели — низкая температура для точного tool-calling.
+        ...(MODEL.startsWith('gpt-5')
+          ? { reasoning_effort: 'low' }
+          : { temperature: 0.1 }),
         messages,
         tools: openaiTools,
         tool_choice: 'auto',
