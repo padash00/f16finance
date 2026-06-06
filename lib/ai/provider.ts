@@ -91,7 +91,9 @@ async function callOpenAi(options: GenerateAiTextOptions): Promise<AiTextResult>
     },
     body: JSON.stringify({
       model,
-      temperature: options.temperature,
+      // gpt-5* принимает только temperature=1 (дефолт) — для них параметр опускаем,
+      // иначе OpenAI вернёт ошибку. Остальные модели — как задано.
+      ...(model.startsWith('gpt-5') ? {} : { temperature: options.temperature }),
       max_completion_tokens: options.maxTokens,
       messages: options.messages,
     }),
@@ -129,7 +131,9 @@ async function callOpenAiStream(options: StreamAiTextOptions): Promise<AiTextRes
     },
     body: JSON.stringify({
       model,
-      temperature: options.temperature,
+      // gpt-5* принимает только temperature=1 (дефолт) — для них параметр опускаем,
+      // иначе OpenAI вернёт ошибку. Остальные модели — как задано.
+      ...(model.startsWith('gpt-5') ? {} : { temperature: options.temperature }),
       max_completion_tokens: options.maxTokens,
       messages: options.messages,
       stream: true,
