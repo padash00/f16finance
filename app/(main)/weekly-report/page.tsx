@@ -10,7 +10,8 @@ import {
   memo
 } from 'react'
 import ExcelJS from 'exceljs'
-import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { buildDashboardSheet, buildStyledSheet, createWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -1853,8 +1854,31 @@ function WeeklyReportContent() {
       { header: '% от выручки', key: 'pctIncome', width: 16, type: 'percent' },
     ], expRows)
 
-    await downloadWorkbook(wb, `Orda_Недельный_отчёт_${startDate}_${endDate}.xlsx`)
-    showToast('Excel отчёт скачан', 'success')
+    // Финансовый PDF-отчёт (детальные приходы/расходы → операции).
+    const ops = [
+      ...incomeDetailRows.filter((r: any) => !r._isTotals).map((r: any) => ({ date: r.date, type: 'Доход', company: r.company, cat: r.shift || r.zone || '', amount: r.total, cash: r.cash, cashless: (r.kaspi || 0) + (r.online || 0) + (r.card || 0), note: r.comment || '' })),
+      ...expenseDetailRows.filter((r: any) => !r._isTotals).map((r: any) => ({ date: r.date, type: 'Расход', company: r.company, cat: r.category, amount: r.total, cash: r.cash, cashless: r.kaspi || 0, note: r.payee || '' })),
+    ].sort((a, b) => a.date.localeCompare(b.date))
+    await downloadReportPdf('finreport', {
+      meta: { title: 'Недельный отчёт', period, company: 'Все точки', generated },
+      kpi: {
+        revenue: totals.incomeTotal, revenuePrev: totals.prev.incomeTotal,
+        expense: totals.expenseTotal, expensePrev: totals.prev.expenseTotal,
+        profit: totals.profit, profitPrev: totals.prev.profit,
+        avgCheck: 0, txns: ops.filter((o) => o.type === 'Доход').length,
+      },
+      summary: [
+        { section: 'СТРУКТУРА ДОХОДОВ' },
+        { label: 'Наличные', cur: totals.incomeCash, prev: 0 },
+        { label: 'Безналичный доход', cur: totals.incomeKaspiOnline, prev: 0 },
+      ],
+      byCompany: companyStats.map(({ name, stats }) => ({
+        name, revenue: stats.total, cash: stats.cash, cashless: stats.nonCash, online: stats.online, card: stats.card, txns: 0,
+      })),
+      expenses: totals.expenseCategories.map((e) => ({ name: e.name, amount: e.value })),
+      operations: ops,
+    }, `Nedelnyy_otchet_${startDate}_${endDate}`)
+    showToast('PDF отчёт скачан', 'success')
   }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast, incomeRows, expenseRows, operators, cashLabels, shifts])
 
   const handleGenerateAiReport = useCallback(async () => {
