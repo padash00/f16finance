@@ -233,7 +233,7 @@ function parseISODate(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function fullMonthsBetween(startISO: string | null | undefined, endISO: string | null | undefined) {
+export function fullMonthsBetween(startISO: string | null | undefined, endISO: string | null | undefined) {
   const start = parseISODate(startISO)
   const end = parseISODate(endISO)
   if (!start || !end || end < start) return 0
@@ -243,7 +243,7 @@ function fullMonthsBetween(startISO: string | null | undefined, endISO: string |
   return Math.max(0, months)
 }
 
-function resolveSeniorityPercent(
+export function resolveSeniorityPercent(
   tiers: SalarySeniorityTier[] | undefined,
   hireDate: string | null | undefined,
   shiftDate: string | null | undefined,
@@ -262,7 +262,7 @@ function resolveSeniorityPercent(
   return Math.min(15, Math.max(0, Number(matched.bonus_percent || 0)))
 }
 
-function distributeAmountByWeights<T extends { key: string; weight: number }>(
+export function distributeAmountByWeights<T extends { key: string; weight: number }>(
   amount: number,
   items: T[],
 ): Map<string, number> {

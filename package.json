@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "node scripts/typecheck.mjs",
     "verify:release": "npm run typecheck && npm run lint && npm run build",
-    "smoke:live": "node scripts/smoke-live.mjs"
+    "smoke:live": "node scripts/smoke-live.mjs",
+    "test": "node --import ./scripts/test-register.mjs --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",
