@@ -164,7 +164,7 @@
 | Аутентификация | Supabase Auth |
 | API | Next.js Route Handlers |
 | Телеграм | Telegram Bot API |
-| AI/Прогнозирование | Claude API |
+| AI/Прогнозирование | OpenAI API (gpt-4o-mini) |
 | Сборка | electron-builder (NSIS), GitHub Actions |
 | Обновления | electron-updater + GitHub Releases |
 
