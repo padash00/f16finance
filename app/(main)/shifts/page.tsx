@@ -301,8 +301,13 @@ function ShiftsPageContent() {
     [currentDate],
   )
 
+  const latestScheduleWeekRef = useRef('')
   const fetchScheduleData = useCallback(async () => {
     const weekStart = weekDays[0].dateISO
+    // Метка актуальной недели: автообновление (4с), realtime и смена недели
+    // могут идти параллельно. Без этого поздний ответ старой недели
+    // перезаписывал данные новой → в таблице показывались чужие смены.
+    latestScheduleWeekRef.current = weekStart
 
     // Таймаут 15 секунд чтобы не висел вечно
     const controller = new AbortController()
@@ -316,6 +321,9 @@ function ShiftsPageContent() {
       clearTimeout(timeoutId)
       const payload = await res.json().catch(() => null)
       if (!res.ok) throw new Error(payload?.error || `HTTP ${res.status}`)
+
+      // Ответ устарел (пользователь уже переключил неделю) — игнорируем.
+      if (latestScheduleWeekRef.current !== weekStart) return
 
       setCompanies(payload?.schedule?.companies || [])
       setShifts(payload?.schedule?.shifts || [])
