@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useCompanies } from '@/hooks/use-companies'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -801,58 +801,35 @@ export default function ProfitabilityPage() {
     try {
       const period = `${monthLabel(monthFrom)} — ${monthLabel(monthTo)}`
       const generated = new Date().toLocaleString('ru-RU')
-      const wb = createWorkbook()
       const t = byCompanyPeriod.reduce((a, c) => ({
         revenue: a.revenue + c.revenue, cashRevenue: a.cashRevenue + c.cashRevenue, cashlessRevenue: a.cashlessRevenue + c.cashlessRevenue,
         cogs: a.cogs + c.cogs, operating: a.operating + c.operating, posCom: a.posCom + c.posCom,
         payroll: a.payroll + c.payroll, payrollTaxes: a.payrollTaxes + c.payrollTaxes,
         ebitda: a.ebitda + c.ebitda, netProfit: a.netProfit + c.netProfit,
       }), { revenue: 0, cashRevenue: 0, cashlessRevenue: 0, cogs: 0, operating: 0, posCom: 0, payroll: 0, payrollTaxes: 0, ebitda: 0, netProfit: 0 })
-      buildStyledSheet(wb, 'Сводка по точкам', 'P&L по точкам — сравнение', `Период: ${period} | Сгенерирован: ${generated}`, [
-        { header: 'Точка', key: 'name', width: 28, type: 'text' },
-        { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
-        { header: 'Нал', key: 'cashRevenue', width: 14, type: 'money' },
-        { header: 'Безнал', key: 'cashlessRevenue', width: 14, type: 'money' },
-        { header: 'COGS', key: 'cogs', width: 14, type: 'money' },
-        { header: 'Операц.', key: 'operating', width: 14, type: 'money' },
-        { header: 'POS-комис.', key: 'posCom', width: 14, type: 'money' },
-        { header: 'ФОТ+налоги', key: 'payrollAll', width: 14, type: 'money' },
-        { header: 'EBITDA', key: 'ebitda', width: 14, type: 'money' },
-        { header: 'Чистая прибыль', key: 'netProfit', width: 16, type: 'money' },
-        { header: 'Маржа', key: 'margin', width: 10, type: 'percent' },
-        { header: 'Доля выручки', key: 'share', width: 12, type: 'percent' },
-      ], [
-        ...byCompanyPeriod.map((c) => ({
+      await downloadReportPdf('table', {
+        meta: { title: 'P&L по точкам', period, generated },
+        columns: [
+          { key: 'name', label: 'Точка' },
+          { key: 'revenue', label: 'Выручка', align: 'right' },
+          { key: 'cashRevenue', label: 'Нал', align: 'right' },
+          { key: 'cashlessRevenue', label: 'Безнал', align: 'right' },
+          { key: 'cogs', label: 'COGS', align: 'right' },
+          { key: 'operating', label: 'Операц.', align: 'right' },
+          { key: 'posCom', label: 'POS-комис.', align: 'right' },
+          { key: 'payrollAll', label: 'ФОТ+налоги', align: 'right' },
+          { key: 'ebitda', label: 'EBITDA', align: 'right' },
+          { key: 'netProfit', label: 'Чистая прибыль', align: 'right' },
+          { key: 'margin', label: 'Маржа %', align: 'right' },
+          { key: 'share', label: 'Доля %', align: 'right' },
+        ],
+        rows: byCompanyPeriod.map((c) => ({
           name: c.name, revenue: c.revenue, cashRevenue: c.cashRevenue, cashlessRevenue: c.cashlessRevenue,
           cogs: c.cogs, operating: c.operating, posCom: c.posCom, payrollAll: c.payroll + c.payrollTaxes,
-          ebitda: c.ebitda, netProfit: c.netProfit, margin: c.margin, share: c.share * 100,
+          ebitda: c.ebitda, netProfit: c.netProfit, margin: Math.round(c.margin), share: Math.round(c.share * 100),
         })),
-        { _isTotals: true, name: 'ИТОГО', revenue: t.revenue, cashRevenue: t.cashRevenue, cashlessRevenue: t.cashlessRevenue, cogs: t.cogs, operating: t.operating, posCom: t.posCom, payrollAll: t.payroll + t.payrollTaxes, ebitda: t.ebitda, netProfit: t.netProfit, margin: t.revenue ? (t.netProfit / t.revenue) * 100 : 0, share: 100 },
-      ])
-      const usedNames = new Set<string>(['Сводка по точкам'])
-      for (const co of byCompanyPeriod) {
-        const monthly = rows
-          .map((r) => {
-            const c = byMonthByCompany.get(r.month)?.get(co.company_id)
-            return c ? { month: monthLabel(r.month), revenue: c.revenue, cogs: c.cogs, operating: c.operating, payrollAll: c.payroll + c.payrollTaxes, ebitda: c.ebitda, netProfit: c.netProfit, margin: c.margin } : null
-          })
-          .filter(Boolean) as any[]
-        if (monthly.length === 0) continue
-        let safeName = (co.name || 'Точка').slice(0, 28).replace(/[\\/?*[\]:]/g, ' ').trim() || 'Точка'
-        while (usedNames.has(safeName)) safeName = (safeName + '·').slice(0, 31)
-        usedNames.add(safeName)
-        buildStyledSheet(wb, safeName, `${co.name} — помесячно`, `Период: ${period}`, [
-          { header: 'Месяц', key: 'month', width: 18, type: 'text' },
-          { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
-          { header: 'COGS', key: 'cogs', width: 14, type: 'money' },
-          { header: 'Операц.', key: 'operating', width: 14, type: 'money' },
-          { header: 'ФОТ+налоги', key: 'payrollAll', width: 14, type: 'money' },
-          { header: 'EBITDA', key: 'ebitda', width: 14, type: 'money' },
-          { header: 'Чистая', key: 'netProfit', width: 16, type: 'money' },
-          { header: 'Маржа', key: 'margin', width: 10, type: 'percent' },
-        ], monthly)
-      }
-      downloadWorkbook(wb, `Точки_P&L_${monthFrom}_${monthTo}.xlsx`)
+        total: { name: 'ИТОГО', revenue: t.revenue, cashRevenue: t.cashRevenue, cashlessRevenue: t.cashlessRevenue, cogs: t.cogs, operating: t.operating, posCom: t.posCom, payrollAll: t.payroll + t.payrollTaxes, ebitda: t.ebitda, netProfit: t.netProfit, margin: t.revenue ? Math.round((t.netProfit / t.revenue) * 100) : 0, share: 100 },
+      }, `Tochki_PnL_${monthFrom}_${monthTo}`)
     } catch (e: any) {
       setError(e?.message || 'Не удалось выгрузить отчёт по точкам')
     } finally {
@@ -868,7 +845,6 @@ export default function ProfitabilityPage() {
     try {
       const period = `${monthLabel(monthFrom)} — ${monthLabel(monthTo)}`
       const generated = new Date().toLocaleString('ru-RU')
-      const wb = createWorkbook()
 
       // Собираем по точке месяцы
       const branchMonthly: any[] = []
@@ -909,141 +885,45 @@ export default function ProfitabilityPage() {
       const bMargin = bRev > 0 ? (bNet / bRev) * 100 : 0
       const bEbitdaMargin = bRev > 0 ? (bEbitda / bRev) * 100 : 0
 
-      // ─── Лист 1: P&L точки (для инвестора) ──────────────────────────────────
-      buildStyledSheet(wb, `${company.name} — P&L`, `Отчёт инвестора — ${company.name}`, `Период: ${period} | Сгенерирован: ${generated}`, [
-        { header: 'Показатель', key: 'label', width: 38, type: 'text' },
-        { header: 'Сумма', key: 'value', width: 22, type: 'money' },
-        { header: 'Маржа / Доля', key: 'meta', width: 18, type: 'text', align: 'right' },
-      ], [
-        { _isSection: true, _sectionLabel: 'ВЫРУЧКА' },
+      const cashTot = branchMonthly.reduce((s, r) => s + r.cashRevenue, 0)
+      const cashlessTot = branchMonthly.reduce((s, r) => s + r.cashlessRevenue, 0)
+      const pctOf = (v: number) => bRev > 0 ? `${(v / bRev * 100).toFixed(1)}%` : '—'
+      const pnlRows = [
+        { label: '— ВЫРУЧКА —', value: ' ', meta: ' ' },
         { label: 'Выручка', value: bRev, meta: '100%' },
-        { label: '  Наличные', value: branchMonthly.reduce((s, r) => s + r.cashRevenue, 0), meta: bRev > 0 ? `${(branchMonthly.reduce((s, r) => s + r.cashRevenue, 0) / bRev * 100).toFixed(1)}%` : '—' },
-        { label: '  Безналичные', value: branchMonthly.reduce((s, r) => s + r.cashlessRevenue, 0), meta: bRev > 0 ? `${(branchMonthly.reduce((s, r) => s + r.cashlessRevenue, 0) / bRev * 100).toFixed(1)}%` : '—' },
-        { _isSection: true, _sectionLabel: 'СЕБЕСТОИМОСТЬ' },
-        { label: 'COGS (Себестоимость)', value: -bCogs, meta: bRev > 0 ? `${(bCogs / bRev * 100).toFixed(1)}%` : '—' },
-        { _isTotals: true, label: 'Валовая прибыль', value: bGross, meta: bRev > 0 ? `${(bGross / bRev * 100).toFixed(1)}%` : '—' },
-        { _isSection: true, _sectionLabel: 'ОПЕРАЦИОННЫЕ РАСХОДЫ' },
-        { label: 'Операционные', value: -bOp, meta: '' },
-        { label: `Комиссия ${cashLabels.pos}`, value: -bPos, meta: '' },
-        { label: 'Фонд оплаты труда', value: -bPayroll, meta: '' },
-        { label: 'Налоги на ФОТ', value: -bPayTax, meta: '' },
-        { label: 'Прочие операционные', value: -bOther, meta: '' },
-        { _isTotals: true, label: 'EBITDA', value: bEbitda, meta: `${bEbitdaMargin.toFixed(1)}%` },
-        { _isSection: true, _sectionLabel: 'НЕДЕНЕЖНЫЕ' },
-        { label: 'Износ (амортизация)', value: -bDepr, meta: '' },
-        { label: 'Амортизация НМА', value: -bAmort, meta: '' },
-        { _isTotals: true, label: 'Опер. прибыль (EBIT)', value: bEbit, meta: bRev > 0 ? `${(bEbit / bRev * 100).toFixed(1)}%` : '—' },
-        { _isSection: true, _sectionLabel: 'ФИН. И НАЛОГИ' },
-        { label: 'Финансовые расходы (%)', value: -bFin, meta: '' },
-        { _isTotals: true, label: 'EBT', value: bEbit - bFin, meta: '' },
-        { label: 'Налог на прибыль / 3%', value: -bIncTax, meta: '' },
-        { label: 'Неоперационные', value: -bNonOp, meta: '' },
-        { _isTotals: true, label: 'ЧИСТАЯ ПРИБЫЛЬ', value: bNet, meta: `${bMargin.toFixed(1)}%` },
-      ])
-
-      // ─── Лист 2: Помесячно по точке ─────────────────────────────────────────
-      const monthlyRowsWithTotals = [...branchMonthly]
-      if (branchMonthly.length > 0) {
-        monthlyRowsWithTotals.push({ _isTotals: true, month: 'ИТОГО', revenue: bRev, cashRevenue: branchMonthly.reduce((s, r) => s + r.cashRevenue, 0), cashlessRevenue: branchMonthly.reduce((s, r) => s + r.cashlessRevenue, 0), cogs: bCogs, operating: bOp, posCom: bPos, payroll: bPayroll, payrollTaxes: bPayTax, otherOperating: bOther, ebitda: bEbitda, depreciation: bDepr, amortization: bAmort, operatingProfit: bEbit, financialExpenses: bFin, incomeTax: bIncTax, nonOperating: bNonOp, netProfit: bNet, margin: bMargin, share: branchMonthly.length > 0 ? branchMonthly.reduce((s, r) => s + r.share, 0) / branchMonthly.length : 0 })
-      }
-      buildStyledSheet(wb, 'Помесячно', `${company.name} — динамика по месяцам`, `Период: ${period}`, [
-        { header: 'Месяц', key: 'month', width: 18, type: 'text' },
-        { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
-        { header: 'Нал', key: 'cashRevenue', width: 14, type: 'money' },
-        { header: 'Безнал', key: 'cashlessRevenue', width: 14, type: 'money' },
-        { header: 'COGS', key: 'cogs', width: 14, type: 'money' },
-        { header: 'Опер.', key: 'operating', width: 14, type: 'money' },
-        { header: 'POS', key: 'posCom', width: 12, type: 'money' },
-        { header: 'ФОТ', key: 'payroll', width: 14, type: 'money' },
-        { header: 'Налоги ФОТ', key: 'payrollTaxes', width: 14, type: 'money' },
-        { header: 'EBITDA', key: 'ebitda', width: 14, type: 'money' },
-        { header: 'EBIT', key: 'operatingProfit', width: 14, type: 'money' },
-        { header: 'Налог', key: 'incomeTax', width: 12, type: 'money' },
-        { header: 'Чистая', key: 'netProfit', width: 14, type: 'money' },
-        { header: 'Маржа %', key: 'margin', width: 11, type: 'percent' },
-        { header: 'Доля выручки', key: 'share', width: 13, type: 'percent' },
-      ], monthlyRowsWithTotals)
-
-      // ─── Лист 3: Расходы точки — детально ──────────────────────────────────
-      const branchExpenses: any[] = []
-      let exCash = 0, exKaspi = 0, exTot = 0
-      for (const e of expenses) {
-        if (String(e.company_id) !== investorCompanyId) continue
-        if (e.date < monthStart(monthFrom) || e.date > monthEnd(monthTo)) continue
-        const cash = Number(e.cash_amount || 0)
-        const kaspi = Number(e.kaspi_amount || 0)
-        const total = cash + kaspi
-        if (total === 0) continue
-        exCash += cash; exKaspi += kaspi; exTot += total
-        branchExpenses.push({ date: e.date, category: e.category || '—', cash, kaspi, total })
-      }
-      branchExpenses.sort((a, b) => a.date.localeCompare(b.date))
-      branchExpenses.push({ _isTotals: true, date: 'ИТОГО', category: '', cash: exCash, kaspi: exKaspi, total: exTot })
-      buildStyledSheet(wb, 'Расходы точки', `${company.name} — расходы за период`, `Период: ${period}`, [
-        { header: 'Дата', key: 'date', width: 12, type: 'text' },
-        { header: 'Категория', key: 'category', width: 26, type: 'text' },
-        { header: 'Нал', key: 'cash', width: 14, type: 'money' },
-        { header: cashLabels.providerName, key: 'kaspi', width: 14, type: 'money' },
-        { header: 'Итого', key: 'total', width: 14, type: 'money' },
-      ], branchExpenses)
-
-      // ─── Лист 4: Все точки — общая сводка ───────────────────────────────────
-      const overallRows: any[] = []
-      let oRev = 0, oCogs = 0, oOp = 0, oPos = 0, oPayroll = 0, oPayTax = 0, oEbitda = 0, oNet = 0
-      const overallByCo = new Map<string, any>()
-      for (const r of rows) {
-        const inner = byMonthByCompany.get(r.month)
-        if (!inner) continue
-        for (const c of inner.values()) {
-          const ex = overallByCo.get(c.company_id)
-          if (ex) {
-            ex.revenue += c.revenue; ex.cogs += c.cogs; ex.operating += c.operating
-            ex.posCom += c.posCom; ex.payroll += c.payroll; ex.payrollTaxes += c.payrollTaxes
-            ex.ebitda += c.ebitda; ex.netProfit += c.netProfit
-          } else {
-            overallByCo.set(c.company_id, {
-              company_id: c.company_id, name: c.name,
-              revenue: c.revenue, cogs: c.cogs, operating: c.operating,
-              posCom: c.posCom, payroll: c.payroll, payrollTaxes: c.payrollTaxes,
-              ebitda: c.ebitda, netProfit: c.netProfit,
-            })
-          }
-        }
-      }
-      for (const c of overallByCo.values()) {
-        const isInvestor = c.company_id === investorCompanyId
-        overallRows.push({
-          name: isInvestor ? `★ ${c.name}` : c.name,
-          revenue: c.revenue,
-          cogs: c.cogs,
-          operating: c.operating,
-          posCom: c.posCom,
-          payroll: c.payroll + c.payrollTaxes,
-          ebitda: c.ebitda,
-          netProfit: c.netProfit,
-          margin: c.revenue > 0 ? (c.netProfit / c.revenue) * 100 : 0,
-        })
-        oRev += c.revenue; oCogs += c.cogs; oOp += c.operating; oPos += c.posCom
-        oPayroll += c.payroll; oPayTax += c.payrollTaxes
-        oEbitda += c.ebitda; oNet += c.netProfit
-      }
-      overallRows.sort((a, b) => b.revenue - a.revenue)
-      const oMargin = oRev > 0 ? (oNet / oRev) * 100 : 0
-      overallRows.push({ _isTotals: true, name: 'ИТОГО (все точки)', revenue: oRev, cogs: oCogs, operating: oOp, posCom: oPos, payroll: oPayroll + oPayTax, ebitda: oEbitda, netProfit: oNet, margin: oMargin })
-      buildStyledSheet(wb, 'Все точки', 'Сравнение по всем точкам за период', `Период: ${period}`, [
-        { header: 'Точка', key: 'name', width: 26, type: 'text' },
-        { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
-        { header: 'COGS', key: 'cogs', width: 14, type: 'money' },
-        { header: 'Опер.', key: 'operating', width: 14, type: 'money' },
-        { header: 'POS', key: 'posCom', width: 12, type: 'money' },
-        { header: 'ФОТ+нал.', key: 'payroll', width: 14, type: 'money' },
-        { header: 'EBITDA', key: 'ebitda', width: 14, type: 'money' },
-        { header: 'Чистая', key: 'netProfit', width: 14, type: 'money' },
-        { header: 'Маржа %', key: 'margin', width: 11, type: 'percent' },
-      ], overallRows)
-
-      const safeName = company.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 40)
-      await downloadWorkbook(wb, `Orda_Investor_${safeName}_${monthFrom}_${monthTo}.xlsx`)
+        { label: '  Наличные', value: cashTot, meta: pctOf(cashTot) },
+        { label: '  Безналичные', value: cashlessTot, meta: pctOf(cashlessTot) },
+        { label: '— СЕБЕСТОИМОСТЬ —', value: ' ', meta: ' ' },
+        { label: 'COGS (Себестоимость)', value: -bCogs, meta: pctOf(bCogs) },
+        { label: 'Валовая прибыль', value: bGross, meta: pctOf(bGross) },
+        { label: '— ОПЕРАЦИОННЫЕ РАСХОДЫ —', value: ' ', meta: ' ' },
+        { label: 'Операционные', value: -bOp, meta: ' ' },
+        { label: `Комиссия ${cashLabels.pos}`, value: -bPos, meta: ' ' },
+        { label: 'Фонд оплаты труда', value: -bPayroll, meta: ' ' },
+        { label: 'Налоги на ФОТ', value: -bPayTax, meta: ' ' },
+        { label: 'Прочие операционные', value: -bOther, meta: ' ' },
+        { label: 'EBITDA', value: bEbitda, meta: `${bEbitdaMargin.toFixed(1)}%` },
+        { label: '— НЕДЕНЕЖНЫЕ —', value: ' ', meta: ' ' },
+        { label: 'Износ (амортизация)', value: -bDepr, meta: ' ' },
+        { label: 'Амортизация НМА', value: -bAmort, meta: ' ' },
+        { label: 'Опер. прибыль (EBIT)', value: bEbit, meta: pctOf(bEbit) },
+        { label: '— ФИН. И НАЛОГИ —', value: ' ', meta: ' ' },
+        { label: 'Финансовые расходы (%)', value: -bFin, meta: ' ' },
+        { label: 'EBT', value: bEbit - bFin, meta: ' ' },
+        { label: 'Налог на прибыль / 3%', value: -bIncTax, meta: ' ' },
+        { label: 'Неоперационные', value: -bNonOp, meta: ' ' },
+        { label: 'ЧИСТАЯ ПРИБЫЛЬ', value: bNet, meta: `${bMargin.toFixed(1)}%` },
+      ]
+      const safeName = company.name.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 40)
+      await downloadReportPdf('table', {
+        meta: { title: `Отчёт инвестора — ${company.name}`, period, generated },
+        columns: [
+          { key: 'label', label: 'Показатель' },
+          { key: 'value', label: 'Сумма', align: 'right' },
+          { key: 'meta', label: 'Маржа / Доля', align: 'right' },
+        ],
+        rows: pnlRows,
+      }, `Investor_${safeName}_${monthFrom}_${monthTo}`)
     } finally {
       setInvestorExporting(false)
     }
