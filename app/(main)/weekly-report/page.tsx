@@ -713,14 +713,19 @@ function WeeklyReportContent() {
   const prevStart = useMemo(() => addDaysISO(startDate, -7), [startDate])
 
   const { companies, loading: companiesLoading, error: companiesError } = useCompanies()
+  // fetchAll: иначе сервер режет до 2000 строк и недельные итоги занижаются
+  // (период — 2 недели по всем точкам, легко превышает лимит).
   const { rows: incomeRows, loading: incomeLoading, error: incomeError, reload: reloadIncome } = useIncome({
     from: prevStart,
     to: endDate,
+    fetchAll: true,
+    pageSize: 2000,
   })
   const { rows: expenseRows, loading: expenseLoading, error: expenseError, reload: reloadExpenses } = useExpenses({
     from: prevStart,
     to: endDate,
-    pageSize: 500,
+    fetchAll: true,
+    pageSize: 2000,
   })
   const { operators } = useOperators()
 

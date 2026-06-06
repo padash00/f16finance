@@ -24,6 +24,24 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+// Как в close/open: desktop может прислать operator_id, а смена привязывается по
+// staff_id. staff_id проходит насквозь, operator_id резолвится через линк.
+// Без этого хендовер писал неверную привязку смены → ломался расчёт зарплаты.
+async function resolveStaffIdForOperator(supabase: any, operatorId: string | null | undefined) {
+  const id = String(operatorId || '').trim()
+  if (!id) return null
+
+  const { data: staff } = await supabase.from('staff').select('id').eq('id', id).maybeSingle()
+  if (staff?.id) return staff.id
+
+  const { data: link } = await supabase
+    .from('operator_staff_links')
+    .select('staff_id')
+    .eq('operator_id', id)
+    .maybeSingle()
+  return link?.staff_id || null
+}
+
 export async function POST(request: Request) {
   const point = await requirePointDevice(request)
   if ('response' in point) return point.response
@@ -41,9 +59,12 @@ export async function POST(request: Request) {
   if (!open) return json({ error: 'point-shift-no-open' }, 409)
   const prevId = (open as any).id as string
 
+  const closedByStaffId = await resolveStaffIdForOperator(supabase, body.closed_by)
+  const nextOperatorStaffId = await resolveStaffIdForOperator(supabase, body.next_operator_id)
+
   const { data: handoverResult, error: handoverErr } = await supabase.rpc('point_shift_handover', {
     p_prev_shift_id: prevId,
-    p_closed_by: body.closed_by || null,
+    p_closed_by: closedByStaffId,
     p_closing_cash: Number(body.closing_cash || 0),
     p_closing_kaspi: Number(body.closing_kaspi || 0),
     p_kaspi_before_midnight: Number(body.kaspi_before_midnight || 0),
@@ -52,7 +73,7 @@ export async function POST(request: Request) {
     p_x_report_url: body.x_report_url || null,
     p_closing_notes: body.closing_notes || null,
     p_company_id: device.company_id,
-    p_operator_id: body.next_operator_id || null,
+    p_operator_id: nextOperatorStaffId,
     p_point_device_id: device.id,
     p_shift_type: body.next_shift_type || 'day',
     p_opening_cash: Number(body.next_opening_cash || 0),
