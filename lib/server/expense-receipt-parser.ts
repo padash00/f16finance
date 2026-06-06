@@ -49,7 +49,7 @@ ${text.slice(0, 3000)}`
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         max_completion_tokens: 400,
-        temperature: 0,
+        ...((process.env.OPENAI_MODEL || 'gpt-4o-mini').startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0 }),
         messages: [{ role: 'user', content: prompt }],
       }),
     })

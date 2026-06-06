@@ -132,7 +132,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.2,
+        ...(model.startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0.2 }),
         max_completion_tokens: 500,
         messages: [
           { role: 'system', content: systemPrompt },

@@ -96,7 +96,7 @@ async function suggestCogsCategory(params: {
       },
       body: JSON.stringify({
         model: params.model,
-        temperature: 0.1,
+        ...(params.model.startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0.1 }),
         max_completion_tokens: 220,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -176,7 +176,7 @@ async function parseInvoiceFromPdfText(pdfBytes: Uint8Array): Promise<ParsedInvo
     },
     body: JSON.stringify({
       model,
-      temperature: 0.1,
+      ...(model.startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0.1 }),
       max_completion_tokens: 1800,
       messages: [{ role: 'user', content: prompt }],
     }),

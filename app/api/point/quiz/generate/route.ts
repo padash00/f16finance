@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: OPENAI_MODEL,
-          temperature: 0.7,
+          ...(OPENAI_MODEL.startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0.7 }),
           max_completion_tokens: 400,
           response_format: { type: 'json_object' },
           messages: [
