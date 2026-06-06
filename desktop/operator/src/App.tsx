@@ -455,10 +455,11 @@ export default function App() {
     }
 
     setView({ screen: 'booting' })
+    // Сессию грузим ДО запроса на сервер — чтобы при офлайне зайти в рабочий режим по кэшу.
+    const cachedSession = await loadOperatorSession()
     try {
       // Сначала сессия: bootstrap без x-point-company-id даёт режим первой компании проекта,
       // из‑за этого UI «чужой точки» при мульти-точке, пока API отвечает по выбранной компании.
-      const cachedSession = await loadOperatorSession()
       const bootstrap = await api.bootstrap(cfg, cachedSession?.company?.id)
       saveBootstrapCache(bootstrap).catch(() => null) // fire and forget
       setIsOffline(false)
@@ -477,6 +478,19 @@ export default function App() {
       const [cached] = await Promise.allSettled([getCachedBootstrap()])
       const cachedBootstrap = cached.status === 'fulfilled' ? cached.value : null
       setIsOffline(true)
+
+      // ОФЛАЙН со входом: есть сохранённая сессия + кэш → сразу в рабочий режим,
+      // а не на экран логина (где офлайн войти всё равно нельзя). Так оператор
+      // продолжает продавать из кэша, операции копятся в очередь.
+      if (cachedSession && cachedBootstrap) {
+        const session: typeof cachedSession = { ...cachedSession, bootstrap: cachedBootstrap }
+        api.getCurrentPointShift(cfg, session.company.id)
+          .then((info) => setOpenShift(info))
+          .catch(() => { /* офлайн — текущая смена восстановится при синхронизации */ })
+        setView({ screen: 'shift', bootstrap: cachedBootstrap, session })
+        return
+      }
+
       setView(cachedBootstrap ? { screen: 'login', bootstrap: cachedBootstrap } : { screen: 'setup' })
     }
   }
