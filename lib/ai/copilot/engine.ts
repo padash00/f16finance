@@ -35,7 +35,10 @@ import type { CopilotContext, CopilotResponse, CopilotTool, CopilotParam } from 
 import { fuzzyFindBest } from './fuzzy'
 
 const OPENAI_API = 'https://api.openai.com/v1/chat/completions'
-const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+// gpt-4o-mini слишком слаб для выбора нужного инструмента из 100+ и рассуждения
+// → копилот «тупил». gpt-4o заметно умнее в tool-calling. Можно поднять ещё выше
+// через env OPENAI_MODEL (gpt-4.1 / gpt-5), если доступно на аккаунте.
+const MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
 
 const COPILOT_SYSTEM_PROMPT = `Ты — AI-ассистент Orda Control. Помогаешь владельцу/менеджеру управлять игровым клубом через диалог: выдавать авансы, штрафы, бонусы, добавлять расходы/доходы, ставить задачи, смотреть аналитику и т.п.
 

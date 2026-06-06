@@ -32,7 +32,9 @@ type StreamAiTextOptions = GenerateAiTextOptions & {
 }
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
-const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+// gpt-4o вместо gpt-4o-mini: умнее во всех AI-фичах (чат-ассистент, прогнозы,
+// разбор). Переопределяется env OPENAI_MODEL.
+const DEFAULT_OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
 const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
 function extractOpenAiText(payload: any): string {
