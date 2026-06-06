@@ -2548,9 +2548,17 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        // temperature=0.3: для tool use критично — детерминированность важнее
-        // креативности. Высокий temp заставляет модель угадывать инструменты.
-        body: JSON.stringify({ model: OPENAI_MODEL, max_completion_tokens: 1800, temperature: 0.3, messages, tools, tool_choice: 'auto' }),
+        // gpt-5 — reasoning-модель: temperature НЕ поддерживается (упадёт с ошибкой),
+        // зато тратит токены на размышление → даём больше бюджета + reasoning_effort='low'
+        // (быстрый выбор инструмента). Обычные модели — низкая temperature для детерминизма.
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          max_completion_tokens: OPENAI_MODEL.startsWith('gpt-5') ? 4000 : 1800,
+          ...(OPENAI_MODEL.startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0.3 }),
+          messages,
+          tools,
+          tool_choice: 'auto',
+        }),
       })
       const data = await res.json().catch(() => null)
       await logAiUsageSafe(supabase, {
