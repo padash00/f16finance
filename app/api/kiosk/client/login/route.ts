@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { resolveStation, generateToken, sha256 } from '../../_lib/auth'
 
 export async function POST(req: NextRequest) {
@@ -22,6 +23,17 @@ export async function POST(req: NextRequest) {
 
   if (!username || !password) {
     return NextResponse.json({ error: 'username-and-password-required' }, { status: 400 })
+  }
+
+  // Защита от перебора пароля (по IP и по логину).
+  const ip = getClientIp(req)
+  const ipLimit = checkRateLimit(`client-login:ip:${ip}`, 15, 60_000)
+  const userLimit = checkRateLimit(`client-login:user:${username}`, 8, 60_000)
+  if (!ipLimit.allowed || !userLimit.allowed) {
+    return NextResponse.json(
+      { error: 'too-many-requests', message: 'Слишком много попыток входа. Подождите минуту.' },
+      { status: 429 },
+    )
   }
 
   // Ищем пользователя в Supabase Auth по email (username = email или phone)
