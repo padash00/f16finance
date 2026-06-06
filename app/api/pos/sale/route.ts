@@ -69,6 +69,8 @@ type SaleRequestBody = {
   discount_percent?: number
   loyalty_points_spent?: number
   note?: string | null
+  /** Ключ идемпотентности: один и тот же при ретрае одной продажи (защита от задвоения). */
+  local_ref?: string | null
 }
 
 type PricedItem = {
@@ -92,6 +94,7 @@ async function runLegacyFallback(params: {
   kaspiBeforeMidnightAmount: number
   kaspiAfterMidnightAmount: number
   comment: string | null
+  localRef: string | null
   pricedItems: PricedItem[]
 }) {
   const { data, error } = await params.supabase.rpc('inventory_create_point_sale', {
@@ -108,7 +111,7 @@ async function runLegacyFallback(params: {
     p_kaspi_after_midnight_amount: params.kaspiAfterMidnightAmount,
     p_comment: params.comment,
     p_source: 'web-pos',
-    p_local_ref: null,
+    p_local_ref: params.localRef,
     p_items: params.pricedItems.map((item) => ({
       item_id: item.item_id,
       quantity: item.quantity,
@@ -165,6 +168,7 @@ export async function POST(request: Request) {
     const discountPercent = Math.max(0, Math.min(99, Number(body.discount_percent || 0)))
     const loyaltyPointsSpent = Math.max(0, Math.floor(Number(body.loyalty_points_spent || 0)))
     const comment = body.note?.trim() || null
+    const localRef = body.local_ref?.trim() || null
 
     const supabase = createAdminSupabaseClient()
 
@@ -357,6 +361,7 @@ export async function POST(request: Request) {
       p_loyalty_discount_amount: loyaltyDiscountAmount,
       p_comment: comment,
       p_source: 'web-pos',
+      p_local_ref: localRef,
       p_items: pricedItems.map((item) => ({
         item_id: item.item_id,
         quantity: item.quantity,
@@ -403,6 +408,7 @@ export async function POST(request: Request) {
         kaspiBeforeMidnightAmount,
         kaspiAfterMidnightAmount,
         comment,
+        localRef,
         pricedItems,
       })
       saleId = fallback.saleId

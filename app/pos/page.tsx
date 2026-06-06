@@ -346,6 +346,9 @@ export default function PosPage() {
   const [aiHintLoading, setAiHintLoading] = useState(false)
   const [aiStats, setAiStats] = useState<{ today: number; yesterday: number; change: number } | null>(null)
   const aiHintFetchedRef = useRef(false)
+  // Ключ идемпотентности продажи: один на попытку, переиспользуется при ретрае,
+  // сбрасывается после успеха. Защита от задвоения при двойном клике / таймауте.
+  const saleLocalRef = useRef<string | null>(null)
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
@@ -619,6 +622,15 @@ export default function PosPage() {
       }
     }
 
+    // Один ключ на попытку: при ретрае (таймаут/повторный клик) шлём тот же,
+    // сервер вернёт уже созданную продажу вместо дубля.
+    if (!saleLocalRef.current) {
+      saleLocalRef.current =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
+
     try {
       const res = await fetch('/api/pos/sale', {
         method: 'POST',
@@ -639,6 +651,7 @@ export default function PosPage() {
           discount_id: selectedDiscount?.id || null,
           discount_percent: manualDiscountPercent,
           loyalty_points_spent: loyaltyPointsToSpend,
+          local_ref: saleLocalRef.current,
         }),
       })
 
@@ -646,6 +659,9 @@ export default function PosPage() {
       if (!res.ok || !json.ok) {
         throw new Error(json.error || `HTTP ${res.status}`)
       }
+
+      // Продажа успешна — следующая получит новый ключ идемпотентности.
+      saleLocalRef.current = null
 
       const data = json.data
       const receiptItemsMap = new Map(

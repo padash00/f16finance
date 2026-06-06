@@ -348,49 +348,29 @@ export async function POST(request: Request) {
       ])
 
       const actorUserId = access.staffMember?.id || null
-      const now = new Date().toISOString()
 
-      for (const item of items) {
-        // v8: возврат витрина → склад. Атомарно: -витрина, +склад.
-        const { data: sBal } = await supabase
-          .from('inventory_balances')
-          .select('quantity')
-          .eq('location_id', showcaseLoc.id)
-          .eq('item_id', item.item_id)
-          .maybeSingle()
-        const showcaseQty = Number(sBal?.quantity || 0)
-        if (item.quantity > showcaseQty) {
-          return json({ error: 'showcase-insufficient', item_id: item.item_id, showcase: showcaseQty, requested: item.quantity }, 400)
+      // Атомарно: -витрина, +склад, +движение для всех товаров в одной транзакции
+      // (SQL-функция). Раньше был цикл из отдельных RPC без транзакции — при сбое
+      // посреди операции терялся остаток.
+      const { data: returnedCount, error: returnErr } = await supabase.rpc('inventory_return_to_warehouse', {
+        p_showcase_location_id: showcaseLoc.id,
+        p_warehouse_location_id: warehouseLoc.id,
+        p_items: items,
+        p_comment: String(body.comment || '').trim() || 'Возврат с витрины на склад',
+        p_actor_user_id: actorUserId,
+      })
+
+      if (returnErr) {
+        const msg = String(returnErr.message || '')
+        if (msg.includes('inventory-showcase-insufficient')) {
+          // формат: inventory-showcase-insufficient:<item_id>:<showcase>:<requested>
+          const [, itemId, showcase, requested] = msg.split(':')
+          return json({ error: 'showcase-insufficient', item_id: itemId, showcase: Number(showcase) || 0, requested: Number(requested) || 0 }, 400)
         }
-
-        const { error: showErr } = await supabase.rpc('inventory_apply_balance_delta', {
-          p_location_id: showcaseLoc.id,
-          p_item_id: item.item_id,
-          p_delta: -item.quantity,
-        })
-        if (showErr) throw showErr
-
-        const { error: whErr } = await supabase.rpc('inventory_apply_balance_delta', {
-          p_location_id: warehouseLoc.id,
-          p_item_id: item.item_id,
-          p_delta: item.quantity,
-        })
-        if (whErr) throw whErr
-
-        await supabase.from('inventory_movements').insert({
-          item_id: item.item_id,
-          from_location_id: showcaseLoc.id,
-          to_location_id: warehouseLoc.id,
-          quantity: item.quantity,
-          movement_type: 'transfer_showcase_to_warehouse',
-          reference_type: 'return_to_warehouse',
-          comment: String(body.comment || '').trim() || 'Возврат с витрины на склад',
-          actor_user_id: actorUserId,
-          created_at: now,
-        })
+        throw returnErr
       }
 
-      return json({ ok: true, data: { returned: items.length } })
+      return json({ ok: true, data: { returned: Number(returnedCount) || items.length } })
     }
 
     return json({ error: 'unknown-action' }, 400)
