@@ -4,6 +4,7 @@ import { isIP } from 'node:net'
 
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
+import { safeEqual } from '@/lib/server/safe-equal'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -103,8 +104,8 @@ export async function POST(request: Request) {
       return json({ error: 'device-token-mismatch' }, 401)
     }
 
-    const authByPerDeviceSecret = Boolean(perDeviceHash && providedSecretHash && perDeviceHash === providedSecretHash)
-    const authByGlobalSecret = Boolean(globalSecret && secret && globalSecret === secret)
+    const authByPerDeviceSecret = safeEqual(perDeviceHash, providedSecretHash)
+    const authByGlobalSecret = safeEqual(globalSecret, secret)
     if (!authByPerDeviceSecret && !authByGlobalSecret) {
       return json({ error: 'unauthorized' }, 401)
     }

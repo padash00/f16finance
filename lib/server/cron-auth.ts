@@ -1,4 +1,5 @@
 import 'server-only'
+import { safeEqual } from '@/lib/server/safe-equal'
 
 /**
  * Проверка, что запрос пришёл от планировщика (Vercel Cron) или авторизованного
@@ -21,5 +22,5 @@ export function verifyCronRequest(request: Request): boolean {
   const headerSecret = (request.headers.get('x-cron-secret') || '').trim()
   const querySecret = (url.searchParams.get('secret') || '').trim()
 
-  return bearer === cronSecret || headerSecret === cronSecret || querySecret === cronSecret
+  return safeEqual(bearer, cronSecret) || safeEqual(headerSecret, cronSecret) || safeEqual(querySecret, cronSecret)
 }

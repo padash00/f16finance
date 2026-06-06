@@ -6,6 +6,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { getStaffRoleLabel } from '@/lib/core/access'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
+import { safeEqual } from '@/lib/server/safe-equal'
 import {
   buildInvoiceConfirmationText,
   downloadTelegramFileAsBase64,
@@ -2708,7 +2709,7 @@ export async function POST(req: Request) {
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET
     const secretHeader = req.headers.get('x-telegram-bot-api-secret-token')
     if (!secret) return json({ error: 'TELEGRAM_WEBHOOK_SECRET is required' }, 503)
-    if (secretHeader !== secret) return json({ error: 'Forbidden' }, 403)
+    if (!safeEqual(secretHeader, secret)) return json({ error: 'Forbidden' }, 403)
     if (!hasAdminSupabaseCredentials()) return json({ error: 'SUPABASE_SERVICE_ROLE_KEY is required' }, 500)
 
     const supabase = createAdminSupabaseClient()
