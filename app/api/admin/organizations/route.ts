@@ -81,11 +81,31 @@ async function loadPlatformData(supabase: any) {
   const plansById = new Map<string, any>(plans.map((p: any) => [p.id, p]))
 
   const companiesByOrg = new Map<string, any[]>()
+  const orgByCompany = new Map<string, string>()
   for (const c of compsR.data || []) {
     const k = String(c.organization_id || '')
     if (!k) continue
+    orgByCompany.set(String(c.id), k)
     if (!companiesByOrg.has(k)) companiesByOrg.set(k, [])
     companiesByOrg.get(k)!.push({ id: String(c.id), name: c.name, code: c.code ?? null })
+  }
+
+  // Legacy-гранты (company_features) по организации — устойчиво к отсутствию таблицы.
+  const legacyByOrg = new Map<string, number>()
+  try {
+    const lgR = await supabase
+      .from('company_features')
+      .select('company_id')
+      .eq('source_type', 'legacy')
+      .eq('enabled', true)
+    if (!lgR.error) {
+      for (const row of lgR.data || []) {
+        const orgId = orgByCompany.get(String(row.company_id))
+        if (orgId) legacyByOrg.set(orgId, (legacyByOrg.get(orgId) || 0) + 1)
+      }
+    }
+  } catch {
+    /* таблицы может ещё не быть */
   }
 
   const memberCountByOrg = new Map<string, number>()
@@ -145,6 +165,7 @@ async function loadPlatformData(supabase: any) {
       },
       companies,
       entitlements,
+      legacyGrants: legacyByOrg.get(id) || 0,
       subscription: sub
         ? {
             id: String(sub.id),

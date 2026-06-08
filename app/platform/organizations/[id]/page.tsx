@@ -30,6 +30,7 @@ type OrgDetail = {
   settings: { timezone: string; currency: string; supportEmail: string; supportPhone: string }
   companies: Array<{ id: string; name: string; code: string | null }>
   entitlements?: Record<string, EntitlementState>
+  legacyGrants?: number
   subscription: {
     id: string
     status: string
@@ -301,9 +302,14 @@ export default function OrgDetailPage() {
           <Sparkles className="h-4 w-4 text-violet-400" />
           Функции (доступы)
         </h2>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-slate-500">
           Что доступно этой организации. По умолчанию — из тарифа; можно переопределить вручную.
         </p>
+        {org.legacyGrants ? (
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
+            🛡 Legacy-гранты активны: {org.legacyGrants} (ничего не пропадёт при включении ограничений)
+          </div>
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2">
           {PLATFORM_FEATURES.map((f) => {
             const st = org.entitlements?.[f.key]
