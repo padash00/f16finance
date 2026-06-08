@@ -1721,8 +1721,8 @@ function WeeklyReportContent() {
             }
           />
 
-          {/* План закупок на следующую неделю (подшивается в PDF) */}
-          <WeeklyPurchasePlan />
+          {/* План закупок на неделю после отчётной (подшивается в PDF) */}
+          <WeeklyPurchasePlan reportEndDate={endDate} />
 
           {/* Week Navigation */}
           <Card className="p-4 border-white/5 bg-slate-900/40 backdrop-blur-xl">

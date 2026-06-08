@@ -68,8 +68,9 @@ type PlanItem = {
 
 const fmtMoney = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
-export function WeeklyPurchasePlan() {
-  const [weekStart, setWeekStart] = useState<string>(() => nextMondayISO())
+export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string } = {}) {
+  // Неделя плана = неделя, следующая за отчётной (смотришь отчёт за прошлую неделю → план на текущую).
+  const [weekStart, setWeekStart] = useState<string>(() => nextMondayISO(reportEndDate))
   const [companies, setCompanies] = useState<Company[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -120,6 +121,11 @@ export function WeeklyPurchasePlan() {
       active = false
     }
   }, [])
+
+  // Когда меняется отчётная неделя на странице — план встаёт на неделю после неё.
+  useEffect(() => {
+    if (reportEndDate) setWeekStart(nextMondayISO(reportEndDate))
+  }, [reportEndDate])
 
   const loadItems = useCallback(async (ws: string) => {
     setLoading(true)
@@ -234,8 +240,8 @@ export function WeeklyPurchasePlan() {
             <ShoppingCart className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">План закупок на следующую неделю</h3>
-            <p className="text-xs text-slate-500">Попадёт отдельной страницей в недельный PDF</p>
+            <h3 className="text-sm font-semibold text-white">План закупок</h3>
+            <p className="text-xs text-slate-500">На неделю после отчётной · войдёт отдельной страницей в PDF</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
