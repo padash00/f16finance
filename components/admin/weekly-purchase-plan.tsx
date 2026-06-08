@@ -45,6 +45,14 @@ export function currentWeekMondayISO(fromIso?: string): string {
   return fmtLocalISO(x)
 }
 
+/** Понедельник СЛЕДУЮЩЕЙ недели относительно даты — «неделя после отчётной». */
+export function nextWeekMondayISO(fromIso?: string): string {
+  const monday = parseLocal(currentWeekMondayISO(fromIso))
+  if (!monday) return currentWeekMondayISO(fromIso)
+  monday.setDate(monday.getDate() + 7)
+  return fmtLocalISO(monday)
+}
+
 /** «08 июн — 14 июн» по дате понедельника. */
 export function planWeekLabel(weekStartIso: string): string {
   const start = parseLocal(weekStartIso)
@@ -81,8 +89,9 @@ type PlanItem = {
 
 const fmtMoney = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
-export function WeeklyPurchasePlan() {
-  const [weekStart, setWeekStart] = useState<string>(() => currentWeekMondayISO())
+export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string } = {}) {
+  // Неделя плана = следующая за отчётной (смотришь отчёт за 1–7 → план на 8–14).
+  const [weekStart, setWeekStart] = useState<string>(() => nextWeekMondayISO(reportEndDate))
   const [companies, setCompanies] = useState<Company[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -101,7 +110,7 @@ export function WeeklyPurchasePlan() {
   const [amount, setAmount] = useState('')
   const [comment, setComment] = useState('')
 
-  const isCurrentWeek = weekStart === currentWeekMondayISO()
+  const isPlanWeek = !!reportEndDate && weekStart === nextWeekMondayISO(reportEndDate)
 
   useEffect(() => {
     let active = true
@@ -135,6 +144,11 @@ export function WeeklyPurchasePlan() {
       active = false
     }
   }, [])
+
+  // Меняется отчётная неделя на странице → план встаёт на следующую за ней.
+  useEffect(() => {
+    if (reportEndDate) setWeekStart(nextWeekMondayISO(reportEndDate))
+  }, [reportEndDate])
 
   const loadItems = useCallback(async (ws: string) => {
     setLoading(true)
@@ -251,7 +265,7 @@ export function WeeklyPurchasePlan() {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">План закупок</h3>
-            <p className="text-xs text-slate-500">Что докупить по дням · войдёт отдельной страницей в PDF</p>
+            <p className="text-xs text-slate-500">На неделю после отчётной · войдёт отдельной страницей в PDF</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -266,7 +280,7 @@ export function WeeklyPurchasePlan() {
           </Button>
           <div className="min-w-[150px] text-center">
             <div className="text-sm font-medium text-white">{planWeekLabel(weekStart)}</div>
-            {isCurrentWeek ? <div className="text-[11px] text-violet-300/70">текущая неделя</div> : null}
+            {isPlanWeek ? <div className="text-[11px] text-violet-300/70">следующая неделя</div> : null}
           </div>
           <Button
             variant="ghost"

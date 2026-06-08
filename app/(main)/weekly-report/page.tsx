@@ -11,7 +11,7 @@ import {
 } from 'react'
 import ExcelJS from 'exceljs'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
-import { WeeklyPurchasePlan, currentWeekMondayISO, planWeekLabel } from '@/components/admin/weekly-purchase-plan'
+import { WeeklyPurchasePlan, nextWeekMondayISO, planWeekLabel } from '@/components/admin/weekly-purchase-plan'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -1489,7 +1489,7 @@ function WeeklyReportContent() {
     let purchasingPlan: Array<{ company: string; day: number; category: string; title: string; supplier: string; qty: number | string; amount: number; bought: boolean }> = []
     let purchasingPlanWeek = ''
     try {
-      const planWeekStart = currentWeekMondayISO()
+      const planWeekStart = nextWeekMondayISO(endDate)
       purchasingPlanWeek = planWeekLabel(planWeekStart)
       const planRes = await fetch(`/api/admin/purchase-plan?week_start=${planWeekStart}`, { cache: 'no-store' })
       if (planRes.ok) {
@@ -1721,8 +1721,8 @@ function WeeklyReportContent() {
             }
           />
 
-          {/* План закупок на текущую неделю (подшивается в PDF) */}
-          <WeeklyPurchasePlan />
+          {/* План закупок на неделю после отчётной (подшивается в PDF) */}
+          <WeeklyPurchasePlan reportEndDate={endDate} />
 
           {/* Week Navigation */}
           <Card className="p-4 border-white/5 bg-slate-900/40 backdrop-blur-xl">

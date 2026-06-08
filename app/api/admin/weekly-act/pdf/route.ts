@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { renderWeeklyHTML, PDF_OPTIONS } from '@/lib/reports/orda-weekly-template'
 import { buildWeeklyContract, type WeeklyActData } from '@/lib/reports/build-weekly-contract'
 
@@ -15,6 +16,16 @@ const CHROMIUM_PACK_URL =
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+// Подпись недели «08 июн — 14 июн» из даты понедельника (локальные части, без UTC-сдвига).
+function weekLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y) return ''
+  const start = new Date(y, m - 1, d)
+  const end = new Date(y, m - 1, d + 6)
+  const f = (x: Date) => x.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
+  return `${f(start)} — ${f(end)}`
 }
 
 export async function GET(req: Request) {
@@ -45,7 +56,40 @@ export async function GET(req: Request) {
 
     // JSON-контракт → HTML по шаблону orda-weekly-template.
     const generated = new Date().toLocaleString('ru-RU')
-    const contract = buildWeeklyContract(actJson.data as WeeklyActData, generated)
+    const baseContract = buildWeeklyContract(actJson.data as WeeklyActData, generated)
+
+    // План закупок (неделя после отчётной). Неделю присылает клиент (plan_week) —
+    // чтобы таймзона сервера не сдвинула дату.
+    const planWeek = (url.searchParams.get('plan_week') || '').trim()
+    let purchasingPlan: any[] = []
+    let purchasingPlanWeek = ''
+    if (planWeek) {
+      try {
+        const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+        const { data: planRows } = await supabase
+          .from('purchase_plan_items')
+          .select('company_id, day_of_week, category, title, supplier, quantity, amount, status')
+          .eq('week_start', planWeek)
+          .order('day_of_week', { ascending: true })
+        const nameById = new Map<string, string>(
+          ((actJson.data as WeeklyActData).companies || []).map((c) => [String(c.id), c.name]),
+        )
+        purchasingPlan = (planRows || []).map((r: any) => ({
+          company: nameById.get(String(r.company_id)) || '—',
+          day: Number(r.day_of_week) || 0,
+          category: r.category || '',
+          title: r.title || '',
+          supplier: r.supplier || '',
+          qty: r.quantity != null ? r.quantity : '',
+          amount: Number(r.amount) || 0,
+          bought: r.status === 'bought',
+        }))
+        purchasingPlanWeek = weekLabel(planWeek)
+      } catch {
+        /* план необязателен для акта */
+      }
+    }
+    const contract = { ...baseContract, purchasingPlan, purchasingPlanWeek }
     const fontCss = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Manrope:wght@700;800&display=swap');"
     const html = renderWeeklyHTML(contract, { fontCss })
 

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Download, Loader2, Printer, X } from 'lucide-react'
 
+import { nextWeekMondayISO } from '@/components/admin/weekly-purchase-plan'
+
 type IncomeAgg = { cash: number; kaspi: number; online: number; card: number; total: number }
 type ExpenseCat = { category: string; amount: number }
 type DailyRow = { date: string; income: number; expense: number; net: number }
@@ -74,7 +76,7 @@ export function WeeklyActPrint({
   const downloadPdf = async () => {
     setDownloading(true)
     try {
-      const res = await fetch(`/api/admin/weekly-act/pdf?from=${from}&to=${to}`, { cache: 'no-store' })
+      const res = await fetch(`/api/admin/weekly-act/pdf?from=${from}&to=${to}&plan_week=${nextWeekMondayISO(to)}`, { cache: 'no-store' })
       if (!res.ok) {
         const j = await res.json().catch(() => null)
         throw new Error(j?.error || `Ошибка ${res.status}`)
