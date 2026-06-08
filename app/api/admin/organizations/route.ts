@@ -90,18 +90,29 @@ async function loadPlatformData(supabase: any) {
     companiesByOrg.get(k)!.push({ id: String(c.id), name: c.name, code: c.code ?? null })
   }
 
-  // Legacy-гранты (company_features) по организации — устойчиво к отсутствию таблицы.
+  // company_features → legacy-счётчик + эффективные коды фич по организации (устойчиво).
   const legacyByOrg = new Map<string, number>()
+  const effectiveByOrg = new Map<string, Map<string, Set<string>>>()
   try {
-    const lgR = await supabase
+    const cfR = await supabase
       .from('company_features')
-      .select('company_id')
-      .eq('source_type', 'legacy')
+      .select('company_id, source_type, enabled, ends_at, feature:feature_id(code)')
       .eq('enabled', true)
-    if (!lgR.error) {
-      for (const row of lgR.data || []) {
+    if (!cfR.error) {
+      const now = Date.now()
+      for (const row of cfR.data || []) {
+        const ends = (row as any).ends_at ? new Date((row as any).ends_at).getTime() : null
+        if (ends && ends < now) continue
         const orgId = orgByCompany.get(String(row.company_id))
-        if (orgId) legacyByOrg.set(orgId, (legacyByOrg.get(orgId) || 0) + 1)
+        if (!orgId) continue
+        if (row.source_type === 'legacy') legacyByOrg.set(orgId, (legacyByOrg.get(orgId) || 0) + 1)
+        const feat = (row as any).feature
+        const code = Array.isArray(feat) ? feat[0]?.code : feat?.code
+        if (!code) continue
+        if (!effectiveByOrg.has(orgId)) effectiveByOrg.set(orgId, new Map())
+        const m = effectiveByOrg.get(orgId)!
+        if (!m.has(code)) m.set(code, new Set())
+        m.get(code)!.add(String(row.source_type))
       }
     }
   } catch {
@@ -195,6 +206,9 @@ async function loadPlatformData(supabase: any) {
       legacyGrants: legacyByOrg.get(id) || 0,
       packageCode: orgPackage.get(id) || null,
       addonCodes: orgAddons.get(id) || [],
+      effectiveFeatures: Array.from((effectiveByOrg.get(id) || new Map<string, Set<string>>()).entries())
+        .map(([code, sources]) => ({ code, sources: Array.from(sources as Set<string>) }))
+        .sort((a, b) => a.code.localeCompare(b.code)),
       subscription: sub
         ? {
             id: String(sub.id),
@@ -234,6 +248,60 @@ async function loadPlatformData(supabase: any) {
   }
 
   return { overview, organizations, plans, packages: packagesCatalog, addons: addonsCatalog }
+}
+
+// Пересчитывает plan/addon-гранты company_features организации из её пакета и включённых add-ons.
+// Legacy/manual-гранты не трогает. Best-effort (устойчиво к отсутствию таблиц).
+async function materializeOrgEntitlements(supabase: any, organizationId: string) {
+  try {
+    const { data: comps } = await supabase.from('companies').select('id').eq('organization_id', organizationId)
+    const companyIds = (comps || []).map((c: any) => String(c.id))
+    if (!companyIds.length) return
+
+    // Пакет → коды фич
+    let planCodes: string[] = []
+    let planRef: string | null = null
+    const { data: op } = await supabase.from('organization_packages').select('package_code').eq('organization_id', organizationId).maybeSingle()
+    if (op?.package_code) {
+      const { data: pkg } = await supabase.from('packages').select('id, feature_codes').eq('code', op.package_code).maybeSingle()
+      if (pkg) { planCodes = (pkg as any).feature_codes || []; planRef = String((pkg as any).id) }
+    }
+
+    // Включённые add-ons → коды фич
+    const addonFeatures: Array<{ code: string; ref: string }> = []
+    const { data: oas } = await supabase.from('organization_addons').select('addon_code').eq('organization_id', organizationId).eq('enabled', true)
+    const addonCodesList = (oas || []).map((r: any) => r.addon_code)
+    if (addonCodesList.length) {
+      const { data: ads } = await supabase.from('addons').select('id, feature_codes').in('code', addonCodesList)
+      for (const a of ads || []) for (const fc of ((a as any).feature_codes || [])) addonFeatures.push({ code: fc, ref: String((a as any).id) })
+    }
+
+    // Коды → id фич
+    const allCodes = Array.from(new Set([...planCodes, ...addonFeatures.map((a) => a.code)]))
+    const featIdByCode = new Map<string, string>()
+    if (allCodes.length) {
+      const { data: feats } = await supabase.from('features').select('id, code').in('code', allCodes)
+      for (const f of feats || []) featIdByCode.set(String((f as any).code), String((f as any).id))
+    }
+
+    // Снести старые plan/addon-гранты этих точек и пересобрать
+    await supabase.from('company_features').delete().in('company_id', companyIds).in('source_type', ['plan', 'addon'])
+
+    const rows: any[] = []
+    for (const cid of companyIds) {
+      for (const code of planCodes) {
+        const fid = featIdByCode.get(code)
+        if (fid) rows.push({ company_id: cid, feature_id: fid, source_type: 'plan', source_ref: planRef, enabled: true })
+      }
+      for (const af of addonFeatures) {
+        const fid = featIdByCode.get(af.code)
+        if (fid) rows.push({ company_id: cid, feature_id: fid, source_type: 'addon', source_ref: af.ref, enabled: true })
+      }
+    }
+    if (rows.length) await supabase.from('company_features').insert(rows)
+  } catch {
+    /* материализация best-effort */
+  }
 }
 
 export async function GET(req: Request) {
@@ -501,6 +569,11 @@ export async function PATCH(req: Request) {
         { onConflict: 'organization_id,addon_code' },
       )
       if (error) throw error
+    }
+
+    // Если меняли пакет/модули — пересобрать plan/addon-гранты в company_features.
+    if (body?.assignPackage !== undefined || body?.setAddon) {
+      await materializeOrgEntitlements(supabase, organizationId)
     }
 
     // Возвращаем обновлённую организацию в том же формате, что и GET.

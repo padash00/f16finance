@@ -36,6 +36,7 @@ type OrgDetail = {
   legacyGrants?: number
   packageCode?: string | null
   addonCodes?: string[]
+  effectiveFeatures?: Array<{ code: string; sources: string[] }>
   subscription: {
     id: string
     status: string
@@ -464,6 +465,33 @@ export default function OrgDetailPage() {
             )
           })}
         </div>
+
+        {org.effectiveFeatures && org.effectiveFeatures.length > 0 ? (
+          <div className="mt-4 border-t border-white/5 pt-3">
+            <p className="mb-2 text-[11px] text-slate-500">Итоговые права (company_features): {org.effectiveFeatures.length}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {org.effectiveFeatures.map((ef) => {
+                const isLegacy = ef.sources.includes('legacy')
+                return (
+                  <span
+                    key={ef.code}
+                    title={`источник: ${ef.sources.join(', ')}`}
+                    className={`rounded-md border px-1.5 py-0.5 text-[11px] ${
+                      isLegacy
+                        ? 'border-amber-500/20 bg-amber-500/10 text-amber-300'
+                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                    }`}
+                  >
+                    {ef.code}
+                  </span>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-600">
+              🛡 жёлтые — legacy-гранты, зелёные — пакет/add-ons. Это эффективные права (пока без enforcement).
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {/* Save */}
