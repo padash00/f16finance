@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation'
+import PlatformShell from './PlatformShell'
 
-export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
-  void children
-  redirect('/dashboard')
+// Доступ к /platform ограничен middleware (только суперадмин). Здесь — оболочка панели.
+export default function PlatformLayout({ children }: { children: React.ReactNode }) {
+  return <PlatformShell>{children}</PlatformShell>
 }

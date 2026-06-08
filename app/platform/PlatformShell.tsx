@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   CreditCard,
+  LayoutDashboard,
   LogOut,
   PlusCircle,
   Zap,
@@ -69,6 +70,13 @@ export default function PlatformShell({ children }: { children: React.ReactNode 
         </nav>
 
         <div className="border-t border-white/[0.06] p-2">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+          >
+            <LayoutDashboard className="h-4 w-4 shrink-0" />
+            Рабочий кабинет
+          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-slate-300"

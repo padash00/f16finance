@@ -174,11 +174,10 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  if (
-    url.pathname === '/platform' ||
-    url.pathname.startsWith('/platform/') ||
-    url.pathname === '/select-organization'
-  ) {
+  // /platform — панель суперадмина: пускаем только суперадмина, остальных — на их home.
+  // /select-organization пока отключён — уводим всех.
+  const isPlatformPath = url.pathname === '/platform' || url.pathname.startsWith('/platform/')
+  if ((isPlatformPath && !isSuperAdmin) || url.pathname === '/select-organization') {
     url.pathname = defaultPath
     url.search = ''
     return NextResponse.redirect(url)

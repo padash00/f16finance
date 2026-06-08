@@ -722,7 +722,7 @@ export function getDefaultAppPath(params: {
 }) {
   const { isSuperAdmin, isStaff, isOperator, isCustomer, staffRole, rolePermissionOverrides } = params
 
-  if (isSuperAdmin) return '/dashboard'
+  if (isSuperAdmin) return '/platform'
   if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole), rolePermissionOverrides)
   if (isOperator) return '/operator'
   if (isCustomer) return '/client'
