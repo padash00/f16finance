@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * Планировщик закупа на следующую неделю.
+ * Планировщик закупа.
  * Встроен в страницу weekly-report; данные подшиваются отдельной страницей в недельный PDF.
+ * По умолчанию — текущая неделя (ту, что планируешь). Неделю можно листать.
  * v1: только план + отметка «куплено». Превращение в реальный заказ — позже.
  */
 
@@ -21,22 +22,34 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
-/** Понедельник недели, следующей за датой (или за текущей датой, если не передана). */
-export function nextMondayISO(fromIso?: string): string {
-  const base = fromIso ? new Date(`${fromIso}T00:00:00`) : new Date()
-  const isoDay = ((base.getDay() + 6) % 7) + 1 // 1=Пн .. 7=Вс
-  const add = ((8 - isoDay) % 7) || 7 // строго следующий понедельник
-  const d = new Date(base)
-  d.setDate(d.getDate() + add)
-  return d.toISOString().slice(0, 10)
+// Локальное форматирование YYYY-MM-DD без UTC-сдвига (toISOString отдаёт UTC и уводит дату).
+function fmtLocalISO(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+function parseLocal(iso: string): Date | null {
+  const parts = String(iso || '').split('-').map(Number)
+  if (parts.length !== 3 || !parts[0]) return null
+  return new Date(parts[0], parts[1] - 1, parts[2])
+}
+
+/** Понедельник недели, содержащей дату (или сегодня). Без таймзонных багов. */
+export function currentWeekMondayISO(fromIso?: string): string {
+  const base = (fromIso ? parseLocal(fromIso) : null) || new Date()
+  const x = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  const dow = (x.getDay() + 6) % 7 // 0=Пн .. 6=Вс
+  x.setDate(x.getDate() - dow)
+  return fmtLocalISO(x)
 }
 
 /** «08 июн — 14 июн» по дате понедельника. */
 export function planWeekLabel(weekStartIso: string): string {
-  const start = new Date(`${weekStartIso}T00:00:00`)
-  if (Number.isNaN(start.getTime())) return ''
-  const end = new Date(start)
-  end.setDate(end.getDate() + 6)
+  const start = parseLocal(weekStartIso)
+  if (!start) return ''
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
   const f = (d: Date) => d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
   return `${f(start)} — ${f(end)}`
 }
@@ -68,9 +81,8 @@ type PlanItem = {
 
 const fmtMoney = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
-export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string } = {}) {
-  // Неделя плана = неделя, следующая за отчётной (смотришь отчёт за прошлую неделю → план на текущую).
-  const [weekStart, setWeekStart] = useState<string>(() => nextMondayISO(reportEndDate))
+export function WeeklyPurchasePlan() {
+  const [weekStart, setWeekStart] = useState<string>(() => currentWeekMondayISO())
   const [companies, setCompanies] = useState<Company[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [suppliers, setSuppliers] = useState<string[]>([])
@@ -88,6 +100,8 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
   const [quantity, setQuantity] = useState('')
   const [amount, setAmount] = useState('')
   const [comment, setComment] = useState('')
+
+  const isCurrentWeek = weekStart === currentWeekMondayISO()
 
   useEffect(() => {
     let active = true
@@ -121,11 +135,6 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
       active = false
     }
   }, [])
-
-  // Когда меняется отчётная неделя на странице — план встаёт на неделю после неё.
-  useEffect(() => {
-    if (reportEndDate) setWeekStart(nextMondayISO(reportEndDate))
-  }, [reportEndDate])
 
   const loadItems = useCallback(async (ws: string) => {
     setLoading(true)
@@ -214,9 +223,10 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
   )
 
   const shiftWeek = (delta: number) => {
-    const d = new Date(`${weekStart}T00:00:00`)
+    const d = parseLocal(weekStart)
+    if (!d) return
     d.setDate(d.getDate() + delta * 7)
-    setWeekStart(d.toISOString().slice(0, 10))
+    setWeekStart(fmtLocalISO(d))
   }
 
   const total = useMemo(() => items.reduce((s, it) => s + (Number(it.amount) || 0), 0), [items])
@@ -241,7 +251,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">План закупок</h3>
-            <p className="text-xs text-slate-500">На неделю после отчётной · войдёт отдельной страницей в PDF</p>
+            <p className="text-xs text-slate-500">Что докупить по дням · войдёт отдельной страницей в PDF</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -254,8 +264,9 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[140px] text-center text-sm font-medium text-white">
-            {planWeekLabel(weekStart)}
+          <div className="min-w-[150px] text-center">
+            <div className="text-sm font-medium text-white">{planWeekLabel(weekStart)}</div>
+            {isCurrentWeek ? <div className="text-[11px] text-violet-300/70">текущая неделя</div> : null}
           </div>
           <Button
             variant="ghost"
