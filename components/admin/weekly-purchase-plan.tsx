@@ -3,8 +3,7 @@
 /**
  * Планировщик закупа.
  * Встроен в страницу weekly-report; данные подшиваются отдельной страницей в недельный PDF.
- * По умолчанию — текущая неделя (ту, что планируешь). Неделю можно листать.
- * v1: только план + отметка «куплено». Превращение в реальный заказ — позже.
+ * Неделя плана = следующая за отчётной. v1: план + отметка «куплено».
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -12,6 +11,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   Loader2,
   Plus,
   ShoppingCart,
@@ -21,8 +21,25 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
-// Локальное форматирование YYYY-MM-DD без UTC-сдвига (toISOString отдаёт UTC и уводит дату).
+// ── Даты (локальные части, без UTC-сдвига) ───────────────────────────────
 function fmtLocalISO(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -36,7 +53,7 @@ function parseLocal(iso: string): Date | null {
   return new Date(parts[0], parts[1] - 1, parts[2])
 }
 
-/** Понедельник недели, содержащей дату (или сегодня). Без таймзонных багов. */
+/** Понедельник недели, содержащей дату (или сегодня). */
 export function currentWeekMondayISO(fromIso?: string): string {
   const base = (fromIso ? parseLocal(fromIso) : null) || new Date()
   const x = new Date(base.getFullYear(), base.getMonth(), base.getDate())
@@ -89,8 +106,97 @@ type PlanItem = {
 
 const fmtMoney = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
+const fieldInput =
+  'h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 text-sm text-white placeholder:text-slate-600'
+
+// ── Комбобокс с поиском и добавлением нового значения ────────────────────
+function ComboBox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder: string
+  searchPlaceholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const q = query.trim()
+  const exists = options.some((o) => o.toLowerCase() === q.toLowerCase())
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery('') }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(fieldInput, 'flex items-center justify-between gap-2 px-3 text-left')}
+        >
+          <span className={cn('truncate', value ? 'text-white' : 'text-slate-500')}>
+            {value || placeholder}
+          </span>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder={searchPlaceholder || 'Поиск или ввод…'}
+            value={query}
+            onValueChange={setQuery}
+          />
+          <CommandList>
+            <CommandEmpty>Начните вводить, чтобы добавить</CommandEmpty>
+            <CommandGroup>
+              {value ? (
+                <CommandItem
+                  value="__clear__"
+                  onSelect={() => { onChange(''); setOpen(false); setQuery('') }}
+                  className="text-slate-400"
+                >
+                  Очистить
+                </CommandItem>
+              ) : null}
+              {options.map((o) => (
+                <CommandItem
+                  key={o}
+                  value={o}
+                  onSelect={() => { onChange(o); setOpen(false); setQuery('') }}
+                >
+                  <Check className={cn('h-4 w-4', value === o ? 'opacity-100' : 'opacity-0')} />
+                  <span className="truncate">{o}</span>
+                </CommandItem>
+              ))}
+              {q && !exists ? (
+                <CommandItem
+                  value={`__add__${q}`}
+                  onSelect={() => { onChange(q); setOpen(false); setQuery('') }}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="truncate">Добавить «{q}»</span>
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-[11px] font-medium text-slate-500">{label}</label>
+      {children}
+    </div>
+  )
+}
+
 export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string } = {}) {
-  // Неделя плана = следующая за отчётной (смотришь отчёт за 1–7 → план на 8–14).
   const [weekStart, setWeekStart] = useState<string>(() => nextWeekMondayISO(reportEndDate))
   const [companies, setCompanies] = useState<Company[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -106,9 +212,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
   const [category, setCategory] = useState('')
   const [title, setTitle] = useState('')
   const [supplier, setSupplier] = useState('')
-  const [quantity, setQuantity] = useState('')
   const [amount, setAmount] = useState('')
-  const [comment, setComment] = useState('')
 
   const isPlanWeek = !!reportEndDate && weekStart === nextWeekMondayISO(reportEndDate)
 
@@ -188,18 +292,21 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
           category: category.trim() || null,
           title: title.trim(),
           supplier: supplier.trim() || null,
-          quantity: quantity ? Number(quantity) : null,
           amount: amount ? Number(amount) : null,
-          comment: comment.trim() || null,
         }),
       })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.error || 'Не удалось добавить')
+      // Категория/поставщик могут быть новыми — добавим в подсказки.
+      if (category.trim() && !categories.includes(category.trim())) {
+        setCategories((p) => [...p, category.trim()].sort((a, b) => a.localeCompare(b, 'ru')))
+      }
+      if (supplier.trim() && !suppliers.includes(supplier.trim())) {
+        setSuppliers((p) => [...p, supplier.trim()].sort((a, b) => a.localeCompare(b, 'ru')))
+      }
       setTitle('')
       setSupplier('')
-      setQuantity('')
       setAmount('')
-      setComment('')
       await loadItems(weekStart)
     } catch (e: any) {
       setError(e?.message || 'Ошибка сохранения')
@@ -252,7 +359,11 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
       if (!m.has(d)) m.set(d, [])
       m.get(d)!.push(it)
     }
-    return DAYS.filter((d) => m.has(d.value)).map((d) => ({ day: d, list: m.get(d.value)! }))
+    return DAYS.filter((d) => m.has(d.value)).map((d) => {
+      const list = m.get(d.value)!
+      const sum = list.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+      return { day: d, list, sum }
+    })
   }, [items])
 
   return (
@@ -268,17 +379,17 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
             <p className="text-xs text-slate-500">На неделю после отчётной · войдёт отдельной страницей в PDF</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 rounded-xl border border-white/5 bg-black/20 p-1">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => shiftWeek(-1)}
-            className="h-9 w-9 rounded-xl hover:bg-white/10"
+            className="h-8 w-8 rounded-lg hover:bg-white/10"
             title="Предыдущая неделя"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[150px] text-center">
+          <div className="min-w-[150px] px-1 text-center">
             <div className="text-sm font-medium text-white">{planWeekLabel(weekStart)}</div>
             {isPlanWeek ? <div className="text-[11px] text-violet-300/70">следующая неделя</div> : null}
           </div>
@@ -286,7 +397,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
             variant="ghost"
             size="icon"
             onClick={() => shiftWeek(1)}
-            className="h-9 w-9 rounded-xl hover:bg-white/10"
+            className="h-8 w-8 rounded-lg hover:bg-white/10"
             title="Следующая неделя"
           >
             <ChevronRight className="h-4 w-4" />
@@ -295,75 +406,89 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
       </div>
 
       {/* Форма добавления */}
-      <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/5 bg-black/20 p-3 sm:grid-cols-12">
-        <select
-          value={dayOfWeek}
-          onChange={(e) => setDayOfWeek(Number(e.target.value))}
-          className="col-span-1 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-2 text-sm text-white sm:col-span-2"
-        >
-          {DAYS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={companyId}
-          onChange={(e) => setCompanyId(e.target.value)}
-          className="col-span-1 rounded-lg border border-white/10 bg-slate-900/60 px-2 py-2 text-sm text-white sm:col-span-2"
-        >
-          <option value="">— точка —</option>
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <Input
-          list="plan-categories"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          placeholder="Категория"
-          className="col-span-2 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600 sm:col-span-2"
-        />
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Что закупаем *"
-          className="col-span-2 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600 sm:col-span-2"
-        />
-        <Input
-          list="plan-suppliers"
-          value={supplier}
-          onChange={(e) => setSupplier(e.target.value)}
-          placeholder="Поставщик"
-          className="col-span-2 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600 sm:col-span-2"
-        />
-        <Input
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="Сумма ₸"
-          className="col-span-1 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600 sm:col-span-1"
-        />
-        <Button
-          onClick={addItem}
-          disabled={saving}
-          className="col-span-1 bg-violet-600 text-white hover:bg-violet-500 sm:col-span-1"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-        </Button>
-
-        <datalist id="plan-categories">
-          {categories.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-        <datalist id="plan-suppliers">
-          {suppliers.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
+      <div className="mb-5 rounded-2xl border border-white/5 bg-black/20 p-3 sm:p-4">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Добавить позицию
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Field label="День">
+            <Select value={String(dayOfWeek)} onValueChange={(v) => setDayOfWeek(Number(v))}>
+              <SelectTrigger className={cn(fieldInput, 'px-3')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DAYS.map((d) => (
+                  <SelectItem key={d.value} value={String(d.value)}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Точка">
+            <Select value={companyId} onValueChange={setCompanyId}>
+              <SelectTrigger className={cn(fieldInput, 'px-3')}>
+                <SelectValue placeholder="Точка" />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Категория">
+            <ComboBox
+              value={category}
+              onChange={setCategory}
+              options={categories}
+              placeholder="Категория"
+              searchPlaceholder="Поиск категории…"
+            />
+          </Field>
+          <Field label="Поставщик">
+            <ComboBox
+              value={supplier}
+              onChange={setSupplier}
+              options={suppliers}
+              placeholder="Поставщик"
+              searchPlaceholder="Поиск поставщика…"
+            />
+          </Field>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_170px_auto]">
+          <Field label="Что закупаем *">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
+              placeholder="Напр. Coca-Cola 1.5л ×20"
+              className={fieldInput}
+            />
+          </Field>
+          <Field label="Сумма, ₸">
+            <Input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
+              placeholder="0"
+              className={fieldInput}
+            />
+          </Field>
+          <div className="flex items-end">
+            <Button
+              onClick={addItem}
+              disabled={saving}
+              className="h-9 w-full bg-violet-600 text-white hover:bg-violet-500 sm:w-auto sm:px-5"
+            >
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+              Добавить
+            </Button>
+          </div>
+        </div>
       </div>
 
       {error ? <p className="mb-3 text-sm text-rose-400">{error}</p> : null}
@@ -379,40 +504,46 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
         </p>
       ) : (
         <div className="space-y-4">
-          {grouped.map(({ day, list }) => (
+          {grouped.map(({ day, list, sum }) => (
             <div key={day.value}>
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-violet-300/80">
-                {day.label}
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-violet-300/80">
+                  {day.label}
+                </span>
+                {sum ? <span className="text-xs text-slate-500">{fmtMoney(sum)} ₸</span> : null}
               </div>
               <div className="space-y-1.5">
                 {list.map((it) => (
                   <div
                     key={it.id}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                    className={cn(
+                      'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
                       it.status === 'bought'
                         ? 'border-emerald-500/20 bg-emerald-500/5'
-                        : 'border-white/5 bg-white/[0.02]'
-                    }`}
+                        : 'border-white/5 bg-white/[0.02]',
+                    )}
                   >
                     <button
                       type="button"
                       onClick={() => toggleBought(it)}
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition',
                         it.status === 'bought'
                           ? 'border-emerald-500 bg-emerald-500 text-white'
-                          : 'border-slate-600 text-transparent hover:border-slate-400'
-                      }`}
+                          : 'border-slate-600 text-transparent hover:border-slate-400',
+                      )}
                       title={it.status === 'bought' ? 'Отметить как план' : 'Отметить куплено'}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </button>
-                    <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-xs text-slate-400">
+                    <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-0.5 text-xs text-slate-400">
                       {companyName(it.company_id)}
                     </span>
                     <span
-                      className={`flex-1 truncate ${
-                        it.status === 'bought' ? 'text-slate-500 line-through' : 'text-white'
-                      }`}
+                      className={cn(
+                        'flex-1 truncate',
+                        it.status === 'bought' ? 'text-slate-500 line-through' : 'text-white',
+                      )}
                     >
                       {it.title}
                       {it.category ? <span className="text-slate-500"> · {it.category}</span> : null}
