@@ -30,6 +30,8 @@ type CreatedOrg = {
   primaryDomain: string
   appUrl: string
   planCode: string
+  ownerEmail?: string | null
+  ownerPassword?: string | null
 }
 
 export default function NewOrganizationPage() {
@@ -112,6 +114,28 @@ export default function NewOrganizationPage() {
             <ExternalLink className="h-3.5 w-3.5" />
             Открыть рабочее пространство
           </a>
+        )}
+        {createdOrg.ownerEmail && (
+          <div className="mt-5 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-left">
+            <p className="mb-2 text-xs font-medium text-amber-300">Доступ владельца (передайте клиенту)</p>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-400">Email</span>
+                <span className="font-mono text-white">{createdOrg.ownerEmail}</span>
+              </div>
+              {createdOrg.ownerPassword ? (
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-400">Пароль</span>
+                  <span className="font-mono text-white">{createdOrg.ownerPassword}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Аккаунт с таким email уже существовал — пароль не менялся.</p>
+              )}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">
+              Вход на {createdOrg.primaryDomain}. При первом входе клиент сменит пароль.
+            </p>
+          </div>
         )}
         <div className="mt-6 flex gap-3">
           <Button

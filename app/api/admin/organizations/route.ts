@@ -33,6 +33,14 @@ function num(v: any): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+// Временный пароль для владельца клиента (без похожих символов).
+function generatePassword(len = 12): string {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let out = ''
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)]
+  return out
+}
+
 function mapPlan(p: any) {
   return {
     id: String(p.id),
@@ -490,15 +498,60 @@ export async function POST(req: Request) {
       }]).then(() => {}, () => {})
     }
 
+    // Провижининг логина владельца клиента: Auth-аккаунт + staff(owner) + member(active).
+    // Best-effort: сбой не ломает создание организации.
+    let ownerPassword: string | null = null
     if (ownerEmail) {
-      await supabase.from('organization_members').insert([{
-        organization_id: orgId,
-        email: ownerEmail,
-        role: 'owner',
-        status: 'invited',
-        is_default: true,
-        metadata: { full_name: ownerFullName || null },
-      }]).then(() => {}, () => {})
+      try {
+        let authUserId: string | null = null
+        ownerPassword = generatePassword()
+        const created = await supabase.auth.admin.createUser({
+          email: ownerEmail,
+          password: ownerPassword,
+          email_confirm: true,
+          user_metadata: { must_change_password: true, full_name: ownerFullName || null },
+        })
+        if (created?.data?.user?.id) {
+          authUserId = String(created.data.user.id)
+        } else {
+          // Аккаунт мог уже существовать — пароль не меняем.
+          ownerPassword = null
+        }
+
+        let staffId: string | null = null
+        const staffRes = await supabase
+          .from('staff')
+          .insert([{
+            full_name: ownerFullName || ownerEmail,
+            role: 'owner',
+            monthly_salary: 0,
+            email: ownerEmail,
+            is_active: true,
+            organization_id: orgId,
+          }])
+          .select('id')
+          .single()
+        if (!staffRes.error && staffRes.data) staffId = String((staffRes.data as any).id)
+
+        if (authUserId && staffId) {
+          await supabase.auth.admin.updateUserById(authUserId, {
+            user_metadata: { must_change_password: true, full_name: ownerFullName || null, staff_id: staffId },
+          }).then(() => {}, () => {})
+        }
+
+        await supabase.from('organization_members').insert([{
+          organization_id: orgId,
+          staff_id: staffId,
+          user_id: authUserId,
+          email: ownerEmail,
+          role: 'owner',
+          status: 'active',
+          is_default: true,
+          metadata: { full_name: ownerFullName || null, provisioned: true },
+        }]).then(() => {}, () => {})
+      } catch {
+        /* провижининг best-effort */
+      }
     }
 
     return json({
@@ -510,6 +563,8 @@ export async function POST(req: Request) {
         primaryDomain: buildTenantHost(slug),
         appUrl: buildTenantUrl(slug),
         planCode,
+        ownerEmail: ownerEmail || null,
+        ownerPassword,
       },
     })
   } catch (error: any) {
