@@ -7,6 +7,7 @@ import {
   Building2,
   ExternalLink,
   Loader2,
+  Package,
   RotateCcw,
   Sparkles,
   Users,
@@ -16,6 +17,8 @@ import { Input } from '@/components/ui/input'
 import { PLATFORM_FEATURES } from '@/lib/core/entitlements'
 
 type EntitlementState = { enabled: boolean; source: string }
+type PackageItem = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; price_kzt: number }
+type AddonItem = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number; billing_unit: string }
 type OrgDetail = {
   id: string
   name: string
@@ -31,6 +34,8 @@ type OrgDetail = {
   companies: Array<{ id: string; name: string; code: string | null }>
   entitlements?: Record<string, EntitlementState>
   legacyGrants?: number
+  packageCode?: string | null
+  addonCodes?: string[]
   subscription: {
     id: string
     status: string
@@ -60,6 +65,10 @@ export default function OrgDetailPage() {
   const [saved, setSaved] = useState(false)
   const [entering, setEntering] = useState(false)
   const [savingFeature, setSavingFeature] = useState<string | null>(null)
+  const [packages, setPackages] = useState<PackageItem[]>([])
+  const [addons, setAddons] = useState<AddonItem[]>([])
+  const [savingPkg, setSavingPkg] = useState(false)
+  const [savingAddon, setSavingAddon] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // editable fields
@@ -72,6 +81,8 @@ export default function OrgDetailPage() {
     fetch('/api/admin/organizations')
       .then(r => r.json())
       .then(data => {
+        setPackages(Array.isArray(data.packages) ? data.packages : [])
+        setAddons(Array.isArray(data.addons) ? data.addons : [])
         const found = (data.organizations || []).find((o: any) => o.id === id) as OrgDetail | undefined
         if (found) {
           setOrg(found)
@@ -82,6 +93,44 @@ export default function OrgDetailPage() {
       })
       .finally(() => setLoading(false))
   }, [id])
+
+  const handleAssignPackage = async (code: string) => {
+    setSavingPkg(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id, assignPackage: code }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось назначить пакет')
+      if (data?.organization) setOrg(data.organization)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSavingPkg(false)
+    }
+  }
+
+  const handleToggleAddon = async (addon: string, enabled: boolean) => {
+    setSavingAddon(addon)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id, setAddon: { addon, enabled } }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось изменить модуль')
+      if (data?.organization) setOrg(data.organization)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSavingAddon(null)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -353,6 +402,68 @@ export default function OrgDetailPage() {
         <p className="mt-3 text-[11px] text-slate-600">
           Управление доступом. Принудительное ограничение интерфейса включится с фазой изоляции тенантов.
         </p>
+      </div>
+
+      {/* Пакет и модули */}
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
+          <Package className="h-4 w-4 text-violet-400" />
+          Пакет и модули
+        </h2>
+        <p className="mb-4 text-xs text-slate-500">Отраслевой пакет и платные add-ons организации.</p>
+
+        <label className="mb-1.5 block text-[11px] text-slate-500">Отраслевой пакет</label>
+        <div className="mb-5 flex flex-wrap gap-2">
+          {packages.length === 0 ? (
+            <span className="text-xs text-slate-600">Каталог пакетов пуст (примени миграцию).</span>
+          ) : (
+            packages.map((p) => {
+              const active = org.packageCode === p.code
+              return (
+                <button
+                  key={p.code}
+                  onClick={() => handleAssignPackage(p.code)}
+                  disabled={savingPkg}
+                  className={`rounded-xl border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${
+                    active
+                      ? 'border-violet-500/50 bg-violet-500/10 text-white'
+                      : 'border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <div className="font-medium">{p.name}</div>
+                  <div className="text-[11px] text-slate-500">{p.price_kzt.toLocaleString('ru')} ₸/мес</div>
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        <label className="mb-1.5 block text-[11px] text-slate-500">Дополнительные модули</label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {addons.map((a) => {
+            const on = (org.addonCodes || []).includes(a.code)
+            const busy = savingAddon === a.code
+            return (
+              <div key={a.code} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white">{a.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {a.price_kzt.toLocaleString('ru')} ₸ · {a.billing_unit === 'company' ? 'за точку' : a.billing_unit === 'device' ? 'за устройство' : 'за орг'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleAddon(a.code, !on)}
+                  disabled={busy}
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${on ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                  title={on ? 'Выключить' : 'Включить'}
+                >
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* Save */}

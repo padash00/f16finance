@@ -108,6 +108,33 @@ async function loadPlatformData(supabase: any) {
     /* таблицы может ещё не быть */
   }
 
+  // Каталог пакетов/add-ons + привязки по организации (устойчиво к отсутствию таблиц).
+  let packagesCatalog: any[] = []
+  let addonsCatalog: any[] = []
+  const orgPackage = new Map<string, string>()
+  const orgAddons = new Map<string, string[]>()
+  try {
+    const [pkgR, adR, opR, oaR] = await Promise.all([
+      supabase.from('packages').select('code, name, vertical, description, feature_codes, price_kzt, status').eq('status', 'active').order('price_kzt', { ascending: true }),
+      supabase.from('addons').select('code, name, description, feature_codes, price_kzt, billing_unit, status').eq('status', 'active').order('price_kzt', { ascending: true }),
+      supabase.from('organization_packages').select('organization_id, package_code'),
+      supabase.from('organization_addons').select('organization_id, addon_code, enabled'),
+    ])
+    if (!pkgR.error) packagesCatalog = pkgR.data || []
+    if (!adR.error) addonsCatalog = adR.data || []
+    if (!opR.error) for (const row of opR.data || []) orgPackage.set(String(row.organization_id), String(row.package_code))
+    if (!oaR.error) {
+      for (const row of oaR.data || []) {
+        if (!row.enabled) continue
+        const k = String(row.organization_id)
+        if (!orgAddons.has(k)) orgAddons.set(k, [])
+        orgAddons.get(k)!.push(String(row.addon_code))
+      }
+    }
+  } catch {
+    /* таблиц может ещё не быть */
+  }
+
   const memberCountByOrg = new Map<string, number>()
   for (const m of memsR.data || []) {
     const k = String(m.organization_id || '')
@@ -166,6 +193,8 @@ async function loadPlatformData(supabase: any) {
       companies,
       entitlements,
       legacyGrants: legacyByOrg.get(id) || 0,
+      packageCode: orgPackage.get(id) || null,
+      addonCodes: orgAddons.get(id) || [],
       subscription: sub
         ? {
             id: String(sub.id),
@@ -204,7 +233,7 @@ async function loadPlatformData(supabase: any) {
     trialMrr,
   }
 
-  return { overview, organizations, plans }
+  return { overview, organizations, plans, packages: packagesCatalog, addons: addonsCatalog }
 }
 
 export async function GET(req: Request) {
@@ -447,6 +476,31 @@ export async function PATCH(req: Request) {
           )
         if (error) throw error
       }
+    }
+
+    // ── Назначение отраслевого пакета ──
+    if (body?.assignPackage !== undefined) {
+      const code = String(body.assignPackage || '').trim()
+      if (code) {
+        const { error } = await supabase.from('organization_packages').upsert(
+          { organization_id: organizationId, package_code: code, updated_at: new Date().toISOString() },
+          { onConflict: 'organization_id' },
+        )
+        if (error) throw error
+      } else {
+        await supabase.from('organization_packages').delete().eq('organization_id', organizationId)
+      }
+    }
+
+    // ── Включение/выключение add-on ──
+    if (body?.setAddon && body.setAddon.addon) {
+      const addon = String(body.setAddon.addon).trim()
+      const enabled = !!body.setAddon.enabled
+      const { error } = await supabase.from('organization_addons').upsert(
+        { organization_id: organizationId, addon_code: addon, enabled, updated_at: new Date().toISOString() },
+        { onConflict: 'organization_id,addon_code' },
+      )
+      if (error) throw error
     }
 
     // Возвращаем обновлённую организацию в том же формате, что и GET.
