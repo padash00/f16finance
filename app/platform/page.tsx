@@ -24,7 +24,13 @@ type Overview = {
   totalMembers: number
   liveMrr: number
   trialMrr: number
+  overdueInvoices: number
+  overdueInvoicesSum: number
+  paidThisMonth: number
+  trialsEndingSoon: number
 }
+
+type AttentionItem = { id: string; name: string; slug: string; reasons: string[] }
 
 type OrgRow = {
   id: string
@@ -79,6 +85,7 @@ function statusBadge(status: string) {
 export default function PlatformOverviewPage() {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [orgs, setOrgs] = useState<OrgRow[]>([])
+  const [attention, setAttention] = useState<AttentionItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -87,6 +94,7 @@ export default function PlatformOverviewPage() {
       .then(data => {
         setOverview(data.overview || null)
         setOrgs((data.organizations || []).slice(0, 8))
+        setAttention(Array.isArray(data.attention) ? data.attention : [])
       })
       .finally(() => setLoading(false))
   }, [])
@@ -122,6 +130,48 @@ export default function PlatformOverviewPage() {
         <StatCard label="Активных подписок" value={overview?.activeSubscriptions ?? 0} color="emerald" />
         <StatCard label="Trial MRR" value={overview?.trialMrr ? `${Math.round(overview.trialMrr).toLocaleString('ru')} ₸` : '—'} color="blue" />
       </div>
+
+      {/* Кокпит: деньги и внимание */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          label="Оплачено в этом месяце"
+          value={overview?.paidThisMonth ? `${Math.round(overview.paidThisMonth).toLocaleString('ru')} ₸` : '—'}
+          color="emerald"
+        />
+        <StatCard
+          label="Просрочено счетов"
+          value={overview?.overdueInvoices ?? 0}
+          sub={overview?.overdueInvoicesSum ? `${Math.round(overview.overdueInvoicesSum).toLocaleString('ru')} ₸` : undefined}
+          color="red"
+        />
+        <StatCard label="Триал истекает (≤7 дн)" value={overview?.trialsEndingSoon ?? 0} color="amber" />
+        <StatCard label="Требуют внимания" value={attention.length} color={attention.length ? 'red' : 'emerald'} />
+      </div>
+
+      {/* Требуют внимания */}
+      {attention.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <AlertTriangle className="h-4 w-4" /> Требуют внимания ({attention.length})
+          </h2>
+          <div className="space-y-1.5">
+            {attention.map((a) => (
+              <Link
+                key={a.id}
+                href={`/platform/organizations/${a.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm transition hover:bg-white/[0.04]"
+              >
+                <span className="font-medium text-white">{a.name}</span>
+                <span className="flex flex-wrap items-center justify-end gap-1.5">
+                  {a.reasons.map((r) => (
+                    <span key={r} className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-300">{r}</span>
+                  ))}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">

@@ -290,18 +290,47 @@ async function loadPlatformData(supabase: any) {
     }
   })
 
-  // Обзор
+  // Обзор + «требуют внимания» (кокпит владельца)
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const monthPrefix = todayIso.slice(0, 7)
+  const soonIso = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+
   let activeSubscriptions = 0, trialingSubscriptions = 0, pastDueSubscriptions = 0
   let liveMrr = 0, trialMrr = 0
+  let overdueInvoices = 0, overdueInvoicesSum = 0, paidThisMonth = 0, trialsEndingSoon = 0
+  const attention: Array<{ id: string; name: string; slug: string; reasons: string[] }> = []
+
   for (const org of organizations) {
     const sub = org.subscription
-    if (!sub) continue
-    const plan = plansById.get(sub.plan?.id || '')
-    const monthly = plan?.priceMonthly || 0
-    if (sub.status === 'active') { activeSubscriptions++; liveMrr += monthly }
-    else if (sub.status === 'trialing') { trialingSubscriptions++; trialMrr += monthly }
-    else if (sub.status === 'past_due') { pastDueSubscriptions++ }
+    const reasons: string[] = []
+
+    if (sub) {
+      const plan = plansById.get(sub.plan?.id || '')
+      const monthly = plan?.priceMonthly || 0
+      if (sub.status === 'active') { activeSubscriptions++; liveMrr += monthly }
+      else if (sub.status === 'trialing') {
+        trialingSubscriptions++; trialMrr += monthly
+        const d = sub.endsAt ? String(sub.endsAt).slice(0, 10) : null
+        if (d && d >= todayIso && d <= soonIso) { trialsEndingSoon++; reasons.push('триал истекает') }
+      } else if (sub.status === 'past_due') { pastDueSubscriptions++; reasons.push('подписка просрочена') }
+    }
+
+    if (org.status === 'suspended') reasons.push('заморожена')
+
+    let orgHasOverdue = false
+    for (const inv of org.invoices || []) {
+      if (inv.status === 'issued' && inv.due_date && String(inv.due_date) < todayIso) {
+        overdueInvoices++; overdueInvoicesSum += Number(inv.amount) || 0; orgHasOverdue = true
+      }
+      if (inv.status === 'paid' && inv.paid_at && String(inv.paid_at).slice(0, 7) === monthPrefix) {
+        paidThisMonth += Number(inv.amount) || 0
+      }
+    }
+    if (orgHasOverdue) reasons.push('просроченный счёт')
+
+    if (reasons.length) attention.push({ id: org.id, name: org.name, slug: org.slug, reasons })
   }
+
   const overview = {
     organizationCount: organizations.length,
     activeOrganizationCount: organizations.filter((o: any) => o.status === 'active').length,
@@ -312,9 +341,13 @@ async function loadPlatformData(supabase: any) {
     totalMembers: (memsR.data || []).length,
     liveMrr,
     trialMrr,
+    overdueInvoices,
+    overdueInvoicesSum,
+    paidThisMonth,
+    trialsEndingSoon,
   }
 
-  return { overview, organizations, plans, packages: packagesCatalog, addons: addonsCatalog, features: featuresCatalog }
+  return { overview, organizations, plans, packages: packagesCatalog, addons: addonsCatalog, features: featuresCatalog, attention }
 }
 
 // Пересчитывает plan/addon-гранты company_features организации из её пакета и включённых add-ons.
