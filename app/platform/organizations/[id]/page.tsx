@@ -52,6 +52,7 @@ export default function OrgDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [entering, setEntering] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // editable fields
@@ -99,6 +100,25 @@ export default function OrgDetailPage() {
       setError(err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleEnter = async () => {
+    setEntering(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/auth/active-organization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось войти')
+      router.push('/dashboard')
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message)
+      setEntering(false)
     }
   }
 
@@ -262,14 +282,14 @@ export default function OrgDetailPage() {
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Сохранить
         </Button>
-        <a
-          href={org.appUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/[0.04] hover:text-white"
+        <Button
+          onClick={handleEnter}
+          disabled={entering}
+          className="bg-emerald-600 text-white hover:bg-emerald-500"
         >
-          Открыть кабинет <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+          {entering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Войти в кабинет
+        </Button>
       </div>
     </div>
   )

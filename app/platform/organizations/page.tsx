@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Loader2, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Building2, Loader2, LogIn, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
 type OrgRow = {
@@ -46,9 +47,27 @@ function statusBadge(status: string) {
 }
 
 export default function OrganizationsPage() {
+  const router = useRouter()
   const [orgs, setOrgs] = useState<OrgRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [enteringId, setEnteringId] = useState<string | null>(null)
+
+  const handleEnter = async (organizationId: string) => {
+    setEnteringId(organizationId)
+    try {
+      const res = await fetch('/api/auth/active-organization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId }),
+      })
+      if (!res.ok) throw new Error()
+      router.push('/dashboard')
+      router.refresh()
+    } catch {
+      setEnteringId(null)
+    }
+  }
 
   useEffect(() => {
     fetch('/api/admin/organizations')
@@ -128,9 +147,19 @@ export default function OrganizationsPage() {
                     {org.createdAt ? new Date(org.createdAt).toLocaleDateString('ru-RU') : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link href={`/platform/organizations/${org.id}`} className="text-xs text-violet-400 hover:text-violet-300">
-                      Управлять →
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        onClick={() => handleEnter(org.id)}
+                        disabled={enteringId === org.id}
+                        className="inline-flex items-center gap-1 text-xs text-emerald-400 transition hover:text-emerald-300 disabled:opacity-50"
+                      >
+                        {enteringId === org.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogIn className="h-3 w-3" />}
+                        Войти
+                      </button>
+                      <Link href={`/platform/organizations/${org.id}`} className="text-xs text-violet-400 hover:text-violet-300">
+                        Управлять →
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
