@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Building2,
+  CreditCard,
   ExternalLink,
   Loader2,
   Package,
@@ -37,6 +38,7 @@ type OrgDetail = {
   packageCode?: string | null
   addonCodes?: string[]
   effectiveFeatures?: Array<{ code: string; sources: string[] }>
+  billingEvents?: Array<{ eventType: string; status: string | null; amount: number | null; currency: string | null; createdAt: string | null }>
   subscription: {
     id: string
     status: string
@@ -56,6 +58,18 @@ const SUB_STATUS_COLORS: Record<string, string> = {
 
 const ORG_STATUSES = ['active', 'suspended']
 const ORG_STATUS_LABELS: Record<string, string> = { active: 'Активна', suspended: 'Заморожена' }
+
+const BILLING_EVENT_LABELS: Record<string, string> = {
+  trial_started: 'Старт пробного периода',
+  subscription_activated: 'Активация',
+  payment_recorded: 'Оплата',
+  subscription_past_due: 'Просрочка',
+  subscription_cancel_scheduled: 'Отмена в конце периода',
+  subscription_canceled: 'Подписка отменена',
+  subscription_resumed: 'Возобновление',
+  subscription_renewed: 'Продление',
+  plan_changed: 'Смена тарифа',
+}
 
 export default function OrgDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -492,6 +506,40 @@ export default function OrgDetailPage() {
             </p>
           </div>
         ) : null}
+      </div>
+
+      {/* История биллинга */}
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+          <CreditCard className="h-4 w-4 text-violet-400" />
+          История биллинга
+        </h2>
+        {org.billingEvents && org.billingEvents.length > 0 ? (
+          <div className="space-y-1.5">
+            {org.billingEvents.map((e, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-white">{BILLING_EVENT_LABELS[e.eventType] || e.eventType}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {e.createdAt ? new Date(e.createdAt).toLocaleString('ru-RU') : '—'}
+                  </p>
+                </div>
+                {e.amount ? (
+                  <span className="shrink-0 font-medium text-slate-200">
+                    {Number(e.amount).toLocaleString('ru')} {e.currency || '₸'}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="py-3 text-sm text-slate-500">
+            Событий биллинга пока нет. Появятся при действиях над подпиской (оплата, активация, триал…).
+          </p>
+        )}
       </div>
 
       {/* Save */}

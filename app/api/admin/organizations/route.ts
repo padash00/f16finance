@@ -146,6 +146,35 @@ async function loadPlatformData(supabase: any) {
     /* таблиц может ещё не быть */
   }
 
+  // История биллинга по организации (последние события).
+  const billingByOrg = new Map<string, any[]>()
+  try {
+    const beR = await supabase
+      .from('organization_billing_events')
+      .select('organization_id, event_type, status, amount, currency, created_at')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (!beR.error) {
+      for (const row of beR.data || []) {
+        const k = String(row.organization_id || '')
+        if (!k) continue
+        const arr = billingByOrg.get(k) || []
+        if (arr.length < 12) {
+          arr.push({
+            eventType: row.event_type,
+            status: row.status ?? null,
+            amount: row.amount ?? null,
+            currency: row.currency ?? null,
+            createdAt: row.created_at ?? null,
+          })
+          billingByOrg.set(k, arr)
+        }
+      }
+    }
+  } catch {
+    /* таблицы может не быть */
+  }
+
   const memberCountByOrg = new Map<string, number>()
   for (const m of memsR.data || []) {
     const k = String(m.organization_id || '')
@@ -209,6 +238,7 @@ async function loadPlatformData(supabase: any) {
       effectiveFeatures: Array.from((effectiveByOrg.get(id) || new Map<string, Set<string>>()).entries())
         .map(([code, sources]) => ({ code, sources: Array.from(sources as Set<string>) }))
         .sort((a, b) => a.code.localeCompare(b.code)),
+      billingEvents: billingByOrg.get(id) || [],
       subscription: sub
         ? {
             id: String(sub.id),
