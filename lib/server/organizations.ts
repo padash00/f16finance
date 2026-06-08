@@ -499,6 +499,8 @@ export async function listOrganizationCompanyIds(params: {
     throw new Error('organization-scope-unavailable')
   }
 
+  // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
+  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && !activeOrganizationId) return []
   let query = supabase.from('companies').select('id')
   if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
@@ -520,6 +522,8 @@ export async function listOrganizationCompanyCodes(params: {
     throw new Error('organization-scope-unavailable')
   }
 
+  // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
+  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && !activeOrganizationId) return []
   let query = supabase.from('companies').select('code')
   if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
@@ -541,6 +545,8 @@ export async function listOrganizationStaffIds(params: {
     throw new Error('organization-scope-unavailable')
   }
 
+  // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
+  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && !activeOrganizationId) return []
   let query = supabase.from('staff').select('id')
   if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
@@ -565,13 +571,17 @@ export async function listOrganizationOperatorIds(params: {
     throw new Error('organization-scope-unavailable')
   }
 
-  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin || !activeOrganizationId) {
+  // Legacy/суперадмин — все операторы (намеренно).
+  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin) {
     let q = supabase.from('operators').select('id')
     if (!includeInactive) q = q.eq('is_active', true)
     const { data, error } = await q
     if (error) throw error
     return (data || []).map((row: any) => String(row.id))
   }
+
+  // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
+  if (!activeOrganizationId) return []
 
   let assignQuery = supabase
     .from('operator_company_assignments')
@@ -602,11 +612,18 @@ export async function resolveCompanyScope(params: {
 }) {
   const { activeOrganizationId, requestedCompanyId, isSuperAdmin } = params
 
-  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin || !activeOrganizationId) {
+  // Legacy-режим и суперадмин — без фильтра (видят всё). Намеренно.
+  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin) {
     return {
       allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : null,
       organizationId: null,
     }
+  }
+
+  // NEVER-pattern: обычный пользователь без валидной организации → НИЧЕГО (пустой набор),
+  // а не «все записи». allowedCompanyIds=[] truthy → .in('company_id', []) вернёт 0 строк.
+  if (!activeOrganizationId) {
+    return { allowedCompanyIds: [] as string[], organizationId: null }
   }
 
   const allowedCompanyIds = await listOrganizationCompanyIds({ activeOrganizationId, isSuperAdmin })
