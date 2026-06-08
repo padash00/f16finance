@@ -188,6 +188,29 @@ async function loadPlatformData(supabase: any) {
     /* таблицы может не быть */
   }
 
+  // Счета по организации (ручной биллинг).
+  const invoicesByOrg = new Map<string, any[]>()
+  try {
+    const invR = await supabase
+      .from('invoices')
+      .select('id, organization_id, amount, currency, period_start, period_end, due_date, status, method, note, paid_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (!invR.error) {
+      for (const row of invR.data || []) {
+        const k = String(row.organization_id || '')
+        if (!k) continue
+        const arr = invoicesByOrg.get(k) || []
+        if (arr.length < 24) {
+          arr.push(row)
+          invoicesByOrg.set(k, arr)
+        }
+      }
+    }
+  } catch {
+    /* таблицы может не быть */
+  }
+
   const memberCountByOrg = new Map<string, number>()
   for (const m of memsR.data || []) {
     const k = String(m.organization_id || '')
@@ -252,6 +275,7 @@ async function loadPlatformData(supabase: any) {
         .map(([code, sources]) => ({ code, sources: Array.from(sources as Set<string>) }))
         .sort((a, b) => a.code.localeCompare(b.code)),
       billingEvents: billingByOrg.get(id) || [],
+      invoices: invoicesByOrg.get(id) || [],
       subscription: sub
         ? {
             id: String(sub.id),
@@ -639,6 +663,71 @@ export async function PATCH(req: Request) {
           await supabase.from('company_features').insert(rows)
         }
       }
+    }
+
+    // ── Ручной биллинг: выставить счёт ──
+    if (body?.createInvoice) {
+      const ci = body.createInvoice
+      const amount = num(ci?.amount) || 0
+      const currency = String(ci?.currency || 'KZT')
+      const { data: inv, error } = await supabase
+        .from('invoices')
+        .insert([{
+          organization_id: organizationId,
+          amount,
+          currency,
+          period_start: ci?.periodStart || null,
+          period_end: ci?.periodEnd || null,
+          due_date: ci?.dueDate || null,
+          status: 'issued',
+          note: String(ci?.note || '').trim() || null,
+          created_by: access.user?.id || null,
+        }])
+        .select('id')
+        .single()
+      if (error) throw error
+      await supabase.from('organization_billing_events').insert([{
+        organization_id: organizationId,
+        event_type: 'invoice_issued',
+        status: 'issued',
+        amount,
+        currency,
+        created_by_user_id: access.user?.id || null,
+        payload: { invoice_id: (inv as any)?.id || null },
+      }]).then(() => {}, () => {})
+    }
+
+    // ── Ручной биллинг: отметить оплату ──
+    if (body?.markInvoicePaid && body.markInvoicePaid.invoiceId) {
+      const invoiceId = String(body.markInvoicePaid.invoiceId)
+      const method = String(body.markInvoicePaid.method || 'manual')
+      const { data: inv } = await supabase.from('invoices').select('amount, currency').eq('id', invoiceId).maybeSingle()
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: 'paid', method, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', invoiceId)
+        .eq('organization_id', organizationId)
+      if (error) throw error
+      await supabase.from('organization_billing_events').insert([{
+        organization_id: organizationId,
+        event_type: 'payment_recorded',
+        status: 'paid',
+        amount: (inv as any)?.amount ?? null,
+        currency: (inv as any)?.currency ?? 'KZT',
+        created_by_user_id: access.user?.id || null,
+        payload: { invoice_id: invoiceId, method },
+      }]).then(() => {}, () => {})
+    }
+
+    // ── Ручной биллинг: аннулировать счёт ──
+    if (body?.voidInvoice && body.voidInvoice.invoiceId) {
+      const invoiceId = String(body.voidInvoice.invoiceId)
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: 'void', updated_at: new Date().toISOString() })
+        .eq('id', invoiceId)
+        .eq('organization_id', organizationId)
+      if (error) throw error
     }
 
     // Если меняли пакет/модули — пересобрать plan/addon-гранты в company_features.

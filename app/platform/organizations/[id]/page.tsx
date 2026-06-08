@@ -10,6 +10,7 @@ import {
   Loader2,
   Package,
   Sparkles,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,19 @@ type EntitlementState = { enabled: boolean; source: string }
 type PackageItem = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; price_kzt: number }
 type AddonItem = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number; billing_unit: string }
 type FeatureCatalogItem = { code: string; name: string; category: string }
+type InvoiceItem = {
+  id: string
+  amount: number
+  currency: string
+  period_start: string | null
+  period_end: string | null
+  due_date: string | null
+  status: string
+  method: string | null
+  note: string | null
+  paid_at: string | null
+  created_at: string
+}
 type OrgDetail = {
   id: string
   name: string
@@ -38,6 +52,7 @@ type OrgDetail = {
   addonCodes?: string[]
   effectiveFeatures?: Array<{ code: string; sources: string[] }>
   billingEvents?: Array<{ eventType: string; status: string | null; amount: number | null; currency: string | null; createdAt: string | null }>
+  invoices?: InvoiceItem[]
   subscription: {
     id: string
     status: string
@@ -84,6 +99,13 @@ export default function OrgDetailPage() {
   const [features, setFeatures] = useState<FeatureCatalogItem[]>([])
   const [savingPkg, setSavingPkg] = useState(false)
   const [savingAddon, setSavingAddon] = useState<string | null>(null)
+  const [invAmount, setInvAmount] = useState('')
+  const [invPeriodStart, setInvPeriodStart] = useState('')
+  const [invPeriodEnd, setInvPeriodEnd] = useState('')
+  const [invDueDate, setInvDueDate] = useState('')
+  const [invNote, setInvNote] = useState('')
+  const [savingInvoice, setSavingInvoice] = useState(false)
+  const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // editable fields
@@ -145,6 +167,61 @@ export default function OrgDetailPage() {
       setError(err.message)
     } finally {
       setSavingAddon(null)
+    }
+  }
+
+  const handleCreateInvoice = async () => {
+    setSavingInvoice(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: id,
+          createInvoice: {
+            amount: invAmount ? Number(invAmount) : 0,
+            periodStart: invPeriodStart || null,
+            periodEnd: invPeriodEnd || null,
+            dueDate: invDueDate || null,
+            note: invNote.trim() || null,
+          },
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось выставить счёт')
+      if (data?.organization) setOrg(data.organization)
+      setInvAmount('')
+      setInvPeriodStart('')
+      setInvPeriodEnd('')
+      setInvDueDate('')
+      setInvNote('')
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSavingInvoice(false)
+    }
+  }
+
+  const handleInvoiceAction = async (invoiceId: string, action: 'paid' | 'void', method?: string) => {
+    setInvoiceBusy(invoiceId)
+    setError(null)
+    try {
+      const body: any = { organizationId: id }
+      if (action === 'paid') body.markInvoicePaid = { invoiceId, method: method || 'manual' }
+      else body.voidInvoice = { invoiceId }
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Ошибка')
+      if (data?.organization) setOrg(data.organization)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setInvoiceBusy(null)
     }
   }
 
@@ -508,6 +585,93 @@ export default function OrgDetailPage() {
             </p>
           </div>
         ) : null}
+      </div>
+
+      {/* Счета (ручной биллинг) */}
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+          <CreditCard className="h-4 w-4 text-violet-400" />
+          Счета
+        </h2>
+
+        {(() => {
+          const pkg = packages.find((p) => p.code === org.packageCode)
+          const addonsTotal = (org.addonCodes || []).reduce((s, c) => s + (addons.find((a) => a.code === c)?.price_kzt || 0), 0)
+          const suggested = (pkg?.price_kzt || 0) + addonsTotal
+          return (
+            <div className="mb-4 rounded-2xl border border-white/5 bg-black/20 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">К оплате по тарифу:</span>
+                <span className="text-xs text-slate-300">{suggested.toLocaleString('ru')} ₸/мес</span>
+                {suggested > 0 ? (
+                  <button type="button" onClick={() => setInvAmount(String(suggested))} className="text-[11px] text-violet-400 hover:text-violet-300">
+                    подставить
+                  </button>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Input type="number" value={invAmount} onChange={(e) => setInvAmount(e.target.value)} placeholder="Сумма ₸" className="border-white/10 bg-slate-900/60 text-white" />
+                <Input type="date" value={invPeriodStart} onChange={(e) => setInvPeriodStart(e.target.value)} title="Период с" className="border-white/10 bg-slate-900/60 text-white" />
+                <Input type="date" value={invPeriodEnd} onChange={(e) => setInvPeriodEnd(e.target.value)} title="Период по" className="border-white/10 bg-slate-900/60 text-white" />
+                <Input type="date" value={invDueDate} onChange={(e) => setInvDueDate(e.target.value)} title="Срок оплаты" className="border-white/10 bg-slate-900/60 text-white" />
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Input value={invNote} onChange={(e) => setInvNote(e.target.value)} placeholder="Комментарий (необяз.)" className="flex-1 border-white/10 bg-slate-900/60 text-white" />
+                <Button onClick={handleCreateInvoice} disabled={savingInvoice} className="bg-violet-600 text-white hover:bg-violet-500">
+                  {savingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Выставить счёт
+                </Button>
+              </div>
+            </div>
+          )
+        })()}
+
+        {org.invoices && org.invoices.length > 0 ? (
+          <div className="space-y-1.5">
+            {org.invoices.map((inv) => {
+              const busy = invoiceBusy === inv.id
+              const statusLabel = inv.status === 'paid' ? 'Оплачен' : inv.status === 'void' ? 'Аннулирован' : inv.status === 'overdue' ? 'Просрочен' : 'Выставлен'
+              const statusColor = inv.status === 'paid' ? 'text-emerald-300' : inv.status === 'void' ? 'text-slate-500' : inv.status === 'overdue' ? 'text-red-300' : 'text-amber-300'
+              return (
+                <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <p className={inv.status === 'void' ? 'text-slate-500 line-through' : 'text-white'}>
+                      {Number(inv.amount).toLocaleString('ru')} {inv.currency || '₸'} · <span className={statusColor}>{statusLabel}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {inv.period_start || inv.period_end ? `${inv.period_start || '—'} … ${inv.period_end || '—'}` : 'без периода'}
+                      {inv.due_date ? ` · до ${inv.due_date}` : ''}
+                      {inv.note ? ` · ${inv.note}` : ''}
+                    </p>
+                  </div>
+                  {inv.status === 'issued' || inv.status === 'overdue' ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleInvoiceAction(inv.id, 'paid')}
+                        disabled={busy}
+                        className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                      >
+                        Оплачен
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleInvoiceAction(inv.id, 'void')}
+                        disabled={busy}
+                        title="Аннулировать"
+                        className="rounded-lg p-1 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="py-2 text-sm text-slate-500">Счетов пока нет. Выставьте первый выше.</p>
+        )}
       </div>
 
       {/* История биллинга */}
