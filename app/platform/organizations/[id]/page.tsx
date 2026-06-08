@@ -7,11 +7,15 @@ import {
   Building2,
   ExternalLink,
   Loader2,
+  RotateCcw,
+  Sparkles,
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PLATFORM_FEATURES } from '@/lib/core/entitlements'
 
+type EntitlementState = { enabled: boolean; source: string }
 type OrgDetail = {
   id: string
   name: string
@@ -25,6 +29,7 @@ type OrgDetail = {
   branding: { productName: string; primaryColor: string; logoUrl: string }
   settings: { timezone: string; currency: string; supportEmail: string; supportPhone: string }
   companies: Array<{ id: string; name: string; code: string | null }>
+  entitlements?: Record<string, EntitlementState>
   subscription: {
     id: string
     status: string
@@ -53,6 +58,7 @@ export default function OrgDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [entering, setEntering] = useState(false)
+  const [savingFeature, setSavingFeature] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // editable fields
@@ -119,6 +125,25 @@ export default function OrgDetailPage() {
     } catch (err: any) {
       setError(err.message)
       setEntering(false)
+    }
+  }
+
+  const handleFeature = async (feature: string, enabled: boolean | null) => {
+    setSavingFeature(feature)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id, featureOverride: { feature, enabled } }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось сохранить')
+      if (data?.organization) setOrg(data.organization)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSavingFeature(null)
     }
   }
 
@@ -268,6 +293,60 @@ export default function OrgDetailPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Функции (доступы / entitlements) */}
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
+          <Sparkles className="h-4 w-4 text-violet-400" />
+          Функции (доступы)
+        </h2>
+        <p className="mb-4 text-xs text-slate-500">
+          Что доступно этой организации. По умолчанию — из тарифа; можно переопределить вручную.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {PLATFORM_FEATURES.map((f) => {
+            const st = org.entitlements?.[f.key]
+            const enabled = !!st?.enabled
+            const source = st?.source || 'none'
+            const busy = savingFeature === f.key
+            return (
+              <div key={f.key} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white">{f.label}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {source === 'override' ? 'переопределено вручную' : source === 'plan' ? 'из тарифа' : 'нет в тарифе'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {source === 'override' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleFeature(f.key, null)}
+                      disabled={busy}
+                      title="Вернуть к тарифу"
+                      className="rounded-md p-1 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleFeature(f.key, !enabled)}
+                    disabled={busy}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${enabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                    title={enabled ? 'Выключить' : 'Включить'}
+                  >
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-3 text-[11px] text-slate-600">
+          Управление доступом. Принудительное ограничение интерфейса включится с фазой изоляции тенантов.
+        </p>
       </div>
 
       {/* Save */}

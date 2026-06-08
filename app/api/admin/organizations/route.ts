@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { buildTenantHost, buildTenantUrl } from '@/lib/core/tenant-domain'
+import { PLATFORM_FEATURES, resolveFeatureState } from '@/lib/core/entitlements'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -60,6 +61,22 @@ async function loadPlatformData(supabase: any) {
     if (r.error) throw r.error
   }
 
+  // Overrides фич по тенанту — устойчиво к отсутствию таблицы (миграция могла не примениться).
+  const overridesByOrg = new Map<string, Map<string, boolean>>()
+  try {
+    const ovR = await supabase.from('tenant_feature_overrides').select('organization_id, feature, enabled')
+    if (!ovR.error) {
+      for (const row of ovR.data || []) {
+        const k = String(row.organization_id || '')
+        if (!k) continue
+        if (!overridesByOrg.has(k)) overridesByOrg.set(k, new Map())
+        overridesByOrg.get(k)!.set(String(row.feature), !!row.enabled)
+      }
+    }
+  } catch {
+    /* таблицы может ещё не быть */
+  }
+
   const plans = (plansR.data || []).map(mapPlan)
   const plansById = new Map<string, any>(plans.map((p: any) => [p.id, p]))
 
@@ -98,6 +115,12 @@ async function loadPlatformData(supabase: any) {
     const sub = subByOrg.get(id) || null
     const plan = sub ? plansById.get(String(sub.plan_id)) || null : null
     const companies = companiesByOrg.get(id) || []
+    const orgOverrides = overridesByOrg.get(id)
+    const planFeatures = (plan?.features || {}) as Record<string, unknown>
+    const entitlements: Record<string, { enabled: boolean; source: string }> = {}
+    for (const f of PLATFORM_FEATURES) {
+      entitlements[f.key] = resolveFeatureState(f.key, planFeatures, orgOverrides?.get(f.key))
+    }
     return {
       id,
       name: String(o.name || ''),
@@ -121,6 +144,7 @@ async function loadPlatformData(supabase: any) {
         supportPhone: settings.support_phone || '',
       },
       companies,
+      entitlements,
       subscription: sub
         ? {
             id: String(sub.id),
@@ -373,6 +397,34 @@ export async function PATCH(req: Request) {
           created_by_user_id: access.user?.id || null,
           payload: { note: body?.billingNote || null },
         }]).then(() => {}, () => {})
+      }
+    }
+
+    // ── Override функции (entitlement) ──
+    if (body?.featureOverride && body.featureOverride.feature) {
+      const feature = String(body.featureOverride.feature)
+      const enabled = body.featureOverride.enabled
+      if (enabled === null || enabled === undefined) {
+        const { error } = await supabase
+          .from('tenant_feature_overrides')
+          .delete()
+          .eq('organization_id', organizationId)
+          .eq('feature', feature)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('tenant_feature_overrides')
+          .upsert(
+            {
+              organization_id: organizationId,
+              feature,
+              enabled: !!enabled,
+              created_by: access.user?.id || null,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'organization_id,feature' },
+          )
+        if (error) throw error
       }
     }
 
