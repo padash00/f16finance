@@ -89,14 +89,24 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const url = request.nextUrl.clone()
-  const apexHost = new URL(SITE_URL).hostname.toLowerCase()
+  const apexHost = new URL(SITE_URL).hostname.toLowerCase().replace(/^www\./, '')
   const requestHost = normalizeHost(request.headers.get('host'))
 
   if (url.pathname.startsWith('/api/')) {
     return response
   }
 
-  if (requestHost && requestHost !== apexHost && requestHost !== `www.${apexHost}`) {
+  // Тенант-поддомены (<slug>.ordaops.kz) пропускаем — организация определяется по хосту
+  // (resolveOrganizationByHost в getRequestAccessContext). apex и www — основной домен.
+  // Прочие чужие хосты (например *.vercel.app) — редиректим на apex, как и раньше.
+  const RESERVED_SUBDOMAINS = new Set(['www', 'admin', 'api', 'app', 'status', 'mail', 'blog', 'docs', 'support'])
+  const isApexHost = requestHost === apexHost || requestHost === `www.${apexHost}`
+  const subLabel = requestHost.endsWith(`.${apexHost}`)
+    ? requestHost.slice(0, -(apexHost.length + 1))
+    : ''
+  const isTenantHost = !!subLabel && !subLabel.includes('.') && !RESERVED_SUBDOMAINS.has(subLabel)
+
+  if (requestHost && !isApexHost && !isTenantHost) {
     url.protocol = new URL(SITE_URL).protocol
     url.host = apexHost
     return NextResponse.redirect(url)

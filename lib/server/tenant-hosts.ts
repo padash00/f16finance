@@ -74,7 +74,42 @@ export async function resolveDefaultOrganization(): Promise<HostOrganization> {
   return result
 }
 
-// SaaS tenant-host resolution removed — always return null (single-tenant mode)
+const RESERVED_TENANT_SLUGS = new Set(['www', 'admin', 'api', 'app', 'status', 'mail', 'blog', 'docs', 'support'])
+
+// Поддомен <slug>.ordaops.kz → организация по slug (с кэшем). apex/www/зарезервированные → null.
 export async function resolveOrganizationByHost(hostHeader: string | null | undefined): Promise<HostOrganization> {
-  return null
+  const normalized = normalizeRequestHost(hostHeader)
+  if (!normalized) return null
+
+  const baseHost = getTenantBaseHost().toLowerCase()
+  if (normalized === baseHost || normalized === `www.${baseHost}`) return null
+  if (!normalized.endsWith(`.${baseHost}`)) return null
+
+  const slug = normalized.slice(0, -(baseHost.length + 1))
+  if (!slug || slug.includes('.') || RESERVED_TENANT_SLUGS.has(slug)) return null
+
+  const cached = hostCache.get(slug)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+
+  const supabase = createServiceSupabaseClient()
+  if (!supabase) return null
+
+  const { data } = await supabase
+    .from('organizations')
+    .select('id, name, slug, status')
+    .eq('slug', slug)
+    .limit(1)
+    .maybeSingle()
+
+  const result: HostOrganization = (data as any)?.id
+    ? {
+        id: String((data as any).id),
+        name: String((data as any).name || ''),
+        slug: String((data as any).slug || ''),
+        status: String((data as any).status || 'active'),
+      }
+    : null
+
+  hostCache.set(slug, { value: result, expiresAt: Date.now() + HOST_CACHE_TTL_MS })
+  return result
 }
