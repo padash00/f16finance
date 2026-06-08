@@ -22,6 +22,10 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import {
+  ensureOrganizationOperatorAccess,
+  ensureOrganizationStaffAccess,
+} from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -69,6 +73,31 @@ export async function POST(request: Request) {
       kind === 'operator' ? 'operators.edit' : 'staff.edit',
     )
     if (denied) return denied as any
+
+    // Tenant isolation: убеждаемся, что редактируемый ресурс принадлежит
+    // активной организации. Под LEGACY_SINGLE_TENANT_MODE (allowedIds=полный
+    // список) это no-op; реальная фильтрация включится после флипа флага.
+    try {
+      if (kind === 'operator') {
+        await ensureOrganizationOperatorAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          operatorId: id,
+        })
+      } else {
+        await ensureOrganizationStaffAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          staffId: id,
+        })
+      }
+    } catch (scopeErr: any) {
+      const msg = String(scopeErr?.message || '')
+      if (msg === 'forbidden-operator' || msg === 'forbidden-staff') {
+        return json({ error: 'forbidden' }, 403)
+      }
+      throw scopeErr
+    }
 
     const supabase = createAdminSupabaseClient()
     const userId = access.user?.id || null

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { listOrganizationStaffIds } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -167,6 +168,24 @@ export async function GET(req: Request) {
       return json({ ok: true, items: [] })
     }
 
+    // Tenant scoping: restrict to staff within the active organization.
+    // In LEGACY_SINGLE_TENANT_MODE this returns all staff ids (no-op filter).
+    let scopedStaffIds = staffIds
+    if (!access.isSuperAdmin && access.activeOrganization?.id) {
+      const allowedStaffIds = await listOrganizationStaffIds({
+        activeOrganizationId: access.activeOrganization.id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      if (allowedStaffIds) {
+        const allowedSet = new Set(allowedStaffIds)
+        scopedStaffIds = staffIds.filter((id) => allowedSet.has(id))
+      }
+    }
+
+    if (scopedStaffIds.length === 0) {
+      return json({ ok: true, items: [] })
+    }
+
     const supabase = createAdminSupabaseClient()
     const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
     if (usersError) throw usersError
@@ -177,7 +196,7 @@ export async function GET(req: Request) {
     }
 
     const items = await Promise.all(
-      staffIds.map(async (staffId) => {
+      scopedStaffIds.map(async (staffId) => {
         const resolved = await resolveStaffAccountTarget(supabase, staffId)
         if (!resolved) return null
 
@@ -243,6 +262,18 @@ export async function POST(req: Request) {
     const resolved = await resolveStaffAccountTarget(supabase, body.staffId)
     if (!resolved) {
       return json({ error: 'Сотрудник не найден', code: 'staff_not_found' }, 404)
+    }
+
+    // Tenant scoping: reject mutations on staff outside the active organization.
+    // In LEGACY_SINGLE_TENANT_MODE listOrganizationStaffIds returns all staff (no-op).
+    if (!access.isSuperAdmin && access.activeOrganization?.id) {
+      const allowedStaffIds = await listOrganizationStaffIds({
+        activeOrganizationId: access.activeOrganization.id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      if (allowedStaffIds && !allowedStaffIds.includes(String(resolved.staff.id))) {
+        return json({ error: 'forbidden' }, 403)
+      }
     }
 
     if (!resolved.staff.is_active) {

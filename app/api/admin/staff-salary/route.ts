@@ -3,6 +3,11 @@ import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeAuditLog } from '@/lib/server/audit'
+import {
+  resolveCompanyScope,
+  listOrganizationStaffIds,
+  listOrganizationOperatorIds,
+} from '@/lib/server/organizations'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -71,42 +76,86 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
+    // Multi-tenant scoping. While LEGACY_SINGLE_TENANT_MODE is true,
+    // scope.allowedCompanyIds is null and every guard below is a no-op.
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    // staff_adjustments / staff_salary_payments scope by staff_id (no company_id),
+    // debts / point_debt_items scope by operator_id. Resolve the allowed id lists
+    // only when scoping is actually active.
+    const allowedStaffIds = scope.allowedCompanyIds
+      ? await listOrganizationStaffIds({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      : null
+    const allowedOperatorIds = scope.allowedCompanyIds
+      ? await listOrganizationOperatorIds({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          includeInactive: true,
+        })
+      : null
+
+    const staffQuery = supabase
+      .from('staff')
+      .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active, dismissed_at, dismissal_date')
+      .order('full_name')
+    if (allowedStaffIds) staffQuery.in('id', allowedStaffIds)
+
+    const adjQuery = supabase
+      .from('staff_adjustments')
+      .select('id, staff_id, kind, amount, date, comment, status, created_at, closed_by_payment_id, source_payment_id, closed_at')
+      .order('created_at', { ascending: false })
+    if (allowedStaffIds) adjQuery.in('staff_id', allowedStaffIds)
+
+    const paymentsQuery = supabase
+      .from('staff_salary_payments')
+      .select('id, staff_id, pay_date, slot, amount, comment, created_at')
+      .order('pay_date', { ascending: false })
+      .limit(200)
+    if (allowedStaffIds) paymentsQuery.in('staff_id', allowedStaffIds)
+
+    const adminOpsQuery = supabase
+      .from('operators')
+      .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff')
+      .eq('is_active', true)
+      .eq('is_admin_staff', true)
+      .order('name')
+    if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
+
+    const adminOpDebtsQuery = supabase
+      .from('debts')
+      .select('id, operator_id, amount, client_name, week_start, comment')
+      .eq('status', 'active')
+    if (allowedOperatorIds) adminOpDebtsQuery.in('operator_id', allowedOperatorIds)
+
+    const adminOpDebtItemsQuery = supabase
+      .from('point_debt_items')
+      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
+      .eq('status', 'active')
+    if (allowedOperatorIds) adminOpDebtItemsQuery.in('operator_id', allowedOperatorIds)
+
+    const expensesQuery = supabase
+      .from('expenses')
+      .select('id, source_type, source_id')
+      .in('source_type', ['salary_payment', 'salary_advance'])
+    if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
+
     const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
-      supabase
-        .from('staff')
-        .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active, dismissed_at, dismissal_date')
-        .order('full_name'),
-      supabase
-        .from('staff_adjustments')
-        .select('id, staff_id, kind, amount, date, comment, status, created_at, closed_by_payment_id, source_payment_id, closed_at')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('staff_salary_payments')
-        .select('id, staff_id, pay_date, slot, amount, comment, created_at')
-        .order('pay_date', { ascending: false })
-        .limit(200),
+      staffQuery,
+      adjQuery,
+      paymentsQuery,
       supabase
         .from('operator_salary_rules')
         .select('company_code, shift_type, base_per_shift')
         .eq('is_active', true),
-      supabase
-        .from('operators')
-        .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff')
-        .eq('is_active', true)
-        .eq('is_admin_staff', true)
-        .order('name'),
-      supabase
-        .from('debts')
-        .select('id, operator_id, amount, client_name, week_start, comment')
-        .eq('status', 'active'),
-      supabase
-        .from('point_debt_items')
-        .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
-        .eq('status', 'active'),
-      supabase
-        .from('expenses')
-        .select('id, source_type, source_id')
-        .in('source_type', ['salary_payment', 'salary_advance']),
+      adminOpsQuery,
+      adminOpDebtsQuery,
+      adminOpDebtItemsQuery,
+      expensesQuery,
     ])
 
     if (staffRes.error) throw staffRes.error
@@ -344,10 +393,28 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null)
     const action = body?.action
 
+    // Multi-tenant scoping for mutations. While LEGACY_SINGLE_TENANT_MODE is true,
+    // scope.allowedCompanyIds is null, allowedStaffIds stays null, and the guard
+    // below is a no-op (never rejects). It only takes effect after the flag flips.
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const allowedStaffIds = scope.allowedCompanyIds
+      ? await listOrganizationStaffIds({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      : null
+    // Returns true only when scoping is active AND the staff_id is out of scope.
+    const staffOutOfScope = (staffId: string | null | undefined) =>
+      !!allowedStaffIds && !allowedStaffIds.includes(String(staffId || ''))
+
     // ── Add adjustment (debt / fine / bonus / advance) ──────────────────────
     if (action === 'addAdjustment') {
       const { staff_id, kind, amount, date, comment, company_id } = body
       if (!staff_id || !kind || !amount) return json({ error: 'staff_id, kind, amount обязательны' }, 400)
+      if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
       if (!['debt', 'fine', 'bonus', 'advance'].includes(kind)) return json({ error: 'Неверный kind' }, 400)
       if (amount <= 0) return json({ error: 'Сумма должна быть > 0' }, 400)
 
@@ -395,11 +462,12 @@ export async function POST(req: Request) {
       if (!id) return json({ error: 'id обязателен' }, 400)
       const { data: adjRow, error: adjFetchError } = await supabase
         .from('staff_adjustments')
-        .select('id, kind')
+        .select('id, kind, staff_id')
         .eq('id', id)
         .maybeSingle()
       if (adjFetchError) throw adjFetchError
       if (!adjRow?.id) return json({ error: 'Корректировка не найдена' }, 404)
+      if (staffOutOfScope((adjRow as any).staff_id)) return json({ error: 'forbidden' }, 403)
 
       // Advance adjustments create an expense row; remove it on void for consistency.
       if (String(adjRow.kind || '') === 'advance') {
@@ -422,6 +490,7 @@ export async function POST(req: Request) {
     if (action === 'addExtraDay') {
       const { staff_id, date, custom_amount } = body
       if (!staff_id) return json({ error: 'staff_id обязателен' }, 400)
+      if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
 
       // Get staff extra day settings
       const { data: staffMember } = await supabase
@@ -457,6 +526,7 @@ export async function POST(req: Request) {
     if (action === 'createPayment') {
       const { staff_id, pay_date, slot, cash_amount, kaspi_amount, expected_amount, comment, company_id } = body
       if (!staff_id || !pay_date) return json({ error: 'staff_id и pay_date обязательны' }, 400)
+      if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
@@ -686,6 +756,7 @@ export async function POST(req: Request) {
         .maybeSingle()
       if (paymentFetchError) throw paymentFetchError
       if (!paymentRow?.id) return json({ error: 'Выплата не найдена' }, 404)
+      if (staffOutOfScope((paymentRow as any).staff_id)) return json({ error: 'forbidden' }, 403)
 
       const monthRange = monthRangeFromDate(String(paymentRow.pay_date || ''))
       if (!monthRange) return json({ error: 'Некорректная дата выплаты' }, 400)
@@ -778,6 +849,7 @@ export async function POST(req: Request) {
     if (action === 'updateStaffSalary') {
       const { staff_id, monthly_salary, extra_day_company_code, extra_day_shift_type } = body
       if (!staff_id) return json({ error: 'staff_id обязателен' }, 400)
+      if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
       const updates: Record<string, unknown> = {}
       if (monthly_salary !== undefined) updates.monthly_salary = Math.round(monthly_salary)
       if (extra_day_company_code !== undefined) updates.extra_day_company_code = extra_day_company_code || null

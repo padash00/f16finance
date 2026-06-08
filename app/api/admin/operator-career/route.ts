@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { normalizeStaffRole } from '@/lib/core/access'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireStaffCapability } from '@/lib/server/capabilities'
+import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -26,6 +27,18 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const operatorId = searchParams.get('operatorId')?.trim()
     if (!operatorId) return json({ error: 'operatorId обязателен' }, 400)
+
+    // Мультитенантная изоляция: оператор должен принадлежать активной организации.
+    // В legacy single-tenant режиме helper возвращает всех операторов → no-op.
+    try {
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId,
+      })
+    } catch {
+      return json({ error: 'Оператор недоступен' }, 403)
+    }
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
@@ -65,6 +78,18 @@ export async function POST(req: Request) {
     const operatorId = body.payload.operatorId?.trim()
     if (!operatorId) return json({ error: 'operatorId обязателен' }, 400)
     if (role === 'other') return json({ error: 'Выберите роль повышения' }, 400)
+
+    // Мультитенантная изоляция: повышать можно только оператора своей организации.
+    // В legacy single-tenant режиме helper возвращает всех операторов → no-op.
+    try {
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId,
+      })
+    } catch {
+      return json({ error: 'Оператор недоступен' }, 403)
+    }
 
     const salary = body.payload.monthly_salary
     if (salary != null && (!Number.isFinite(salary) || Number(salary) < 0)) {

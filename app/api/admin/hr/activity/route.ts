@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -34,6 +35,11 @@ export async function GET(req: Request) {
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
+
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     // Audit log по сущности
     const auditRes = await supabase
@@ -76,10 +82,14 @@ export async function GET(req: Request) {
         .maybeSingle()
       const name = (opRow as any)?.short_name || (opRow as any)?.name
       if (name) {
-        const { data: shiftsData } = await supabase
+        let shiftsQuery = supabase
           .from('shifts')
           .select('id, date, shift_type, company_id')
           .eq('operator_name', name)
+        if (scope.allowedCompanyIds) {
+          shiftsQuery = shiftsQuery.in('company_id', scope.allowedCompanyIds)
+        }
+        const { data: shiftsData } = await shiftsQuery
           .order('date', { ascending: false })
           .limit(15)
         shifts = (shiftsData || []) as any[]

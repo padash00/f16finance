@@ -11,6 +11,7 @@ import { calculateStaffAccrualForMonth } from '@/lib/domain/staff-payroll'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { listSalaryReferenceData } from '@/lib/server/repositories/salary'
+import { listOrganizationStaffIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -93,10 +94,34 @@ export async function GET(req: Request) {
     if (!monthFrom || !monthTo) return json({ error: 'from и to обязательны (формат YYYY-MM)' }, 400)
     if (monthFrom > monthTo) return json({ error: 'from должен быть ≤ to' }, 400)
 
+    // Мультитенантная изоляция: проверяем, что запрошенная точка в скоупе активной
+    // организации, и получаем allowedCompanyIds (null в LEGACY_SINGLE_TENANT_MODE).
+    let scope: { allowedCompanyIds: string[] | null }
+    try {
+      scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: companyId,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+    } catch {
+      return json({ error: 'Точка не найдена' }, 404)
+    }
+
     const fromDate = monthStartISO(monthFrom)
     const toDate = monthEndISO(monthTo)
 
     const supabase = createAdminSupabaseClient()
+
+    // Скоупим адм. сотрудников по организации (no-op пока флаг LEGACY включён).
+    const scopedStaffIds = scope.allowedCompanyIds
+      ? await listOrganizationStaffIds({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      : null
+
+    const staffQuery = supabase.from('staff').select('id, full_name, created_at, dismissed_at, monthly_salary')
+    if (scopedStaffIds) staffQuery.in('id', scopedStaffIds)
 
     const [companyRes, incomesRes, expensesRes, categoriesRes, staffRes, staffPeriodsRes, salaryAdjustmentsRes, salaryReference] = await Promise.all([
       supabase.from('companies').select('id, name, code').eq('id', companyId).maybeSingle(),
@@ -113,7 +138,7 @@ export async function GET(req: Request) {
         .gte('date', fromDate)
         .lte('date', toDate),
       supabase.from('expense_categories').select('name, accounting_group'),
-      supabase.from('staff').select('id, full_name, created_at, dismissed_at, monthly_salary'),
+      staffQuery,
       supabase.from('staff_salary_periods').select('staff_id, effective_from, monthly_salary'),
       supabase
         .from('operator_salary_adjustments')
@@ -152,12 +177,15 @@ export async function GET(req: Request) {
     {
       let page = 0
       while (true) {
-        const { data, error } = await supabase
+        let totalQuery = supabase
           .from('incomes')
           .select('cash_amount, kaspi_amount, online_amount, card_amount')
           .gte('date', fromDate)
           .lte('date', toDate)
-          .range(page * 1000, page * 1000 + 999)
+        // Скоуп организации: "общая выручка" не должна выходить за пределы
+        // компаний активной организации (no-op пока allowedCompanyIds === null).
+        if (scope.allowedCompanyIds) totalQuery = totalQuery.in('company_id', scope.allowedCompanyIds)
+        const { data, error } = await totalQuery.range(page * 1000, page * 1000 + 999)
         if (error) throw error
         const chunk = (data || []) as any[]
         for (const r of chunk) {

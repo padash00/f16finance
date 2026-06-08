@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -32,15 +33,22 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       return json({ error: 'Укажите причину отклонения (≥ 10 символов)' }, 400)
     }
 
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(request)
 
-    const { data: existing, error: existingError } = await supabase
+    let existingQuery = supabase
       .from('expenses')
-      .select('id, status')
+      .select('id, status, company_id')
       .eq('id', expenseId)
-      .single()
+    if (scope.allowedCompanyIds) existingQuery = existingQuery.in('company_id', scope.allowedCompanyIds)
+
+    const { data: existing, error: existingError } = await existingQuery.single()
 
     if (existingError || !existing) return json({ error: 'Расход не найден' }, 404)
     if (existing.status !== 'pending_approval') {

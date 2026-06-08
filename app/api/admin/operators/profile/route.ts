@@ -4,6 +4,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveCompanyScope, listOrganizationOperatorIds } from '@/lib/server/organizations'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -19,6 +20,23 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const operatorId = url.searchParams.get('operator_id') || ''
     if (!operatorId) return json({ error: 'operator_id required' }, 400)
+
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    // Operator must belong to the active organization's operators.
+    if (scope.allowedCompanyIds) {
+      const allowedOperatorIds = await listOrganizationOperatorIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        includeInactive: true,
+      })
+      if (allowedOperatorIds && !allowedOperatorIds.includes(operatorId)) {
+        return json({ error: 'forbidden' }, 403)
+      }
+    }
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -51,7 +69,11 @@ export async function GET(req: Request) {
         .eq('operator_id', operatorId)
         .order('created_at', { ascending: false }),
       supabase.from('operator_auth').select('*').eq('operator_id', operatorId).maybeSingle(),
-      supabase.from('companies').select('id, name, code').order('name'),
+      (() => {
+        let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+        if (scope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', scope.allowedCompanyIds)
+        return companiesQuery
+      })(),
     ])
 
     if (operatorError) throw operatorError
@@ -89,6 +111,23 @@ export async function PATCH(req: Request) {
     const body = await req.json().catch(() => null)
     const operatorId = String(body?.operator_id || '').trim()
     if (!operatorId) return json({ error: 'operator_id required' }, 400)
+
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    // Operator must belong to the active organization's operators.
+    if (scope.allowedCompanyIds) {
+      const allowedOperatorIds = await listOrganizationOperatorIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        includeInactive: true,
+      })
+      if (allowedOperatorIds && !allowedOperatorIds.includes(operatorId)) {
+        return json({ error: 'forbidden' }, 403)
+      }
+    }
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()

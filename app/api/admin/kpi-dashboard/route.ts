@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { calculateForecast, type CompanyCode } from '@/lib/kpiEngine'
 import { requireCapability } from '@/lib/server/capabilities'
+import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -108,24 +109,38 @@ export async function GET(req: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    const incomesMonthQuery = supabase
+      .from('incomes')
+      .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
+      .gte('date', monthStart)
+      .lte('date', monthEnd)
+    const incomesWeekQuery = supabase
+      .from('incomes')
+      .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
+      .gte('date', weekStart)
+      .lte('date', weekEnd)
+    const histQuery = supabase
+      .from('incomes')
+      .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
+      .gte('date', fetchStart)
+      .lte('date', fetchEnd)
+    if (scope.allowedCompanyIds) {
+      incomesMonthQuery.in('company_id', scope.allowedCompanyIds)
+      incomesWeekQuery.in('company_id', scope.allowedCompanyIds)
+      histQuery.in('company_id', scope.allowedCompanyIds)
+    }
+
     const [{ data: plans, error: plansError }, { data: incomesMonth, error: monthError }, { data: incomesWeek, error: weekError }, { data: hist, error: histError }] =
       await Promise.all([
         supabase.from('kpi_plans').select('*').eq('month_start', monthStart).eq('entity_type', 'collective'),
-        supabase
-          .from('incomes')
-          .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
-          .gte('date', monthStart)
-          .lte('date', monthEnd),
-        supabase
-          .from('incomes')
-          .select('date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)')
-          .gte('date', weekStart)
-          .lte('date', weekEnd),
-        supabase
-          .from('incomes')
-          .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
-          .gte('date', fetchStart)
-          .lte('date', fetchEnd),
+        incomesMonthQuery,
+        incomesWeekQuery,
+        histQuery,
       ])
 
     if (plansError) throw plansError
@@ -143,10 +158,21 @@ export async function GET(req: Request) {
 
     let operatorNames: Record<string, string> = {}
     if (operatorIds.size > 0) {
+      let operatorIdsToFetch = Array.from(operatorIds)
+      if (scope.allowedCompanyIds) {
+        const allowedOperatorIds = new Set(
+          await listOrganizationOperatorIds({
+            activeOrganizationId: access.activeOrganization?.id || null,
+            isSuperAdmin: access.isSuperAdmin,
+          }),
+        )
+        operatorIdsToFetch = operatorIdsToFetch.filter((id) => allowedOperatorIds.has(id))
+      }
+
       const { data: operatorsData, error: operatorsError } = await supabase
         .from('operators')
         .select('id, name')
-        .in('id', Array.from(operatorIds))
+        .in('id', operatorIdsToFetch)
 
       if (operatorsError) throw operatorsError
 
@@ -212,11 +238,20 @@ export async function POST(req: Request) {
     const prev2Key = getMonthKey(prev2)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const { data: incomes, error } = await supabase
+
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    const incomesQuery = supabase
       .from('incomes')
       .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
       .gte('date', `${prev2Key}-01`)
       .lte('date', iso(new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)))
+    if (scope.allowedCompanyIds) incomesQuery.in('company_id', scope.allowedCompanyIds)
+
+    const { data: incomes, error } = await incomesQuery
 
     if (error) throw error
 

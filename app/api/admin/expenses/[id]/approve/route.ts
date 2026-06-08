@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -32,11 +33,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const { data: existing, error: existingError } = await supabase
       .from('expenses')
-      .select('id, status')
+      .select('id, status, company_id')
       .eq('id', expenseId)
       .single()
 
     if (existingError || !existing) return json({ error: 'Расход не найден' }, 404)
+
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(existing.company_id)) {
+      return json({ error: 'forbidden' }, 403)
+    }
+
     if (existing.status !== 'pending_approval') {
       return json({ error: 'Можно одобрить только расход в статусе ожидания' }, 409)
     }

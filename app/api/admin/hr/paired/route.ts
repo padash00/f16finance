@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server'
 import { findPairedRecord } from '@/lib/server/hr-paired'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import {
+  listOrganizationOperatorIds,
+  listOrganizationStaffIds,
+} from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -29,6 +33,25 @@ export async function GET(req: Request) {
       return json({ error: 'kind должен быть staff или operator' }, 400)
     }
     if (!id) return json({ error: 'id обязателен' }, 400)
+
+    // Тенант-скоупинг входного id. В LEGACY single-tenant режиме (флаг включён)
+    // эти хелперы возвращают ВСЕ id, поэтому проверка членства — no-op. После
+    // флипа флага запрос на чужой staff/operator id вернёт 403.
+    const allowedIds = !access.isSuperAdmin
+      ? kind === 'staff'
+        ? await listOrganizationStaffIds({
+            activeOrganizationId: access.activeOrganization?.id || null,
+            isSuperAdmin: access.isSuperAdmin,
+          })
+        : await listOrganizationOperatorIds({
+            activeOrganizationId: access.activeOrganization?.id || null,
+            isSuperAdmin: access.isSuperAdmin,
+            includeInactive: true,
+          })
+      : null
+    if (allowedIds && !allowedIds.includes(String(id))) {
+      return json({ error: 'forbidden' }, 403)
+    }
 
     const supabase = createAdminSupabaseClient()
     const paired = await findPairedRecord(supabase, { kind, id })

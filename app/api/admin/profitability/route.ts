@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { buildDailyKaspiSeriesFromRows, sumDailyKaspiReports, type DailyKaspiReport } from '@/lib/server/services/daily-kaspi'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -180,18 +181,29 @@ export async function GET(req: Request) {
     const dateTo = monthEnd(to)
     const previousDate = prevDayISO(dateFrom)
 
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let deviceQuery = supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true)
+    if (scope.allowedCompanyIds) deviceQuery = deviceQuery.in('company_id', scope.allowedCompanyIds)
+
+    let incomeQuery = supabase
+      .from('incomes')
+      .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
+      .gte('date', previousDate)
+      .lte('date', dateTo)
+    if (scope.allowedCompanyIds) incomeQuery = incomeQuery.in('company_id', scope.allowedCompanyIds)
+
     const [{ data: deviceRows, error: devicesError }, { data: projectRows, error: projectsError }, { data: incomeRows, error: incomesError }] =
       await Promise.all([
-        supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
+        deviceQuery,
         supabase
           .from('point_projects')
           .select('point_project_companies(company_id, feature_flags)')
           .eq('is_active', true),
-        supabase
-          .from('incomes')
-          .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
-          .gte('date', previousDate)
-          .lte('date', dateTo),
+        incomeQuery,
       ])
 
     if (devicesError) throw devicesError

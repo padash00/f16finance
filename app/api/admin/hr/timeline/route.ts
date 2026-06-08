@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { listOrganizationOperatorIds, listOrganizationStaffIds } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -42,12 +43,37 @@ export async function GET(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const { data, error } = await supabase
+    // Multi-tenant scoping: restrict timeline to staff/operator entities of the
+    // active organization. In LEGACY_SINGLE_TENANT_MODE these helpers return ALL
+    // ids, so the filter is a no-op and current behavior is preserved.
+    const [scopedStaffIds, scopedOperatorIds] = await Promise.all([
+      listOrganizationStaffIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      }),
+      listOrganizationOperatorIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        includeInactive: true,
+      }),
+    ])
+    // null = superadmin / legacy mode → do not filter. Non-null → filter entity_id.
+    const allowedEntityIds =
+      access.isSuperAdmin || !access.activeOrganization?.id
+        ? null
+        : Array.from(new Set([...scopedStaffIds, ...scopedOperatorIds].map((id) => String(id))))
+
+    let auditQuery = supabase
       .from('audit_log')
       .select('id, entity_type, entity_id, action, payload, created_at, actor_user_id')
       .in('entity_type', ['staff', 'operator'])
       .in('action', RELEVANT_ACTIONS)
       .gte('created_at', sinceIso)
+    if (allowedEntityIds) {
+      auditQuery = auditQuery.in('entity_id', allowedEntityIds)
+    }
+
+    const { data, error } = await auditQuery
       .order('created_at', { ascending: false })
       .limit(limit)
 

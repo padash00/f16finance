@@ -24,6 +24,11 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import {
+  listOrganizationOperatorIds,
+  listOrganizationStaffIds,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -68,21 +73,58 @@ export async function GET(req: Request) {
 
     const today = new Date()
 
+    // Мультитенантная изоляция. Пока LEGACY_SINGLE_TENANT_MODE=true все
+    // helper'ы возвращают полный набор id, а scope.allowedCompanyIds === null —
+    // поэтому фильтры ниже остаются no-op. Активируется после флипа флага.
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const orgOperatorIds = await listOrganizationOperatorIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      includeInactive: true,
+    })
+    const orgStaffIds = await listOrganizationStaffIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const scopeOperators = !scope.allowedCompanyIds ? null : orgOperatorIds
+    const scopeStaff = !scope.allowedCompanyIds ? null : orgStaffIds
+
+    let operatorsQuery = supabase
+      .from('operators')
+      .select('id, name, short_name, role, is_active, dismissed_at, is_admin_staff')
+    if (scopeOperators) operatorsQuery = operatorsQuery.in('id', scopeOperators)
+
+    let staffQuery = supabase
+      .from('staff')
+      .select('id, full_name, short_name, role, is_active, dismissed_at, created_at')
+    if (scopeStaff) staffQuery = staffQuery.in('id', scopeStaff)
+
+    let profilesQuery = supabase
+      .from('operator_profiles')
+      .select('operator_id, full_name, birth_date, hire_date')
+    if (scopeOperators) profilesQuery = profilesQuery.in('operator_id', scopeOperators)
+
+    let assignQuery = supabase
+      .from('operator_company_assignments')
+      .select('operator_id, company_id')
+    if (scope.allowedCompanyIds) assignQuery = assignQuery.in('company_id', scope.allowedCompanyIds)
+
+    let companiesQuery = supabase.from('companies').select('id, name')
+    if (scope.allowedCompanyIds) companiesQuery = companiesQuery.in('id', scope.allowedCompanyIds)
+
+    let authQuery = supabase.from('operator_auth').select('operator_id, is_active')
+    if (scopeOperators) authQuery = authQuery.in('operator_id', scopeOperators)
+
     const [opRes, staffRes, profilesRes, assignRes, companiesRes, authRes, auditRes, positionsRes] = await Promise.all([
-      supabase
-        .from('operators')
-        .select('id, name, short_name, role, is_active, dismissed_at, is_admin_staff'),
-      supabase
-        .from('staff')
-        .select('id, full_name, short_name, role, is_active, dismissed_at, created_at'),
-      supabase
-        .from('operator_profiles')
-        .select('operator_id, full_name, birth_date, hire_date'),
-      supabase
-        .from('operator_company_assignments')
-        .select('operator_id, company_id'),
-      supabase.from('companies').select('id, name'),
-      supabase.from('operator_auth').select('operator_id, is_active'),
+      operatorsQuery,
+      staffQuery,
+      profilesQuery,
+      assignQuery,
+      companiesQuery,
+      authQuery,
       supabase
         .from('audit_log')
         .select('action, entity_type, created_at')
