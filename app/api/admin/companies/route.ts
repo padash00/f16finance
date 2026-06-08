@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { requireCapability } from '@/lib/server/capabilities'
@@ -18,11 +19,23 @@ export async function GET(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const { data, error } = await supabase
+    // Скоуп по организации. Пока LEGACY_SINGLE_TENANT_MODE=true → allowedCompanyIds=null → фильтр не применяется (no-op).
+    const scope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let query = supabase
       .from('companies')
       .select('id, name, code')
       .order('name', { ascending: true })
 
+    if (scope.allowedCompanyIds) {
+      if (scope.allowedCompanyIds.length === 0) return json({ data: [] })
+      query = query.in('id', scope.allowedCompanyIds)
+    }
+
+    const { data, error } = await query
     if (error) throw error
 
     return json({ data: data ?? [] })
