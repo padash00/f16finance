@@ -11,6 +11,7 @@ import {
 } from 'react'
 import ExcelJS from 'exceljs'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { WeeklyPurchasePlan, nextMondayISO, planWeekLabel } from '@/components/admin/weekly-purchase-plan'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -1483,6 +1484,32 @@ function WeeklyReportContent() {
       ops.push({ date: r.date, type: 'Расход', company: companyNameById.get(String(r.company_id)) || '—', cat: r.category || '—', amount: total, cash, cashless: kaspi, note: (r.one_off_payee || r.comment || '') })
     }
     ops.sort((a, b) => a.date.localeCompare(b.date))
+
+    // ─── План закупок на следующую неделю (отдельная страница PDF) ──────────
+    let purchasingPlan: Array<{ company: string; day: number; category: string; title: string; supplier: string; qty: number | string; amount: number; bought: boolean }> = []
+    let purchasingPlanWeek = ''
+    try {
+      const planWeekStart = nextMondayISO(endDate)
+      purchasingPlanWeek = planWeekLabel(planWeekStart)
+      const planRes = await fetch(`/api/admin/purchase-plan?week_start=${planWeekStart}`, { cache: 'no-store' })
+      if (planRes.ok) {
+        const planJson = await planRes.json().catch(() => null)
+        const planRows = Array.isArray(planJson?.data) ? planJson.data : []
+        purchasingPlan = planRows.map((r: any) => ({
+          company: companyNameById.get(String(r.company_id)) || '—',
+          day: Number(r.day_of_week) || 0,
+          category: r.category || '',
+          title: r.title || '',
+          supplier: r.supplier || '',
+          qty: r.quantity != null ? r.quantity : '',
+          amount: Number(r.amount) || 0,
+          bought: r.status === 'bought',
+        }))
+      }
+    } catch {
+      /* план необязателен для отчёта */
+    }
+
     await downloadReportPdf('finreport', {
       meta: { title: 'Недельный отчёт', period, company: 'Все точки', generated },
       kpi: {
@@ -1501,6 +1528,8 @@ function WeeklyReportContent() {
       })),
       expenses: totals.expenseCategories.map((e) => ({ name: e.name, amount: e.value })),
       operations: ops,
+      purchasingPlan,
+      purchasingPlanWeek,
     }, `Nedelnyy_otchet_${startDate}_${endDate}`)
     showToast('PDF отчёт скачан', 'success')
   }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast, incomeRows, expenseRows, operators, cashLabels, shifts])
@@ -1691,6 +1720,9 @@ function WeeklyReportContent() {
               </div>
             }
           />
+
+          {/* План закупок на следующую неделю (подшивается в PDF) */}
+          <WeeklyPurchasePlan />
 
           {/* Week Navigation */}
           <Card className="p-4 border-white/5 bg-slate-900/40 backdrop-blur-xl">
