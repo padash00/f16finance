@@ -175,6 +175,19 @@ async function loadPlatformData(supabase: any) {
     /* таблицы может не быть */
   }
 
+  // Каталог фич (для ручной выдачи в панели).
+  let featuresCatalog: any[] = []
+  try {
+    const fR = await supabase
+      .from('features')
+      .select('code, name, category')
+      .order('category', { ascending: true })
+      .order('code', { ascending: true })
+    if (!fR.error) featuresCatalog = fR.data || []
+  } catch {
+    /* таблицы может не быть */
+  }
+
   const memberCountByOrg = new Map<string, number>()
   for (const m of memsR.data || []) {
     const k = String(m.organization_id || '')
@@ -277,7 +290,7 @@ async function loadPlatformData(supabase: any) {
     trialMrr,
   }
 
-  return { overview, organizations, plans, packages: packagesCatalog, addons: addonsCatalog }
+  return { overview, organizations, plans, packages: packagesCatalog, addons: addonsCatalog, features: featuresCatalog }
 }
 
 // Пересчитывает plan/addon-гранты company_features организации из её пакета и включённых add-ons.
@@ -599,6 +612,33 @@ export async function PATCH(req: Request) {
         { onConflict: 'organization_id,addon_code' },
       )
       if (error) throw error
+    }
+
+    // ── Ручная выдача/снятие отдельной фичи (source 'manual') ──
+    if (body?.setFeatureGrant && body.setFeatureGrant.code) {
+      const code = String(body.setFeatureGrant.code)
+      const enabled = body.setFeatureGrant.enabled === true
+      const { data: comps } = await supabase.from('companies').select('id').eq('organization_id', organizationId)
+      const companyIds = (comps || []).map((c: any) => String(c.id))
+      const { data: feat } = await supabase.from('features').select('id').eq('code', code).maybeSingle()
+      if (feat?.id && companyIds.length) {
+        await supabase
+          .from('company_features')
+          .delete()
+          .in('company_id', companyIds)
+          .eq('feature_id', (feat as any).id)
+          .eq('source_type', 'manual')
+        if (enabled) {
+          const rows = companyIds.map((cid) => ({
+            company_id: cid,
+            feature_id: (feat as any).id,
+            source_type: 'manual',
+            enabled: true,
+            created_by: access.user?.id || null,
+          }))
+          await supabase.from('company_features').insert(rows)
+        }
+      }
     }
 
     // Если меняли пакет/модули — пересобрать plan/addon-гранты в company_features.

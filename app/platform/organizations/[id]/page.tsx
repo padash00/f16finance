@@ -9,17 +9,16 @@ import {
   ExternalLink,
   Loader2,
   Package,
-  RotateCcw,
   Sparkles,
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { PLATFORM_FEATURES } from '@/lib/core/entitlements'
 
 type EntitlementState = { enabled: boolean; source: string }
 type PackageItem = { code: string; name: string; vertical: string; description: string | null; feature_codes: string[]; price_kzt: number }
 type AddonItem = { code: string; name: string; description: string | null; feature_codes: string[]; price_kzt: number; billing_unit: string }
+type FeatureCatalogItem = { code: string; name: string; category: string }
 type OrgDetail = {
   id: string
   name: string
@@ -82,6 +81,7 @@ export default function OrgDetailPage() {
   const [savingFeature, setSavingFeature] = useState<string | null>(null)
   const [packages, setPackages] = useState<PackageItem[]>([])
   const [addons, setAddons] = useState<AddonItem[]>([])
+  const [features, setFeatures] = useState<FeatureCatalogItem[]>([])
   const [savingPkg, setSavingPkg] = useState(false)
   const [savingAddon, setSavingAddon] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +98,7 @@ export default function OrgDetailPage() {
       .then(data => {
         setPackages(Array.isArray(data.packages) ? data.packages : [])
         setAddons(Array.isArray(data.addons) ? data.addons : [])
+        setFeatures(Array.isArray(data.features) ? data.features : [])
         const found = (data.organizations || []).find((o: any) => o.id === id) as OrgDetail | undefined
         if (found) {
           setOrg(found)
@@ -193,14 +194,14 @@ export default function OrgDetailPage() {
     }
   }
 
-  const handleFeature = async (feature: string, enabled: boolean | null) => {
-    setSavingFeature(feature)
+  const handleFeatureGrant = async (code: string, enabled: boolean) => {
+    setSavingFeature(code)
     setError(null)
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ organizationId: id, featureOverride: { feature, enabled } }),
+        body: JSON.stringify({ organizationId: id, setFeatureGrant: { code, enabled } }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error || 'Не удалось сохранить')
@@ -360,62 +361,63 @@ export default function OrgDetailPage() {
         </div>
       </div>
 
-      {/* Функции (доступы / entitlements) */}
+      {/* Доступ к функциям (entitlements) */}
       <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
           <Sparkles className="h-4 w-4 text-violet-400" />
-          Функции (доступы)
+          Доступ к функциям
         </h2>
         <p className="mb-3 text-xs text-slate-500">
-          Что доступно этой организации. По умолчанию — из тарифа; можно переопределить вручную.
+          Эффективные права организации (из пакета, add-ons и legacy). Можно выдать функцию вручную.
         </p>
         {org.legacyGrants ? (
-          <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
-            🛡 Legacy-гранты активны: {org.legacyGrants} (ничего не пропадёт при включении ограничений)
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
+            🛡 Legacy-гранты активны: {org.legacyGrants}
           </div>
         ) : null}
-        <div className="grid gap-2 sm:grid-cols-2">
-          {PLATFORM_FEATURES.map((f) => {
-            const st = org.entitlements?.[f.key]
-            const enabled = !!st?.enabled
-            const source = st?.source || 'none'
-            const busy = savingFeature === f.key
-            return (
-              <div key={f.key} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-white">{f.label}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {source === 'override' ? 'переопределено вручную' : source === 'plan' ? 'из тарифа' : 'нет в тарифе'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {source === 'override' ? (
-                    <button
-                      type="button"
-                      onClick={() => handleFeature(f.key, null)}
-                      disabled={busy}
-                      title="Вернуть к тарифу"
-                      className="rounded-md p-1 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
+        {features.length === 0 ? (
+          <p className="text-xs text-slate-600">Каталог функций пуст (примени миграцию).</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {features.map((f) => {
+              const eff = (org.effectiveFeatures || []).find((e) => e.code === f.code)
+              const enabled = !!eff
+              const sources = eff?.sources || []
+              const isManual = sources.includes('manual')
+              const fromPackageOrLegacy = sources.some((s) => s !== 'manual')
+              const busy = savingFeature === f.code
+              const lockedByPackage = enabled && fromPackageOrLegacy && !isManual
+              const sourceLabel = !enabled
+                ? 'нет доступа'
+                : sources.includes('legacy')
+                  ? 'legacy'
+                  : sources.includes('plan')
+                    ? 'из пакета'
+                    : sources.includes('addon')
+                      ? 'из add-on'
+                      : 'вручную'
+              return (
+                <div key={f.code} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-white">{f.name}</p>
+                    <p className="text-[11px] text-slate-500">{f.code} · {sourceLabel}</p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => handleFeature(f.key, !enabled)}
-                    disabled={busy}
-                    className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${enabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                    title={enabled ? 'Выключить' : 'Включить'}
+                    onClick={() => handleFeatureGrant(f.code, !isManual)}
+                    disabled={busy || lockedByPackage}
+                    title={lockedByPackage ? 'Выдано пакетом/legacy — меняется через пакет' : isManual ? 'Снять ручную выдачу' : 'Выдать вручную'}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-40 ${enabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
                   >
                     <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`} />
                   </button>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
         <p className="mt-3 text-[11px] text-slate-600">
-          Управление доступом. Принудительное ограничение интерфейса включится с фазой изоляции тенантов.
+          Тумблер управляет ручной выдачей (manual). Права из пакета/legacy меняются через пакет. Enforcement пока выключен.
         </p>
       </div>
 
