@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Brain, Loader2, AlertTriangle, ShieldAlert, TrendingUp, Lightbulb, Target, CalendarDays } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Brain, Loader2, AlertTriangle, ShieldAlert, TrendingUp, Lightbulb, Target, CalendarDays, RefreshCw } from 'lucide-react'
 
 type Exec = {
   revenue: number; revenueDeltaPct: number
@@ -29,10 +29,15 @@ type AI = {
   summary?: { where_losing: string; where_earn: string; main_risk: string; main_opportunity: string; extra_profit: string; three_actions: string[] } | null
   error?: string
 }
+type CostStructure = {
+  variableExpenses: number; fixedExpenses: number; capex: number; incomeTax: number; profitDistribution: number
+  contributionRatePct: number; breakevenRevenue: number; safetyMarginPct: number; operatingProfit: number
+}
 type Resp = {
   days: number; dateFrom: string; dateTo: string
   executive: Exec; companies: Company[]; ranking: Ranking; expenseChanges: Change[]
-  fot: number; fotShare: number
+  fot: number; fotShare: number; concentrationPct?: number
+  costStructure?: CostStructure
   dataQuality: { percent: number; daysInPeriod: number; daysWithSales: number; salesCompleteness: number; daysWithExpenses: number; expenseCompleteness: number }
   ai: AI
 }
@@ -105,14 +110,30 @@ export default function AiCfoPage() {
   const [sel, setSel] = useState('d90')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [lastParams, setLastParams] = useState<{ days?: number; dateFrom?: string; dateTo?: string }>({ days: 90 })
+  const [cached, setCached] = useState(false)
 
-  const run = async (params: { days?: number; dateFrom?: string; dateTo?: string }, selKey: string) => {
-    setLoading(true); setError(null); setSel(selKey)
+  const run = async (params: { days?: number; dateFrom?: string; dateTo?: string }, selKey: string, force = false) => {
+    setSel(selKey); setLastParams(params)
+    const key = 'orda.cfo.cache.v1.' + JSON.stringify(params)
+    if (!force) {
+      try {
+        const raw = sessionStorage.getItem(key)
+        if (raw) {
+          const c = JSON.parse(raw)
+          if (c?.data && Date.now() - c.ts < 3 * 3600 * 1000) {
+            setData(c.data); setLoaded(true); setError(null); setCached(true); return
+          }
+        }
+      } catch {}
+    }
+    setLoading(true); setError(null); setCached(false)
     try {
       const res = await fetch('/api/ai/cfo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) })
       const j = await res.json()
       if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
       setData(j); setLoaded(true)
+      try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: j })) } catch {}
     } catch (e: any) { setError(e?.message || 'Ошибка') } finally { setLoading(false) }
   }
   useEffect(() => { run({ days: 90 }, 'd90') }, [])
@@ -129,6 +150,7 @@ export default function AiCfoPage() {
         <p className={`mt-1 text-sm ${C.sub}`}>
           Где теряете деньги, где заработать больше и что делать.
           {data ? <span className="ml-1 text-violet-300">· период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
+          {cached ? <span className="ml-1 text-[#52525B]">· из кэша</span> : null}
         </p>
       </div>
 
@@ -153,6 +175,10 @@ export default function AiCfoPage() {
             Период
           </button>
         </div>
+        <button onClick={() => run(lastParams, sel, true)} disabled={loading}
+          className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-white/[0.03] disabled:opacity-50`}>
+          <RefreshCw className="h-3.5 w-3.5" /> Обновить
+        </button>
       </div>
 
       {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
@@ -222,6 +248,24 @@ export default function AiCfoPage() {
             <Metric label="Доля ФОТ" value={data.fotShare} unit="%" />
             <Metric label="Денежный поток" value={ex.cashflow} delta={<Delta value={ex.profitDeltaPct} />} />
           </div>
+
+          {/* Устойчивость и структура затрат */}
+          {data.costStructure ? (
+            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+              <h2 className="mb-3 text-sm font-semibold">Устойчивость и структура затрат <span className={`text-[11px] font-normal ${C.sub}`}>[ФАКТ]</span></h2>
+              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+                <div><p className={`text-xs ${C.sub}`}>Точка безубыточности</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.breakevenRevenue)} ₸</p></div>
+                <div>
+                  <p className={`text-xs ${C.sub}`}>Запас прочности</p>
+                  <p className="mt-0.5 font-semibold" style={{ color: data.costStructure.safetyMarginPct >= 50 ? '#22C55E' : data.costStructure.safetyMarginPct >= 30 ? '#F59E0B' : '#EF4444' }}>{data.costStructure.safetyMarginPct}%</p>
+                </div>
+                <div><p className={`text-xs ${C.sub}`}>Операц. прибыль</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.operatingProfit)} ₸</p></div>
+                <div><p className={`text-xs ${C.sub}`}>Постоянные</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.fixedExpenses)} ₸</p></div>
+                <div><p className={`text-xs ${C.sub}`}>Переменные</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.variableExpenses)} ₸</p></div>
+                <div><p className={`text-xs ${C.sub}`}>CAPEX / разовые</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.capex)} ₸</p></div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Состояние бизнеса */}
           {ai?.state ? (

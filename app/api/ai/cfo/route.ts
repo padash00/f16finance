@@ -6,6 +6,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { resolveFinancialGroup } from '@/lib/core/financial-groups'
 
 // AI CFO — виртуальный финансовый директор.
 // Точные цифры (выручка/расходы/прибыль/маржа по компаниям + дельты к прошлому периоду) считаются КОДОМ.
@@ -126,14 +127,18 @@ export async function POST(request: Request) {
       return all
     }
 
-    const [companiesR, incomeRows, expenseRows] = await Promise.all([
+    const [companiesR, catsR, incomeRows, expenseRows] = await Promise.all([
       companiesQ,
+      supabase.from('expense_categories').select('name, accounting_group'),
       fetchAll('incomes', 'id, date, company_id, cash_amount, kaspi_amount, online_amount, card_amount'),
       fetchAll('expenses', 'id, date, company_id, category, cash_amount, kaspi_amount'),
     ])
     if (companiesR.error) throw companiesR.error
 
     const companies = (companiesR.data || []) as any[]
+    const catGroup = new Map<string, string>(
+      (((catsR as any)?.data || []) as any[]).map((c) => [String(c.name || '').toLowerCase(), String(c.accounting_group || '')]),
+    )
     const nameById = new Map(companies.map((c) => [String(c.id), c.name || c.code || '—']))
 
     // Агрегация по компаниям (текущий/прошлый) + категории расходов
@@ -150,6 +155,7 @@ export async function POST(request: Request) {
     const expenseDays = new Set<string>()
     const FOT_KEYS = ['зарплат', 'оклад', 'фот', 'преми', 'бонус', 'salary', ' зп']
     let fotCur = 0
+    let varExpCur = 0, fixExpCur = 0, capexCur = 0, taxCur = 0, distCur = 0
 
     for (const row of incomeRows) {
       const v = incomeOf(row)
@@ -168,6 +174,12 @@ export async function POST(request: Request) {
         a.expCur += v; expCur += v; catCur.set(cat, (catCur.get(cat) || 0) + v); expenseDays.add(String(row.date))
         const lc = cat.toLowerCase()
         if (FOT_KEYS.some((k) => lc.includes(k))) fotCur += v
+        const grp = resolveFinancialGroup(cat, catGroup.get(lc) || null)
+        if (grp === 'cogs' || grp === 'pos_commission') varExpCur += v
+        else if (grp === 'capex') capexCur += v
+        else if (grp === 'profit_distribution') distCur += v
+        else if (grp === 'income_tax') taxCur += v
+        else fixExpCur += v
       } else { a.expPrev += v; expPrev += v; catPrev.set(cat, (catPrev.get(cat) || 0) + v) }
     }
 
@@ -224,12 +236,30 @@ export async function POST(request: Request) {
     const topRev = companyRows.length ? Math.max(...companyRows.map((c) => c.revenue)) : 0
     const concentrationPct = revCur ? r1((topRev / revCur) * 100) : 0
 
+    // Структура затрат → безубыточность и запас прочности (постоянные/переменные = группы P&L)
+    const contributionMargin = revCur - varExpCur
+    const contributionRate = revCur ? contributionMargin / revCur : 0
+    const breakevenRevenue = contributionRate > 0 ? fixExpCur / contributionRate : 0
+    const safetyMarginPct = revCur && breakevenRevenue ? ((revCur - breakevenRevenue) / revCur) * 100 : 0
+    const costStructure = {
+      variableExpenses: r0(varExpCur),
+      fixedExpenses: r0(fixExpCur),
+      capex: r0(capexCur),
+      incomeTax: r0(taxCur),
+      profitDistribution: r0(distCur),
+      contributionRatePct: r1(contributionRate * 100),
+      breakevenRevenue: r0(breakevenRevenue),
+      safetyMarginPct: r1(safetyMarginPct),
+      operatingProfit: r0(revCur - varExpCur - fixExpCur),
+    }
+
     const computed = {
       days, dateFrom, dateTo, prevFrom, prevTo,
       executive,
       fot: r0(fotCur),
       fotShare: r1(fotShare),
       concentrationPct,
+      costStructure,
       companies: companyRows,
       ranking,
       expenseChanges: changes,
@@ -246,7 +276,7 @@ export async function POST(request: Request) {
       '',
       'ТОН: для собственника, простой язык, термины — с расшифровкой. Без воды и лозунгов. Плохие новости — прямо, но с тем, что делать.',
       '',
-      'ФОРМУЛЫ (применяй к данным; чего нет — [ГИПОТЕЗА], не выдумывай): Прибыль=Выручка−Расходы; Маржа%=Прибыль/Выручка×100; Доля ФОТ%=ФОТ/Выручка (дано fotShare; ориентир услуги/клубы 15–25%, общепит 25–35%); Точка безубыточности и Запас прочности — нужно деление расходов на пост./перем. (нет → [ГИПОТЕЗА]); EBITDA — амортизации нет → реальная прибыль ниже на износ [ГИПОТЕЗА]; Концентрация (дано concentrationPct) >30% = риск зависимости; деньги≠прибыль, runway только при убытке; Темп роста — дельты даны.',
+      'ФОРМУЛЫ (применяй к данным; чего нет — [ГИПОТЕЗА], не выдумывай): Прибыль=Выручка−Расходы; Маржа%=Прибыль/Выручка×100; Доля ФОТ%=ФОТ/Выручка (дано fotShare; ориентир услуги/клубы 15–25%, общепит 25–35%); Точка безубыточности и Запас прочности ДАНЫ в costStructure (breakevenRevenue, safetyMarginPct; постоянные fixedExpenses/переменные variableExpenses) — это [ФАКТ], используй их; costStructure.operatingProfit — операц. прибыль до CAPEX/налога, costStructure.capex — разовые вложения: ОБЪЯСНИ, почему чистая прибыль ниже операционной (разовые/инвестиц. статьи); EBITDA — амортизации нет → реальная прибыль ниже на износ [ГИПОТЕЗА]; Концентрация (дано concentrationPct) >30% = риск зависимости; деньги≠прибыль, runway только при убытке; Темп роста — дельты даны.',
       '',
       'HEALTH SCORE (0–100, это [ФАКТ] из метрик; ВСЕГДА показывай разбивку). Компоненты: Рентабельность(25): запас прочности + тренд маржи. Деньги(25): денежный поток + runway + дебиторка. Риски(20): концентрация (concentrationPct: <20%→12, 20–35%→8, 35–50%→4, >50%→0) + долг. Динамика(20): тренд выручки + тренд прибыли (по дельтам). Данные(10)=dataQuality.percent×0,1. Если компонента нет данных — ИСКЛЮЧИ его, пересчитай по доступным и укажи в "missing". Итог: ≥80 healthy, 60–79 attention, <60 problem.',
       '',
