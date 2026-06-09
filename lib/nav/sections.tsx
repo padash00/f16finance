@@ -247,6 +247,7 @@ export function buildOwnerNavSections(): NavSection[] {
   const opsSection = getSectionById('ops')
   const pointDevicesItem = getSectionItem('system', '/point-devices')
   const operatorAnalyticsItem = getSectionItem('operator-space', '/operator-analytics')
+  const subscriptionItem = getSectionItem('system', '/subscription')
 
   const sections: NavSection[] = []
 
@@ -275,6 +276,17 @@ export function buildOwnerNavSections(): NavSection[] {
       accentColor: 'fuchsia',
       icon: Zap,
       items: [operatorAnalyticsItem],
+    })
+  }
+
+  if (subscriptionItem) {
+    sections.push({
+      id: 'owner-billing',
+      title: 'Подписка',
+      subtitle: 'Тариф, модули и счета',
+      accentColor: 'slate',
+      icon: CreditCard,
+      items: [subscriptionItem],
     })
   }
 

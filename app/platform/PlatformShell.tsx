@@ -14,9 +14,9 @@ import {
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/platform', label: 'Обзор', icon: BarChart3, exact: true },
+  { href: '/platform', label: 'Кокпит', icon: BarChart3, exact: true },
   { href: '/platform/organizations', label: 'Организации', icon: Building2, exact: false },
-  { href: '/platform/billing', label: 'Тарифы', icon: CreditCard, exact: false },
+  { href: '/platform/billing', label: 'Тарифы и пакеты', icon: CreditCard, exact: false },
 ]
 
 export default function PlatformShell({ children }: { children: React.ReactNode }) {
