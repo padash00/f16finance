@@ -83,6 +83,7 @@ export const ADMIN_PATHS = [
   '/platform/*',
   '/dashboard',
   '/welcome',
+  '/subscription',
   '/logs',
   '/point-devices',
   '/income',
@@ -190,6 +191,7 @@ const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 const OWNER_PATHS = [
   '/dashboard',
   '/welcome',
+  '/subscription',
   '/planner',
   '/point-devices',
   '/income',

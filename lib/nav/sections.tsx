@@ -210,6 +210,7 @@ export const navSections: NavSection[] = [
     icon: Shield,
     items: [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
+      { href: '/subscription', label: 'Подписка', icon: CreditCard, note: 'Тариф, модули и счета' },
       { href: '/access', label: 'Права и пароли', icon: Shield, note: 'Доступ ролей и аккаунты' },
       { href: '/knowledge-admin', label: 'База знаний', icon: BookOpen, note: 'FAQ, правила и чек-листы', badge: 'new', badgeColor: 'green' },
       { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
