@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { formatMoney } from '@/lib/core/format'
 
 type Factor = {
@@ -119,24 +120,22 @@ export default function ValuationPage() {
       <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
 
       {/* Header */}
-      <div className="relative flex flex-wrap items-center gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30">
-          <Building2 className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold tracking-tight">Оценка бизнеса</h1>
-          <p className="truncate text-xs text-muted-foreground">
-            EBITDA × мультипликатор · период {data.period.start} — {data.period.end}
-          </p>
-        </div>
-        <button
-          onClick={() => void load()}
-          className="ml-auto grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
-          title="Обновить"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
-      </div>
+      <AdminPageHeader
+        title="Оценка бизнеса"
+        description={`EBITDA × мультипликатор · период ${data.period.start} — ${data.period.end}`}
+        icon={<Building2 className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <button
+            onClick={() => void load()}
+            className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
+            title="Обновить"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        }
+      />
 
       {/* Hero — диапазон оценки */}
       <Card className="relative overflow-hidden border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-orange-500/[0.03] p-6">

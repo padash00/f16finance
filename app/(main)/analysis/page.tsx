@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { downloadReportPdf } from "@/lib/client/download-pdf"
 import { FloatingAssistant } from "@/components/ai/floating-assistant"
+import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -461,24 +462,14 @@ export default function AIAnalysisPage() {
   return (
     <>
       <div className="app-page-wide space-y-6">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/80 via-gray-900 to-indigo-950/40 p-6 border border-indigo-500/15">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-10 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-slate-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
-
-          <div className="relative z-10 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-indigo-500/20 rounded-xl">
-                <BrainCircuit className="w-8 h-8 text-indigo-300" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-white">AI Разбор</h1>
-                <p className="text-gray-400 text-sm mt-1">
-                  Финансы точки: факт, план, прогноз и аномалии (данные с сервера)
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
+        <AdminPageHeader
+          title="AI Разбор"
+          description="Финансы точки: факт, план, прогноз и аномалии (данные с сервера)"
+          icon={<BrainCircuit className="h-5 w-5" />}
+          accent="violet"
+          backHref="/"
+          actions={
+            <>
               {can('analysis.refresh') && (
                 <Button
                   onClick={() => loadData()}
@@ -517,9 +508,9 @@ export default function AIAnalysisPage() {
                   Обновить
                 </Button>
               </div>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
           <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">{dataSource}</p>

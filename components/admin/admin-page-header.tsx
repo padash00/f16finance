@@ -4,25 +4,30 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
+// Soft modern: тёмный, но тёплый — мягкое цветное свечение по углам,
+// градиентный чип-иконка, плавные закругления. Акцент задаёт оттенок свечения.
 const ACCENT = {
   emerald: {
-    card: 'bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))]',
-    iconWrap: 'bg-emerald-500/15 text-emerald-300',
+    glow1: 'bg-emerald-500/15',
+    glow2: 'bg-sky-500/10',
+    chip: 'from-emerald-400/30 to-sky-400/20 text-emerald-100',
   },
   amber: {
-    card: 'bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))]',
-    iconWrap: 'bg-amber-500/15 text-amber-300',
+    glow1: 'bg-amber-500/15',
+    glow2: 'bg-orange-500/10',
+    chip: 'from-amber-400/30 to-orange-400/20 text-amber-100',
   },
   violet: {
-    card: 'bg-[radial-gradient(circle_at_top_left,_rgba(139,92,246,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))]',
-    iconWrap: 'bg-violet-500/15 text-violet-300',
+    glow1: 'bg-violet-500/15',
+    glow2: 'bg-fuchsia-500/10',
+    chip: 'from-violet-400/30 to-fuchsia-400/20 text-violet-100',
   },
   blue: {
-    card: 'bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))]',
-    iconWrap: 'bg-blue-500/15 text-blue-300',
+    glow1: 'bg-sky-500/15',
+    glow2: 'bg-indigo-500/10',
+    chip: 'from-sky-400/30 to-indigo-400/20 text-sky-100',
   },
 } as const
 
@@ -43,15 +48,16 @@ export function AdminPageHeader(props: {
   const back = props.backHref ?? '/'
 
   return (
-    <Card
+    <div
       className={cn(
-        'overflow-hidden border-white/10 p-4 md:p-5',
-        a.card,
+        'relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/25 p-5',
         props.className,
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className={cn('pointer-events-none absolute -left-16 -top-24 h-52 w-52 rounded-full blur-3xl', a.glow1)} />
+      <div className={cn('pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full blur-3xl', a.glow2)} />
+      <div className="relative flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
           <Link
             href={back}
             className="shrink-0 text-slate-400 transition hover:text-white"
@@ -59,11 +65,13 @@ export function AdminPageHeader(props: {
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className={cn('shrink-0 rounded-xl p-2', a.iconWrap)}>{props.icon}</div>
+          <div className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br', a.chip)}>
+            {props.icon}
+          </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-white">{props.title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-white">{props.title}</h1>
             {props.description ? (
-              <p className="mt-0.5 text-xs text-slate-500">{props.description}</p>
+              <p className="mt-0.5 text-sm text-slate-400">{props.description}</p>
             ) : null}
           </div>
         </div>
@@ -71,8 +79,8 @@ export function AdminPageHeader(props: {
           <div className="flex flex-wrap items-center gap-2">{props.actions}</div>
         ) : null}
       </div>
-      {props.toolbar ? <div className="mt-4 flex flex-col gap-3">{props.toolbar}</div> : null}
-    </Card>
+      {props.toolbar ? <div className="relative mt-4 flex flex-col gap-3">{props.toolbar}</div> : null}
+    </div>
   )
 }
 

@@ -42,6 +42,7 @@ import {
   YAxis,
 } from 'recharts'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -526,36 +527,51 @@ export default function GoalsPage() {
 
       <div className="relative space-y-6">
         {/* Header */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/40">
-              <Target className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-2xl font-bold tracking-tight">Цели и план</h1>
-              <p className="truncate text-xs text-muted-foreground">Реальные цифры по периодам · план накладывается поверх</p>
-            </div>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
-              <button onClick={() => setYear((y) => y - 1)} disabled={loading} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
-                <ChevronLeft className="h-4 w-4" />
+        <AdminPageHeader
+          title="Цели и план"
+          description="Реальные цифры по периодам · план накладывается поверх"
+          icon={<Target className="h-5 w-5" />}
+          accent="emerald"
+          backHref="/"
+          actions={
+            <>
+              <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
+                <button onClick={() => setYear((y) => y - 1)} disabled={loading} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="px-4 text-sm font-semibold tabular-nums">{year}</span>
+                <button onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))} disabled={loading || year >= currentYear + 1} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <button onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50" title="Обновить">
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
-              <span className="px-4 text-sm font-semibold tabular-nums">{year}</span>
-              <button onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))} disabled={loading || year >= currentYear + 1} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-white/[0.06] hover:text-foreground disabled:opacity-50">
-                <ChevronRight className="h-4 w-4" />
+              <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:from-amber-700 hover:to-amber-700">
+                <Plus className="h-4 w-4" />
+                Новая цель
               </button>
+            </>
+          }
+          toolbar={
+            <div className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+              {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => { setTab(p); setSelectedMonth(null) }}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                    tab === p
+                      ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow shadow-amber-500/20'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {PERIOD_LABEL[p]}
+                </button>
+              ))}
             </div>
-            <button onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50" title="Обновить">
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:from-amber-700 hover:to-amber-700">
-              <Plus className="h-4 w-4" />
-              Новая цель
-            </button>
-          </div>
-        </div>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
@@ -563,24 +579,6 @@ export default function GoalsPage() {
         {success ? (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div>
         ) : null}
-
-        {/* Pill-Tabs */}
-        <div className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-          {(['year', 'h1', 'h2', 'month'] as PeriodKind[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => { setTab(p); setSelectedMonth(null) }}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                tab === p
-                  ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow shadow-amber-500/20'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {PERIOD_LABEL[p]}
-            </button>
-          ))}
-        </div>
 
         {loading && !data ? (
           <div className="grid place-items-center rounded-2xl border border-white/10 bg-white/[0.02] p-12 text-sm text-muted-foreground">

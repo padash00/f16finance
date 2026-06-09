@@ -16,6 +16,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
 import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
 import { emptyProcessedReport, processedFromBundleAggregate, type ReportBundleAggregate } from '@/lib/reports/from-api-aggregate'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
 import { ReportsPageSkeleton } from '@/components/reports/reports-page-skeleton'
 import { AIInsightCard } from '@/components/reports/ai-insight-card'
@@ -34,7 +35,6 @@ import {
   ArrowUpDown,
   BarChart3,
   Building2,
-  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -1905,45 +1905,17 @@ function ReportsContent() {
           )}
 
           {/* Header */}
-          <div className="rounded-2xl border border-white/10 bg-zinc-950/80 backdrop-blur-sm p-6 lg:p-7">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300">
-                  <BarChart3 className="w-8 h-8" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight">
-                    Финансы и отчёты
-                  </h1>
-                  <p className="text-slate-400 mt-1 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    {formatDateRange(dateFrom, dateTo)}
-                    {comparisonMode && <span className="text-amber-400">(сравнение с прошлым периодом)</span>}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex bg-slate-900/50 backdrop-blur-xl rounded-2xl p-1 border border-white/10">
-                  {(['overview', 'analytics', 'details', 'companies'] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        activeTab === tab ? 'bg-white/10 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {tab === 'overview' && 'Обзор'}
-                      {tab === 'analytics' && 'Аналитика'}
-                      {tab === 'details' && 'Детали'}
-                      {tab === 'companies' && 'Компании'}
-                    </button>
-                  ))}
-                </div>
-
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+          <AdminPageHeader
+            title="Финансы и отчёты"
+            description={`${formatDateRange(dateFrom, dateTo)}${comparisonMode ? ' · сравнение с прошлым периодом' : ''}`}
+            icon={<BarChart3 className="h-5 w-5" />}
+            accent="amber"
+            backHref="/"
+            actions={
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
                   className={`rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10 ${comparisonMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : ''}`}
                   onClick={() => setComparisonMode(!comparisonMode)}
                   title="Режим сравнения"
@@ -1951,9 +1923,9 @@ function ReportsContent() {
                   <ArrowUpDown className="w-4 h-4" />
                 </Button>
 
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   className={`rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
                   onClick={() => loadData(true)}
                   title="Обновить"
@@ -2003,9 +1975,27 @@ function ReportsContent() {
                   <FileText className="w-4 h-4" />
                   PDF / Печать
                 </Button>
+              </>
+            }
+            toolbar={
+              <div className="flex w-fit bg-slate-900/50 backdrop-blur-xl rounded-2xl p-1 border border-white/10">
+                {(['overview', 'analytics', 'details', 'companies'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                      activeTab === tab ? 'bg-white/10 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tab === 'overview' && 'Обзор'}
+                    {tab === 'analytics' && 'Аналитика'}
+                    {tab === 'details' && 'Детали'}
+                    {tab === 'companies' && 'Компании'}
+                  </button>
+                ))}
               </div>
-            </div>
-          </div>
+            }
+          />
 
           {/* Print-only summary */}
           <div className="print-summary rounded-2xl border border-slate-200 bg-white p-6 print-card">

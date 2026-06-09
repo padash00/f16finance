@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { CardSkeleton, StatGridSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
@@ -1089,25 +1090,28 @@ function HeaderBlock(props: {
   }
 
   return (
-    <div className="relative overflow-visible rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 p-6 border border-amber-500/20">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-amber-500/20 rounded-xl">
-              <Brain className="w-6 h-6 text-amber-300" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Финансовый дашборд</h1>
-              <p className="text-xs text-slate-400">Без “мертвых” кнопок. Только рабочая логика.</p>
-            </div>
-
-            <span className={`ml-auto px-3 py-1 rounded-full text-xs font-medium border ${statusStyle[props.insight.status]}`}>
+    <div className="relative">
+      <AdminPageHeader
+        title="Финансовый дашборд"
+        description="Без “мертвых” кнопок. Только рабочая логика."
+        icon={<Brain className="h-5 w-5" />}
+        accent="amber"
+        backHref="/"
+        actions={
+          <>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusStyle[props.insight.status]}`}>
               {props.insight.status === 'excellent' ? '🚀 Отлично' :
                props.insight.status === 'good' ? '✅ Хорошо' :
                props.insight.status === 'warning' ? '⚠️ Внимание' : '🔴 Критично'}
             </span>
-          </div>
-
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              <span className="text-slate-300 text-sm">Прогноз:</span>
+              <span className="font-medium text-amber-300 text-sm">{props.insight.predictions.confidence}%</span>
+            </div>
+          </>
+        }
+        toolbar={
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <QuickRangeBtn active={props.rangeType === 'today'} onClick={() => props.onQuickRange('today')} label="Сегодня" />
             <QuickRangeBtn active={props.rangeType === 'week'} onClick={() => props.onQuickRange('week')} label="Неделя" />
@@ -1139,15 +1143,9 @@ function HeaderBlock(props: {
                 {props.includeExtra ? 'Extra включён' : 'Extra исключён'}
               </button>
             )}
-
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
-              <Sparkles className="w-4 h-4 text-yellow-400" />
-              <span className="text-slate-300">Прогноз:</span>
-              <span className="font-medium text-amber-300">{props.insight.predictions.confidence}%</span>
-            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {props.calendarOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 z-[100]">

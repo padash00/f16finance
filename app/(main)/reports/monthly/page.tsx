@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { FileSpreadsheet, RefreshCw, Download, TrendingUp, ShoppingCart, Tag, Percent } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -135,62 +136,60 @@ export default function MonthlyReportPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileSpreadsheet className="h-6 w-6 text-emerald-400" />
-            Ежемесячный отчёт
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Бухгалтерский и налоговый отчёт
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
-            <SelectTrigger className="w-[100px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {YEARS.map(y => (
-                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={String(month)} onValueChange={v => setMonth(Number(v))}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTHS.map(m => (
-                <SelectItem key={m} value={String(m)} className="capitalize">{getMonthName(m)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {companies.length > 0 && (
-            <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Все компании" />
+      <AdminPageHeader
+        title="Ежемесячный отчёт"
+        description="Бухгалтерский и налоговый отчёт"
+        icon={<FileSpreadsheet className="h-5 w-5" />}
+        accent="amber"
+        backHref="/"
+        actions={
+          <>
+            <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
+              <SelectTrigger className="w-[100px]">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all">Все компании</SelectItem>
-                {companies.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                {YEARS.map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Загрузить
-          </Button>
-          {hasData && totals && can('reports.export') && (
-            <Button variant="outline" size="sm" onClick={() => downloadCSV(daily, totals, year, month)}>
-              <Download className="mr-2 h-4 w-4" />
-              Скачать Excel
+            <Select value={String(month)} onValueChange={v => setMonth(Number(v))}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTHS.map(m => (
+                  <SelectItem key={m} value={String(m)} className="capitalize">{getMonthName(m)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {companies.length > 0 && (
+              <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Все компании" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">Все компании</SelectItem>
+                  {companies.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Загрузить
             </Button>
-          )}
-        </div>
-      </div>
+            {hasData && totals && can('reports.export') && (
+              <Button variant="outline" size="sm" onClick={() => downloadCSV(daily, totals, year, month)}>
+                <Download className="mr-2 h-4 w-4" />
+                Скачать Excel
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Error */}
       {error && (

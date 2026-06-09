@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   Calculator,
   CalendarDays,
@@ -502,40 +503,42 @@ export default function TaxPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <Landmark className="w-8 h-8 text-emerald-500" />
-            Налоги ИП (упрощёнка)
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+      <AdminPageHeader
+        title="Налоги ИП (упрощёнка)"
+        description="Расчёт налогов на упрощёнке · форма 910.00"
+        icon={<Landmark className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <Card className="p-1 flex items-center gap-2 bg-card/50">
+            <div className="flex items-center px-2">
+              <CalendarDays className="w-4 h-4 text-muted-foreground mr-2" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="bg-transparent text-sm text-foreground outline-none"
+              />
+            </div>
+            <span className="text-muted-foreground">—</span>
+            <div className="flex items-center px-2">
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="bg-transparent text-sm text-foreground outline-none"
+              />
+            </div>
+          </Card>
+        }
+        toolbar={
+          <p className="text-muted-foreground text-sm">
             {bizSettings.companyFullName ? <><b className="text-foreground">{bizSettings.companyFullName}</b>, </> : null}
             ОКЭД {bizSettings.oked || '—'}{bizSettings.bin ? <>, БИН/ИИН {bizSettings.bin}</> : null} · форма 910.00
             {!bizSettings.vatPayer ? <span className="ml-2 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-300">не плательщик НДС</span> : <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">плательщик НДС 16%</span>}
           </p>
-        </div>
-
-        <Card className="p-1 flex items-center gap-2 bg-card/50">
-          <div className="flex items-center px-2">
-            <CalendarDays className="w-4 h-4 text-muted-foreground mr-2" />
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-transparent text-sm text-foreground outline-none"
-            />
-          </div>
-          <span className="text-muted-foreground">—</span>
-          <div className="flex items-center px-2">
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="bg-transparent text-sm text-foreground outline-none"
-            />
-          </div>
-        </Card>
-      </div>
+        }
+      />
 
       {/* Хлебная цифра — сразу под header, на calc */}
       {activeTab === 'calc' && (() => {

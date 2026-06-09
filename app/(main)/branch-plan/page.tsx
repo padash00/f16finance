@@ -18,6 +18,7 @@ import { Building2, Cpu, Loader2, Plus, RefreshCw, Save, Trash2 } from 'lucide-r
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -717,39 +718,13 @@ export default function BranchPlanPage() {
       <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
 
       {/* Header */}
-      <div className="relative flex flex-wrap items-center gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg shadow-purple-500/30">
-          <Building2 className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold tracking-tight">Финмодель новой точки</h1>
-          <p className="truncate text-xs text-muted-foreground">CAPEX · OPEX · сценарии · окупаемость</p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {drafts.length > 0 ? (
-            <Select value={draft.id || '__new__'} onValueChange={(v) => {
-              if (v === '__new__') {
-                const fresh = defaultDraft()
-                setDraft(fresh)
-                setSavedSnapshot(draftSnapshot(fresh))
-              } else {
-                void loadDraft(v)
-              }
-            }}>
-              <SelectTrigger className="w-56"><SelectValue placeholder="Черновик" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__new__">+ Новый черновик</SelectItem>
-                {drafts.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          {dirty ? (
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
-              Есть несохранённые изменения
-            </span>
-          ) : null}
+      <AdminPageHeader
+        title="Финмодель новой точки"
+        description="CAPEX · OPEX · сценарии · окупаемость"
+        icon={<Building2 className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
           <button
             onClick={() => { const fresh = defaultDraft(); setDraft(fresh); setSavedSnapshot(draftSnapshot(fresh)); void loadList() }}
             className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
@@ -757,8 +732,36 @@ export default function BranchPlanPage() {
           >
             <RefreshCw className="h-4 w-4" />
           </button>
-        </div>
-      </div>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            {drafts.length > 0 ? (
+              <Select value={draft.id || '__new__'} onValueChange={(v) => {
+                if (v === '__new__') {
+                  const fresh = defaultDraft()
+                  setDraft(fresh)
+                  setSavedSnapshot(draftSnapshot(fresh))
+                } else {
+                  void loadDraft(v)
+                }
+              }}>
+                <SelectTrigger className="w-56"><SelectValue placeholder="Черновик" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__new__">+ Новый черновик</SelectItem>
+                  {drafts.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {dirty ? (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
+                Есть несохранённые изменения
+              </span>
+            ) : null}
+          </div>
+        }
+      />
 
       {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</Card> : null}
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{success}</Card> : null}

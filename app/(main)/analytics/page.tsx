@@ -26,6 +26,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { isAbortError } from '@/lib/is-abort-error'
 
 const MONTH_LABELS_RU = [
@@ -178,51 +179,48 @@ export default function AnalyticsPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <BarChart3 className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">Аналитика доходов</h1>
-            <p className="truncate text-xs text-muted-foreground">Сводка по месяцам · 12 мес. года</p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+      <AdminPageHeader
+        title="Аналитика доходов"
+        description="Сводка по месяцам · 12 мес. года"
+        icon={<BarChart3 className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setYear((y) => y - 1)}
+                className="h-8 w-8 p-0"
+                disabled={loading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-3 text-sm font-medium tabular-nums">{year}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))}
+                className="h-8 w-8 p-0"
+                disabled={loading || year >= currentYear + 1}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
             <Button
+              variant="outline"
               size="sm"
-              variant="ghost"
-              onClick={() => setYear((y) => y - 1)}
-              className="h-8 w-8 p-0"
-              disabled={loading}
+              onClick={() => void load(undefined, { soft: true })}
+              disabled={loading || refreshing}
+              className="h-9 gap-1.5"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <RefreshCcw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+              Обновить
             </Button>
-            <span className="px-3 text-sm font-medium tabular-nums">{year}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setYear((y) => Math.min(currentYear + 1, y + 1))}
-              className="h-8 w-8 p-0"
-              disabled={loading || year >= currentYear + 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load(undefined, { soft: true })}
-            disabled={loading || refreshing}
-            className="h-9 gap-1.5"
-          >
-            <RefreshCcw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {error ? (
         <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>

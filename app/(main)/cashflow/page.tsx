@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Card } from '@/components/ui/card'
 import { useCompanies } from '@/hooks/use-companies'
@@ -240,21 +241,25 @@ export default function CashFlowPage() {
         <div className="app-page-wide space-y-6">
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/30 via-slate-900 to-amber-900/30 p-6 border border-emerald-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500/20 rounded-xl">
-                  <Activity className="w-8 h-8 text-emerald-400" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    Cash Flow
-                  </h1>
-                  <p className="text-sm text-slate-400">Движение денег и баланс нарастающим итогом</p>
-                </div>
-              </div>
-
+          <AdminPageHeader
+            title="Cash Flow"
+            description="Движение денег и баланс нарастающим итогом"
+            icon={<Activity className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={
+              can('cashflow.export') ? (
+                <button
+                  onClick={downloadCSV}
+                  disabled={dailyData.length === 0}
+                  className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 hover:bg-slate-700/50 disabled:opacity-40 border border-slate-700 rounded-xl text-sm text-slate-200 transition-colors"
+                >
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  Excel
+                </button>
+              ) : undefined
+            }
+            toolbar={
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   {([
@@ -309,19 +314,9 @@ export default function CashFlowPage() {
                     ))}
                   </select>
                 )}
-                {can('cashflow.export') && (
-                  <button
-                    onClick={downloadCSV}
-                    disabled={dailyData.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 hover:bg-slate-700/50 disabled:opacity-40 border border-slate-700 rounded-xl text-sm text-slate-200 transition-colors"
-                  >
-                    <Download className="w-4 h-4 text-emerald-400" />
-                    Excel
-                  </button>
-                )}
               </div>
-            </div>
-          </div>
+            }
+          />
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

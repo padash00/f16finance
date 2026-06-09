@@ -5,6 +5,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import { useCompanies } from '@/hooks/use-companies'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -933,32 +934,29 @@ export default function ProfitabilityPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* ═══ HEADER ═══ */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <Landmark className="h-7 w-7 text-emerald-400" />
-            ОПиУ и прибыльность
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Период: <span className="text-foreground font-medium">{periodLabel}</span>
-            <span className="ml-2 text-xs">· выручка и расходы автоматически из журнала, при необходимости — ручные корректировки</span>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-            <CalendarDays className="h-4 w-4 text-emerald-400" />
-            <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
-            <span className="text-muted-foreground">—</span>
-            <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
+      <AdminPageHeader
+        title="ОПиУ и прибыльность"
+        description={`Период: ${periodLabel} · выручка и расходы автоматически из журнала, при необходимости — ручные корректировки`}
+        icon={<Landmark className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
+              <CalendarDays className="h-4 w-4 text-emerald-400" />
+              <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
+              <span className="text-muted-foreground">—</span>
+              <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => { const c = closedMonthDefaults(); setMonthFrom(c.from); setMonthTo(c.to) }}>4 мес</Button>
+              <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(shiftMonth(last, -5)); setMonthTo(last) }}>6 мес</Button>
+              <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(shiftMonth(last, -11)); setMonthTo(last) }}>12 мес</Button>
+              <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(`${last.slice(0, 4)}-01`); setMonthTo(last) }}>Год</Button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={() => { const c = closedMonthDefaults(); setMonthFrom(c.from); setMonthTo(c.to) }}>4 мес</Button>
-            <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(shiftMonth(last, -5)); setMonthTo(last) }}>6 мес</Button>
-            <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(shiftMonth(last, -11)); setMonthTo(last) }}>12 мес</Button>
-            <Button variant="outline" size="sm" onClick={() => { const last = shiftMonth(currentMonth(), -1); setMonthFrom(`${last.slice(0, 4)}-01`); setMonthTo(last) }}>Год</Button>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
       {success ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div> : null}

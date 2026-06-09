@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Brain, Loader2, AlertTriangle, ShieldAlert, TrendingUp, Lightbulb, Target, CalendarDays, RefreshCw } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
+
 type Exec = {
   revenue: number; revenueDeltaPct: number
   expenses: number; expensesDeltaPct: number
@@ -146,41 +148,51 @@ export default function AiCfoPage() {
 
   return (
     <div className="app-page-wide space-y-5 text-[#FAFAFA]">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold"><Brain className="h-6 w-6 text-violet-400" /> AI Финдиректор</h1>
-        <p className={`mt-1 text-sm ${C.sub}`}>
-          Где теряете деньги, где заработать больше и что делать.
-          {data ? <span className="ml-1 text-violet-300">· период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
-          {cached ? <span className="ml-1 text-[#52525B]">· из кэша</span> : null}
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {[7, 30, 90, 365].map((d) => (
-          <button key={d} onClick={() => run({ days: d }, `d${d}`)} disabled={loading}
-            className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
-            {d} дн
+      <AdminPageHeader
+        title="AI Финдиректор"
+        description="Где теряете деньги, где заработать больше и что делать."
+        icon={<Brain className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
+          <button onClick={() => run(lastParams, sel, true)} disabled={loading}
+            className={`inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-white/[0.03] disabled:opacity-50`}>
+            <RefreshCw className="h-3.5 w-3.5" /> Обновить
           </button>
-        ))}
-        <select value={sel.startsWith('m:') ? sel.slice(2) : ''} onChange={(e) => { const v = e.target.value; if (v) run(monthRange(v), `m:${v}`) }} disabled={loading}
-          className={`rounded-lg border ${C.border} bg-[#111113] px-3 py-1.5 text-sm ${C.sub} disabled:opacity-50`}>
-          <option value="">Месяц…</option>
-          {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <div className="flex items-center gap-1">
-          <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
-          <span className={C.sub}>—</span>
-          <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
-          <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
-            className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
-            Период
-          </button>
-        </div>
-        <button onClick={() => run(lastParams, sel, true)} disabled={loading}
-          className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-white/[0.03] disabled:opacity-50`}>
-          <RefreshCw className="h-3.5 w-3.5" /> Обновить
-        </button>
-      </div>
+        }
+        toolbar={
+          <>
+            {(data || cached) ? (
+              <p className={`text-xs ${C.sub}`}>
+                {data ? <span className="text-violet-300">период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
+                {cached ? <span className="ml-1 text-[#52525B]">· из кэша</span> : null}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {[7, 30, 90, 365].map((d) => (
+                <button key={d} onClick={() => run({ days: d }, `d${d}`)} disabled={loading}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+                  {d} дн
+                </button>
+              ))}
+              <select value={sel.startsWith('m:') ? sel.slice(2) : ''} onChange={(e) => { const v = e.target.value; if (v) run(monthRange(v), `m:${v}`) }} disabled={loading}
+                className={`rounded-lg border ${C.border} bg-[#111113] px-3 py-1.5 text-sm ${C.sub} disabled:opacity-50`}>
+                <option value="">Месяц…</option>
+                {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <div className="flex items-center gap-1">
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
+                <span className={C.sub}>—</span>
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
+                <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+                  Период
+                </button>
+              </div>
+            </div>
+          </>
+        }
+      />
 
       {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { AssistantPanel } from '@/components/ai/assistant-panel'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import type { PageSnapshot } from '@/lib/ai/types'
@@ -317,22 +318,14 @@ export default function ForecastPage() {
         <div className="app-page-wide space-y-6">
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 p-6 border border-amber-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-500/20 rounded-xl">
-                  <BrainCircuit className="w-8 h-8 text-amber-400" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    AI Прогноз
-                  </h1>
-                  <p className="text-sm text-slate-400">Прогноз на текущий и следующие 2 месяца</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
+          <AdminPageHeader
+            title="AI Прогноз"
+            description="Прогноз на текущий и следующие 2 месяца"
+            icon={<BrainCircuit className="h-5 w-5" />}
+            accent="violet"
+            backHref="/"
+            actions={
+              <>
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
@@ -372,9 +365,9 @@ export default function ForecastPage() {
                     Отменить
                   </button>
                 ) : null}
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
 
           {/* Error */}
           {error && (
