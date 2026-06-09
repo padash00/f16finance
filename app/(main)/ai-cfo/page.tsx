@@ -16,10 +16,13 @@ type Change = { label: string; current: number; prev: number; deltaPct: number }
 type Tagged = { text: string; status: string }
 type AI = {
   state?: string
+  healthScore?: { score: number; band: string; breakdown?: Record<string, number>; missing?: string[] } | null
   dataQuality?: { percent: number; band: string; notes?: string[]; limitations?: string[] }
   changes?: Tagged[]
   rootCauses?: Tagged[]
   risks?: Array<{ risk: string; probability: string; impact: string; level: string }>
+  losses?: Array<{ text: string; amount: string; status: string }>
+  missedProfit?: Array<{ text: string; potential: string; status: string }>
   opportunities?: Array<{ title: string; action: string; effect: string; status: string }>
   actionPlan?: { today?: string[]; week?: string[]; month?: string[] }
   forecast?: { band: string; text: string; warning: string | null } | null
@@ -142,9 +145,9 @@ export default function AiCfoPage() {
           {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <div className="flex items-center gap-1">
-          <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm ${C.sub}`} />
+          <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
           <span className={C.sub}>—</span>
-          <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm ${C.sub}`} />
+          <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
           <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
             className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
             Период
@@ -154,13 +157,44 @@ export default function AiCfoPage() {
 
       {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
 
+      {loading && loaded ? (
+        <div className="flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+          <Loader2 className="h-4 w-4 animate-spin" /> Пересчитываю и анализирую период…
+        </div>
+      ) : null}
+
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#A1A1AA]">
           <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
           <p className="text-sm">Финансовый директор анализирует период…</p>
         </div>
       ) : !data || !ex ? null : (
-        <>
+        <div className={loading ? 'space-y-5 opacity-40 transition-opacity' : 'space-y-5'}>
+          {/* Health Score */}
+          {ai?.healthScore ? (
+            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className={`text-xs ${C.sub}`}>Индекс здоровья бизнеса</p>
+                  <p className="text-3xl font-bold" style={{ color: ai.healthScore.score >= 80 ? '#22C55E' : ai.healthScore.score >= 60 ? '#F59E0B' : '#EF4444' }}>
+                    {ai.healthScore.score}/100
+                    <span className="ml-2 text-sm font-medium">{ai.healthScore.band === 'healthy' ? 'Здоровый' : ai.healthScore.band === 'attention' ? 'Требует внимания' : 'Проблемный'}</span>
+                  </p>
+                </div>
+                {ai.healthScore.breakdown ? (
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    {Object.entries(ai.healthScore.breakdown).map(([k, v]) => (
+                      <span key={k} className={`rounded-md border ${C.border} px-2 py-1 ${C.sub}`}>
+                        {({ profitability: 'Рентаб.', money: 'Деньги', risks: 'Риски', dynamics: 'Динамика', data: 'Данные' } as any)[k] || k}: <b className="text-[#FAFAFA]">{v}</b>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              {ai.healthScore.missing?.length ? <p className="mt-2 text-[11px] text-[#F59E0B]">Не хватило данных: {ai.healthScore.missing.join(', ')}</p> : null}
+            </div>
+          ) : null}
+
           {/* Качество данных */}
           {dq ? (
             <div className={`rounded-xl border ${C.border} ${C.card} flex flex-wrap items-center justify-between gap-3 p-4`}>
@@ -303,6 +337,38 @@ export default function AiCfoPage() {
             </div>
           ) : null}
 
+          {/* Потери и упущенная прибыль */}
+          {(ai?.losses?.length || ai?.missedProfit?.length) ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#EF4444]"><ArrowDownRight className="h-4 w-4" /> Потери — деньги утекают</h2>
+                {ai?.losses?.length ? (
+                  <ul className="space-y-2">
+                    {ai.losses.map((l, i) => (
+                      <li key={i} className="text-sm">
+                        <div className="flex items-center gap-2"><Tag status={l.status} />{l.amount ? <span className="font-medium text-[#EF4444]">{l.amount}</span> : null}</div>
+                        <p className={`mt-0.5 ${C.sub}`}>{l.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className={`text-sm ${C.sub}`}>Явных потерь не выявлено.</p>}
+              </div>
+              <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#22C55E]"><ArrowUpRight className="h-4 w-4" /> Упущенная прибыль — не захватываем</h2>
+                {ai?.missedProfit?.length ? (
+                  <ul className="space-y-2">
+                    {ai.missedProfit.map((m, i) => (
+                      <li key={i} className="text-sm">
+                        <div className="flex items-center gap-2"><Tag status={m.status} />{m.potential ? <span className="font-medium text-[#22C55E]">{m.potential}</span> : null}</div>
+                        <p className={`mt-0.5 ${C.sub}`}>{m.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className={`text-sm ${C.sub}`}>Явной упущенной прибыли не выявлено.</p>}
+              </div>
+            </div>
+          ) : null}
+
           {/* Возможности */}
           {ai?.opportunities?.length ? (
             <div>
@@ -357,7 +423,7 @@ export default function AiCfoPage() {
 
           {loading ? <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-violet-400" /></div> : null}
           {ai?.error ? <p className="text-xs text-[#F59E0B]">AI-анализ недоступен ({ai.error}), но цифры посчитаны.</p> : null}
-        </>
+        </div>
       )}
     </div>
   )
