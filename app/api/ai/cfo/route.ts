@@ -283,10 +283,13 @@ export async function POST(request: Request) {
 
     let ai: any = null
     try {
-      const result = await generateAiText({ model: OPENAI_MODEL, maxTokens: 3200, messages })
+      const result = await generateAiText({ model: OPENAI_MODEL, maxTokens: 8000, messages })
       await logAiUsageSafe(access.supabase, { userId: access.user?.id || null, endpoint: '/api/ai/cfo', provider: result.provider, model: result.model, usage: result.usage })
       ai = parseJsonLoose(result.text)
-      if (!ai) ai = { state: result.text }
+      // Если AI вернул не-JSON (или обрезался) — НЕ вываливаем сырой текст на экран.
+      if (!ai || typeof ai !== 'object' || (!ai.state && !ai.summary && !ai.changes)) {
+        ai = { error: 'Ответ AI не распознан (возможно, слишком длинный). Цифры посчитаны верно — обновите страницу.' }
+      }
     } catch (e: any) {
       ai = { error: e?.message || 'AI недоступен' }
     }
