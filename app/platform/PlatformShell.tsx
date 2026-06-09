@@ -7,16 +7,24 @@ import {
   BarChart3,
   Building2,
   CreditCard,
+  FileText,
   LayoutDashboard,
   LogOut,
   PlusCircle,
+  ScrollText,
+  Settings,
+  TrendingUp,
   Zap,
 } from 'lucide-react'
 
 const NAV = [
   { href: '/platform', label: 'Кокпит', icon: BarChart3, exact: true },
   { href: '/platform/organizations', label: 'Организации', icon: Building2, exact: false },
+  { href: '/platform/invoices', label: 'Счета', icon: FileText, exact: false },
   { href: '/platform/billing', label: 'Тарифы и пакеты', icon: CreditCard, exact: false },
+  { href: '/platform/analytics', label: 'Аналитика', icon: TrendingUp, exact: false },
+  { href: '/platform/audit', label: 'Аудит', icon: ScrollText, exact: false },
+  { href: '/platform/settings', label: 'Настройки', icon: Settings, exact: false },
 ]
 
 export default function PlatformShell({ children }: { children: React.ReactNode }) {
