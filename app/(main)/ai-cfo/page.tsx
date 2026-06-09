@@ -30,6 +30,25 @@ type Resp = { days: number; dateFrom: string; dateTo: string; executive: Exec; c
 const fmt = (v: number) => new Intl.NumberFormat('ru-RU').format(Math.round(v || 0))
 const C = { card: 'bg-[#111113]', border: 'border-[#27272A]', sub: 'text-[#A1A1AA]' }
 
+const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+function lastMonthOptions(count = 12) {
+  const out: Array<{ value: string; label: string }> = []
+  const now = new Date()
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    out.push({ value, label: `${MONTHS_RU[d.getMonth()]} ${d.getFullYear()}` })
+  }
+  return out
+}
+function monthRange(value: string) {
+  const [y, m] = value.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return { dateFrom: `${value}-01`, dateTo: `${value}-${String(last).padStart(2, '0')}` }
+}
+const MONTH_OPTIONS = lastMonthOptions(12)
+const fmtRange = (a?: string, b?: string) => (a && b ? `${a.split('-').reverse().join('.')} — ${b.split('-').reverse().join('.')}` : '')
+
 function Delta({ value, goodWhenUp = true, pp = false }: { value: number; goodWhenUp?: boolean; pp?: boolean }) {
   if (value === 0) return <span className="text-[#A1A1AA] text-xs">0%</span>
   const up = value > 0
@@ -62,38 +81,60 @@ export default function AiCfoPage() {
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [days, setDays] = useState(90)
   const [loaded, setLoaded] = useState(false)
+  const [sel, setSel] = useState('d90')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
-  const run = async (d: number) => {
-    setLoading(true); setError(null); setDays(d)
+  const run = async (params: { days?: number; dateFrom?: string; dateTo?: string }, selKey: string) => {
+    setLoading(true); setError(null); setSel(selKey)
     try {
-      const res = await fetch('/api/ai/cfo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days: d }) })
+      const res = await fetch('/api/ai/cfo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) })
       const j = await res.json()
       if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
       setData(j); setLoaded(true)
     } catch (e: any) { setError(e?.message || 'Ошибка') } finally { setLoading(false) }
   }
 
-  useEffect(() => { run(90) }, [])
+  useEffect(() => { run({ days: 90 }, 'd90') }, [])
 
   const ai = data?.ai
   const ex = data?.executive
 
   return (
     <div className="app-page-wide space-y-5 text-[#FAFAFA]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold"><Brain className="h-6 w-6 text-violet-400" /> AI Финдиректор</h1>
-          <p className={`mt-1 text-sm ${C.sub}`}>Где теряете деньги, где заработать больше и что делать сегодня.</p>
-        </div>
-        <div className="flex gap-2">
-          {[7, 30, 90, 365].map((d) => (
-            <button key={d} onClick={() => run(d)} disabled={loading}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${days === d ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
-              {d} дн
-            </button>
-          ))}
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold"><Brain className="h-6 w-6 text-violet-400" /> AI Финдиректор</h1>
+        <p className={`mt-1 text-sm ${C.sub}`}>
+          Где теряете деньги, где заработать больше и что делать сегодня.
+          {data ? <span className="ml-1 text-violet-300">· период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {[7, 30, 90, 365].map((d) => (
+          <button key={d} onClick={() => run({ days: d }, `d${d}`)} disabled={loading}
+            className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+            {d} дн
+          </button>
+        ))}
+        <select
+          value={sel.startsWith('m:') ? sel.slice(2) : ''}
+          onChange={(e) => { const v = e.target.value; if (v) run(monthRange(v), `m:${v}`) }}
+          disabled={loading}
+          className={`rounded-lg border ${C.border} bg-[#111113] px-3 py-1.5 text-sm ${C.sub} disabled:opacity-50`}
+        >
+          <option value="">Месяц…</option>
+          {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <div className="flex items-center gap-1">
+          <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm ${C.sub}`} />
+          <span className={C.sub}>—</span>
+          <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm ${C.sub}`} />
+          <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
+            className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+            Период
+          </button>
         </div>
       </div>
 
@@ -102,7 +143,7 @@ export default function AiCfoPage() {
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#A1A1AA]">
           <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
-          <p className="text-sm">Финансовый директор анализирует {days} дней…</p>
+          <p className="text-sm">Финансовый директор анализирует период…</p>
         </div>
       ) : !data || !ex ? null : (
         <>

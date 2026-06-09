@@ -29,6 +29,13 @@ function addDaysISO(iso: string, diff: number) {
   const t = dt.getTime() - dt.getTimezoneOffset() * 60_000
   return new Date(t).toISOString().slice(0, 10)
 }
+function daysBetweenISO(from: string, to: string) {
+  const [fy, fm, fd] = from.split('-').map(Number)
+  const [ty, tm, td] = to.split('-').map(Number)
+  const a = Date.UTC(fy, (fm || 1) - 1, fd || 1)
+  const b = Date.UTC(ty, (tm || 1) - 1, td || 1)
+  return Math.round((b - a) / 86_400_000) + 1
+}
 const n = (v: any) => Number(v || 0)
 const incomeOf = (r: any) => n(r.cash_amount) + n(r.kaspi_amount) + n(r.online_amount) + n(r.card_amount)
 const expenseOf = (r: any) => n(r.cash_amount) + n(r.kaspi_amount)
@@ -61,9 +68,23 @@ export async function POST(request: Request) {
     if (!hasAdminSupabaseCredentials()) return json({ error: 'supabase-unavailable' }, 500)
 
     const body = await request.json().catch(() => ({}))
-    const days = [7, 30, 90, 365].includes(Number(body?.days)) ? Number(body.days) : 90
-    const dateTo = body?.dateTo || todayISO()
-    const dateFrom = addDaysISO(dateTo, -(days - 1))
+    const isISO = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+
+    let dateFrom: string
+    let dateTo: string
+    let days: number
+    if (isISO(body?.dateFrom) && isISO(body?.dateTo) && body.dateFrom <= body.dateTo) {
+      // Явный период: конкретный месяц или произвольный диапазон
+      dateFrom = body.dateFrom
+      dateTo = body.dateTo
+      days = daysBetweenISO(dateFrom, dateTo)
+    } else {
+      // Пресет: последние N дней
+      days = [7, 30, 90, 365].includes(Number(body?.days)) ? Number(body.days) : 90
+      dateTo = body?.dateTo && isISO(body.dateTo) ? body.dateTo : todayISO()
+      dateFrom = addDaysISO(dateTo, -(days - 1))
+    }
+    // Предыдущий период такой же длины — непосредственно перед текущим
     const prevTo = addDaysISO(dateFrom, -1)
     const prevFrom = addDaysISO(prevTo, -(days - 1))
 
