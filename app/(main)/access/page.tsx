@@ -107,6 +107,8 @@ export default function AccessPage() {
   const [newPosName, setNewPosName] = useState('')
   const [newPosDesc, setNewPosDesc] = useState('')
   const [creatingPos, setCreatingPos] = useState(false)
+  const [newPosSeed, setNewPosSeed] = useState<'closed' | 'open' | 'copy_from'>('closed')
+  const [newPosCopyFrom, setNewPosCopyFrom] = useState('')
   const [editingPos, setEditingPos] = useState<Position | null>(null)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
@@ -203,13 +205,21 @@ export default function AccessPage() {
       const res = await fetch('/api/admin/positions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', name, description: newPosDesc.trim() || null }),
+        body: JSON.stringify({
+          action: 'create',
+          name,
+          description: newPosDesc.trim() || null,
+          seed: newPosSeed,
+          copy_from_role: newPosSeed === 'copy_from' ? newPosCopyFrom : undefined,
+        }),
       })
       const data = await res.json()
       if (data.ok) {
         setPositions(prev => [...prev, data.data])
         setNewPosName('')
         setNewPosDesc('')
+        setNewPosSeed('closed')
+        setNewPosCopyFrom('')
       } else {
         alert(data.error || 'Ошибка')
       }
@@ -523,12 +533,39 @@ export default function AccessPage() {
               />
               <button
                 onClick={handleCreatePosition}
-                disabled={!newPosName.trim() || creatingPos || posTableExists === false}
+                disabled={!newPosName.trim() || creatingPos || posTableExists === false || (newPosSeed === 'copy_from' && !newPosCopyFrom)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl text-sm text-emerald-300 font-semibold transition-colors disabled:opacity-40"
               >
                 {creatingPos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Создать
               </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500">Стартовые права:</span>
+              <select
+                value={newPosSeed}
+                onChange={e => setNewPosSeed(e.target.value as 'closed' | 'open' | 'copy_from')}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+              >
+                <option value="closed">Без прав (настрою сам)</option>
+                <option value="open">Полный доступ (все права)</option>
+                <option value="copy_from">Скопировать с роли…</option>
+              </select>
+              {newPosSeed === 'copy_from' && (
+                <select
+                  value={newPosCopyFrom}
+                  onChange={e => setNewPosCopyFrom(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">— выберите роль —</option>
+                  {allPositionNames.map(name => (
+                    <option key={name} value={name}>{BUILTIN_LABELS[name] ?? name}</option>
+                  ))}
+                </select>
+              )}
+              {newPosSeed === 'open' && (
+                <span className="text-xs text-amber-400/80">⚠ роль получит все 265 прав</span>
+              )}
             </div>
           </Card>
           )}
