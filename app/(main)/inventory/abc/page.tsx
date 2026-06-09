@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -260,20 +261,26 @@ export function AbcAnalysisPageContent() {
 
   return (
     <div className="app-page">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <PieChart className="h-6 w-6 text-emerald-400" />
-            ABC-анализ товаров
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Классификация товаров по вкладу в выручку
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Period selector */}
-          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+      <AdminPageHeader
+        title="ABC-анализ товаров"
+        description="Классификация товаров по вкладу в выручку"
+        icon={<PieChart className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        className="mb-6"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
+              <Download className="mr-2 h-4 w-4" />
+              Скачать Excel
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </>
+        }
+        toolbar={
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1 self-start">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -288,15 +295,8 @@ export function AbcAnalysisPageContent() {
               </button>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
-            Скачать Excel
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Summary cards */}
       {loading ? (

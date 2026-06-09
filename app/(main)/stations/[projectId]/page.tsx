@@ -3,11 +3,11 @@
 import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
-  ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
+  Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Settings, Loader2, CheckCircle2, ChevronDown, ChevronRight,
   AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers,
 } from 'lucide-react'
-import Link from 'next/link'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   Dialog,
   DialogContent,
@@ -1759,22 +1759,26 @@ function StationsPageContent() {
   return (
     <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : activeTab === 'catalog' ? 'app-page max-w-4xl space-y-4' : activeTab === 'settings' ? 'app-page max-w-2xl space-y-4' : 'app-page max-w-5xl space-y-6'}>
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <button
-          type="button"
-          title="Обновить данные с сервера"
-          onClick={() => void load({ silent: true })}
-          disabled={syncing || loading}
-          className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition disabled:opacity-40"
-        >
-          <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
-        </button>
-        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-2.5">
-          <Monitor className="h-6 w-6 text-cyan-300" />
-        </div>
+      <AdminPageHeader
+        title={projectName || 'Игровая зона'}
+        description="Зоны, станции, тарифы и аналитика точки"
+        icon={<Monitor className="h-5 w-5" />}
+        accent="amber"
+        backHref="/point-devices"
+        actions={
+          <button
+            type="button"
+            title="Обновить данные с сервера"
+            onClick={() => void load({ silent: true })}
+            disabled={syncing || loading}
+            className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition disabled:opacity-40"
+          >
+            <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+          </button>
+        }
+        toolbar={
+          <>
+            <div className="flex flex-wrap items-center gap-3">
         {/* Точка selector — shows individual companies within arena-enabled projects */}
         {(() => {
           // Flat list of (projectId, projectName, companyId, companyName)
@@ -1833,7 +1837,29 @@ function StationsPageContent() {
             Синхронизация…
           </span>
         )}
-      </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-0 border-b border-white/10">
+              {[
+                { id: 'manage', label: 'Управление', icon: Settings },
+                { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
+                { id: 'map', label: 'Карта', icon: Map },
+                { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
+                { id: 'settings', label: 'Настройки', icon: Paintbrush },
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id as any)}
+                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                >
+                  <Icon className="h-4 w-4" />{label}
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
 
       {/* Flash */}
       {flash && (
@@ -1842,25 +1868,6 @@ function StationsPageContent() {
           {flash.msg}
         </div>
       )}
-
-      {/* Tabs */}
-      <div className="flex gap-0 border-b border-white/10">
-        {[
-          { id: 'manage', label: 'Управление', icon: Settings },
-          { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
-          { id: 'map', label: 'Карта', icon: Map },
-          { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
-          { id: 'settings', label: 'Настройки', icon: Paintbrush },
-        ].map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id as any)}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-          >
-            <Icon className="h-4 w-4" />{label}
-          </button>
-        ))}
-      </div>
 
       <div className="space-y-4">
         {activeTab === 'manage' && (

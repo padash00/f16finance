@@ -4,7 +4,6 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  ArrowLeft,
   CheckCircle2,
   AlertCircle,
   ChevronRight,
@@ -19,6 +18,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
@@ -616,15 +616,14 @@ function ExpenseWizardPageContent() {
 
   return (
     <div className="app-page-tight max-w-3xl mx-auto py-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/expenses">
-          <Button variant="outline" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Новый расход</h1>
-          <p className="text-sm text-muted-foreground">Шаг {step} из 3</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Новый расход"
+        description={`Шаг ${step} из 3`}
+        icon={<Receipt className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/expenses"
+        className="mb-6"
+      />
 
       <div className="rounded-lg border bg-card p-4 mb-6">
         <div className="flex items-center gap-2 mb-3">

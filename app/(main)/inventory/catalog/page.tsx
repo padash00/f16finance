@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -663,51 +664,49 @@ export function CatalogPageContent() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Package className="w-6 h-6 text-primary" />
-            Каталог товаров
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {loading ? 'Загрузка...' : `${items.length} позиций в базе`}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {canExport && (
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
-              <Download className="w-3.5 h-3.5 mr-1.5" />
-              Экспорт Excel
-            </Button>
-          )}
-          {canBulkZeroStock && (
-            <Button variant="outline" size="sm" className="text-sky-700 border-sky-500/40" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase('') }}>
-              Обнулить остатки
-            </Button>
-          )}
-          {canBulkDeactivate && (
-            <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
-              Скрыть все в каталоге
-            </Button>
-          )}
-          {canBulkDeleteEmpty && (
-            <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
-              Удалить без остатков
-            </Button>
-          )}
-          {canBulkDeleteAll && (
-            <Button variant="outline" size="sm" className="text-destructive border-destructive/60 bg-destructive/5" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase('') }}>
-              Удалить весь каталог
-            </Button>
-          )}
-          {canCreate && (
-            <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Добавить товар
-            </Button>
-          )}
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Каталог товаров"
+        description={loading ? 'Загрузка...' : `${items.length} позиций в базе`}
+        icon={<Package className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            {canExport && (
+              <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                Экспорт Excel
+              </Button>
+            )}
+            {canBulkZeroStock && (
+              <Button variant="outline" size="sm" className="text-sky-700 border-sky-500/40" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase('') }}>
+                Обнулить остатки
+              </Button>
+            )}
+            {canBulkDeactivate && (
+              <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
+                Скрыть все в каталоге
+              </Button>
+            )}
+            {canBulkDeleteEmpty && (
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
+                Удалить без остатков
+              </Button>
+            )}
+            {canBulkDeleteAll && (
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/60 bg-destructive/5" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase('') }}>
+                Удалить весь каталог
+              </Button>
+            )}
+            {canCreate && (
+              <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Добавить товар
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* ── Summary cards ──────────────────────────────────────────────────── */}
       {!loading && items.length > 0 && (

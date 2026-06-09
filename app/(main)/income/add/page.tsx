@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, FormEvent, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft,
   Calendar,
   Wallet,
   CreditCard,
@@ -27,6 +26,7 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Company = {
   id: string
@@ -418,30 +418,14 @@ export default function AddIncomePage() {
   return (
     <>
         <div className="app-page-tight max-w-4xl">
-          {/* Хедер */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20 mb-6">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            
-            <div className="relative z-10 flex items-center gap-4">
-              <Link href="/income">
-                <Button variant="outline" size="icon" className="rounded-full border-gray-700 bg-gray-800/50 hover:bg-gray-700">
-                  <ArrowLeft className="w-5 h-5 text-gray-300" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-500/20 rounded-xl">
-                  <Brain className="w-8 h-8 text-purple-400" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Новая запись дохода
-                  </h1>
-                  <p className="text-sm text-gray-400">AI-помощник внесения выручки</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AdminPageHeader
+            title="Новая запись дохода"
+            description="AI-помощник внесения выручки"
+            icon={<Brain className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/income"
+            className="mb-6"
+          />
 
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm flex items-center gap-3">

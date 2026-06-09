@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/ui/app-modal'
@@ -1721,65 +1722,14 @@ export default function OperatorProfilePage() {
           )}
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => router.back()}
-                  className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5 text-gray-400" />
-                </button>
-                
-                {/* Avatar с загрузкой */}
-                <AvatarUpload
-                  operatorId={operatorId}
-                  currentAvatarUrl={profile?.photo_url || null}
-                  onUploadComplete={handleAvatarUpload}
-                  onError={setUploadError}
-                  canUpload={canAvatarUpload}
-                />
-
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    {getOperatorDisplayName({ ...operator, full_name: profile?.full_name })}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-3 mt-2">
-                    <span className="text-sm text-gray-400">{operator.short_name || operator.name || 'Нет короткого имени'}</span>
-                    <span className="w-1 h-1 rounded-full bg-gray-600" />
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      operator.is_active 
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
-                    }`}>
-                      {operator.is_active ? 'Активен' : 'Неактивен'}
-                    </span>
-                    {operatorAccount && (
-                      <>
-                        <span className="w-1 h-1 rounded-full bg-gray-600" />
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                          <Key className="w-3 h-3" />
-                          Аккаунт создан
-                        </span>
-                      </>
-                    )}
-                    {currentWork && (
-                      <>
-                        <span className="w-1 h-1 rounded-full bg-gray-600" />
-                        <span className="text-sm text-violet-400 flex items-center gap-1">
-                          <Briefcase className="w-3 h-3" />
-                          {currentWork.position} в {currentWork.company_name || 'компании'}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
+          <AdminPageHeader
+            title={getOperatorDisplayName({ ...operator, full_name: profile?.full_name })}
+            description={operator.short_name || operator.name || 'Профиль оператора'}
+            icon={<User className="h-5 w-5" />}
+            accent="amber"
+            backHref="/operators"
+            actions={
+              <>
                 {canCreateAccount && !isEditing && !operatorAccount && (
                   <Button
                     onClick={handleCreateAccount}
@@ -1835,9 +1785,42 @@ export default function OperatorProfilePage() {
                     </Button>
                   </>
                 )}
+              </>
+            }
+            toolbar={
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Avatar с загрузкой */}
+                <AvatarUpload
+                  operatorId={operatorId}
+                  currentAvatarUrl={profile?.photo_url || null}
+                  onUploadComplete={handleAvatarUpload}
+                  onError={setUploadError}
+                  canUpload={canAvatarUpload}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    operator.is_active
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                  }`}>
+                    {operator.is_active ? 'Активен' : 'Неактивен'}
+                  </span>
+                  {operatorAccount && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <Key className="w-3 h-3" />
+                      Аккаунт создан
+                    </span>
+                  )}
+                  {currentWork && (
+                    <span className="text-sm text-violet-400 flex items-center gap-1">
+                      <Briefcase className="w-3 h-3" />
+                      {currentWork.position} в {currentWork.company_name || 'компании'}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            }
+          />
 
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

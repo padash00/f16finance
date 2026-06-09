@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { ChevronLeft, Printer, RefreshCw, Loader2, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 
 type Location = {
@@ -162,78 +163,78 @@ export default function ShiftReportPage() {
 
       <div className="app-page max-w-5xl">
         {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
-              <BarChart3 className="h-8 w-8 text-purple-500" /> Отчёт по смене
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Итоги продаж за выбранную дату и смену
-            </p>
-          </div>
-
-          {/* Controls */}
-          <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Дата</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Смена</label>
-              <Card className="!flex-row !gap-0 !p-0.5 border-border bg-card self-start">
-                {(['', 'day', 'night'] as const).map((s) => (
-                  <Button
-                    key={s}
-                    variant={shift === s ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="text-xs px-3"
-                    onClick={() => setShift(s)}
-                  >
-                    {s === '' ? 'Все' : s === 'day' ? 'День' : 'Ночь'}
-                  </Button>
-                ))}
-              </Card>
-            </div>
-
-            {locations.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">Точка</label>
-                <select
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                >
-                  <option value="">Все точки</option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="flex items-end gap-2">
-              <Button onClick={loadReport} disabled={loading} size="sm" className="gap-1.5">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Загрузить
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
-                <Printer className="h-4 w-4" />
-                Печать
-              </Button>
-              <Link href="/shifts">
-                <Button variant="ghost" size="sm" className="gap-1.5">
-                  <ChevronLeft className="h-4 w-4" />
-                  Назад
+        <div className="mb-8">
+          <AdminPageHeader
+            title="Отчёт по смене"
+            description="Итоги продаж за выбранную дату и смену"
+            icon={<BarChart3 className="h-5 w-5" />}
+            accent="amber"
+            backHref="/shifts"
+            actions={
+              <>
+                <Button onClick={loadReport} disabled={loading} size="sm" className="gap-1.5">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Загрузить
                 </Button>
-              </Link>
-            </div>
-          </div>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4" />
+                  Печать
+                </Button>
+                <Link href="/shifts">
+                  <Button variant="ghost" size="sm" className="gap-1.5">
+                    <ChevronLeft className="h-4 w-4" />
+                    Назад
+                  </Button>
+                </Link>
+              </>
+            }
+            toolbar={
+              <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Дата</label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Смена</label>
+                  <Card className="!flex-row !gap-0 !p-0.5 border-border bg-card self-start">
+                    {(['', 'day', 'night'] as const).map((s) => (
+                      <Button
+                        key={s}
+                        variant={shift === s ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="text-xs px-3"
+                        onClick={() => setShift(s)}
+                      >
+                        {s === '' ? 'Все' : s === 'day' ? 'День' : 'Ночь'}
+                      </Button>
+                    ))}
+                  </Card>
+                </div>
+
+                {locations.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Точка</label>
+                    <select
+                      value={locationId}
+                      onChange={(e) => setLocationId(e.target.value)}
+                      className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      <option value="">Все точки</option>
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            }
+          />
         </div>
 
         {/* Error */}

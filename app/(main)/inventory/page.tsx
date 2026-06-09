@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { formatMoney } from '@/lib/core/format'
 import { InventoryLegacyRedirect } from './legacy-redirect'
 
@@ -1147,16 +1148,19 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
 
   return (
     <div className={inventoryView === 'overview' ? 'app-page max-w-[1680px] space-y-6' : 'app-page max-w-[1180px] space-y-6'}>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">{viewMeta.title}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{viewMeta.description}</p>
-        </div>
-        <Button type="button" variant="outline" className="gap-2" onClick={() => void loadData()} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Обновить
-        </Button>
-      </div>
+      <AdminPageHeader
+        title={viewMeta.title}
+        description={viewMeta.description}
+        icon={<Boxes className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <Button type="button" variant="outline" className="gap-2" onClick={() => void loadData()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Обновить
+          </Button>
+        }
+      />
 
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{success}</Card> : null}

@@ -4,6 +4,7 @@ import { ArrowRight, Building2, CreditCard, LayoutDashboard, Settings2, Users } 
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 const TENANT_LINKS = [
@@ -41,27 +42,18 @@ export default async function WorkspacePage() {
 
   return (
     <div className="app-page space-y-6">
-      <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.18),transparent_30%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              <Building2 className="h-3.5 w-3.5" />
-              Tenant workspace
-            </div>
-            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-              {hostOrg?.name || 'Организация'}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              Вы вошли в контур организации {hostOrg?.name || ''}. Этот поддомен работает отдельно от платформенного
-              кабинета и открывает только данные текущего клиента.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-slate-300">
+      <AdminPageHeader
+        title={hostOrg?.name || 'Организация'}
+        description="Поддомен организации — отдельный контур с данными только текущего клиента"
+        icon={<Building2 className="h-5 w-5" />}
+        accent="blue"
+        backHref="/"
+        actions={
+          <div className="rounded-full border border-white/10 bg-black/20 px-4 py-1.5 text-sm text-slate-300">
             {normalizedHost || hostOrg?.slug || 'tenant'}
           </div>
-        </div>
-      </Card>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {TENANT_LINKS.map((item) => {

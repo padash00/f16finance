@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type SessionInfo = {
   email: string | null
@@ -207,33 +208,32 @@ export default function ProfilePage() {
   return (
     <div className="app-page-tight space-y-6">
       {/* Шапка */}
-      <Card className="border-white/10 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white">
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/15">
-            <User className="h-8 w-8 text-violet-300" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold tracking-tight">{session.displayName || session.email}</h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              {session.roleLabel ? (
-                <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-0.5 text-xs font-medium text-violet-200">
-                  {session.roleLabel}
-                </span>
-              ) : null}
-              {session.activeOrganization ? (
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-0.5 text-xs text-slate-300">
-                  {session.activeOrganization.name}
-                </span>
-              ) : null}
-              {session.isSuperAdmin ? (
-                <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-0.5 text-xs font-medium text-amber-200">
-                  Супер-админ
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </Card>
+      <AdminPageHeader
+        title={session.displayName || session.email || 'Профиль'}
+        description="Личные данные, email и пароль"
+        icon={<User className="h-5 w-5" />}
+        accent="blue"
+        backHref="/"
+        actions={
+          <>
+            {session.roleLabel ? (
+              <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-0.5 text-xs font-medium text-violet-200">
+                {session.roleLabel}
+              </span>
+            ) : null}
+            {session.activeOrganization ? (
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-0.5 text-xs text-slate-300">
+                {session.activeOrganization.name}
+              </span>
+            ) : null}
+            {session.isSuperAdmin ? (
+              <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-0.5 text-xs font-medium text-amber-200">
+                Супер-админ
+              </span>
+            ) : null}
+          </>
+        }
+      />
 
       {/* Имя */}
       <Card className="border-white/10 bg-slate-950/70 p-6 text-white">

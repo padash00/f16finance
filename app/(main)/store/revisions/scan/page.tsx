@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
-import { ArrowLeft, Camera, Check, Loader2, Package, Search, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Loader2, Package, ScanLine, Search, X } from 'lucide-react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Item = { id: string; name: string; barcode?: string | null; unit?: string }
 type Balance = { location_id: string; item_id: string; quantity: number; item?: Item | null }
@@ -267,15 +268,13 @@ export default function ScanRevisionPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-3 pb-24">
-      <div className="flex items-center gap-3">
-        <Link href="/store/revisions" className="border border-white/10 p-2 text-zinc-400 hover:text-zinc-100">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="min-w-0">
-          <div className="font-mono text-base font-semibold uppercase tracking-tight text-zinc-100">Сканер-ревизия</div>
-          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-500">Считай товар камерой телефона</div>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Сканер-ревизия"
+        description="Считай товар камерой телефона"
+        icon={<ScanLine className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/store/revisions"
+      />
 
       {error ? <div className="border border-rose-500/40 bg-rose-500/[0.06] p-3 font-mono text-[12px] text-rose-300">{error}</div> : null}
 

@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { CalendarPlus } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
@@ -160,13 +162,15 @@ export default function AddShiftPage() {
   return (
     <>
         <div className="app-page-tight max-w-3xl">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Добавить смену
-          </h1>
-          <p className="text-muted-foreground mb-6">
-            Выбираешь любую будущую дату, компанию, смену и оператора — и
-            мы создаём одну запись в графике.
-          </p>
+          <div className="mb-6">
+            <AdminPageHeader
+              title="Добавить смену"
+              description="Создание одной записи в графике: дата, компания, смена и оператор"
+              icon={<CalendarPlus className="h-5 w-5" />}
+              accent="amber"
+              backHref="/shifts"
+            />
+          </div>
 
           <Card className="p-6 border-border bg-card neon-glow">
             <form onSubmit={handleSubmit} className="space-y-5">

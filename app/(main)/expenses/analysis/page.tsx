@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   RefreshCw,
-  ArrowLeft,
   TrendingUp,
   Wallet,
   PieChart as PieIcon,
@@ -181,44 +180,44 @@ export default function ExpensesDashboard() {
         <div className="app-page-wide space-y-8">
         
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-                 <Link href="/expenses" className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-1 transition-colors">
-                    <ArrowLeft className="w-4 h-4" /> Назад к журналу
-                 </Link>
-                 <h1 className="text-3xl font-bold tracking-tight">Дашборд расходов</h1>
-            </div>
-
-            <div className="flex flex-wrap gap-2 items-center bg-card p-1 rounded-lg border border-border/50">
-                <select 
-                    value={companyId} 
-                    onChange={e => setCompanyId(e.target.value)}
-                    className="bg-transparent text-sm h-8 px-2 outline-none border-r border-border/50 mr-2 min-w-[120px]"
-                >
-                    <option value="all">Все компании</option>
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-
-                {['week', 'month', 'year', 'all'].map((r) => (
-                    <button
-                        key={r}
-                        onClick={() => setRange(r as TimeRange)}
-                        className={`px-3 py-1 text-xs rounded-md transition-all ${
-                            range === r ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-secondary'
-                        }`}
+        <AdminPageHeader
+            title="Дашборд расходов"
+            description="Аналитика затрат по точкам и категориям"
+            icon={<TrendingUp className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/expenses"
+            toolbar={
+                <div className="flex flex-wrap gap-2 items-center bg-card p-1 rounded-lg border border-border/50 w-fit">
+                    <select
+                        value={companyId}
+                        onChange={e => setCompanyId(e.target.value)}
+                        className="bg-transparent text-sm h-8 px-2 outline-none border-r border-border/50 mr-2 min-w-[120px]"
                     >
-                        {r === 'week' && 'Неделя'}
-                        {r === 'month' && 'Месяц'}
-                        {r === 'year' && 'Год'}
-                        {r === 'all' && 'Всё время'}
-                    </button>
-                ))}
-                
-                <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={loadData}>
-                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}/>
-                </Button>
-            </div>
-        </div>
+                        <option value="all">Все компании</option>
+                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+
+                    {['week', 'month', 'year', 'all'].map((r) => (
+                        <button
+                            key={r}
+                            onClick={() => setRange(r as TimeRange)}
+                            className={`px-3 py-1 text-xs rounded-md transition-all ${
+                                range === r ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-secondary'
+                            }`}
+                        >
+                            {r === 'week' && 'Неделя'}
+                            {r === 'month' && 'Месяц'}
+                            {r === 'year' && 'Год'}
+                            {r === 'all' && 'Всё время'}
+                        </button>
+                    ))}
+
+                    <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={loadData}>
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}/>
+                    </Button>
+                </div>
+            }
+        />
 
         {/* --- BIG NUMBERS --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

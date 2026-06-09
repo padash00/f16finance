@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { ArrowLeft, Building2, FileText, Loader2, Plus, Receipt, Tag, Trash2, Wallet } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -307,20 +308,14 @@ export default function SupplierCardPage() {
 
   return (
     <div className="app-page max-w-[1600px] space-y-5">
-      <Link href="/store/suppliers" className="inline-flex items-center text-sm text-emerald-300 hover:text-emerald-200">
-        <ArrowLeft className="w-4 h-4 mr-1" /> К списку поставщиков
-      </Link>
-
-      <div className="flex items-start gap-4">
-        <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shrink-0">
-          <Building2 className="w-6 h-6 text-emerald-300" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-semibold">{supplier.organization_name || supplier.name}</h1>
-          {supplier.organization_name && supplier.organization_name !== supplier.name ? (
-            <p className="text-sm text-muted-foreground">{supplier.name}</p>
-          ) : null}
-          <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
+      <AdminPageHeader
+        title={supplier.organization_name || supplier.name}
+        description={supplier.organization_name && supplier.organization_name !== supplier.name ? supplier.name : 'Карточка поставщика'}
+        icon={<Building2 className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/store/suppliers"
+        toolbar={
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             {supplier.bin_iin ? <span>БИН/ИИН: <span className="font-mono">{supplier.bin_iin}</span></span> : null}
             {supplier.contact_name ? <span>Контакт: {supplier.contact_name}</span> : null}
             {supplier.phone ? <span>Тел: {supplier.phone}</span> : null}
@@ -331,8 +326,8 @@ export default function SupplierCardPage() {
               <span>COGS-категория: {supplier.preferred_expense_category_name}</span>
             ) : null}
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card> : null}

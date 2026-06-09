@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Bell, MessageSquare, Send, Bell as BellIcon } from 'lucide-react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 const EVENT_LABELS: Record<string, { label: string; subtitle?: string }> = {
   team_chat_message: { label: 'Сообщения в команд-чате', subtitle: 'Когда кто-то пишет в общем чате' },
@@ -73,17 +74,13 @@ export default function NotificationSettingsPage() {
 
   return (
     <div className="app-page-tight space-y-5">
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-amber-500/10 rounded-xl">
-          <Bell className="w-7 h-7 text-amber-300" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Уведомления</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Выбери что хочешь получать и как
-          </p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Уведомления"
+        description="Выбери что хочешь получать и как"
+        icon={<Bell className="h-5 w-5" />}
+        accent="blue"
+        backHref="/settings"
+      />
 
       {loading && <Card className="p-6 text-center text-muted-foreground text-sm">Загрузка...</Card>}
 
