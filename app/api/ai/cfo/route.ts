@@ -124,13 +124,17 @@ export async function POST(request: Request) {
     let revCur = 0, revPrev = 0, expCur = 0, expPrev = 0
     const catCur = new Map<string, number>()
     const catPrev = new Map<string, number>()
+    const salesDays = new Set<string>()
+    const expenseDays = new Set<string>()
+    const FOT_KEYS = ['зарплат', 'оклад', 'фот', 'преми', 'бонус', 'salary', ' зп']
+    let fotCur = 0
 
     for (const row of incR.data || []) {
       const v = incomeOf(row)
       if (!v) continue
       const cur = String(row.date) >= dateFrom
       const a = ensure(String(row.company_id))
-      if (cur) { a.revCur += v; revCur += v } else { a.revPrev += v; revPrev += v }
+      if (cur) { a.revCur += v; revCur += v; salesDays.add(String(row.date)) } else { a.revPrev += v; revPrev += v }
     }
     for (const row of expR.data || []) {
       const v = expenseOf(row)
@@ -138,8 +142,11 @@ export async function POST(request: Request) {
       const cur = String(row.date) >= dateFrom
       const a = ensure(String(row.company_id))
       const cat = String(row.category || 'Прочее')
-      if (cur) { a.expCur += v; expCur += v; catCur.set(cat, (catCur.get(cat) || 0) + v) }
-      else { a.expPrev += v; expPrev += v; catPrev.set(cat, (catPrev.get(cat) || 0) + v) }
+      if (cur) {
+        a.expCur += v; expCur += v; catCur.set(cat, (catCur.get(cat) || 0) + v); expenseDays.add(String(row.date))
+        const lc = cat.toLowerCase()
+        if (FOT_KEYS.some((k) => lc.includes(k))) fotCur += v
+      } else { a.expPrev += v; expPrev += v; catPrev.set(cat, (catPrev.get(cat) || 0) + v) }
     }
 
     const profitCur = revCur - expCur
@@ -181,28 +188,68 @@ export async function POST(request: Request) {
       .sort((a, b) => Math.abs(b.current - b.prev) - Math.abs(a.current - a.prev))
       .slice(0, 8)
 
-    const computed = { days, dateFrom, dateTo, prevFrom, prevTo, executive, companies: companyRows, ranking, expenseChanges: changes }
+    const salesCompleteness = days ? Math.min(100, (salesDays.size / days) * 100) : 0
+    const expenseCompleteness = days ? Math.min(100, (expenseDays.size / days) * 100) : 0
+    const dataQuality = {
+      percent: Math.round((salesCompleteness + expenseCompleteness) / 2),
+      daysInPeriod: days,
+      daysWithSales: salesDays.size,
+      salesCompleteness: r1(salesCompleteness),
+      daysWithExpenses: expenseDays.size,
+      expenseCompleteness: r1(expenseCompleteness),
+    }
+    const fotShare = revCur ? (fotCur / revCur) * 100 : 0
+
+    const computed = {
+      days, dateFrom, dateTo, prevFrom, prevTo,
+      executive,
+      fot: r0(fotCur),
+      fotShare: r1(fotShare),
+      companies: companyRows,
+      ranking,
+      expenseChanges: changes,
+      dataQuality,
+    }
 
     // ---- AI анализ ----
     const systemPrompt = [
-      'Ты — AI-CFO (виртуальный финансовый директор) с 30-летним опытом. Мыслишь как собственник. Цель — рост ЧИСТОЙ ПРИБЫЛИ.',
-      'Тебе дают УЖЕ ПОСЧИТАННЫЕ точные цифры (JSON). НЕ пересчитывай и НЕ выдумывай числа — используй данные как есть.',
-      'Твоя работа — АНАЛИЗ: причины, проблемы, возможности заработать, рекомендации, прогноз, риски.',
-      'Верни СТРОГО валидный JSON без markdown:',
+      'Ты — AI-CFO (виртуальный финансовый директор) с 30-летним опытом. Мыслишь как собственник бизнеса. Цель — рост ЧИСТОЙ ПРИБЫЛИ, не выручки.',
+      '',
+      'СТАТУСЫ ДОСТОВЕРНОСТИ (помечай каждый вывод):',
+      '[ФАКТ] — посчитано из предоставленных данных. [ОЦЕНКА] — проекция/прогноз на допущениях. [ГИПОТЕЗА] — данных не хватает: НЕ подставляй числа, скажи чего не хватает и что проверить.',
+      'Деньги округляй до целых тенге, проценты — до 1 знака.',
+      '',
+      'ФОРМУЛЫ (применяй к данным; чего нет во входных — помечай [ГИПОТЕЗА], не выдумывай):',
+      '- Прибыль = Выручка − Расходы. Маржа% = Прибыль/Выручка×100.',
+      '- Доля ФОТ% = ФОТ/Выручка×100 (дано fotShare). Ориентир: услуги/клубы 15–25%, общепит 25–35%. Рост доли при падающей выручке — сигнал.',
+      '- Точка безубыточности = Постоянные расходы / ставку марж. прибыли; Запас прочности% = (Выручка−Точка)/Выручка×100. Если нет деления расходов на постоянные/переменные — [ГИПОТЕЗА].',
+      '- EBITDA: амортизации в данных МСБ обычно нет → отметь «реальная прибыль ниже на износ оборудования» [ГИПОТЕЗА].',
+      '- Концентрация: доля одной компании/клиента в выручке. >30% = риск зависимости.',
+      '- Деньги ≠ прибыль; runway считай только если бизнес теряет деньги, иначе «вопрос не стоит».',
+      '- Темп роста% = (Тек−Прош)/Прош×100 (дельты уже даны).',
+      '',
+      'КАЧЕСТВО ДАННЫХ: используй dataQuality.percent из данных. ≥90% — выводы надёжны; 70–89% — есть пробелы (перечисли их, ограничь выводы); <70% — данные ненадёжны, глубокий анализ не делай, запроси недостающее.',
+      'ПОЛОСА УВЕРЕННОСТИ ПРОГНОЗА (band, НЕ выдуманный процент): high — ≥90 дней истории и стабильно; medium — 30–89 дней или есть аномалия; low — <30 дней или высокая волатильность.',
+      '',
+      'Тебе дают УЖЕ ПОСЧИТАННЫЕ точные цифры (JSON, статус [ФАКТ]). НЕ пересчитывай и НЕ выдумывай их.',
+      'Верни СТРОГО валидный JSON без markdown (в текстовых полях ставь статус-теги [ФАКТ]/[ОЦЕНКА]/[ГИПОТЕЗА]):',
       '{',
-      '"summary": "2-4 предложения: сколько заработано, главный источник прибыли, главная проблема, потенциал роста, уровень риска",',
-      '"problems": [{"title": "...", "cause": "...", "impact": "потери денег/последствие", "severity": "high|medium|low"}],',
-      '"opportunities": [{"title": "...", "action": "что сделать", "profit": "оценка прибыли ₸", "effort": "low|medium|high"}],',
-      '"recommendations": [{"title": "...", "expected": "ожидаемый результат", "priority": "high|medium|low"}],',
-      '"forecast": {"trend": "positive|neutral|negative", "text": "прогноз прибыли на 30 дней при текущем тренде", "warning": "предупреждение или null"},',
-      '"answers": {"where_losing": "где теряем деньги", "where_earn": "где заработать больше", "three_actions": ["...","...","..."], "best_company": "...", "worst_company": "...", "extra_profit": "сколько прибыли можно добавить ₸", "main_risk": "главный риск"}',
+      '"state": "состояние бизнеса, 2-3 предложения",',
+      '"dataQuality": {"percent": число, "band": "high|medium|low", "notes": ["что с полнотой данных"], "limitations": ["что ограничивает выводы"]},',
+      '"changes": [{"text": "что выросло/упало с цифрами", "status": "ФАКТ|ОЦЕНКА|ГИПОТЕЗА"}],',
+      '"rootCauses": [{"text": "корневая причина", "status": "..."}],',
+      '"risks": [{"risk": "...", "probability": "Высокая|Средняя|Низкая", "impact": "Высокое|Среднее|Низкое", "level": "critical|high|medium|low"}],',
+      '"opportunities": [{"title": "...", "action": "что сделать", "effect": "финэффект ₸/мес со знаком", "status": "..."}],',
+      '"actionPlan": {"today": ["..."], "week": ["..."], "month": ["..."]},',
+      '"forecast": {"band": "high|medium|low", "text": "прогноз прибыли на 30 дней при текущем тренде [ОЦЕНКА]", "warning": "предупреждение или null"},',
+      '"summary": {"where_losing": "где теряем деньги", "where_earn": "где заработать больше", "main_risk": "главный риск", "main_opportunity": "главная возможность", "extra_profit": "доп.прибыль ₸", "three_actions": ["...","...","..."]}',
       '}',
-      'Правила: 3-6 проблем, 3-6 возможностей, 3-5 рекомендаций. Конкретика и цифры из данных. Русский язык. Если данных мало — честно скажи в summary.',
+      'Правила: 3-6 изменений, 2-4 корневые причины, 3-5 рисков, 3-5 возможностей. Показывай расчёт в тексте где уместно. Конкретика и цифры. Язык собственника, без воды. Русский.',
     ].join('\n')
 
     const messages: AiMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Посчитанные финансы за ${days} дней (${dateFrom} — ${dateTo}), сравнение с предыдущими ${days} днями:\n\n${JSON.stringify(computed)}\n\nДай разбор в JSON.` },
+      { role: 'user', content: `Посчитанные финансы [ФАКТ] за ${days} дней (${dateFrom} — ${dateTo}), сравнение с предыдущим периодом такой же длины:\n\n${JSON.stringify(computed)}\n\nСделай полный аудит в JSON по структуре.` },
     ]
 
     let ai: any = null
@@ -210,9 +257,9 @@ export async function POST(request: Request) {
       const result = await generateAiText({ model: OPENAI_MODEL, maxTokens: 2500, messages })
       await logAiUsageSafe(access.supabase, { userId: access.user?.id || null, endpoint: '/api/ai/cfo', provider: result.provider, model: result.model, usage: result.usage })
       ai = parseJsonLoose(result.text)
-      if (!ai) ai = { summary: result.text, problems: [], opportunities: [], recommendations: [], forecast: null, answers: null }
+      if (!ai) ai = { state: result.text }
     } catch (e: any) {
-      ai = { error: e?.message || 'AI недоступен', summary: '', problems: [], opportunities: [], recommendations: [], forecast: null, answers: null }
+      ai = { error: e?.message || 'AI недоступен' }
     }
 
     return json({ ok: true, ...computed, ai })
