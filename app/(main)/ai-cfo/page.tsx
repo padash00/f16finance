@@ -25,7 +25,8 @@ type AI = {
   missedProfit?: Array<{ text: string; potential: string; status: string }>
   opportunities?: Array<{ title: string; action: string; effect: string; status: string }>
   actionPlan?: { today?: string[]; week?: string[]; month?: string[] }
-  forecast?: { band: string; text: string; warning: string | null } | null
+  forecast?: { band: string; text: string; base?: string; optimistic?: string; pessimistic?: string; warning: string | null } | null
+  scenarios?: Array<{ name: string; assumption: string; effect: string; note: string; status: string }>
   summary?: { where_losing: string; where_earn: string; main_risk: string; main_opportunity: string; extra_profit: string; three_actions: string[] } | null
   error?: string
 }
@@ -440,7 +441,34 @@ export default function AiCfoPage() {
                 <span className="text-[11px]" style={{ color: BAND[ai.forecast.band]?.c }}>уверенность: {BAND[ai.forecast.band]?.l || ai.forecast.band}</span>
               </h2>
               <p className="text-sm">{ai.forecast.text}</p>
+              {(ai.forecast.base || ai.forecast.optimistic || ai.forecast.pessimistic) ? (
+                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                  <div className={`rounded-lg border ${C.border} bg-black/20 p-3`}><p className="text-xs text-[#EF4444]">Пессимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.pessimistic || '—'}</p></div>
+                  <div className={`rounded-lg border ${C.border} bg-black/20 p-3`}><p className={`text-xs ${C.sub}`}>Базовый</p><p className="mt-0.5 font-semibold">{ai.forecast.base || '—'}</p></div>
+                  <div className={`rounded-lg border ${C.border} bg-black/20 p-3`}><p className="text-xs text-[#22C55E]">Оптимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.optimistic || '—'}</p></div>
+                </div>
+              ) : null}
               {ai.forecast.warning ? <p className="mt-2 flex items-center gap-1.5 text-xs text-[#F59E0B]"><AlertTriangle className="h-3.5 w-3.5" /> {ai.forecast.warning}</p> : null}
+            </div>
+          ) : null}
+
+          {/* Сценарии «что если» */}
+          {ai?.scenarios?.length ? (
+            <div>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Target className="h-4 w-4 text-violet-400" /> Сценарии «что если»</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {ai.scenarios.map((s, i) => (
+                  <div key={i} className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-semibold">{s.name}</h3>
+                      <Tag status={s.status} />
+                    </div>
+                    <p className="mt-1 text-lg font-bold" style={{ color: String(s.effect).includes('-') || String(s.effect).includes('−') ? '#EF4444' : '#22C55E' }}>{s.effect}</p>
+                    <p className={`mt-1 text-xs ${C.sub}`}>{s.assumption}</p>
+                    {s.note ? <p className={`mt-1 text-xs ${C.sub}`}>{s.note}</p> : null}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
