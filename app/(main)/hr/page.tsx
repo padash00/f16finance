@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { ArrowDown, ArrowLeft, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight, Download, ExternalLink, LayoutGrid, List, Loader2, MoreVertical, Pencil, Search, Square, TrendingUp, UserMinus, UserCheck, UserPlus, Users, WifiOff, X as XIcon } from 'lucide-react'
+import { ArrowDown, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight, Download, ExternalLink, LayoutGrid, List, Loader2, MoreVertical, Pencil, Search, Square, TrendingUp, UserMinus, UserCheck, UserPlus, Users, WifiOff, X as XIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import HireModal from './HireModal'
@@ -482,46 +482,36 @@ export default function HrPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-slate-900/40 p-6 border border-amber-500/20">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500 rounded-full blur-3xl opacity-15 pointer-events-none" />
-        <div className="absolute -bottom-10 -left-8 w-56 h-56 bg-amber-500 rounded-full blur-3xl opacity-10 pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <Link href="/dashboard">
-              <Button variant="outline" size="icon" className="border-white/20 bg-white/5 hover:bg-white/10">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2 text-white">
-                <Users className="w-6 h-6 text-amber-300" /> Кадры
-              </h1>
-              <p className="text-sm text-slate-300">Активные и уволенные сотрудники: операторы и администрация</p>
-            </div>
+      <AdminPageHeader
+        title="Кадры"
+        description="Активные и уволенные сотрудники: операторы и администрация"
+        icon={<Users className="h-5 w-5" />}
+        accent="amber"
+        backHref="/"
+        actions={
+          canHire ? (
+            <Button
+              onClick={() => setHireOpen(true)}
+              className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-lg shadow-amber-500/20 h-10 sm:h-auto sm:px-5"
+            >
+              <UserPlus className="w-4 h-4 mr-1.5" />
+              Нанять
+            </Button>
+          ) : null
+        }
+        toolbar={
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:max-w-md">
+            <Card className="px-3 py-2 border-emerald-500/25 bg-emerald-500/10">
+              <div className="text-[11px] uppercase tracking-wide text-emerald-300/90">Активные</div>
+              <div className="text-lg font-bold text-emerald-200">{counts.active}</div>
+            </Card>
+            <Card className="px-3 py-2 border-red-500/25 bg-red-500/10">
+              <div className="text-[11px] uppercase tracking-wide text-red-300/90">Уволенные</div>
+              <div className="text-lg font-bold text-red-200">{counts.dismissed}</div>
+            </Card>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              <Card className="px-3 py-2 border-emerald-500/25 bg-emerald-500/10">
-                <div className="text-[11px] uppercase tracking-wide text-emerald-300/90">Активные</div>
-                <div className="text-lg font-bold text-emerald-200">{counts.active}</div>
-              </Card>
-              <Card className="px-3 py-2 border-red-500/25 bg-red-500/10">
-                <div className="text-[11px] uppercase tracking-wide text-red-300/90">Уволенные</div>
-                <div className="text-lg font-bold text-red-200">{counts.dismissed}</div>
-              </Card>
-            </div>
-            {canHire && (
-              <Button
-                onClick={() => setHireOpen(true)}
-                className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-lg shadow-amber-500/20 h-10 sm:h-auto sm:px-5"
-              >
-                <UserPlus className="w-4 h-4 mr-1.5" />
-                Нанять
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       <HireModal open={hireOpen} onClose={() => setHireOpen(false)} onCreated={() => load()} />
 

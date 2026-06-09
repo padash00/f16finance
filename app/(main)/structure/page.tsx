@@ -18,6 +18,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -804,18 +805,13 @@ export default function StructurePage() {
   return (
     <>
         <div className="app-page-wide space-y-6">
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_32%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.3)] sm:p-8">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-4 inline-flex rounded-2xl bg-amber-400/10 p-4">
-                  <Network className="h-7 w-7 text-amber-300" />
-                </div>
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Структура команды</h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                  Здесь видно управленческую и операционную иерархию: кто отвечает за клуб в целом, кто ведёт маркетинг и кто является старшим по каждой точке.
-                </p>
-              </div>
-
+          <AdminPageHeader
+            title="Структура команды"
+            description="Управленческая и операционная иерархия: кто отвечает за клуб, кто ведёт маркетинг и кто старший по каждой точке."
+            icon={<Network className="h-5 w-5" />}
+            accent="amber"
+            backHref="/"
+            toolbar={
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Команда</div>
@@ -842,8 +838,8 @@ export default function StructurePage() {
                   <div className="mt-1 text-2xl font-semibold text-emerald-300">{operators.length}</div>
                 </div>
               </div>
-            </div>
-          </Card>
+            }
+          />
 
           {loading && staff.length === 0 ? (
             <Card className="border-white/10 bg-slate-950/65 p-8 text-white">

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
@@ -437,25 +438,14 @@ export default function AccessPage() {
           )}
 
           {/* Хедер */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600/20 via-teal-600/20 to-cyan-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl shadow-lg shadow-emerald-500/25">
-                  <Key className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Управление доступом
-                  </h1>
-                  <p className="text-gray-400 mt-1">Активные операторы ({operators.length})</p>
-                </div>
-              </div>
-
-              {/* Панель действий */}
-              <div className="flex flex-wrap gap-3 mt-6">
+          <AdminPageHeader
+            title="Управление доступом"
+            description={`Активные операторы (${operators.length})`}
+            icon={<Key className="h-5 w-5" />}
+            accent="amber"
+            backHref="/"
+            actions={
+              <>
                 {canResetPassword && (
                   <Button
                     onClick={resetAllPasswords}
@@ -511,14 +501,14 @@ export default function AccessPage() {
                 <Button
                   onClick={loadOperators}
                   variant="outline"
-                  className="border-white/10 bg-white/5 hover:bg-white/10 ml-auto"
+                  className="border-white/10 bg-white/5 hover:bg-white/10"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Обновить
                 </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
 
           {/* Статистика */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
