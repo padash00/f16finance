@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { ArchiveX, ArrowRight, History, Loader2, Package, RefreshCw, Search } from 'lucide-react'
 import Link from 'next/link'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -218,30 +219,27 @@ function StoreMovementsPageContent() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <History className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Журнал движений</h1>
-            <p className="truncate text-xs text-muted-foreground">Приёмки, выдачи, продажи, долги, возвраты и корректировки</p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Link href="/store/writeoffs">
-            <Button variant="outline" size="sm" className="h-9 gap-1.5">
-              <ArchiveX className="h-3.5 w-3.5" />
-              Списание
+      <AdminPageHeader
+        title="Журнал движений"
+        description="Приёмки, выдачи, продажи, долги, возвраты и корректировки"
+        icon={<History className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <Link href="/store/writeoffs">
+              <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <ArchiveX className="h-3.5 w-3.5" />
+                Списание
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+              Обновить
             </Button>
-          </Link>
-          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

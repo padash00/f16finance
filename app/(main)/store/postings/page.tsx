@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Item = {
   id: string
@@ -251,20 +252,18 @@ export default function StorePostingsPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-300">
-          <Upload className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold text-white">Оприходование</h1>
-          <p className="truncate text-xs text-muted-foreground">
-            Ручное добавление товара на склад или витрину без поставщика. Только для владельца и суперадмина.
-          </p>
-        </div>
-        <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
-          {role?.roleLabel || 'Владелец'}
-        </Badge>
-      </div>
+      <AdminPageHeader
+        title="Оприходование"
+        description="Ручное добавление товара на склад или витрину без поставщика. Только для владельца и суперадмина."
+        icon={<Upload className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={(
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+            {role?.roleLabel || 'Владелец'}
+          </Badge>
+        )}
+      />
 
       <Card className="border-amber-500/20 bg-amber-500/5">
         <CardContent className="p-4 flex items-start gap-3">

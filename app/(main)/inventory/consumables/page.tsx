@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Package2, RefreshCw } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -297,21 +298,19 @@ export function ConsumablesPageContent() {
 
   return (
     <div className="app-page-wide space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <Package2 className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Расходники</h1>
-            <p className="truncate text-xs text-muted-foreground">Нормы потребления и контроль остатков по точкам</p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleRefreshClick} disabled={loading}>
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Обновить
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Расходники"
+        description="Нормы потребления и контроль остатков по точкам"
+        icon={<Package2 className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleRefreshClick} disabled={loading}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+        }
+      />
 
       {error && <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">{error}</div>}
       {success && <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">{success}</div>}

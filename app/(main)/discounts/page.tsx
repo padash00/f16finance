@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -347,26 +348,26 @@ export default function DiscountsPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Tag className="h-6 w-6 text-blue-400" />
-            Скидки и промо
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Скидки, промокоды и акции</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          {can('discounts.create') && (
-            <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Создать скидку
+      <AdminPageHeader
+        title="Скидки и промокоды"
+        description="Скидки, промокоды и акции"
+        icon={<Tag className="h-5 w-5" />}
+        accent="blue"
+        backHref="/"
+        actions={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-          )}
-        </div>
-      </div>
+            {can('discounts.create') && (
+              <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
+                <Plus className="mr-2 h-4 w-4" />
+                Создать скидку
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">

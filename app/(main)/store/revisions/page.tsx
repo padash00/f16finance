@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClipboardCheck, ClipboardList, Loader2, Package, RefreshCw, ScanLine, ScanSearch, Search, Smartphone, Trash2 } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -675,58 +676,55 @@ export default function StoreRevisionsPage() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <ScanSearch className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Ревизии</h1>
-            <p className="truncate text-xs text-muted-foreground">Сверка фактических остатков с системой</p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
-            {(['all', 'warehouse', 'showcase'] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setScope(s)}
-                className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                {s === 'all' ? 'Все' : s === 'warehouse' ? 'Подсобка' : 'Витрина'}
-              </button>
-            ))}
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setFormSheetOpen(true)
-            }}
-            className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
-          >
-            <ClipboardCheck className="h-3.5 w-3.5" />
-            Новый акт
-          </Button>
-          <Button asChild size="sm" variant="outline" className="h-9 gap-1.5 border-amber-400/40 text-amber-300 hover:bg-amber-400/10">
-            <Link href="/store/revisions/scan">
-              <Smartphone className="h-3.5 w-3.5" />
-              Сканер с телефона
-            </Link>
-          </Button>
-          <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
-            <Link href="/store/audit">
-              <ClipboardList className="h-3.5 w-3.5" />
-              Аудит-акт
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Ревизии"
+        description="Сверка фактических остатков с системой"
+        icon={<ScanSearch className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+              {(['all', 'warehouse', 'showcase'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setScope(s)}
+                  className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {s === 'all' ? 'Все' : s === 'warehouse' ? 'Подсобка' : 'Витрина'}
+                </button>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setFormSheetOpen(true)
+              }}
+              className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
+            >
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              Новый акт
+            </Button>
+            <Button asChild size="sm" variant="outline" className="h-9 gap-1.5 border-amber-400/40 text-amber-300 hover:bg-amber-400/10">
+              <Link href="/store/revisions/scan">
+                <Smartphone className="h-3.5 w-3.5" />
+                Сканер с телефона
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="h-9 gap-1.5">
+              <Link href="/store/audit">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Аудит-акт
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

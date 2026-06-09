@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { isAbortError } from '@/lib/is-abort-error'
 import { SupplierDebtsWidget } from '@/components/store/supplier-debts-widget'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 const InventoryPageContent = dynamic(
   () => import('../inventory/page').then((m) => m.InventoryPageContent),
@@ -236,19 +237,15 @@ export default function StoreOverviewPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <section className="rounded-3xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_38%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
-              <Boxes className="h-3.5 w-3.5" />
-              Центр магазина
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold text-white">Склад, витрины и поток заявок в одном месте</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              Здесь видно, что заканчивается, сколько заявок ждут решения и куда перейти дальше: в приёмку, каталог,
-              ревизию или движение товара.
-            </p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <AdminPageHeader
+        title="Обзор магазина"
+        description="Что заканчивается, сколько заявок ждут решения и куда перейти дальше: приёмка, каталог, ревизия или движение товара."
+        icon={<Boxes className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        toolbar={
+          <>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <Input
                 value={filters.q}
                 onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
@@ -305,7 +302,7 @@ export default function StoreOverviewPage() {
               />
             </div>
             {(searching || searchResults.length > 0) && (
-              <div className="mt-3 rounded-2xl border border-white/10 bg-black/25 p-3">
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
                 <p className="text-xs text-slate-400">{searching ? 'Ищу по магазину...' : `Найдено: ${searchResults.length}`}</p>
                 <div className="mt-2 space-y-1">
                   {searchResults.slice(0, 8).map((row, idx) => (
@@ -321,8 +318,12 @@ export default function StoreOverviewPage() {
                 </div>
               </div>
             )}
-          </div>
+          </>
+        }
+      />
 
+      <section className="rounded-3xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_38%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="grid gap-2 sm:grid-cols-2 xl:w-[360px]">
             <Link
               href={withGlobalFilters('/store/requests')}

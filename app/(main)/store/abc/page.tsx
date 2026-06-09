@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -207,62 +208,59 @@ export default function StoreAbcPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <BarChart3 className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">ABC-анализ</h1>
-            <p className="truncate text-xs text-muted-foreground">
-              {tab === 'sales' ? `По продажам · ${period} дн` : 'По текущим запасам склада'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={exportCsv} disabled={filteredRows.length === 0}>
-            <Download className="h-3.5 w-3.5" />
-            CSV
-          </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load(tab, period)} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
-          <button
-            type="button"
-            onClick={() => setTab('sales')}
-            className={`rounded-lg px-3 py-1.5 text-sm transition ${tab === 'sales' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            По продажам
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('stock')}
-            className={`rounded-lg px-3 py-1.5 text-sm transition ${tab === 'stock' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            По запасам
-          </button>
-        </div>
-        {tab === 'sales' ? (
-          <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
-            {PERIODS.map((p) => (
+      <AdminPageHeader
+        title="ABC-анализ"
+        description={tab === 'sales' ? `По продажам · ${period} дн` : 'По текущим запасам склада'}
+        icon={<BarChart3 className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={exportCsv} disabled={filteredRows.length === 0}>
+              <Download className="h-3.5 w-3.5" />
+              CSV
+            </Button>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load(tab, period)} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+          </>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
               <button
-                key={p.value}
                 type="button"
-                onClick={() => setPeriod(p.value)}
-                className={`rounded-lg px-3 py-1.5 text-xs transition ${period === p.value ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setTab('sales')}
+                className={`rounded-lg px-3 py-1.5 text-sm transition ${tab === 'sales' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                {p.label}
+                По продажам
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setTab('stock')}
+                className={`rounded-lg px-3 py-1.5 text-sm transition ${tab === 'stock' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                По запасам
+              </button>
+            </div>
+            {tab === 'sales' ? (
+              <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
+                {PERIODS.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setPeriod(p.value)}
+                    className={`rounded-lg px-3 py-1.5 text-xs transition ${period === p.value ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        }
+      />
 
       {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div> : null}
 

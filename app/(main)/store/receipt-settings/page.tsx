@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { isAbortError } from '@/lib/is-abort-error'
 
 type Company = {
@@ -156,44 +157,39 @@ export default function ReceiptSettingsPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <Receipt className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Реквизиты чека ККМ</h1>
-            <p className="truncate text-xs text-muted-foreground">
-              Приказ Министра финансов РК №626 от 24.10.2025 (действует с 01.01.2026)
-            </p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-            <SelectTrigger className="h-9 min-w-[220px]">
-              <SelectValue placeholder="Выберите точку" />
-            </SelectTrigger>
-            <SelectContent>
-              {companies.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                  {c.code ? ` · ${c.code}` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={saving || loading || !settings}
-            className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Сохранить
-          </Button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Реквизиты чека ККМ"
+        description="Приказ Министра финансов РК №626 от 24.10.2025 (действует с 01.01.2026)"
+        icon={<Receipt className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+              <SelectTrigger className="h-9 min-w-[220px]">
+                <SelectValue placeholder="Выберите точку" />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                    {c.code ? ` · ${c.code}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={saving || loading || !settings}
+              className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              Сохранить
+            </Button>
+          </>
+        }
+      />
 
       {error ? (
         <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>

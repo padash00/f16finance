@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { AlertCircle, CheckCircle2, ClipboardList, History, Loader2, MoreHorizontal, PackageCheck, RefreshCw, Search, XCircle } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -526,55 +527,86 @@ function StoreRequestsPageContent() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <ClipboardList className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Заявки точек</h1>
-            <p className="truncate text-xs text-muted-foreground">Решения по пополнению витрин со склада</p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Link href="/store/requests-journal">
-            <Button variant="outline" size="sm" className="h-9 gap-1.5">
-              <History className="h-3.5 w-3.5" />
-              Журнал
-            </Button>
-          </Link>
-          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+      <AdminPageHeader
+        title="Заявки точек"
+        description="Решения по пополнению витрин со склада"
+        icon={<ClipboardList className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <Link href="/store/requests-journal">
               <Button variant="outline" size="sm" className="h-9 gap-1.5">
-                <MoreHorizontal className="h-3.5 w-3.5" />
-                Действия
+                <History className="h-3.5 w-3.5" />
+                Журнал
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Заявки</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={exportRequestsCsv}>
-                <ClipboardList className="h-4 w-4" />
-                Экспорт CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setSearchInput('')
-                  setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
-                }}
-              >
-                <XCircle className="h-4 w-4" />
-                Сбросить фильтры
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+            </Link>
+            <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  Действия
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Заявки</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={exportRequestsCsv}>
+                  <ClipboardList className="h-4 w-4" />
+                  Экспорт CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSearchInput('')
+                    setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
+                  }}
+                >
+                  <XCircle className="h-4 w-4" />
+                  Сбросить фильтры
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Поиск по точке, товару или комментарию"
+                className="h-9 pl-9"
+              />
+            </div>
+            <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
+              <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все статусы</SelectItem>
+                <SelectItem value="new">Новая</SelectItem>
+                <SelectItem value="approved_full">Одобрена полностью</SelectItem>
+                <SelectItem value="approved_partial">Одобрена частично</SelectItem>
+                <SelectItem value="issued">Выдана</SelectItem>
+                <SelectItem value="received">Получена</SelectItem>
+                <SelectItem value="rejected">Отклонена</SelectItem>
+                <SelectItem value="disputed">Спор</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={filters.actor}
+              onChange={(event) => setFilters({ actor: event.target.value })}
+              placeholder="Кто создавал/одобрял"
+              className="h-9 w-[220px]"
+            />
+            <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
+            <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
+          </div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -615,40 +647,6 @@ function StoreRequestsPageContent() {
           Обновление списка…
         </div>
       ) : null}
-
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Поиск по точке, товару или комментарию"
-            className="h-9 pl-9"
-          />
-        </div>
-        <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
-          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все статусы</SelectItem>
-            <SelectItem value="new">Новая</SelectItem>
-            <SelectItem value="approved_full">Одобрена полностью</SelectItem>
-            <SelectItem value="approved_partial">Одобрена частично</SelectItem>
-            <SelectItem value="issued">Выдана</SelectItem>
-            <SelectItem value="received">Получена</SelectItem>
-            <SelectItem value="rejected">Отклонена</SelectItem>
-            <SelectItem value="disputed">Спор</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          value={filters.actor}
-          onChange={(event) => setFilters({ actor: event.target.value })}
-          placeholder="Кто создавал/одобрял"
-          className="h-9 w-[220px]"
-        />
-        <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
-        <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
-      </div>
 
       {stats.pending > 0 && (
         <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">

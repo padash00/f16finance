@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -376,27 +377,69 @@ function StoreRequestsJournalPageContent() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <History className="h-5 w-5 text-amber-300" />
+      <AdminPageHeader
+        title="Журнал заявок"
+        description="История: создана → одобрена → выдана → получена"
+        icon={<History className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0} className="h-9 gap-1.5">
+              Экспорт CSV
+            </Button>
+          </>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Поиск: точка, товар, комментарий"
+                className="h-9 pl-9"
+              />
+            </div>
+            <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
+              <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все статусы</SelectItem>
+                <SelectItem value="new">Новая</SelectItem>
+                <SelectItem value="approved_full">Одобрена полностью</SelectItem>
+                <SelectItem value="approved_partial">Одобрена частично</SelectItem>
+                <SelectItem value="issued">Выдана</SelectItem>
+                <SelectItem value="received">Получена</SelectItem>
+                <SelectItem value="rejected">Отклонена</SelectItem>
+                <SelectItem value="disputed">Спор</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={filters.actor}
+              onChange={(event) => setFilters({ actor: event.target.value })}
+              placeholder="Кто создавал/одобрял"
+              className="h-9 w-[220px]"
+            />
+            <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
+            <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setSearchInput('')
+                setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
+              }}
+            >
+              Сбросить
+            </Button>
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Журнал заявок</h1>
-            <p className="truncate text-xs text-muted-foreground">История: создана → одобрена → выдана → получена</p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0} className="h-9 gap-1.5">
-            Экспорт CSV
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
@@ -433,51 +476,6 @@ function StoreRequestsJournalPageContent() {
           Обновление журнала…
         </div>
       ) : null}
-
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Поиск: точка, товар, комментарий"
-            className="h-9 pl-9"
-          />
-        </div>
-        <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
-          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все статусы</SelectItem>
-            <SelectItem value="new">Новая</SelectItem>
-            <SelectItem value="approved_full">Одобрена полностью</SelectItem>
-            <SelectItem value="approved_partial">Одобрена частично</SelectItem>
-            <SelectItem value="issued">Выдана</SelectItem>
-            <SelectItem value="received">Получена</SelectItem>
-            <SelectItem value="rejected">Отклонена</SelectItem>
-            <SelectItem value="disputed">Спор</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          value={filters.actor}
-          onChange={(event) => setFilters({ actor: event.target.value })}
-          placeholder="Кто создавал/одобрял"
-          className="h-9 w-[220px]"
-        />
-        <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
-        <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9"
-          onClick={() => {
-            setSearchInput('')
-            setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
-          }}
-        >
-          Сбросить
-        </Button>
-      </div>
 
       {/* Main table */}
       <Card className="overflow-hidden border-white/10 bg-card/70 p-0">

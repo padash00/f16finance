@@ -36,6 +36,7 @@ import { Label } from '@/components/ui/label'
 import { Search } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -302,60 +303,53 @@ export default function ShowcasePage() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <Store className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">
-              {showcase ? showcase.name : 'Витрина'}
-            </h1>
-            <p className="truncate text-xs text-muted-foreground">
-              {warehouse ? `Склад: ${warehouse.name}` : 'Склад не настроен'}
-            </p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {companies.length > 1 && (
-            <div className="relative">
-              <select
-                value={selectedCompanyId || ''}
-                onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
-              >
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            </div>
-          )}
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => { setShowReturnPanel(true); setShowRequestPanel(false) }}
-            disabled={balances.length === 0}
-            className="h-9 gap-1.5"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Вернуть на склад
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}
-            className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
-          >
-            <ClipboardList className="h-3.5 w-3.5" />
-            Запросить со склада
-          </Button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title={showcase ? showcase.name : 'Витрина'}
+        description={warehouse ? `Склад: ${warehouse.name}` : 'Склад не настроен'}
+        icon={<Store className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            {companies.length > 1 && (
+              <div className="relative">
+                <select
+                  value={selectedCompanyId || ''}
+                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                  className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setShowReturnPanel(true); setShowRequestPanel(false) }}
+              disabled={balances.length === 0}
+              className="h-9 gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Вернуть на склад
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}
+              className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              Запросить со склада
+            </Button>
+          </>
+        }
+      />
 
       {/* Stats strip */}
       <div className="grid grid-cols-3 gap-3">

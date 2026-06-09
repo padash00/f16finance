@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/tooltip'
 import { isAbortError } from '@/lib/is-abort-error'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 
@@ -728,54 +729,47 @@ export default function WarehousePage() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-            <Warehouse className="h-5 w-5 text-amber-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">
-              {warehouseLoc ? warehouseLoc.name : 'Склад'}
-            </h1>
-            <p className="truncate text-xs text-muted-foreground">
-              Итого = подсобка + витрина
-            </p>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {companies.length > 1 && (
-            <div className="relative">
-              <select
-                value={selectedCompanyId || ''}
-                onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
-              >
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            </div>
-          )}
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-          {canUploadBackroom && (
-            <Button variant="outline" size="sm" onClick={() => { setAddMode('warehouseFile'); setBackroomSheetOpen(true) }} className="h-9 gap-1.5">
-              <Boxes className="h-3.5 w-3.5" />
-              Файл подсобки
+      <AdminPageHeader
+        title={warehouseLoc ? warehouseLoc.name : 'Склад'}
+        description="Итого = подсобка + витрина"
+        icon={<Warehouse className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            {companies.length > 1 && (
+              <div className="relative">
+                <select
+                  value={selectedCompanyId || ''}
+                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                  className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Обновить
             </Button>
-          )}
-          {canEdit && (
-            <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
-              <PackagePlus className="h-3.5 w-3.5" />
-              Добавить товары
-            </Button>
-          )}
-        </div>
-      </div>
+            {canUploadBackroom && (
+              <Button variant="outline" size="sm" onClick={() => { setAddMode('warehouseFile'); setBackroomSheetOpen(true) }} className="h-9 gap-1.5">
+                <Boxes className="h-3.5 w-3.5" />
+                Файл подсобки
+              </Button>
+            )}
+            {canEdit && (
+              <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
+                <PackagePlus className="h-3.5 w-3.5" />
+                Добавить товары
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Stats strip */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">

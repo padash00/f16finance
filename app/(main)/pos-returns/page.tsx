@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Search, RotateCcw, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -212,23 +213,21 @@ export default function PosReturnsPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <RotateCcw className="h-6 w-6 text-amber-400" />
-            Возврат товара
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Оформление возврата по чеку
-          </p>
-        </div>
-        {(sale || result) && (
-          <Button variant="outline" size="sm" onClick={handleReset}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Новый возврат
-          </Button>
-        )}
-      </div>
+      <AdminPageHeader
+        title="Возврат товара"
+        description="Оформление возврата по чеку"
+        icon={<RotateCcw className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          (sale || result) ? (
+            <Button variant="outline" size="sm" onClick={handleReset}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Новый возврат
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Success Result */}
       {result && (

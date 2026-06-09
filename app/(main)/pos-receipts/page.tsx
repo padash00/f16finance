@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from 'lucide-react'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -334,22 +335,18 @@ function PosReceiptsPageContent() {
 
       <div className="app-page-wide space-y-6">
         {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Receipt className="h-6 w-6 text-emerald-400" />
-              История чеков
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">Просмотр и повторная печать чеков POS</p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => void load(page)} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-
-        {/* Filters */}
-        <Card className="mb-4">
-          <CardContent className="p-4">
+        <AdminPageHeader
+          title="История чеков"
+          description="Просмотр и повторная печать чеков POS"
+          icon={<Receipt className="h-5 w-5" />}
+          accent="emerald"
+          backHref="/"
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => void load(page)} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          }
+          toolbar={
             <div className="flex flex-wrap gap-3">
               {/* Date from */}
               <div className="flex flex-col gap-1 min-w-[140px]">
@@ -426,8 +423,8 @@ function PosReceiptsPageContent() {
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          }
+        />
 
         {/* Error */}
         {error && (

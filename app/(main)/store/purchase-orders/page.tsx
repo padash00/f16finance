@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
@@ -251,37 +252,36 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div className="app-page max-w-[1600px] space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 shrink-0">
-            <ClipboardList className="w-6 h-6 text-amber-300" />
+      <AdminPageHeader
+        title="Заявки поставщикам"
+        description="Заказы на закуп товара. Создавайте вручную, скоро — авто по остаткам."
+        icon={<ClipboardList className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={(
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Создать заявку
+          </Button>
+        )}
+        toolbar={(
+          <div className="flex flex-wrap gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
+            {(['all', 'draft', 'sent', 'received', 'cancelled'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                  statusFilter === s ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'
+                }`}
+              >
+                {s === 'all' ? 'Все' : STATUS_META[s].label} ({counts[s] || 0})
+              </button>
+            ))}
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold">Заявки поставщикам</h1>
-            <p className="text-sm text-muted-foreground">Заказы на закуп товара. Создавайте вручную, скоро — авто по остаткам.</p>
-          </div>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="w-4 h-4 mr-1" /> Создать заявку
-        </Button>
-      </div>
+        )}
+      />
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card> : null}
-
-      <div className="flex flex-wrap gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
-        {(['all', 'draft', 'sent', 'received', 'cancelled'] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              statusFilter === s ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'
-            }`}
-          >
-            {s === 'all' ? 'Все' : STATUS_META[s].label} ({counts[s] || 0})
-          </button>
-        ))}
-      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">

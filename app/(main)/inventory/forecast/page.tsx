@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCompanies } from '@/hooks/use-companies'
 import { isAbortError } from '@/lib/is-abort-error'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
@@ -152,49 +153,47 @@ export function InventoryForecastPageContent() {
 
   return (
     <div className="app-page-wide space-y-4">
-      <div className="flex flex-wrap items-center gap-3 md:items-start md:justify-between">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
-            <PackageSearch className="h-5 w-5 text-emerald-300" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-foreground">Прогноз остатков</h1>
-            <p className="truncate text-xs text-muted-foreground">Основано на продажах за последние 30 дней</p>
-          </div>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
-          {companies.length > 0 && (
-            <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
-              <SelectTrigger className="h-9 w-[180px]">
-                <SelectValue placeholder="Все компании" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">Все компании</SelectItem>
-                {companies.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {locations.length > 0 && (
-            <Select value={locationId || '__all'} onValueChange={v => setLocationId(v === '__all' ? '' : v)}>
-              <SelectTrigger className="h-9 w-[180px]">
-                <SelectValue placeholder="Все локации" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">Все локации</SelectItem>
-                {locations.map(l => (
-                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Прогноз остатков"
+        description="Основано на продажах за последние 30 дней"
+        icon={<PackageSearch className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <>
+            {companies.length > 0 && (
+              <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
+                <SelectTrigger className="h-9 w-[180px]">
+                  <SelectValue placeholder="Все компании" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">Все компании</SelectItem>
+                  {companies.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {locations.length > 0 && (
+              <Select value={locationId || '__all'} onValueChange={v => setLocationId(v === '__all' ? '' : v)}>
+                <SelectTrigger className="h-9 w-[180px]">
+                  <SelectValue placeholder="Все локации" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">Все локации</SelectItem>
+                  {locations.map(l => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+          </>
+        }
+      />
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

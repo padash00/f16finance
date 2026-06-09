@@ -6,6 +6,7 @@ import { ArrowRight, Building2, Loader2, Search } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { formatMoney } from '@/lib/core/format'
 
 type Supplier = {
@@ -74,25 +75,24 @@ export default function SuppliersListPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-          <Building2 className="w-6 h-6 text-emerald-300" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold">Поставщики</h1>
-          <p className="text-sm text-muted-foreground">Все поставщики, обороты, долги и алиасы</p>
-        </div>
-      </div>
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск по названию или БИН/ИИН..."
-          className="pl-9"
-        />
-      </div>
+      <AdminPageHeader
+        title="Поставщики"
+        description="Все поставщики, обороты, долги и алиасы"
+        icon={<Building2 className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        toolbar={(
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск по названию или БИН/ИИН..."
+              className="pl-9"
+            />
+          </div>
+        )}
+      />
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Boxes, MoreHorizontal, RefreshCw, Store } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -251,17 +252,13 @@ export default function StoreAnalyticsPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-          <Store className="h-5 w-5 text-amber-300" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-semibold text-foreground">Аналитика точек</h1>
-          <p className="truncate text-xs text-muted-foreground">
-            Приход на витрины, продажи, долги, возвраты и риски по остаткам.
-          </p>
-        </div>
-        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+      <AdminPageHeader
+        title="Аналитика точек"
+        description="Приход на витрины, продажи, долги, возвраты и риски по остаткам."
+        icon={<Store className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 gap-1.5">
@@ -278,25 +275,26 @@ export default function StoreAnalyticsPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-        <button
-          type="button"
-          onClick={() => setTab('showcase')}
-          className={`rounded-lg px-3 py-2 text-sm ${tab === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}
-        >
-          Витрина (продажи)
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('warehouse')}
-          className={`rounded-lg px-3 py-2 text-sm ${tab === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}
-        >
-          Склад (запасы)
-        </button>
-      </div>
+        }
+        toolbar={
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            <button
+              type="button"
+              onClick={() => setTab('showcase')}
+              className={`rounded-lg px-3 py-2 text-sm ${tab === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+            >
+              Витрина (продажи)
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('warehouse')}
+              className={`rounded-lg px-3 py-2 text-sm ${tab === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+            >
+              Склад (запасы)
+            </button>
+          </div>
+        }
+      />
 
       {error ? (
         <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
