@@ -1,135 +1,280 @@
 'use client'
 
-import { useState } from 'react'
-import { Brain, Loader2, TrendingUp, AlertTriangle, ShieldAlert, Sparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowDownRight, ArrowUpRight, Brain, Loader2, AlertTriangle, ShieldAlert, TrendingUp, Lightbulb, Target } from 'lucide-react'
 
-type Card = {
-  severity: 'good' | 'warn' | 'risk'
-  title: string
-  finding: string
-  root_cause: string
-  recommendation: string
+type Exec = {
+  revenue: number; revenueDeltaPct: number
+  expenses: number; expensesDeltaPct: number
+  profit: number; profitDeltaPct: number
+  margin: number; marginDeltaPp: number
+  cashflow: number
 }
-type Digest = {
-  summary: string
-  headline_metric: { label: string; value: string } | null
-  cards: Card[]
+type Company = { name: string; revenue: number; expenses: number; profit: number; margin: number; profitShare: number; revenueDeltaPct: number; profitDeltaPct: number }
+type Ranking = { profitLeader: string | null; worst: string | null; efficiencyLeader: string | null; growthLeader: string | null } | null
+type Change = { label: string; current: number; prev: number; deltaPct: number }
+type AI = {
+  summary?: string
+  problems?: Array<{ title: string; cause: string; impact: string; severity: string }>
+  opportunities?: Array<{ title: string; action: string; profit: string; effort: string }>
+  recommendations?: Array<{ title: string; expected: string; priority: string }>
+  forecast?: { trend: string; text: string; warning: string | null } | null
+  answers?: {
+    where_losing: string; where_earn: string; three_actions: string[]
+    best_company: string; worst_company: string; extra_profit: string; main_risk: string
+  } | null
+  error?: string
+}
+type Resp = { days: number; dateFrom: string; dateTo: string; executive: Exec; companies: Company[]; ranking: Ranking; expenseChanges: Change[]; ai: AI }
+
+const fmt = (v: number) => new Intl.NumberFormat('ru-RU').format(Math.round(v || 0))
+const C = { card: 'bg-[#111113]', border: 'border-[#27272A]', sub: 'text-[#A1A1AA]' }
+
+function Delta({ value, goodWhenUp = true, pp = false }: { value: number; goodWhenUp?: boolean; pp?: boolean }) {
+  if (value === 0) return <span className="text-[#A1A1AA] text-xs">0%</span>
+  const up = value > 0
+  const good = up === goodWhenUp
+  const color = good ? '#22C55E' : '#EF4444'
+  const Icon = up ? ArrowUpRight : ArrowDownRight
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs font-medium" style={{ color }}>
+      <Icon className="h-3 w-3" />
+      {Math.abs(value).toFixed(1)}{pp ? ' п.п.' : '%'}
+    </span>
+  )
 }
 
-const SEV: Record<string, { border: string; bg: string; text: string; icon: typeof TrendingUp; label: string }> = {
-  good: { border: 'border-emerald-500/25', bg: 'bg-emerald-500/[0.05]', text: 'text-emerald-300', icon: TrendingUp, label: 'Хорошо' },
-  warn: { border: 'border-amber-500/25', bg: 'bg-amber-500/[0.05]', text: 'text-amber-300', icon: AlertTriangle, label: 'Внимание' },
-  risk: { border: 'border-rose-500/25', bg: 'bg-rose-500/[0.05]', text: 'text-rose-300', icon: ShieldAlert, label: 'Риск' },
+function Metric({ label, value, unit = '₸', delta, big = false }: { label: string; value: number; unit?: string; delta?: React.ReactNode; big?: boolean }) {
+  return (
+    <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+      <p className={`text-xs ${C.sub}`}>{label}</p>
+      <p className={`mt-1 font-bold text-[#FAFAFA] ${big ? 'text-3xl' : 'text-2xl'}`}>{fmt(value)} {unit}</p>
+      {delta ? <div className="mt-1">{delta}</div> : null}
+    </div>
+  )
 }
+
+const SEV: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#3B82F6' }
+const SEV_LABEL: Record<string, string> = { high: 'Критично', medium: 'Внимание', low: 'Низкий' }
+const PRIO_LABEL: Record<string, string> = { high: 'Высокий', medium: 'Средний', low: 'Низкий' }
 
 export default function AiCfoPage() {
-  const [digest, setDigest] = useState<Digest | null>(null)
+  const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [period, setPeriod] = useState(30)
+  const [days, setDays] = useState(90)
+  const [loaded, setLoaded] = useState(false)
 
-  const run = async (days: number) => {
-    setLoading(true)
-    setError(null)
-    setPeriod(days)
+  const run = async (d: number) => {
+    setLoading(true); setError(null); setDays(d)
     try {
-      const to = new Date()
-      const from = new Date(to.getTime() - (days - 1) * 86400000)
-      const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-      const res = await fetch('/api/ai/cfo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom: iso(from), dateTo: iso(to) }),
-      })
+      const res = await fetch('/api/ai/cfo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days: d }) })
       const j = await res.json()
-      if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка генерации')
-      setDigest(j.digest || null)
-    } catch (e: any) {
-      setError(e?.message || 'Ошибка')
-    } finally {
-      setLoading(false)
-    }
+      if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
+      setData(j); setLoaded(true)
+    } catch (e: any) { setError(e?.message || 'Ошибка') } finally { setLoading(false) }
   }
 
+  useEffect(() => { run(90) }, [])
+
+  const ai = data?.ai
+  const ex = data?.executive
+
   return (
-    <div className="app-page-wide space-y-6 text-white">
+    <div className="app-page-wide space-y-5 text-[#FAFAFA]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <Brain className="h-6 w-6 text-violet-400" /> AI Финдиректор
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">Разбор финансов: что произошло, почему и что делать.</p>
+          <h1 className="flex items-center gap-2 text-2xl font-bold"><Brain className="h-6 w-6 text-violet-400" /> AI Финдиректор</h1>
+          <p className={`mt-1 text-sm ${C.sub}`}>Где теряете деньги, где заработать больше и что делать сегодня.</p>
         </div>
         <div className="flex gap-2">
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              onClick={() => run(d)}
-              disabled={loading}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${
-                period === d && digest ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : 'border-white/10 text-slate-300 hover:bg-white/[0.04]'
-              }`}
-            >
+          {[7, 30, 90, 365].map((d) => (
+            <button key={d} onClick={() => run(d)} disabled={loading}
+              className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${days === d ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
               {d} дн
             </button>
           ))}
         </div>
       </div>
 
-      {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+      {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-400">
+      {loading && !loaded ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#A1A1AA]">
           <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
-          <p className="text-sm">Анализирую финансы за {period} дней…</p>
+          <p className="text-sm">Финансовый директор анализирует {days} дней…</p>
         </div>
-      ) : !digest ? (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-10 text-center">
-          <Sparkles className="mx-auto mb-3 h-8 w-8 text-violet-400" />
-          <p className="text-sm text-slate-400">Выберите период выше — AI разберёт доходы, расходы, маржу и риски.</p>
-        </div>
-      ) : (
+      ) : !data || !ex ? null : (
         <>
-          {digest.summary ? (
+          {/* ЭКРАН 1 — EXECUTIVE SUMMARY */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <Metric label="Прибыль" value={ex.profit} delta={<Delta value={ex.profitDeltaPct} />} big />
+            <Metric label="Выручка" value={ex.revenue} delta={<Delta value={ex.revenueDeltaPct} />} />
+            <Metric label="Маржа" value={ex.margin} unit="%" delta={<Delta value={ex.marginDeltaPp} pp />} />
+            <Metric label="Расходы" value={ex.expenses} delta={<Delta value={ex.expensesDeltaPct} goodWhenUp={false} />} />
+            <Metric label="Денежный поток" value={ex.cashflow} delta={<Delta value={ex.profitDeltaPct} />} />
+          </div>
+
+          {/* ЭКРАН 2 — AI CFO SUMMARY */}
+          {ai?.summary ? (
             <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.05] p-5">
-              <p className="text-sm leading-relaxed text-violet-100">{digest.summary}</p>
-              {digest.headline_metric ? (
-                <div className="mt-3 border-t border-white/10 pt-3 text-sm">
-                  <span className="text-slate-400">{digest.headline_metric.label}: </span>
-                  <b className="text-white">{digest.headline_metric.value}</b>
-                </div>
+              <p className="text-[15px] leading-relaxed text-[#FAFAFA]">{ai.summary}</p>
+            </div>
+          ) : null}
+
+          {/* Ключевые ответы */}
+          {ai?.answers ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+                <p className="text-xs font-medium text-[#EF4444]">Где теряем деньги</p>
+                <p className="mt-1 text-sm">{ai.answers.where_losing}</p>
+              </div>
+              <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+                <p className="text-xs font-medium text-[#22C55E]">Где заработать больше</p>
+                <p className="mt-1 text-sm">{ai.answers.where_earn}</p>
+                {ai.answers.extra_profit ? <p className="mt-1 text-xs text-[#22C55E]">+{ai.answers.extra_profit}</p> : null}
+              </div>
+              <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+                <p className="text-xs font-medium text-[#F59E0B]">Главный риск</p>
+                <p className="mt-1 text-sm">{ai.answers.main_risk}</p>
+              </div>
+            </div>
+          ) : null}
+
+          {/* 3 действия сейчас */}
+          {ai?.answers?.three_actions?.length ? (
+            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Target className="h-4 w-4 text-violet-400" /> 3 действия прямо сейчас</h2>
+              <ol className="space-y-2">
+                {ai.answers.three_actions.map((a, i) => (
+                  <li key={i} className="flex gap-2 text-sm"><span className="text-violet-400">{i + 1}.</span>{a}</li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+
+          {/* ЭКРАН 3-4 — КОМПАНИИ + РЕЙТИНГ */}
+          {data.companies.length > 0 ? (
+            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">Компании</h2>
+                {data.ranking ? (
+                  <div className="flex flex-wrap gap-1.5 text-[11px]">
+                    {data.ranking.profitLeader ? <span className="rounded-md bg-[#22C55E]/10 px-2 py-0.5 text-[#22C55E]">🏆 Прибыль: {data.ranking.profitLeader}</span> : null}
+                    {data.ranking.efficiencyLeader ? <span className="rounded-md bg-[#3B82F6]/10 px-2 py-0.5 text-[#3B82F6]">⚡ Маржа: {data.ranking.efficiencyLeader}</span> : null}
+                    {data.ranking.worst ? <span className="rounded-md bg-[#EF4444]/10 px-2 py-0.5 text-[#EF4444]">⚠ Слабая: {data.ranking.worst}</span> : null}
+                  </div>
+                ) : null}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {data.companies.map((c) => (
+                  <div key={c.name} className={`rounded-lg border ${C.border} bg-black/20 p-4`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">{c.name}</span>
+                      <span className={`text-xs ${C.sub}`}>{c.profitShare}% прибыли</span>
+                    </div>
+                    <p className="mt-2 text-2xl font-bold">{fmt(c.profit)} ₸</p>
+                    <div className="mt-0.5"><Delta value={c.profitDeltaPct} /></div>
+                    <div className={`mt-2 flex justify-between border-t ${C.border} pt-2 text-xs ${C.sub}`}>
+                      <span>Выручка {fmt(c.revenue)}</span>
+                      <span>Маржа {c.margin}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* ЭКРАН 5 — ЧТО ИЗМЕНИЛОСЬ (расходы) */}
+          {data.expenseChanges.length > 0 ? (
+            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+              <h2 className="mb-3 text-sm font-semibold">Что изменилось в расходах</h2>
+              <div className="space-y-1.5">
+                {data.expenseChanges.map((ch) => (
+                  <div key={ch.label} className="flex items-center justify-between text-sm">
+                    <span className={C.sub}>{ch.label}</span>
+                    <span className="flex items-center gap-3">
+                      <span>{fmt(ch.current)} ₸</span>
+                      <Delta value={ch.deltaPct} goodWhenUp={false} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* ЭКРАН 6 — ТОП ПРОБЛЕМ */}
+          {ai?.problems?.length ? (
+            <div>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldAlert className="h-4 w-4 text-[#EF4444]" /> Топ проблем</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {ai.problems.map((p, i) => (
+                  <div key={i} className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ background: SEV[p.severity] || '#F59E0B' }} />
+                      <span className="text-[11px]" style={{ color: SEV[p.severity] || '#F59E0B' }}>{SEV_LABEL[p.severity] || p.severity}</span>
+                    </div>
+                    <h3 className="font-semibold">{p.title}</h3>
+                    <p className={`mt-1 text-xs ${C.sub}`}>Причина: {p.cause}</p>
+                    <p className="mt-1 text-xs text-[#EF4444]">{p.impact}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* ЭКРАН 7 — ТОП ВОЗМОЖНОСТЕЙ */}
+          {ai?.opportunities?.length ? (
+            <div>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-[#22C55E]" /> Возможности заработать</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {ai.opportunities.map((o, i) => (
+                  <div key={i} className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+                    <h3 className="font-semibold">{o.title}</h3>
+                    <p className={`mt-1 text-xs ${C.sub}`}>{o.action}</p>
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-[#22C55E]">{o.profit}</span>
+                      <span className={C.sub}>сложность: {o.effort}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* ЭКРАН 8 — ПРОГНОЗ */}
+          {ai?.forecast ? (
+            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><TrendingUp className="h-4 w-4 text-violet-400" /> Прогноз</h2>
+              <p className="text-sm">{ai.forecast.text}</p>
+              {ai.forecast.warning ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-[#F59E0B]"><AlertTriangle className="h-3.5 w-3.5" /> {ai.forecast.warning}</p>
               ) : null}
             </div>
           ) : null}
 
-          {digest.cards.length === 0 ? (
-            <p className="text-sm text-slate-500">AI не вернул структурированных карточек — см. сводку выше.</p>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {digest.cards.map((c, i) => {
-                const sev = SEV[c.severity] || SEV.warn
-                const Icon = sev.icon
-                return (
-                  <div key={i} className={`rounded-xl border ${sev.border} ${sev.bg} p-4`}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <Icon className={`h-4 w-4 ${sev.text}`} />
-                      <span className={`text-[11px] font-medium uppercase ${sev.text}`}>{sev.label}</span>
+          {/* ЭКРАН 10 — РЕКОМЕНДАЦИИ */}
+          {ai?.recommendations?.length ? (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold">Рекомендации</h2>
+              <div className="space-y-2">
+                {ai.recommendations.map((rec, i) => (
+                  <div key={i} className={`flex items-start justify-between gap-3 rounded-xl border ${C.border} ${C.card} p-4`}>
+                    <div>
+                      <h3 className="font-semibold">{rec.title}</h3>
+                      <p className={`mt-0.5 text-xs ${C.sub}`}>{rec.expected}</p>
                     </div>
-                    <h3 className="mb-1.5 font-semibold text-white">{c.title}</h3>
-                    <p className="text-sm text-slate-300">{c.finding}</p>
-                    {c.root_cause ? (
-                      <p className="mt-2 text-xs text-slate-400"><span className="text-slate-500">Причина: </span>{c.root_cause}</p>
-                    ) : null}
-                    {c.recommendation ? (
-                      <p className="mt-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-xs text-slate-200">
-                        <span className="text-violet-300">→ </span>{c.recommendation}
-                      </p>
-                    ) : null}
+                    <span className="shrink-0 rounded-md px-2 py-0.5 text-[11px]" style={{ background: `${SEV[rec.priority] || '#3B82F6'}1a`, color: SEV[rec.priority] || '#3B82F6' }}>
+                      {PRIO_LABEL[rec.priority] || rec.priority}
+                    </span>
                   </div>
-                )
-              })}
+                ))}
+              </div>
             </div>
-          )}
+          ) : null}
+
+          {loading ? <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-violet-400" /></div> : null}
+          {ai?.error ? <p className="text-xs text-[#F59E0B]">AI-анализ недоступен ({ai.error}), но цифры посчитаны.</p> : null}
         </>
       )}
     </div>
