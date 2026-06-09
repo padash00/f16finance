@@ -87,6 +87,7 @@ export const navSections: NavSection[] = [
       { href: '/dashboard', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
       { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/forecast', label: 'AI Прогноз', icon: Radar, note: 'Прогноз 30/60/90 дней', badge: 'AI', badgeColor: 'purple', isNew: true },
+      { href: '/ai-cfo', label: 'AI Финдиректор', icon: Briefcase, note: 'Карточки: вывод → причина → действие', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/goals', label: 'Цели и план', icon: Target, note: 'Плановые показатели', badge: 'new', badgeColor: 'blue' },
       { href: '/reports', label: 'Отчеты', icon: BarChart3, note: 'Сводные метрики' },
       { href: '/reports/monthly', label: 'Ежемесячный отчёт', icon: FileSpreadsheet, note: 'Бухгалтерия и налоги' },
