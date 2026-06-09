@@ -485,21 +485,48 @@ function PageRow({
 }) {
   const allCapIds = page.capabilities.map((c) => c.id)
   const effectivelyCollapsed = forceExpand ? false : collapsed
+  // Право «просмотр страницы» = видимость страницы для роли (если есть в каталоге).
+  const viewCapId = `${page.id}.view`
+  const hasViewCap = page.capabilities.some((c) => c.id === viewCapId)
 
   return (
     <div className="border-b border-white/5 last:border-b-0">
-      <button
-        onClick={onToggleCollapse}
-        className="flex w-full items-center justify-between gap-2 px-6 py-2 text-left transition hover:bg-white/5"
-      >
-        <div className="flex items-center gap-2">
+      <div className="flex w-full items-center justify-between gap-2 px-6 py-2">
+        <button
+          onClick={onToggleCollapse}
+          className="flex flex-1 items-center gap-2 text-left transition hover:opacity-80"
+        >
           {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
           <span className="text-sm font-medium text-slate-200">{page.label}</span>
           <span className="text-xs text-slate-500" title={page.path}>
             {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
           </span>
-        </div>
-      </button>
+        </button>
+        {hasViewCap && canToggle && (
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="mr-0.5 text-[11px] text-slate-500">видят:</span>
+            {roles.filter((r) => r !== 'super_admin').map((role) => {
+              const visible = isGranted(role, viewCapId)
+              const saving = savingKey === `${role}:${viewCapId}`
+              return (
+                <button
+                  key={role}
+                  onClick={() => onToggle(role, viewCapId, !visible)}
+                  disabled={saving}
+                  className={`rounded px-1.5 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                    visible
+                      ? 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
+                      : 'bg-slate-800 text-slate-500 line-through hover:bg-slate-700'
+                  }`}
+                  title={visible ? `${roleLabel(role)}: страница видна — клик чтобы скрыть` : `${roleLabel(role)}: страница скрыта — клик чтобы показать`}
+                >
+                  {roleLabel(role)}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {!effectivelyCollapsed && (
         <div className="px-6 pb-3">
@@ -577,7 +604,11 @@ function PageRow({
                   </button>
                   <span className="text-slate-600">·</span>
                   <button
-                    onClick={() => onBulkSet(role, allCapIds, false)}
+                    onClick={() => {
+                      if (confirm(`Выключить ВСЕ действия страницы «${page.label}» для роли «${roleLabel(role)}»?\n\nСтраница станет недоступна этой роли.`)) {
+                        onBulkSet(role, allCapIds, false)
+                      }
+                    }}
                     disabled={savingKey === `bulk:${role}`}
                     className="text-[11px] text-rose-300 hover:underline"
                   >

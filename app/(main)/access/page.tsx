@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
+import { UserOverridesPanel } from '@/components/admin/user-overrides-panel'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -12,7 +13,7 @@ import {
 } from '@/lib/core/access'
 import {
   CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2,
-  Lock, LockOpen, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save,
+  Lock, LockOpen, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save, SlidersHorizontal,
 } from 'lucide-react'
 
 // ==================== TYPES ====================
@@ -134,6 +135,7 @@ export default function AccessPage() {
   const [savingEmailId, setSavingEmailId] = useState<string | null>(null)
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null)
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null)
+  const [overridesFor, setOverridesFor] = useState<{ userId: string; name: string; role: string | null } | null>(null)
 
   // ---- Load positions ----
   const loadPositions = useCallback(() => {
@@ -862,6 +864,16 @@ export default function AccessPage() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
+                        {account?.userId && can('access.manage_user_overrides') && (
+                          <button
+                            onClick={() => setOverridesFor({ userId: account.userId!, name: s.full_name || s.email || 'Сотрудник', role: s.role })}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/15 hover:bg-violet-600/25 border border-violet-500/30 rounded-lg text-xs text-violet-200 transition-colors"
+                            title="Индивидуальные права (исключения поверх роли)"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            Инд. права
+                          </button>
+                        )}
                         {s.email && can('access.invite_staff') && (
                           <button
                             onClick={() => sendInvite(s.id)}
@@ -938,6 +950,15 @@ export default function AccessPage() {
             </div>
           )}
         </>
+      )}
+
+      {overridesFor && (
+        <UserOverridesPanel
+          userId={overridesFor.userId}
+          staffName={overridesFor.name}
+          role={overridesFor.role}
+          onClose={() => setOverridesFor(null)}
+        />
       )}
 
     </div>
