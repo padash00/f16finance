@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { getStaffRoleLabel } from '@/lib/core/access'
 import {
@@ -310,22 +311,13 @@ create table if not exists telegram_allowed_users (
         <div className="app-page-wide space-y-4">
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-cyan-900/30 p-6 border border-amber-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
-            <div className="flex items-center justify-between relative z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-500/20 rounded-xl">
-                  <Bot className="w-8 h-8 text-amber-400" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    Telegram Bot
-                  </h1>
-                  <p className="text-sm text-slate-400">
-                    {status?.botInfo ? `@${status.botInfo.username}` : 'Управление ботом и доступами'}
-                  </p>
-                </div>
-              </div>
+          <AdminPageHeader
+            title="Telegram Bot"
+            description={status?.botInfo ? `@${status.botInfo.username}` : 'Управление ботом и доступами'}
+            icon={<Bot className="h-5 w-5" />}
+            accent="blue"
+            backHref="/"
+            actions={
               <button
                 onClick={() => { loadStatus(); loadUsers(); loadStaff() }}
                 disabled={statusLoading}
@@ -333,8 +325,8 @@ create table if not exists telegram_allowed_users (
               >
                 <RefreshCw className={`w-4 h-4 ${statusLoading ? 'animate-spin' : ''}`} />
               </button>
-            </div>
-          </div>
+            }
+          />
 
           {/* ── 1. Status ── */}
           <SectionToggle title="Статус бота" icon={Settings2} open={openSections.status} onToggle={() => toggle('status')}>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { supabase } from '@/lib/supabaseClient'
 import {
   AlertTriangle,
@@ -18,6 +19,7 @@ import {
   Search,
   Server,
   Timer,
+  Wrench,
   XCircle,
   Zap,
 } from 'lucide-react'
@@ -635,22 +637,24 @@ function Header({
   totalMs: number | null
   authEmail: string | null
 }) {
+  const status = lastRun
+    ? `проверено ${new Date(lastRun).toLocaleTimeString('ru-RU')} • ${totalMs} мс`
+    : 'проверка не запускалась'
+  const description = authEmail ? `${authEmail} • ${status}` : status
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold text-white">Диагностика системы</h1>
-        <p className="mt-0.5 text-xs text-slate-500">
-          {authEmail && <span className="mr-2">{authEmail} • </span>}
-          {lastRun
-            ? `проверено ${new Date(lastRun).toLocaleTimeString('ru-RU')} • ${totalMs} мс`
-            : 'проверка не запускалась'}
-        </p>
-      </div>
-      <Button onClick={onRun} disabled={loading} variant="outline" size="sm">
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-        Перезапустить
-      </Button>
-    </div>
+    <AdminPageHeader
+      title="Диагностика системы"
+      description={description}
+      icon={<Wrench className="h-5 w-5" />}
+      accent="blue"
+      backHref="/"
+      actions={
+        <Button onClick={onRun} disabled={loading} variant="outline" size="sm">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Перезапустить
+        </Button>
+      }
+    />
   )
 }
 

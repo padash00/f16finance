@@ -5,6 +5,7 @@ import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Building2,
@@ -688,23 +689,19 @@ export default function PointDevicesPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
-            <FolderOpen className="h-7 w-7 text-amber-300" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Проекты точек</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Один токен — несколько точек. Каждой точке можно задать свой режим.
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" onClick={loadData} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Обновить
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Проекты точек"
+        description="Один токен — несколько точек. Каждой точке можно задать свой режим."
+        icon={<FolderOpen className="h-5 w-5" />}
+        accent="blue"
+        backHref="/"
+        actions={
+          <Button variant="outline" onClick={loadData} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Обновить
+          </Button>
+        }
+      />
 
       {error ? (
         <Card className="border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card>

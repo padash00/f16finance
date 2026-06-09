@@ -28,6 +28,7 @@ import {
   type ChecklistItemEditorValue,
   type ChecklistTemplateEditorValue,
 } from '@/components/admin/knowledge-editor-types'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
 const ArticleEditorDialog = dynamic(
@@ -798,26 +799,45 @@ export default function KnowledgeAdminPage() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#07111c] px-4 py-8 text-slate-100 sm:px-6">
       <section className="app-page-wide flex flex-col gap-6">
-        <div className="overflow-hidden rounded-[2rem] border border-amber-400/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.24),transparent_32%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] p-8 shadow-2xl shadow-black/30">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-amber-200">
-                <BookOpen className="h-4 w-4" />
-                База знаний операторов
-              </div>
-              <h1 className="text-4xl font-black tracking-tight md:text-5xl">Админка правил, FAQ и чек-листов</h1>
-              <p className="mt-4 text-base leading-7 text-slate-300">
-                Здесь можно обновлять инструкции для операторов, правила зарплаты, штрафы, бонусы, решения проблем и обязательные чек-листы смены.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[520px]">
+        <AdminPageHeader
+          title="База знаний"
+          description="Правила, FAQ, штрафы, бонусы, решения проблем и обязательные чек-листы смены."
+          icon={<BookOpen className="h-5 w-5" />}
+          accent="blue"
+          backHref="/"
+          actions={
+            <>
+              <button
+                onClick={() => load()}
+                disabled={loading || saving}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Обновить
+              </button>
+              <button
+                onClick={() =>
+                  send('seedDefaults', undefined, undefined, (response) => {
+                    if (response?.data) setData(normalizeKnowledgeResponse(response.data))
+                  })
+                }
+                disabled={saving}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110 disabled:opacity-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                Создать базу F16
+              </button>
+            </>
+          }
+          toolbar={
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatCard label="Категорий" value={data.categories.length} />
               <StatCard label="Статей" value={data.articles.length} />
               <StatCard label="Чек-листов" value={data.templates.length} />
               <StatCard label="Прохождений" value={data.runs.length} />
             </div>
-          </div>
-        </div>
+          }
+        />
 
         <WorkflowGuide />
 
@@ -842,29 +862,6 @@ export default function KnowledgeAdminPage() {
                 </button>
               )
             })}
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              onClick={() => load()}
-              disabled={loading || saving}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Обновить
-            </button>
-            <button
-              onClick={() =>
-                send('seedDefaults', undefined, undefined, (response) => {
-                  if (response?.data) setData(normalizeKnowledgeResponse(response.data))
-                })
-              }
-              disabled={saving}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110 disabled:opacity-50"
-            >
-              <Sparkles className="h-4 w-4" />
-              Создать базу F16
-            </button>
           </div>
         </div>
 

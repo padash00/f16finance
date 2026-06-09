@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
   Plus,
@@ -315,21 +316,21 @@ export default function SettingsPage() {
         <div className="app-page-wide space-y-8">
           
           {/* Хедер */}
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-accent/10 rounded-xl">
-                <Settings className="w-8 h-8 text-accent" />
-            </div>
-            <div className="flex-1">
-                <h1 className="text-3xl font-bold text-foreground">Настройки системы</h1>
-                <p className="text-muted-foreground mt-1">Управление структурой бизнеса и командой</p>
-            </div>
-            <a
-              href="/settings/payment-provider"
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20"
-            >
-              💳 Платёжный провайдер
-            </a>
-          </div>
+          <AdminPageHeader
+            title="Настройки системы"
+            description="Управление структурой бизнеса и командой"
+            icon={<Settings className="h-5 w-5" />}
+            accent="blue"
+            backHref="/"
+            actions={
+              <a
+                href="/settings/payment-provider"
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20"
+              >
+                💳 Платёжный провайдер
+              </a>
+            }
+          />
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
             

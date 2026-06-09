@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CreditCard, Loader2, Package, Sparkles } from 'lucide-react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Sub = {
   organization: { name: string; slug: string; status: string; primaryDomain: string } | null
@@ -63,10 +64,13 @@ export default function SubscriptionPage() {
 
   return (
     <div className="app-page-wide space-y-6 text-white">
-      <div>
-        <h1 className="text-2xl font-semibold">Подписка</h1>
-        <p className="mt-1 text-sm text-slate-400">Ваш тариф, модули и счета.</p>
-      </div>
+      <AdminPageHeader
+        title="Подписка"
+        description="Ваш тариф, модули и счета."
+        icon={<CreditCard className="h-5 w-5" />}
+        accent="blue"
+        backHref="/"
+      />
 
       {error ? <p className="text-sm text-rose-400">{error}</p> : null}
 
