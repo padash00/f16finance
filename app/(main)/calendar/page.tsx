@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Gift, Star, Megaphone } from 'lucide-react'
 
 type Event = {
@@ -69,33 +70,30 @@ export default function CalendarPage() {
 
   return (
     <div className="app-page-tight space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-purple-500/10 rounded-xl">
-            <CalendarDays className="w-7 h-7 text-purple-300" />
+      <AdminPageHeader
+        title="Календарь"
+        description="Смены · ДР · праздники РК · объявления"
+        icon={<CalendarDays className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        toolbar={
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="outline" size="icon" onClick={() => {
+              if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1)
+            }}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <h2 className="text-lg font-semibold text-foreground capitalize">
+              {fmtMonth(year, month)}
+            </h2>
+            <Button variant="outline" size="icon" onClick={() => {
+              if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1)
+            }}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Календарь</h1>
-            <p className="text-muted-foreground mt-0.5 text-sm">Смены · ДР · праздники РК · объявления</p>
-          </div>
-        </div>
-      </div>
-
-      <Card className="p-4 border-border bg-card flex items-center justify-between gap-3">
-        <Button variant="outline" size="icon" onClick={() => {
-          if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1)
-        }}>
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <h2 className="text-lg font-semibold text-foreground capitalize">
-          {fmtMonth(year, month)}
-        </h2>
-        <Button variant="outline" size="icon" onClick={() => {
-          if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1)
-        }}>
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </Card>
+        }
+      />
 
       {loading && events.length === 0 && (
         <div className="text-center py-10 text-muted-foreground text-sm">Загрузка...</div>

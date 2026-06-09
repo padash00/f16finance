@@ -8,10 +8,10 @@ import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { supabase } from '@/lib/supabaseClient'
 import {
   CalendarDays,
-  ArrowLeft,
   Users2,
   Search,
   X,
@@ -1711,32 +1711,14 @@ function OperatorAnalyticsContent() {
           )}
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500/20 via-amber-600/15 to-amber-700/10 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <Link href="/dashboard">
-                  <div className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-slate-400" />
-                  </div>
-                </Link>
-                <div className="p-3 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl shadow-lg shadow-amber-500/25">
-                  <Users2 className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    Аналитика операторов
-                  </h1>
-                  <p className="text-slate-400 mt-1 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    {formatDateRange(dateFrom, dateTo)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
+          <AdminPageHeader
+            title="Аналитика операторов"
+            description="Выручка, смены, штрафы и чистый эффект по операторам"
+            icon={<Zap className="h-5 w-5" />}
+            accent="violet"
+            backHref="/dashboard"
+            actions={
+              <>
                 <div className="flex bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
                   {(['thisWeek', 'lastWeek', 'thisMonth'] as DatePreset[]).map((preset) => (
                     <button
@@ -1751,9 +1733,9 @@ function OperatorAnalyticsContent() {
                   ))}
                 </div>
 
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   className={`rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
@@ -1761,18 +1743,24 @@ function OperatorAnalyticsContent() {
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10"
                   onClick={handleDownloadCSV}
                   title="Скачать CSV"
                 >
                   <Download className="w-4 h-4" />
                 </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+            toolbar={
+              <p className="text-slate-400 flex items-center gap-2 text-sm">
+                <Calendar className="w-4 h-4" />
+                {formatDateRange(dateFrom, dateTo)}
+              </p>
+            }
+          />
 
           {/* AI Insights */}
           {aiInsights.length > 0 && (

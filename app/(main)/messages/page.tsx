@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Send, MessageSquare, Search, ArrowLeft, RefreshCw } from 'lucide-react'
 
 type Thread = {
@@ -125,18 +126,17 @@ export default function MessagesPage() {
   }, [threads, search])
 
   return (
-    <div className="app-page-wide max-w-6xl mx-auto" style={{ height: 'calc(100vh - 100px)' }}>
-      <div className="flex items-center gap-4 mb-4">
-        <div className="p-2 bg-blue-500/10 rounded-lg">
-          <MessageSquare className="w-6 h-6 text-blue-300" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Сообщения</h1>
-          <p className="text-xs text-muted-foreground">Личные переписки внутри приложения</p>
-        </div>
-      </div>
+    <div className="app-page-wide max-w-6xl mx-auto flex flex-col" style={{ height: 'calc(100vh - 100px)' }}>
+      <AdminPageHeader
+        title="Личные сообщения"
+        description="Личные переписки внутри приложения"
+        icon={<MessageSquare className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        className="mb-4"
+      />
 
-      <div className="grid grid-cols-12 gap-4 h-full">
+      <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
         {/* Левая колонка — список переписок */}
         <Card className={`col-span-12 md:col-span-4 border-border bg-card overflow-hidden flex flex-col ${activeUser ? 'hidden md:flex' : ''}`}>
           <div className="p-3 border-b border-border">

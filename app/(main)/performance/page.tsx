@@ -19,6 +19,7 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type ShiftDetail = {
@@ -237,74 +238,43 @@ export default function PerformancePage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.18),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
-              Справедливый рейтинг
+      <AdminPageHeader
+        title="Эффективность операторов"
+        description="Performance Index = факт / ожидание. Рейтинг с поправкой на слот: точка, день недели, день/ночь."
+        icon={<TrendingUp className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
+          <>
+            <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
+              {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriod(p)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                    period === p ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {PERIOD_PRESETS[p].label}
+                </button>
+              ))}
             </div>
-            <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-white flex items-center gap-3 lg:text-4xl">
-              <Trophy className="w-8 h-8 text-emerald-400" />
-              Эффективность операторов
-            </h1>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => load(true)}
+              disabled={loading || refreshing}
+              className="rounded-xl border border-white/10"
+              title="Обновить"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
+          </>
+        }
+        toolbar={
+          <>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-300">
-                {PERIOD_PRESETS[period].label}
-              </span>
-              {selectedCompany && (
-                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
-                  📍 {selectedCompany.name}
-                </span>
-              )}
-              {shiftFilter !== 'all' && (
-                <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-medium text-violet-300">
-                  {shiftFilter === 'day' ? '☀️ Только дневные смены' : '🌙 Только ночные смены'}
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-slate-400 max-w-2xl">
-              Performance Index = факт / ожидание. Учитывается контекст каждой смены: точка, день недели, день/ночь.
-              Сравнение с медианой такого же слота за{' '}
-              <strong className="text-slate-200">всю историю</strong>
-              {data?.baseline.from && (
-                <> с <strong className="text-slate-200">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
-              )}
-              {' '}— <strong className="text-slate-200">без собственных смен оператора</strong> (leave-one-out).
-              Минимум {data?.config.min_qualifying_shifts || 3} смен для попадания в основной рейтинг.
-            </p>
-          </div>
-
-          <div className="flex flex-col items-stretch gap-2 lg:items-end">
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              {/* Период */}
-              <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
-                {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPeriod(p)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                      period === p ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {PERIOD_PRESETS[p].label}
-                  </button>
-                ))}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => load(true)}
-                disabled={loading || refreshing}
-                className="rounded-xl border border-white/10"
-                title="Обновить"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-
-            {/* Точка + Тип смены */}
-            <div className="flex flex-wrap items-center gap-2 justify-end">
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
@@ -332,9 +302,24 @@ export default function PerformancePage() {
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-      </Card>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-300">
+                {PERIOD_PRESETS[period].label}
+              </span>
+              {selectedCompany && (
+                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                  📍 {selectedCompany.name}
+                </span>
+              )}
+              {shiftFilter !== 'all' && (
+                <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-medium text-violet-300">
+                  {shiftFilter === 'day' ? '☀️ Только дневные смены' : '🌙 Только ночные смены'}
+                </span>
+              )}
+            </div>
+          </>
+        }
+      />
 
       {error && (
         <Card className="p-4 border-rose-500/30 bg-rose-500/10 text-sm text-rose-300">

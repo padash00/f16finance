@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -109,43 +110,39 @@ export default function ModerationPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-red-500/10 rounded-xl">
-            <ShieldAlert className="w-8 h-8 text-red-400" />
+      <AdminPageHeader
+        title="Модерация ИИ"
+        description="Подозрительные сообщения отмечены ИИ. Проверяй и реагируй."
+        icon={<ShieldAlert className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+        }
+        toolbar={
+          <div className="flex gap-1 border-b border-border">
+            {([
+              { id: 'pending' as const, label: `На рассмотрении ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: AlertTriangle },
+              { id: 'confirmed' as const, label: 'Подтверждённые', icon: ShieldCheck },
+              { id: 'dismissed' as const, label: 'Отклонённые', icon: XCircle },
+            ]).map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === id ? 'border-red-500 text-red-300' : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">ИИ-модерация чата</h1>
-            <p className="text-muted-foreground mt-1">
-              Подозрительные сообщения отмечены ИИ. Проверяй и реагируй.
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-          Обновить
-        </Button>
-      </div>
-
-      {/* Табы */}
-      <div className="flex gap-1 border-b border-border">
-        {([
-          { id: 'pending' as const, label: `На рассмотрении ${pendingCount > 0 ? `(${pendingCount})` : ''}`, icon: AlertTriangle },
-          { id: 'confirmed' as const, label: 'Подтверждённые', icon: ShieldCheck },
-          { id: 'dismissed' as const, label: 'Отклонённые', icon: XCircle },
-        ]).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === id ? 'border-red-500 text-red-300' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+        }
+      />
 
       {error && (
         <Card className="p-4 border-red-500/30 bg-red-500/5 text-red-300 text-sm">

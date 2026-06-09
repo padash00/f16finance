@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCompanies } from '@/hooks/use-companies'
 import { useIncome } from '@/hooks/use-income'
 import { useOperators } from '@/hooks/use-operators'
@@ -131,21 +132,13 @@ export default function RatingsPage() {
         <div className="app-page-wide space-y-6">
 
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-orange-900/30 p-6 border border-amber-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-500/20 rounded-xl">
-                  <Trophy className="w-8 h-8 text-amber-400" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    Рейтинг операторов
-                  </h1>
-                  <p className="text-sm text-slate-400">Лидерборд по выручке, сменам и среднему чеку</p>
-                </div>
-              </div>
-
+          <AdminPageHeader
+            title="Рейтинг операторов"
+            description="Лидерборд по выручке, сменам и среднему чеку"
+            icon={<Trophy className="h-5 w-5" />}
+            accent="violet"
+            backHref="/"
+            toolbar={
               <div className="flex flex-wrap items-center gap-3">
                 {/* Quick date presets */}
                 {(['today', 'week', 'month'] as const).map(p => (
@@ -192,8 +185,8 @@ export default function RatingsPage() {
                   </select>
                 )}
               </div>
-            </div>
-          </div>
+            }
+          />
 
           {/* Summary stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Newspaper, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 type Post = {
@@ -91,27 +92,25 @@ export default function NewsPage() {
 
   return (
     <div className="app-page-tight space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-orange-500/10 rounded-xl">
-            <Newspaper className="w-7 h-7 text-orange-300" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Лента</h1>
-            <p className="text-muted-foreground mt-0.5 text-sm">Новости и объявления компании</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {canPublish && (
-            <Button onClick={() => setComposing(true)} className="bg-orange-600 hover:bg-orange-700">
-              <Plus className="w-4 h-4 mr-1" /> Новый пост
+      <AdminPageHeader
+        title="Лента"
+        description="Новости и объявления компании"
+        icon={<Newspaper className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
+          <>
+            {canPublish && (
+              <Button onClick={() => setComposing(true)} className="bg-orange-600 hover:bg-orange-700">
+                <Plus className="w-4 h-4 mr-1" /> Новый пост
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {composing && (
         <Card className="p-4 border-orange-500/40 bg-orange-500/[0.04]">

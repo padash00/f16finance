@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   MessageSquare,
   Megaphone,
@@ -181,33 +182,31 @@ function ChatContent() {
 
   return (
     <div className="app-page-tight space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-500/10 rounded-xl">
-            <MessageSquare className="w-7 h-7 text-amber-300" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {contextType && contextId ? `Обсуждение${contextLabel ? `: ${contextLabel}` : ''}` : 'Командный чат'}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              <AlertTriangle className="w-3 h-3 inline mr-1 text-amber-400" />
-              Чат проверяется ИИ на нарушения. Не пиши лишнего.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {canBroadcast && !contextType && (
-            <Button variant="outline" size="sm" onClick={() => setShowAnnounce(true)}>
-              <Megaphone className="w-4 h-4 mr-1" />
-              Объявление
+      <AdminPageHeader
+        title={contextType && contextId ? `Обсуждение${contextLabel ? `: ${contextLabel}` : ''}` : 'Командный чат'}
+        icon={<MessageSquare className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
+          <>
+            {canBroadcast && !contextType && (
+              <Button variant="outline" size="sm" onClick={() => setShowAnnounce(true)}>
+                <Megaphone className="w-4 h-4 mr-1" />
+                Объявление
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+        toolbar={
+          <p className="text-xs text-muted-foreground">
+            <AlertTriangle className="w-3 h-3 inline mr-1 text-amber-400" />
+            Чат проверяется ИИ на нарушения. Не пиши лишнего.
+          </p>
+        }
+      />
 
       {/* Закреплённые */}
       {pinned.length > 0 && !contextType && (

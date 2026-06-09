@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { Button } from '@/components/ui/button'
 import {
@@ -226,22 +227,14 @@ export default function OperatorAchievementsPage() {
   return (
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <Card className="relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.18),transparent_42%),linear-gradient(135deg,rgba(13,22,38,0.85),rgba(13,22,38,0.55))] p-6 lg:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              Мотивация и рейтинг
-            </div>
-            <h1 className="font-display text-3xl font-bold tracking-[-0.02em] text-white flex items-center gap-3 lg:text-4xl">
-              <Trophy className="w-8 h-8 text-amber-400" />
-              Достижения операторов
-            </h1>
-            <p className="text-sm text-slate-400 max-w-2xl">
-              Видите кто и какие достижения получил за выбранный период. Кликните на оператора чтобы увидеть полный список достижений и прогресс по тем что ещё не получены.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
+      <AdminPageHeader
+        title="Достижения операторов"
+        description="Кто и какие достижения получил за период. Кликните на оператора, чтобы увидеть полный список и прогресс."
+        icon={<Award className="h-5 w-5" />}
+        accent="violet"
+        backHref="/"
+        actions={
+          <>
             <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
               {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
                 <button
@@ -266,9 +259,9 @@ export default function OperatorAchievementsPage() {
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>
-          </div>
-        </div>
-      </Card>
+          </>
+        }
+      />
 
       {error && (
         <Card className="p-4 border-rose-500/30 bg-rose-500/10 text-sm text-rose-300">{error}</Card>
