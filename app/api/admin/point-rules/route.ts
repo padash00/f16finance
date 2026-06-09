@@ -4,6 +4,7 @@ import { evaluatePointRules, type PointRuleAction, type PointRuleCondition } fro
 import { listOrganizationCompanyIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type RulePayload = {
@@ -143,6 +144,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'createRule') {
+      const capDenied = await requireStaffCapability(access, 'salary-rules.create')
+      if (capDenied) return capDenied
       const payload = normalizePayload(body.payload)
       const payloadError = validatePayload(payload)
       if (payloadError) return json({ error: payloadError }, 400)
@@ -170,6 +173,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateRule') {
+      const capDenied = await requireStaffCapability(access, 'salary-rules.edit')
+      if (capDenied) return capDenied
       const payload = normalizePayload(body.payload)
       const payloadError = validatePayload(payload)
       if (payloadError) return json({ error: payloadError }, 400)
@@ -201,6 +206,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteRule') {
+      const capDenied = await requireStaffCapability(access, 'salary-rules.delete')
+      if (capDenied) return capDenied
       const { data: current, error: currentError } = await supabase.from('point_rules').select('*').eq('id', body.ruleId).maybeSingle()
       if (currentError) throw currentError
       if (!current) return json({ error: 'Правило не найдено' }, 404)

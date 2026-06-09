@@ -4,6 +4,7 @@ import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { humanizeDbError } from '@/lib/server/db-error-humanize'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
@@ -239,6 +240,8 @@ export async function POST(request: Request) {
     if (!body?.action) return json({ error: 'action-required' }, 400)
 
     if (body.action === 'createRequest') {
+      const capDenied = await requireStaffCapability(access, 'store-showcase.move')
+      if (capDenied) return capDenied
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
@@ -328,6 +331,8 @@ export async function POST(request: Request) {
 
     // ── returnToWarehouse: move stock showcase -> warehouse ────────────────────
     if (body.action === 'returnToWarehouse') {
+      const capDenied = await requireStaffCapability(access, 'store-showcase.return_to_warehouse')
+      if (capDenied) return capDenied
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 

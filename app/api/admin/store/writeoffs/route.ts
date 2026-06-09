@@ -113,6 +113,8 @@ export async function POST(request: Request) {
 
     // ── Отмена списания: возвращаем товар на локацию, акт → cancelled ──────
     if (body.action === 'cancelWriteoff') {
+      const cancelDenied = await requireCapability(access, 'store-writeoffs.cancel')
+      if (cancelDenied) return cancelDenied
       const writeoffId = String(body.writeoff_id || '').trim()
       if (!writeoffId) return json({ error: 'writeoff-id-required' }, 400)
       const reason = String(body.cancel_reason || '').trim() || null
