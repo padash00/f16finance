@@ -41,6 +41,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
@@ -691,27 +692,14 @@ function TasksContent() {
     <>
         <div className="app-page-wide space-y-6">
           {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-                  <Kanban className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    Задачи операторов
-                  </h1>
-                  <p className="text-slate-400 mt-1 flex items-center gap-2">
-                    <Send className="w-4 h-4" />
-                    Уведомления в Telegram
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
+          <AdminPageHeader
+            title="Задачи"
+            description="Текущая работа операторов — уведомления в Telegram"
+            icon={<Kanban className="h-5 w-5" />}
+            accent="blue"
+            backHref="/"
+            actions={
+              <>
                 <Button
                   variant="outline"
                   size="icon"
@@ -752,9 +740,9 @@ function TasksContent() {
                     Новая задача
                   </Button>
                 )}
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

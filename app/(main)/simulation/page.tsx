@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Company = { id: string; name: string; code: string | null }
 type Tariff = {
@@ -208,34 +209,34 @@ export default function SimulationPage() {
       <div className="pointer-events-none absolute -top-32 right-0 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
 
       {/* Header */}
-      <div className="relative flex flex-wrap items-center gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30">
-          <Calculator className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold tracking-tight">Симуляция выручки</h1>
-          <p className="truncate text-xs text-muted-foreground">Потенциал по зонам vs реальная выручка клуба</p>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          {companies.length > 0 ? (
-            <Select value={companyId} onValueChange={(v) => { setCompanyId(v); void load(v) }}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Точка" /></SelectTrigger>
-              <SelectContent>
-                {companies.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          <button
-            onClick={() => void load(companyId)}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
-            title="Обновить"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Симуляция выручки"
+        description="Потенциал по зонам vs реальная выручка клуба"
+        icon={<Calculator className="h-5 w-5" />}
+        accent="blue"
+        backHref="/"
+        actions={
+          <>
+            {companies.length > 0 ? (
+              <Select value={companyId} onValueChange={(v) => { setCompanyId(v); void load(v) }}>
+                <SelectTrigger className="w-48"><SelectValue placeholder="Точка" /></SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <button
+              onClick={() => void load(companyId)}
+              className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
+              title="Обновить"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </>
+        }
+      />
 
       {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</Card> : null}
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{success}</Card> : null}

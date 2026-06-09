@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CalendarRange, CakeSlice, Gift, Loader2, Sparkles, Users2 } from 'lucide-react'
+import { CalendarDays, CalendarRange, Gift, Loader2, Sparkles, Users2 } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type BirthdayItem = {
   id: string
@@ -128,23 +129,18 @@ export default function BirthdaysPage() {
   return (
     <>
         <div className="app-page-wide space-y-6">
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.18),transparent_34%),linear-gradient(135deg,rgba(20,12,28,0.98),rgba(7,12,24,0.96))] p-6 text-white sm:p-8">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-4 inline-flex rounded-2xl bg-amber-400/10 p-4">
-                  <CakeSlice className="h-7 w-7 text-amber-300" />
-                </div>
-                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Дни рождения команды</h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                  Ближайшие дни рождения операторов по точкам. Здесь сразу видно, у кого праздник сегодня, на этой неделе и в ближайший месяц.
-                </p>
-              </div>
-
-              <div className="rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-slate-300">
+          <AdminPageHeader
+            title="Дни рождения"
+            description="Ближайшие дни рождения операторов по точкам — кто скоро отмечает"
+            icon={<CalendarDays className="h-5 w-5" />}
+            accent="blue"
+            backHref="/"
+            toolbar={
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300">
                 Сейчас учитываются даты рождения только операторов. Для staff можно расширить экран после добавления поля в их профиль.
               </div>
-            </div>
-          </Card>
+            }
+          />
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
