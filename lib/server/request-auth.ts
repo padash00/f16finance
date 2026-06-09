@@ -209,6 +209,17 @@ export async function getRequestAccessContext(
     }
   }
 
+  // Suspend-рубильник (неоплата): приостановленная организация блокирует доступ не-суперадмину.
+  // F16 имеет status='active' → не срабатывает. Суперадмин выше уже вернулся.
+  if ((activeOrganization as any)?.status === 'suspended') {
+    return {
+      response: NextResponse.json(
+        { error: 'organization_suspended', code: 'organization-suspended' },
+        { status: 403 },
+      ),
+    }
+  }
+
   const isCustomer = !staffMember && !operatorAuth && linkedCustomers.length > 0
 
   if (!staffMember && !operatorAuth && !isCustomer) {
