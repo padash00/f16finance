@@ -1,23 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import Link from 'next/link'
 import { CapabilitiesPanel } from '@/components/admin/capabilities-panel'
 import { UserOverridesPanel } from '@/components/admin/user-overrides-panel'
-import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import {
-  ACCESS_PAGE_GROUPS,
-  getBuiltinRoleDefaultPaths,
-} from '@/lib/core/access'
-import {
   CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2,
-  Lock, LockOpen, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save, SlidersHorizontal,
+  Lock, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save, SlidersHorizontal,
 } from 'lucide-react'
 
 // ==================== TYPES ====================
-type Permission = { role: string; path: string; enabled: boolean }
 type Position = { id: string; name: string; description: string | null; is_builtin: boolean; created_at: string | null }
 type StaffRow = {
   id: string
@@ -47,14 +41,6 @@ const BUILTIN_LABELS: Record<string, string> = {
   owner: 'Владелец',
   other: 'Прочие',
 }
-const PAGE_GROUPS = ACCESS_PAGE_GROUPS.map((group) => ({
-  group: group.group,
-  pages: group.pages.map((page) => ({
-    path: page.path,
-    label: page.label,
-  })),
-}))
-
 
 const SQL_POSITIONS = `create table if not exists positions (
   id uuid primary key default gen_random_uuid(),
@@ -69,12 +55,15 @@ insert into positions (name, description, is_builtin) values
   ('marketer', 'Маркетолог — только задачи', true)
 on conflict (name) do nothing;`
 
-const SQL_PERMS = `create table if not exists role_permissions (
-  role text not null,
-  path text not null,
-  enabled boolean default true,
-  primary key (role, path)
-);`
+// ==================== INDUSTRIAL DESIGN TOKENS ====================
+// Тёплый чёрный + 1px-границы + один сигнальный цвет (янтарь), без скруглений.
+const SIGNAL = '#FFB800'
+const card = 'border border-white/10 bg-white/[0.015]'
+const sectionTitle = 'text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40'
+const btnNeutral = 'inline-flex items-center gap-1.5 border border-white/15 px-3 py-1.5 text-xs text-white/70 transition-colors hover:bg-white/5 disabled:opacity-50'
+const btnSignal = 'inline-flex items-center gap-1.5 border border-[#FFB800]/45 bg-[#FFB800]/10 px-3 py-1.5 text-xs font-semibold text-[#FFB800] transition-colors hover:bg-[#FFB800]/20 disabled:opacity-40'
+const btnDanger = 'inline-flex items-center gap-1.5 border border-[#FF3B30]/30 bg-[#FF3B30]/10 px-2.5 py-1.5 text-xs text-[#FF3B30] transition-colors hover:bg-[#FF3B30]/20 disabled:opacity-50'
+const inputCls = 'border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder-white/25 focus:border-[#FFB800] focus:outline-none'
 
 // ==================== HELPERS ====================
 function fmtDate(iso: string | null) {
@@ -84,10 +73,10 @@ function fmtDate(iso: string | null) {
 
 function accountStateLabel(state: AccountInfo['accountState']) {
   switch (state) {
-    case 'active': return { label: 'Активен', color: 'text-emerald-400' }
-    case 'invited': return { label: 'Приглашён', color: 'text-amber-400' }
-    case 'no_account': return { label: 'Нет аккаунта', color: 'text-slate-500' }
-    case 'no_email': return { label: 'Нет email', color: 'text-red-400' }
+    case 'active': return { label: 'активен', color: 'text-[#00E676]' }
+    case 'invited': return { label: 'приглашён', color: 'text-[#FFB800]' }
+    case 'no_account': return { label: 'нет аккаунта', color: 'text-white/40' }
+    case 'no_email': return { label: 'нет email', color: 'text-[#FF3B30]' }
   }
 }
 
@@ -115,13 +104,6 @@ export default function AccessPage() {
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [posCopied, setPosCopied] = useState(false)
-
-  // --- Permissions state ---
-  const [permissions, setPermissions] = useState<Permission[]>([])
-  const [permsLoading, setPermsLoading] = useState(true)
-  const [permsTableExists, setPermsTableExists] = useState<boolean | null>(null)
-  const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [permsCopied, setPermsCopied] = useState(false)
   const [selectedRole, setSelectedRole] = useState<string>('')
 
   // --- Accounts state ---
@@ -154,19 +136,6 @@ export default function AccessPage() {
   }, [selectedRole])
 
   useEffect(() => { loadPositions() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ---- Load permissions ----
-  useEffect(() => {
-    setPermsLoading(true)
-    fetch('/api/admin/role-permissions')
-      .then(r => r.json())
-      .then(data => {
-        setPermsTableExists(data.tableExists !== false)
-        setPermissions(data.data ?? [])
-      })
-      .catch(() => setPermsTableExists(false))
-      .finally(() => setPermsLoading(false))
-  }, [])
 
   // Set default selected role when positions load
   useEffect(() => {
@@ -265,7 +234,6 @@ export default function AccessPage() {
       const data = await res.json()
       if (data.ok) {
         setPositions(prev => prev.filter(p => p.id !== pos.id))
-        setPermissions(prev => prev.filter(p => p.role !== pos.name))
         if (selectedRole === pos.name) setSelectedRole(positions.find(p => p.id !== pos.id)?.name ?? '')
       } else if (data.error === 'in-use') {
         alert(data.message || `Роль используется ${data.count} сотрудниками — переназначьте их сначала через вкладку Аккаунты.`)
@@ -275,79 +243,6 @@ export default function AccessPage() {
     } catch { alert('Ошибка сети') }
     setDeletingId(null)
   }
-
-  const isEnabled = useCallback((role: string, path: string): boolean => {
-  const override = permissions.find(p => p.role === role && p.path === path)
-  if (override) return override.enabled
-
-  if (role === 'manager' || role === 'marketer' || role === 'owner') {
-    return getBuiltinRoleDefaultPaths(role).includes(path)
-  }
-
-  return false
-}, [permissions])
-
-  const togglePermission = useCallback(async (role: string, path: string) => {
-    const current = isEnabled(role, path)
-    const newEnabled = !current
-    const key = `${role}:${path}`
-    setSavingKey(key)
-    setPermissions(prev => {
-      const filtered = prev.filter(p => !(p.role === role && p.path === path))
-      return [...filtered, { role, path, enabled: newEnabled }]
-    })
-    try {
-      await fetch('/api/admin/role-permissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, path, enabled: newEnabled }),
-      })
-    } catch {
-      setPermissions(prev => {
-        const filtered = prev.filter(p => !(p.role === role && p.path === path))
-        return [...filtered, { role, path, enabled: current }]
-      })
-    }
-    setSavingKey(null)
-  }, [isEnabled])
-
-  const bulkToggle = useCallback(async (role: string, enabled: boolean) => {
-    const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
-    setPermissions(prev => {
-      const filtered = prev.filter(p => p.role !== role)
-      return [...filtered, ...allPaths.map(path => ({ role, path, enabled }))]
-    })
-    await Promise.all(allPaths.map(path =>
-      fetch('/api/admin/role-permissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, path, enabled }),
-      })
-    ))
-  }, [])
-
-  const resetToDefault = useCallback(async (role: string) => {
-  const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
-  const defaults =
-    role === 'manager' || role === 'marketer' || role === 'owner'
-      ? getBuiltinRoleDefaultPaths(role)
-      : []
-
-  setPermissions(prev => {
-    const filtered = prev.filter(p => p.role !== role)
-    return [...filtered, ...allPaths.map(path => ({ role, path, enabled: defaults.includes(path) }))]
-  })
-
-  await Promise.all(
-    allPaths.map(path =>
-      fetch('/api/admin/role-permissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, path, enabled: defaults.includes(path) }),
-      })
-    )
-  )
-}, [])
 
   // ---- Staff role change ----
   const saveStaffRole = useCallback(async (staffId: string, newRole: string) => {
@@ -439,113 +334,117 @@ export default function AccessPage() {
     setTimeout(() => setInviteMessage(null), 5000)
   }, [loadAccounts])
 
-  // ---- Stats ----
-  const enabledCount = useMemo(() => {
-    const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
-    return allPaths.filter(path => isEnabled(selectedRole, path)).length
-  }, [selectedRole, isEnabled])
-  const totalCount = PAGE_GROUPS.flatMap(g => g.pages).length
-
   const allPositionNames = useMemo(() => positions.map(p => p.name), [positions])
 
-  return (
-    <div className="app-page-wide space-y-5">
+  const TABS = [
+    { key: 'positions' as const, icon: Briefcase, label: 'Должности' },
+    { key: 'permissions' as const, icon: Lock, label: 'Права' },
+    { key: 'accounts' as const, icon: Users, label: 'Аккаунты' },
+  ]
 
-      <AdminPageHeader
-        title="Права доступа"
-        description="Должности, права на страницы и аккаунты сотрудников"
-        accent="amber"
-        icon={<Shield className="h-5 w-5" aria-hidden />}
-        toolbar={
-          <div
-            className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-black/20 p-1"
-            role="tablist"
-            aria-label="Раздел прав доступа"
-          >
-            {([
-              { key: 'positions' as const, icon: Briefcase, label: 'Должности' },
-              { key: 'permissions' as const, icon: Lock, label: 'Права доступа' },
-              { key: 'accounts' as const, icon: Users, label: 'Аккаунты и пароли' },
-            ]).map(({ key, icon: Icon, label }) => (
+  return (
+    <div className="app-page-wide space-y-4 font-mono text-white">
+
+      {/* ============ HEADER ============ */}
+      <div className={`${card} bg-[#0B0C0A]`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3.5 md:px-5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center border" style={{ borderColor: `${SIGNAL}66`, backgroundColor: `${SIGNAL}1a`, color: SIGNAL }}>
+              <Shield className="h-4 w-4" aria-hidden />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold uppercase tracking-[0.22em] text-white">Доступ</h1>
+              <p className="mt-0.5 text-[11px] text-white/40">Должности · права · аккаунты сотрудников</p>
+            </div>
+          </div>
+          <Link href="/" className="text-[11px] uppercase tracking-wider text-white/40 transition-colors hover:text-white">
+            ← назад
+          </Link>
+        </div>
+
+        {/* TABS — segmented, sharp, signal-active */}
+        <div className="flex flex-wrap" role="tablist" aria-label="Раздел прав доступа">
+          {TABS.map(({ key, icon: Icon, label }) => {
+            const active = tab === key
+            return (
               <button
                 key={key}
                 type="button"
                 role="tab"
-                aria-selected={tab === key}
+                aria-selected={active}
                 onClick={() => setTab(key)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                  tab === key ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'
+                className={`flex items-center gap-2 border-r border-white/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  active ? 'text-black' : 'text-white/45 hover:bg-white/5 hover:text-white/80'
                 }`}
+                style={active ? { backgroundColor: SIGNAL } : undefined}
               >
-                <Icon className="h-4 w-4" aria-hidden />
+                <Icon className="h-3.5 w-3.5" aria-hidden />
                 {label}
               </button>
-            ))}
-          </div>
-        }
-      />
+            )
+          })}
+        </div>
+      </div>
 
       {/* ============ TAB: POSITIONS ============ */}
       {tab === 'positions' && (
         <>
-          {/* SQL setup notice */}
           {posTableExists === false && (
-            <Card className="p-5 bg-yellow-500/5 border border-yellow-500/30">
-              <div className="flex items-center gap-2 mb-3">
-                <Shield className="w-4 h-4 text-yellow-400" />
-                <h2 className="text-sm font-semibold text-yellow-300">Требуются таблицы в Supabase</h2>
+            <div className="border border-[#FFB800]/30 bg-[#FFB800]/[0.04] p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Shield className="h-4 w-4" style={{ color: SIGNAL }} />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-[#FFB800]">Требуются таблицы в Supabase</h2>
               </div>
-              <p className="text-xs text-slate-400 mb-3">Выполните в Supabase → SQL Editor:</p>
               <div className="relative">
-                <pre className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs text-slate-300 overflow-x-auto">{SQL_POSITIONS}</pre>
+                <pre className="overflow-x-auto border border-white/10 bg-black p-4 text-[11px] leading-relaxed text-white/70">{SQL_POSITIONS}</pre>
                 <button
                   onClick={() => { navigator.clipboard.writeText(SQL_POSITIONS); setPosCopied(true); setTimeout(() => setPosCopied(false), 2000) }}
-                  className="absolute top-2 right-2 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+                  className="absolute right-2 top-2 border border-white/15 bg-black px-2 py-1 text-[11px] text-white/70 hover:bg-white/5"
                 >
-                  {posCopied ? '✓ Скопировано' : 'Копировать'}
+                  {posCopied ? '✓ скопировано' : 'копировать'}
                 </button>
               </div>
-            </Card>
+            </div>
           )}
 
           {/* Create new position */}
           {can('access.create_role') && (
-          <Card className="p-5 bg-slate-900/80 border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-emerald-400" />
-              Создать новую должность
+          <div className={`${card} p-5`}>
+            <h2 className={`${sectionTitle} mb-4 flex items-center gap-2`}>
+              <Plus className="h-3.5 w-3.5" style={{ color: SIGNAL }} />
+              Создать должность
             </h2>
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex flex-wrap gap-3">
               <input
                 type="text"
                 placeholder="Название (напр. бухгалтер)"
                 value={newPosName}
                 onChange={e => setNewPosName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleCreatePosition()}
-                className="flex-1 min-w-40 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                className={`${inputCls} min-w-40 flex-1`}
               />
               <input
                 type="text"
                 placeholder="Описание (необязательно)"
                 value={newPosDesc}
                 onChange={e => setNewPosDesc(e.target.value)}
-                className="flex-1 min-w-48 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                className={`${inputCls} min-w-48 flex-1`}
               />
               <button
                 onClick={handleCreatePosition}
                 disabled={!newPosName.trim() || creatingPos || posTableExists === false || (newPosSeed === 'copy_from' && !newPosCopyFrom)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl text-sm text-emerald-300 font-semibold transition-colors disabled:opacity-40"
+                className={btnSignal}
               >
-                {creatingPos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {creatingPos ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Создать
               </button>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-500">Стартовые права:</span>
+              <span className="text-[11px] uppercase tracking-wider text-white/35">Стартовые права:</span>
               <select
                 value={newPosSeed}
                 onChange={e => setNewPosSeed(e.target.value as 'closed' | 'open' | 'copy_from')}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="border border-white/15 bg-black px-2 py-1.5 text-xs text-white focus:border-[#FFB800] focus:outline-none"
               >
                 <option value="closed">Без прав (настрою сам)</option>
                 <option value="open">Полный доступ (все права)</option>
@@ -555,7 +454,7 @@ export default function AccessPage() {
                 <select
                   value={newPosCopyFrom}
                   onChange={e => setNewPosCopyFrom(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                  className="border border-white/15 bg-black px-2 py-1.5 text-xs text-white focus:border-[#FFB800] focus:outline-none"
                 >
                   <option value="">— выберите роль —</option>
                   {allPositionNames.map(name => (
@@ -564,264 +463,128 @@ export default function AccessPage() {
                 </select>
               )}
               {newPosSeed === 'open' && (
-                <span className="text-xs text-amber-400/80">⚠ роль получит все 265 прав</span>
+                <span className="text-[11px] text-[#FFB800]/80">⚠ роль получит все права</span>
               )}
             </div>
-          </Card>
+          </div>
           )}
 
           {/* Positions list */}
           {positionsLoading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
-              <Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Загрузка...</span>
+            <div className="flex h-32 items-center justify-center gap-2 text-white/40">
+              <Loader2 className="h-5 w-5 animate-spin" /><span className="text-xs uppercase tracking-wider">Загрузка…</span>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-px">
               {positions.map(pos => (
-                <Card key={pos.id} className="p-4 bg-slate-900/80 border-slate-800">
+                <div key={pos.id} className={`${card} p-4`}>
                   {editingPos?.id === pos.id ? (
-                    <div className="flex gap-3 flex-wrap items-center">
+                    <div className="flex flex-wrap items-center gap-3">
                       <input
                         type="text"
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
-                        className="flex-1 min-w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                        className={`${inputCls} min-w-32 flex-1 py-1.5`}
                       />
                       <input
                         type="text"
                         value={editDesc}
                         onChange={e => setEditDesc(e.target.value)}
                         placeholder="Описание"
-                        className="flex-1 min-w-48 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                        className={`${inputCls} min-w-48 flex-1 py-1.5`}
                       />
-                      <button
-                        onClick={handleSaveEdit}
-                        disabled={savingEdit}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-lg text-xs text-emerald-300 transition-colors"
-                      >
-                        {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      <button onClick={handleSaveEdit} disabled={savingEdit} className={btnSignal}>
+                        {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                         Сохранить
                       </button>
-                      <button onClick={() => setEditingPos(null)} className="text-slate-600 hover:text-slate-400">
-                        <X className="w-4 h-4" />
+                      <button onClick={() => setEditingPos(null)} className="text-white/30 hover:text-white/60">
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20">
-                          <Briefcase className="w-4 h-4 text-amber-400" />
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center border" style={{ borderColor: `${SIGNAL}55`, backgroundColor: `${SIGNAL}14`, color: SIGNAL }}>
+                          <Briefcase className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-white">{posLabel(pos)}</p>
-                            <span className="text-xs text-slate-600 font-mono">{pos.name}</span>
+                            <span className="text-[11px] text-white/35">{pos.name}</span>
+                            {pos.is_builtin && (
+                              <span className="border border-white/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/40">базовая</span>
+                            )}
                           </div>
-                          {pos.description && <p className="text-xs text-slate-500 truncate">{pos.description}</p>}
+                          {pos.description && <p className="truncate text-xs text-white/40">{pos.description}</p>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex shrink-0 items-center gap-2">
                         <button
                           onClick={() => { setTab('permissions'); setSelectedRole(pos.name) }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
+                          className={btnNeutral}
                         >
-                          <Lock className="w-3.5 h-3.5" />
-                          Настроить права
+                          <Lock className="h-3.5 w-3.5" />
+                          Права
                         </button>
-                        {can('access.edit_role') && (
-                          <button
-                            onClick={() => startEdit(pos)}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
+                        {can('access.edit_role') && !pos.is_builtin && (
+                          <button onClick={() => startEdit(pos)} className="border border-white/15 p-1.5 text-white/50 transition-colors hover:bg-white/5">
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
                         )}
-                        {can('access.delete_role') && (
+                        {can('access.delete_role') && !pos.is_builtin && (
                           <button
                             onClick={() => handleDeletePosition(pos)}
                             disabled={deletingId === pos.id}
-                            className="p-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400 transition-colors disabled:opacity-50"
+                            className="border border-[#FF3B30]/30 bg-[#FF3B30]/10 p-1.5 text-[#FF3B30] transition-colors hover:bg-[#FF3B30]/20 disabled:opacity-50"
                           >
-                            {deletingId === pos.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            {deletingId === pos.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           </button>
                         )}
                       </div>
                     </div>
                   )}
-                </Card>
+                </div>
               ))}
 
               {positions.length === 0 && !positionsLoading && (
-                <Card className="p-8 text-center bg-slate-900/80 border-slate-800">
-                  <p className="text-sm text-slate-500">Должностей пока нет. Создайте первую выше.</p>
-                </Card>
+                <div className={`${card} p-8 text-center`}>
+                  <p className="text-xs uppercase tracking-wider text-white/40">Должностей пока нет. Создайте первую выше.</p>
+                </div>
               )}
             </div>
           )}
         </>
       )}
 
-      {/* ============ TAB: PERMISSIONS (capabilities v2) ============ */}
+      {/* ============ TAB: PERMISSIONS (capabilities) ============ */}
       {tab === 'permissions' && (
         <CapabilitiesPanel />
-      )}
-
-      {/* Старая модель временно сохранена для отката (без UI) */}
-      {false && tab === 'permissions' && (
-        <>
-          {permsTableExists === false && (
-            <Card className="p-5 bg-yellow-500/5 border border-yellow-500/30">
-              <div className="flex items-center gap-2 mb-3">
-                <Shield className="w-4 h-4 text-yellow-400" />
-                <h2 className="text-sm font-semibold text-yellow-300">Требуется таблица role_permissions в Supabase</h2>
-              </div>
-              <div className="relative">
-                <pre className="bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs text-slate-300 overflow-x-auto">{SQL_PERMS}</pre>
-                <button
-                  onClick={() => { navigator.clipboard.writeText(SQL_PERMS); setPermsCopied(true); setTimeout(() => setPermsCopied(false), 2000) }}
-                  className="absolute top-2 right-2 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg"
-                >
-                  {permsCopied ? '✓ Скопировано' : 'Копировать'}
-                </button>
-              </div>
-            </Card>
-          )}
-
-          {permsLoading || positionsLoading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
-              <Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Загрузка...</span>
-            </div>
-          ) : (
-            <>
-              {/* Position selector */}
-              <div className="flex gap-2 flex-wrap">
-                {positions.map(pos => {
-                  const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
-                  const count = allPaths.filter(path => isEnabled(pos.name, path)).length
-                  const isSelected = selectedRole === pos.name
-                  return (
-                    <button
-                      key={pos.id}
-                      onClick={() => setSelectedRole(pos.name)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                          : 'bg-slate-900/50 border-slate-700 text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      {posLabel(pos)}
-                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${isSelected ? 'bg-white/10' : 'bg-slate-800'}`}>
-                        {count}/{totalCount}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {selectedRole && (
-                <>
-                  {/* Info + bulk actions */}
-                  <div className="flex items-center gap-3 text-sm text-slate-400 flex-wrap">
-                    <LockOpen className="w-4 h-4 text-emerald-400" />
-                    <span>Доступно страниц: <span className="text-white font-semibold">{enabledCount}</span> из <span className="text-white font-semibold">{totalCount}</span></span>
-                    <span className="flex items-center gap-2 ml-2 flex-wrap">
-                      <button
-                        onClick={() => bulkToggle(selectedRole, true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 transition-colors"
-                      >
-                        <LockOpen className="w-3.5 h-3.5" /> Включить всё
-                      </button>
-                      <button
-                        onClick={() => bulkToggle(selectedRole, false)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-xs text-red-300 transition-colors"
-                      >
-                        <Lock className="w-3.5 h-3.5" /> Выключить всё
-                      </button>
-                      {(selectedRole === 'manager' || selectedRole === 'marketer' || selectedRole === 'owner') && (
-  <button
-    onClick={() => resetToDefault(selectedRole)}
-    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
-  >
-    <RefreshCw className="w-3.5 h-3.5" /> Сбросить к стандарту
-  </button>
-)}
-                    </span>
-                  </div>
-
-                  {/* Pages grid — ALL pages are toggleable */}
-                  <div className="space-y-4">
-                    {PAGE_GROUPS.map(group => (
-                      <Card key={group.group} className="p-4 bg-slate-900/80 border-slate-800">
-                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{group.group}</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {group.pages.map(page => {
-                            const enabled = isEnabled(selectedRole, page.path)
-                            const key = `${selectedRole}:${page.path}`
-                            const isSaving = savingKey === key
-                            return (
-                              <div
-                                key={page.path}
-                                className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${
-                                  enabled ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-900/40 border-slate-800 opacity-60'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  {enabled
-                                    ? <LockOpen className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                    : <Lock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                                  }
-                                  <div className="min-w-0">
-                                    <p className="text-sm text-slate-200 truncate">{page.label}</p>
-                                    <p className="text-xs text-slate-600">{page.path}</p>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => togglePermission(selectedRole, page.path)}
-                                  disabled={isSaving}
-                                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                                    enabled ? 'bg-emerald-500' : 'bg-slate-700'
-                                  } ${isSaving ? 'opacity-50' : 'cursor-pointer'}`}
-                                >
-                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </>
       )}
 
       {/* ============ TAB: ACCOUNTS ============ */}
       {tab === 'accounts' && (
         <>
           {accountsLoading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-slate-500">
-              <Loader2 className="w-5 h-5 animate-spin" /><span className="text-sm">Загрузка...</span>
+            <div className="flex h-32 items-center justify-center gap-2 text-white/40">
+              <Loader2 className="h-5 w-5 animate-spin" /><span className="text-xs uppercase tracking-wider">Загрузка…</span>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-px">
               {staff.filter(s => s.is_active).map(s => {
                 const account = accounts.find(a => a.staffId === s.id)
                 const stateInfo = accountStateLabel(account?.accountState ?? 'no_email')
                 const genPwd = generatedPasswords.find(p => p.staffId === s.id)
 
                 return (
-                  <Card key={s.id} className="p-4 bg-slate-900/80 border-slate-800">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 bg-slate-700 rounded-xl flex items-center justify-center text-sm font-bold text-slate-300 shrink-0">
+                  <div key={s.id} className={`${card} p-4`}>
+                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="grid h-9 w-9 shrink-0 place-items-center border border-white/15 bg-white/5 text-sm font-bold text-white/70">
                           {(s.full_name || '?').charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{s.full_name || 'Без имени'}</p>
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <p className="truncate text-sm font-semibold text-white">{s.full_name || 'Без имени'}</p>
+                          <div className="flex flex-wrap items-center gap-2">
                             {editingEmailId === s.id ? (
                               <div className="flex items-center gap-1">
                                 <input
@@ -830,30 +593,26 @@ export default function AccessPage() {
                                   value={editingEmailValue}
                                   onChange={e => setEditingEmailValue(e.target.value)}
                                   onKeyDown={e => { if (e.key === 'Enter') saveEmail(s.id); if (e.key === 'Escape') setEditingEmailId(null) }}
-                                  className="text-xs bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-white w-48 focus:outline-none focus:border-amber-500"
+                                  className="w-48 border border-white/15 bg-black px-2 py-1 text-xs text-white focus:border-[#FFB800] focus:outline-none"
                                 />
-                                <button
-                                  onClick={() => saveEmail(s.id)}
-                                  disabled={savingEmailId === s.id}
-                                  className="px-2 py-1 text-xs bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 rounded-lg text-amber-300 transition-colors disabled:opacity-50"
-                                >
-                                  {savingEmailId === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Сохранить'}
+                                <button onClick={() => saveEmail(s.id)} disabled={savingEmailId === s.id} className={btnSignal}>
+                                  {savingEmailId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Сохранить'}
                                 </button>
-                                <button onClick={() => setEditingEmailId(null)} className="text-slate-600 hover:text-slate-400">
-                                  <X className="w-3.5 h-3.5" />
+                                <button onClick={() => setEditingEmailId(null)} className="text-white/30 hover:text-white/60">
+                                  <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             ) : can('access.change_email') ? (
                               <button
                                 onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
-                                className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
+                                className="inline-flex items-center gap-1.5 border border-white/15 px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/5"
                                 title="Изменить логин"
                               >
-                                <Pencil className="w-3 h-3" />
+                                <Pencil className="h-3 w-3" />
                                 {s.email || 'нет email'}
                               </button>
                             ) : (
-                              <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300">
+                              <span className="inline-flex items-center gap-1.5 border border-white/10 px-2 py-1 text-xs text-white/50">
                                 {s.email || 'нет email'}
                               </span>
                             )}
@@ -864,70 +623,62 @@ export default function AccessPage() {
                                 <select
                                   defaultValue={s.role || ''}
                                   onChange={e => saveStaffRole(s.id, e.target.value)}
-                                  className="text-xs bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-amber-500"
+                                  className="border border-white/15 bg-black px-2 py-1 text-xs text-white focus:border-[#FFB800] focus:outline-none"
                                 >
                                   <option value="">— выберите —</option>
                                   {allPositionNames.map(name => (
                                     <option key={name} value={name}>{BUILTIN_LABELS[name] ?? name}</option>
                                   ))}
                                 </select>
-                                {savingRoleId === s.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
-                                <button onClick={() => setChangingRoleId(null)} className="text-slate-600 hover:text-slate-400">
-                                  <X className="w-3.5 h-3.5" />
+                                {savingRoleId === s.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-white/40" />}
+                                <button onClick={() => setChangingRoleId(null)} className="text-white/30 hover:text-white/60">
+                                  <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             ) : can('access.manage_staff_roles') ? (
                               <button
                                 onClick={() => setChangingRoleId(s.id)}
-                                className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors"
+                                className="inline-flex items-center gap-1.5 border border-white/15 px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/5"
                                 title="Изменить должность"
                               >
-                                <Briefcase className="w-3 h-3" />
+                                <Briefcase className="h-3 w-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </button>
                             ) : (
-                              <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300">
-                                <Briefcase className="w-3 h-3" />
+                              <span className="inline-flex items-center gap-1.5 border border-white/10 px-2 py-1 text-xs text-white/50">
+                                <Briefcase className="h-3 w-3" />
                                 {s.role ? (BUILTIN_LABELS[s.role] ?? s.role) : 'нет должности'}
                               </span>
                             )}
 
-                            <span className={`text-xs font-medium ${stateInfo.color}`}>{stateInfo.label}</span>
+                            <span className={`text-[11px] font-medium uppercase tracking-wider ${stateInfo.color}`}>{stateInfo.label}</span>
                             {account?.lastSignInAt && (
-                              <span className="text-xs text-slate-600">вход: {fmtDate(account.lastSignInAt)}</span>
+                              <span className="text-[11px] text-white/30">вход: {fmtDate(account.lastSignInAt)}</span>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex flex-wrap items-center gap-2">
                         {account?.userId && can('access.manage_user_overrides') && (
                           <button
                             onClick={() => setOverridesFor({ userId: account.userId!, name: s.full_name || s.email || 'Сотрудник', role: s.role })}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/15 hover:bg-violet-600/25 border border-violet-500/30 rounded-lg text-xs text-violet-200 transition-colors"
+                            className="inline-flex items-center gap-1.5 border border-white/15 px-3 py-1.5 text-xs text-white/70 transition-colors hover:bg-white/5"
                             title="Индивидуальные права (исключения поверх роли)"
                           >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <SlidersHorizontal className="h-3.5 w-3.5" />
                             Инд. права
                           </button>
                         )}
                         {s.email && can('access.invite_staff') && (
-                          <button
-                            onClick={() => sendInvite(s.id)}
-                            disabled={sendingInviteId === s.id}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors disabled:opacity-50"
-                          >
-                            {sendingInviteId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                            {account?.accountState === 'no_account' || account?.accountState === 'no_email' ? 'Пригласить' : 'Сбросить пароль (email)'}
+                          <button onClick={() => sendInvite(s.id)} disabled={sendingInviteId === s.id} className={btnNeutral}>
+                            {sendingInviteId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                            {account?.accountState === 'no_account' || account?.accountState === 'no_email' ? 'Пригласить' : 'Сбросить пароль'}
                           </button>
                         )}
                         {(account?.accountState === 'active' || account?.accountState === 'invited') && can('access.generate_password') && (
-                          <button
-                            onClick={() => generatePassword(s.id)}
-                            disabled={generatingId === s.id}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 rounded-lg text-xs text-amber-300 transition-colors disabled:opacity-50"
-                          >
-                            {generatingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                          <button onClick={() => generatePassword(s.id)} disabled={generatingId === s.id} className={btnSignal}>
+                            {generatingId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
                             Новый пароль
                           </button>
                         )}
@@ -935,54 +686,54 @@ export default function AccessPage() {
                     </div>
 
                     {inviteMessage?.staffId === s.id && (
-                      <div className={`mt-3 p-2.5 rounded-lg text-xs ${inviteMessage.ok ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-red-500/10 text-red-300 border border-red-500/20'}`}>
+                      <div className={`mt-3 border p-2.5 text-xs ${inviteMessage.ok ? 'border-[#00E676]/25 bg-[#00E676]/10 text-[#00E676]' : 'border-[#FF3B30]/25 bg-[#FF3B30]/10 text-[#FF3B30]'}`}>
                         {inviteMessage.text}
                       </div>
                     )}
 
                     {genPwd && (
-                      <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                        <div className="flex items-center justify-between mb-1.5">
+                      <div className="mt-3 border border-[#FFB800]/25 bg-[#FFB800]/[0.06] p-3">
+                        <div className="mb-1.5 flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-xs text-emerald-300 font-medium">Новый пароль установлен</span>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-[#00E676]" />
+                            <span className="text-xs font-medium uppercase tracking-wider text-[#00E676]">Новый пароль установлен</span>
                           </div>
-                          <button onClick={() => setGeneratedPasswords(prev => prev.filter(p => p.staffId !== s.id))} className="text-slate-600 hover:text-slate-400">
-                            <X className="w-3.5 h-3.5" />
+                          <button onClick={() => setGeneratedPasswords(prev => prev.filter(p => p.staffId !== s.id))} className="text-white/30 hover:text-white/60">
+                            <X className="h-3.5 w-3.5" />
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <code className={`flex-1 text-sm font-mono bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 text-white tracking-widest ${genPwd.visible ? '' : 'blur-sm select-none'}`}>
+                          <code className={`flex-1 border border-white/15 bg-black px-3 py-1.5 text-sm tracking-widest text-white ${genPwd.visible ? '' : 'select-none blur-sm'}`}>
                             {genPwd.password}
                           </code>
                           {can('access.reveal_password') && (
                             <button
                               onClick={() => setGeneratedPasswords(prev => prev.map(p => p.staffId === s.id ? { ...p, visible: !p.visible } : p))}
-                              className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 transition-colors"
+                              className="border border-white/15 p-1.5 text-white/50 transition-colors hover:bg-white/5"
                             >
-                              {genPwd.visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              {genPwd.visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                           )}
                           <button
                             onClick={() => navigator.clipboard.writeText(genPwd.password)}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-400 transition-colors"
+                            className="border border-white/15 p-1.5 text-white/50 transition-colors hover:bg-white/5"
                           >
-                            <Copy className="w-4 h-4" />
+                            <Copy className="h-4 w-4" />
                           </button>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1.5">
-                          Аккаунт: <span className="text-slate-400">{genPwd.email}</span> · Скопируй и передай пользователю.
+                        <p className="mt-1.5 text-[11px] text-white/40">
+                          Аккаунт: <span className="text-white/60">{genPwd.email}</span> · скопируй и передай пользователю.
                         </p>
                       </div>
                     )}
-                  </Card>
+                  </div>
                 )
               })}
 
               {staff.filter(s => s.is_active).length === 0 && (
-                <Card className="p-8 bg-slate-900/80 border-slate-800 text-center">
-                  <p className="text-sm text-slate-500">Активных сотрудников не найдено</p>
-                </Card>
+                <div className={`${card} p-8 text-center`}>
+                  <p className="text-xs uppercase tracking-wider text-white/40">Активных сотрудников не найдено</p>
+                </div>
               )}
             </div>
           )}

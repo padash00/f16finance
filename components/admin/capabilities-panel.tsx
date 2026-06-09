@@ -3,18 +3,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Lock, RotateCcw, ShieldAlert, ShieldCheck, Search } from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   CAPABILITY_GROUPS,
   type Capability,
-  type CapabilityGroup,
   type CapabilityPage,
 } from '@/lib/core/capabilities'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type RoleCapability = { role: string; capability: string; granted: boolean }
+
+// Industrial: тёплый чёрный, 1px-границы, янтарь-сигнал, семантика вкл(зелёный)/выкл(красный).
+const SIGNAL = '#FFB800'
+const card = 'border border-white/10 bg-white/[0.015]'
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Владелец',
@@ -29,8 +30,8 @@ function roleLabel(role: string): string {
 }
 
 function severityBadge(sev: Capability['severity']) {
-  if (sev === 'high') return <ShieldAlert className="h-3 w-3 text-red-400" />
-  if (sev === 'medium') return <ShieldCheck className="h-3 w-3 text-amber-400" />
+  if (sev === 'high') return <ShieldAlert className="h-3 w-3 text-[#FF3B30]" />
+  if (sev === 'medium') return <ShieldCheck className="h-3 w-3 text-[#FFB800]" />
   return null
 }
 
@@ -183,40 +184,6 @@ export function CapabilitiesPanel() {
     }
   }
 
-  async function resetRole(role: string) {
-    if (!confirm(`Открыть все права для роли «${roleLabel(role)}»?`)) return
-    setSavingKey(`reset:${role}`)
-
-    // Оптимистично включаем все capabilities для роли
-    const previousItems = items
-    setItems((prev) => {
-      const otherRoles = prev.filter((it) => it.role !== role)
-      const allCaps: typeof prev = []
-      for (const group of CAPABILITY_GROUPS) {
-        for (const page of group.pages) {
-          for (const cap of page.capabilities) {
-            allCaps.push({ role, capability: cap.id, granted: true })
-          }
-        }
-      }
-      return [...otherRoles, ...allCaps]
-    })
-
-    try {
-      const res = await fetch('/api/admin/role-capabilities', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'reset_role', role }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    } catch (e: any) {
-      setItems(previousItems)
-      alert(`Ошибка: ${e?.message}`)
-    } finally {
-      setSavingKey(null)
-    }
-  }
-
   function togglePage(pageId: string) {
     setCollapsedPages((s) => {
       const next = new Set(s)
@@ -278,87 +245,87 @@ export function CapabilitiesPanel() {
 
   if (loading) {
     return (
-      <Card className="p-6">
-        <div className="flex items-center gap-3 text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin" /> Загружаем права...
+      <div className={`${card} p-6`}>
+        <div className="flex items-center gap-3 text-white/40">
+          <Loader2 className="h-4 w-4 animate-spin" /> <span className="text-xs uppercase tracking-wider">Загружаем права…</span>
         </div>
-      </Card>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Card className="border-red-500/30 bg-red-500/5 p-6 text-red-200">
+      <div className="border border-[#FF3B30]/30 bg-[#FF3B30]/[0.06] p-6 text-[#FF3B30]">
         Не удалось загрузить: {error}
-      </Card>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 font-mono text-white">
       {/* Сводка по ролям */}
-      <Card className="border-white/10 bg-slate-950/50 p-4">
+      <div className={`${card} p-4`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold text-slate-300">Сводка:</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Сводка</span>
           {roles.map((role) => {
             const s = summary[role] || { granted: 0, total: 0 }
             const pct = s.total ? Math.round((s.granted / s.total) * 100) : 0
             return (
               <span
                 key={role}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-slate-300"
+                className="inline-flex items-center gap-1.5 border border-white/10 bg-white/5 px-2 py-1 text-white/70"
                 title={`${s.granted} из ${s.total} прав включено`}
               >
-                <span className="font-medium text-white">{roleLabel(role)}</span>
-                <span className="text-slate-400">{s.granted}/{s.total}</span>
-                <span className={pct === 100 ? 'text-emerald-400' : pct > 50 ? 'text-amber-400' : 'text-rose-400'}>
+                <span className="font-semibold text-white">{roleLabel(role)}</span>
+                <span className="tabular-nums text-white/40">{s.granted}/{s.total}</span>
+                <span className={`tabular-nums ${pct === 100 ? 'text-[#00E676]' : pct > 50 ? 'text-[#FFB800]' : 'text-[#FF3B30]'}`}>
                   {pct}%
                 </span>
               </span>
             )
           })}
         </div>
-      </Card>
+      </div>
 
       {/* Поиск */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[280px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="relative min-w-[280px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по правам и страницам..."
-            className="border-white/10 bg-slate-900/60 pl-10 text-sm text-white"
+            placeholder="Поиск по правам и страницам…"
+            className="rounded-none border-white/15 bg-black pl-10 font-mono text-sm text-white"
           />
         </div>
-        <Button onClick={load} variant="outline" size="sm" className="border-white/10">
-          <RotateCcw className="mr-2 h-3.5 w-3.5" />
+        <button onClick={load} className="inline-flex items-center gap-1.5 border border-white/15 px-3 py-2 text-xs text-white/70 transition-colors hover:bg-white/5">
+          <RotateCcw className="h-3.5 w-3.5" />
           Обновить
-        </Button>
+        </button>
       </div>
 
       {/* Дерево разделов */}
-      <div className="space-y-3">
+      <div className="space-y-px">
         {filteredGroups.map((group) => {
           // Если идёт поиск — раскрываем найденное независимо от collapsed
           const groupCollapsed = search.trim() ? false : collapsedGroups.has(group.id)
           return (
-            <Card key={group.id} className="border-white/10 bg-slate-950/50 overflow-hidden">
+            <div key={group.id} className={`${card} overflow-hidden`}>
               <button
                 onClick={() => toggleGroup(group.id)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/5"
               >
                 <div className="flex items-center gap-2">
-                  {groupCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  <span className="font-semibold text-white">{group.label}</span>
-                  <span className="text-xs text-slate-500">
-                    ({group.pages.length} стр., {group.pages.reduce((acc, p) => acc + p.capabilities.length, 0)} прав)
+                  {groupCollapsed ? <ChevronRight className="h-4 w-4 text-white/40" /> : <ChevronDown className="h-4 w-4" style={{ color: SIGNAL }} />}
+                  <span className="text-sm font-semibold uppercase tracking-wider text-white">{group.label}</span>
+                  <span className="tabular-nums text-[11px] text-white/30">
+                    {group.pages.length} стр · {group.pages.reduce((acc, p) => acc + p.capabilities.length, 0)} прав
                   </span>
                 </div>
               </button>
 
               {!groupCollapsed && (
-                <div className="border-t border-white/5">
+                <div className="border-t border-white/10">
                   {group.pages.map((page) => (
                     <PageRow
                       key={page.id}
@@ -377,19 +344,19 @@ export function CapabilitiesPanel() {
                   ))}
                 </div>
               )}
-            </Card>
+            </div>
           )
         })}
       </div>
 
       {/* Действия для роли */}
       {can('access.reset_to_defaults') && (
-      <Card className="border-white/10 bg-slate-950/50 p-4 space-y-4">
+      <div className={`${card} space-y-4 p-4`}>
         <div>
-          <div className="text-sm font-semibold text-white mb-2">Умное управление правами</div>
-          <p className="text-xs text-slate-400 mb-3">
-            При включении любого действия (например <span className="text-amber-300">expenses.create</span>)
-            автоматически включаются зависимости (страница <span className="text-amber-300">expenses.view</span>),
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Умное управление правами</div>
+          <p className="mb-3 text-xs text-white/50">
+            При включении любого действия (например <span className="text-[#FFB800]">expenses.create</span>)
+            автоматически включаются зависимости (страница <span className="text-[#FFB800]">expenses.view</span>),
             чтобы не было ошибки «Нет доступа к странице».
           </p>
         </div>
@@ -397,58 +364,55 @@ export function CapabilitiesPanel() {
         {roles.filter((r) => r !== 'super_admin').map((role) => {
           const otherRoles = roles.filter((r) => r !== role && r !== 'super_admin')
           return (
-            <div key={role} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-              <div className="text-sm font-medium text-white mb-2">{roleLabel(role)}</div>
+            <div key={role} className="border border-white/10 bg-black/30 p-3">
+              <div className="mb-2 text-sm font-semibold text-white">{roleLabel(role)}</div>
               <div className="flex flex-wrap gap-2 text-xs">
-                <Button
-                  variant="outline" size="sm"
-                  className="border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/10"
+                <button
+                  className="inline-flex items-center gap-1.5 border border-[#00E676]/35 px-3 py-1.5 text-[#00E676] transition-colors hover:bg-[#00E676]/10 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
                   onClick={() => applyPreset(role, 'reset_role', `Включить ВСЁ для роли «${roleLabel(role)}»?`)}
                 >
                   ✓ Включить всё
-                </Button>
-                <Button
-                  variant="outline" size="sm"
-                  className="border-sky-500/30 text-sky-200 hover:bg-sky-500/10"
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 border border-white/20 px-3 py-1.5 text-white/70 transition-colors hover:bg-white/5 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
                   onClick={() => applyPreset(role, 'view_only', `Только просмотр для роли «${roleLabel(role)}»?\n\nВсе *.view = ВКЛ, остальные действия = ВЫКЛ.`)}
                 >
                   👁 Только просмотр
-                </Button>
-                <Button
-                  variant="outline" size="sm"
-                  className="border-rose-500/30 text-rose-200 hover:bg-rose-500/10"
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 border border-[#FF3B30]/35 px-3 py-1.5 text-[#FF3B30] transition-colors hover:bg-[#FF3B30]/10 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
                   onClick={() => applyPreset(role, 'clear_all', `Закрыть ВСЁ для роли «${roleLabel(role)}»?\n\nПользователь не сможет открыть ни одну страницу.`)}
                 >
                   ✗ Закрыть всё
-                </Button>
+                </button>
                 {otherRoles.length > 0 && (
-                  <Button
-                    variant="outline" size="sm"
-                    className="border-violet-500/30 text-violet-200 hover:bg-violet-500/10"
+                  <select
+                    className="border border-white/20 bg-black px-2 py-1.5 text-xs text-white/70 focus:border-[#FFB800] focus:outline-none disabled:opacity-50"
                     disabled={savingKey?.startsWith(`preset:${role}:`)}
-                    onClick={() => {
-                      const source = window.prompt(
-                        `Скопировать с какой роли в «${roleLabel(role)}»?\n\nДоступные:\n${otherRoles.map((r) => `  - ${r} (${roleLabel(r)})`).join('\n')}\n\nВведите код роли:`,
-                        otherRoles[0],
-                      )
+                    value=""
+                    onChange={(e) => {
+                      const source = e.target.value
                       if (!source) return
-                      applyPreset(role, 'copy_from', `Скопировать права с «${source}» в «${roleLabel(role)}»?`, { copy_from_role: source })
+                      applyPreset(role, 'copy_from', `Скопировать права с «${roleLabel(source)}» в «${roleLabel(role)}»?`, { copy_from_role: source })
                     }}
                   >
-                    📋 Скопировать с другой
-                  </Button>
+                    <option value="">📋 Скопировать с роли…</option>
+                    {otherRoles.map((r) => (
+                      <option key={r} value={r}>{roleLabel(r)}</option>
+                    ))}
+                  </select>
                 )}
                 {savingKey?.startsWith(`preset:${role}:`) && (
-                  <Loader2 className="mt-2 h-4 w-4 animate-spin text-slate-400" />
+                  <Loader2 className="mt-2 h-4 w-4 animate-spin text-white/40" />
                 )}
               </div>
             </div>
           )
         })}
-      </Card>
+      </div>
       )}
     </div>
   )
@@ -490,21 +454,21 @@ function PageRow({
   const hasViewCap = page.capabilities.some((c) => c.id === viewCapId)
 
   return (
-    <div className="border-b border-white/5 last:border-b-0">
+    <div className="border-b border-white/10 last:border-b-0">
       <div className="flex w-full items-center justify-between gap-2 px-6 py-2">
         <button
           onClick={onToggleCollapse}
           className="flex flex-1 items-center gap-2 text-left transition hover:opacity-80"
         >
-          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
-          <span className="text-sm font-medium text-slate-200">{page.label}</span>
-          <span className="text-xs text-slate-500" title={page.path}>
+          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-white/35" /> : <ChevronDown className="h-3.5 w-3.5 text-white/55" />}
+          <span className="text-sm font-medium text-white/85">{page.label}</span>
+          <span className="tabular-nums text-[11px] text-white/30" title={page.path}>
             {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
           </span>
         </button>
         {hasViewCap && canToggle && (
           <div className="flex shrink-0 items-center gap-1">
-            <span className="mr-0.5 text-[11px] text-slate-500">видят:</span>
+            <span className="mr-0.5 text-[11px] uppercase tracking-wider text-white/30">видят:</span>
             {roles.filter((r) => r !== 'super_admin').map((role) => {
               const visible = isGranted(role, viewCapId)
               const saving = savingKey === `${role}:${viewCapId}`
@@ -513,10 +477,10 @@ function PageRow({
                   key={role}
                   onClick={() => onToggle(role, viewCapId, !visible)}
                   disabled={saving}
-                  className={`rounded px-1.5 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                  className={`border px-1.5 py-0.5 text-[11px] transition disabled:opacity-50 ${
                     visible
-                      ? 'bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
-                      : 'bg-slate-800 text-slate-500 line-through hover:bg-slate-700'
+                      ? 'border-[#00E676]/40 bg-[#00E676]/15 text-[#00E676] hover:bg-[#00E676]/25'
+                      : 'border-white/10 bg-white/5 text-white/35 line-through hover:bg-white/10'
                   }`}
                   title={visible ? `${roleLabel(role)}: страница видна — клик чтобы скрыть` : `${roleLabel(role)}: страница скрыта — клик чтобы показать`}
                 >
@@ -532,18 +496,18 @@ function PageRow({
         <div className="px-6 pb-3">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs font-medium text-slate-400">
-                <th className="py-1 pr-3 w-1/3">Действие</th>
+              <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-white/40">
+                <th className="w-1/3 py-1 pr-3">Действие</th>
                 {roles.map((role) => (
-                  <th key={role} className="py-1 px-2 text-center text-[11px]">
+                  <th key={role} className="px-2 py-1 text-center text-[11px]">
                     {roleLabel(role)}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="text-slate-200">
+            <tbody className="text-white/80">
               {page.capabilities.map((cap) => (
-                <tr key={cap.id} className="border-t border-white/5">
+                <tr key={cap.id} className="border-t border-white/10">
                   <td className="py-1.5 pr-3 align-top">
                     <div className="flex items-center gap-1.5" title={cap.id}>
                       {severityBadge(cap.severity)}
@@ -563,8 +527,8 @@ function PageRow({
                         <button
                           onClick={() => canToggle && !isSuperAdminRow && onToggle(role, cap.id, !granted)}
                           disabled={saving || isSuperAdminRow || !canToggle}
-                          className={`inline-flex h-5 w-9 items-center rounded-full transition ${
-                            granted ? 'bg-emerald-500/40' : 'bg-slate-700'
+                          className={`inline-flex h-5 w-9 items-center border transition ${
+                            granted ? 'border-[#FFB800]/50 bg-[#FFB800]/30' : 'border-white/15 bg-white/5'
                           } ${saving ? 'opacity-50' : ''} ${(isSuperAdminRow || !canToggle) ? 'cursor-not-allowed opacity-70' : ''}`}
                           title={
                             !canToggle
@@ -577,8 +541,8 @@ function PageRow({
                           }
                         >
                           <span
-                            className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                              granted ? 'translate-x-4' : 'translate-x-0.5'
+                            className={`inline-block h-3.5 w-3.5 transition-transform ${
+                              granted ? 'translate-x-4 bg-[#FFB800]' : 'translate-x-0.5 bg-white/60'
                             }`}
                           />
                         </button>
@@ -591,18 +555,18 @@ function PageRow({
           </table>
           {canBulk && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-500">Пакетно по роли:</span>
+              <span className="text-[11px] uppercase tracking-wider text-white/30">Пакетно по роли:</span>
               {roles.map((role) => (
-                <div key={role} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5">
-                  <span className="text-[11px] text-slate-300">{roleLabel(role)}:</span>
+                <div key={role} className="inline-flex items-center gap-1 border border-white/10 bg-white/5 px-1.5 py-0.5">
+                  <span className="text-[11px] text-white/60">{roleLabel(role)}:</span>
                   <button
                     onClick={() => onBulkSet(role, allCapIds, true)}
                     disabled={savingKey === `bulk:${role}`}
-                    className="text-[11px] text-emerald-300 hover:underline"
+                    className="text-[11px] text-[#00E676] hover:underline"
                   >
                     все вкл
                   </button>
-                  <span className="text-slate-600">·</span>
+                  <span className="text-white/20">·</span>
                   <button
                     onClick={() => {
                       if (confirm(`Выключить ВСЕ действия страницы «${page.label}» для роли «${roleLabel(role)}»?\n\nСтраница станет недоступна этой роли.`)) {
@@ -610,7 +574,7 @@ function PageRow({
                       }
                     }}
                     disabled={savingKey === `bulk:${role}`}
-                    className="text-[11px] text-rose-300 hover:underline"
+                    className="text-[11px] text-[#FF3B30] hover:underline"
                   >
                     все выкл
                   </button>
