@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Loader2, Lock, RotateCcw, ShieldAlert, ShieldCheck, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, RotateCcw, ShieldAlert, ShieldCheck, Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import {
@@ -13,9 +13,8 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 
 type RoleCapability = { role: string; capability: string; granted: boolean }
 
-// Industrial: тёплый чёрный, 1px-границы, янтарь-сигнал, семантика вкл(зелёный)/выкл(красный).
-const SIGNAL = '#FFB800'
-const card = 'border border-white/10 bg-white/[0.015]'
+// Soft modern: тёмный, плавные закругления, мягкие тени, изумруд/синий акценты.
+const card = 'rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/20'
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Владелец',
@@ -30,8 +29,8 @@ function roleLabel(role: string): string {
 }
 
 function severityBadge(sev: Capability['severity']) {
-  if (sev === 'high') return <ShieldAlert className="h-3 w-3 text-[#FF3B30]" />
-  if (sev === 'medium') return <ShieldCheck className="h-3 w-3 text-[#FFB800]" />
+  if (sev === 'high') return <ShieldAlert className="h-3 w-3 text-rose-400" />
+  if (sev === 'medium') return <ShieldCheck className="h-3 w-3 text-amber-400" />
   return null
 }
 
@@ -246,8 +245,8 @@ export function CapabilitiesPanel() {
   if (loading) {
     return (
       <div className={`${card} p-6`}>
-        <div className="flex items-center gap-3 text-white/40">
-          <Loader2 className="h-4 w-4 animate-spin" /> <span className="text-xs uppercase tracking-wider">Загружаем права…</span>
+        <div className="flex items-center gap-3 text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Загружаем права…
         </div>
       </div>
     )
@@ -255,30 +254,30 @@ export function CapabilitiesPanel() {
 
   if (error) {
     return (
-      <div className="border border-[#FF3B30]/30 bg-[#FF3B30]/[0.06] p-6 text-[#FF3B30]">
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/[0.07] p-6 text-rose-200">
         Не удалось загрузить: {error}
       </div>
     )
   }
 
   return (
-    <div className="space-y-3 font-mono text-white">
+    <div className="space-y-4">
       {/* Сводка по ролям */}
       <div className={`${card} p-4`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Сводка</span>
+          <span className="font-semibold text-slate-300">Сводка:</span>
           {roles.map((role) => {
             const s = summary[role] || { granted: 0, total: 0 }
             const pct = s.total ? Math.round((s.granted / s.total) * 100) : 0
             return (
               <span
                 key={role}
-                className="inline-flex items-center gap-1.5 border border-white/10 bg-white/5 px-2 py-1 text-white/70"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-slate-300"
                 title={`${s.granted} из ${s.total} прав включено`}
               >
-                <span className="font-semibold text-white">{roleLabel(role)}</span>
-                <span className="tabular-nums text-white/40">{s.granted}/{s.total}</span>
-                <span className={`tabular-nums ${pct === 100 ? 'text-[#00E676]' : pct > 50 ? 'text-[#FFB800]' : 'text-[#FF3B30]'}`}>
+                <span className="font-medium text-white">{roleLabel(role)}</span>
+                <span className="text-slate-400">{s.granted}/{s.total}</span>
+                <span className={pct === 100 ? 'text-emerald-400' : pct > 50 ? 'text-amber-400' : 'text-rose-400'}>
                   {pct}%
                 </span>
               </span>
@@ -290,22 +289,22 @@ export function CapabilitiesPanel() {
       {/* Поиск */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[280px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск по правам и страницам…"
-            className="rounded-none border-white/15 bg-black pl-10 font-mono text-sm text-white"
+            className="rounded-xl border-white/10 bg-slate-950/50 pl-10 text-sm text-white"
           />
         </div>
-        <button onClick={load} className="inline-flex items-center gap-1.5 border border-white/15 px-3 py-2 text-xs text-white/70 transition-colors hover:bg-white/5">
+        <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10">
           <RotateCcw className="h-3.5 w-3.5" />
           Обновить
         </button>
       </div>
 
       {/* Дерево разделов */}
-      <div className="space-y-px">
+      <div className="space-y-3">
         {filteredGroups.map((group) => {
           // Если идёт поиск — раскрываем найденное независимо от collapsed
           const groupCollapsed = search.trim() ? false : collapsedGroups.has(group.id)
@@ -316,10 +315,10 @@ export function CapabilitiesPanel() {
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/5"
               >
                 <div className="flex items-center gap-2">
-                  {groupCollapsed ? <ChevronRight className="h-4 w-4 text-white/40" /> : <ChevronDown className="h-4 w-4" style={{ color: SIGNAL }} />}
-                  <span className="text-sm font-semibold uppercase tracking-wider text-white">{group.label}</span>
-                  <span className="tabular-nums text-[11px] text-white/30">
-                    {group.pages.length} стр · {group.pages.reduce((acc, p) => acc + p.capabilities.length, 0)} прав
+                  {groupCollapsed ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-emerald-300" />}
+                  <span className="font-semibold text-white">{group.label}</span>
+                  <span className="text-xs text-slate-500">
+                    ({group.pages.length} стр., {group.pages.reduce((acc, p) => acc + p.capabilities.length, 0)} прав)
                   </span>
                 </div>
               </button>
@@ -353,10 +352,10 @@ export function CapabilitiesPanel() {
       {can('access.reset_to_defaults') && (
       <div className={`${card} space-y-4 p-4`}>
         <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Умное управление правами</div>
-          <p className="mb-3 text-xs text-white/50">
-            При включении любого действия (например <span className="text-[#FFB800]">expenses.create</span>)
-            автоматически включаются зависимости (страница <span className="text-[#FFB800]">expenses.view</span>),
+          <div className="mb-2 text-sm font-semibold text-white">Умное управление правами</div>
+          <p className="mb-3 text-xs text-slate-400">
+            При включении любого действия (например <span className="text-emerald-300">expenses.create</span>)
+            автоматически включаются зависимости (страница <span className="text-emerald-300">expenses.view</span>),
             чтобы не было ошибки «Нет доступа к странице».
           </p>
         </div>
@@ -364,25 +363,25 @@ export function CapabilitiesPanel() {
         {roles.filter((r) => r !== 'super_admin').map((role) => {
           const otherRoles = roles.filter((r) => r !== role && r !== 'super_admin')
           return (
-            <div key={role} className="border border-white/10 bg-black/30 p-3">
-              <div className="mb-2 text-sm font-semibold text-white">{roleLabel(role)}</div>
+            <div key={role} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="mb-2 text-sm font-medium text-white">{roleLabel(role)}</div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <button
-                  className="inline-flex items-center gap-1.5 border border-[#00E676]/35 px-3 py-1.5 text-[#00E676] transition-colors hover:bg-[#00E676]/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
                   onClick={() => applyPreset(role, 'reset_role', `Включить ВСЁ для роли «${roleLabel(role)}»?`)}
                 >
                   ✓ Включить всё
                 </button>
                 <button
-                  className="inline-flex items-center gap-1.5 border border-white/20 px-3 py-1.5 text-white/70 transition-colors hover:bg-white/5 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-1.5 text-sky-200 transition-colors hover:bg-sky-500/20 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
                   onClick={() => applyPreset(role, 'view_only', `Только просмотр для роли «${roleLabel(role)}»?\n\nВсе *.view = ВКЛ, остальные действия = ВЫКЛ.`)}
                 >
                   👁 Только просмотр
                 </button>
                 <button
-                  className="inline-flex items-center gap-1.5 border border-[#FF3B30]/35 px-3 py-1.5 text-[#FF3B30] transition-colors hover:bg-[#FF3B30]/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-rose-200 transition-colors hover:bg-rose-500/20 disabled:opacity-50"
                   disabled={savingKey?.startsWith(`preset:${role}:`)}
                   onClick={() => applyPreset(role, 'clear_all', `Закрыть ВСЁ для роли «${roleLabel(role)}»?\n\nПользователь не сможет открыть ни одну страницу.`)}
                 >
@@ -390,7 +389,7 @@ export function CapabilitiesPanel() {
                 </button>
                 {otherRoles.length > 0 && (
                   <select
-                    className="border border-white/20 bg-black px-2 py-1.5 text-xs text-white/70 focus:border-[#FFB800] focus:outline-none disabled:opacity-50"
+                    className="rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-violet-200 transition-colors hover:bg-violet-500/20 focus:outline-none disabled:opacity-50"
                     disabled={savingKey?.startsWith(`preset:${role}:`)}
                     value=""
                     onChange={(e) => {
@@ -406,7 +405,7 @@ export function CapabilitiesPanel() {
                   </select>
                 )}
                 {savingKey?.startsWith(`preset:${role}:`) && (
-                  <Loader2 className="mt-2 h-4 w-4 animate-spin text-white/40" />
+                  <Loader2 className="mt-2 h-4 w-4 animate-spin text-slate-400" />
                 )}
               </div>
             </div>
@@ -455,20 +454,20 @@ function PageRow({
 
   return (
     <div className="border-b border-white/10 last:border-b-0">
-      <div className="flex w-full items-center justify-between gap-2 px-6 py-2">
+      <div className="flex w-full items-center justify-between gap-2 px-5 py-2.5">
         <button
           onClick={onToggleCollapse}
           className="flex flex-1 items-center gap-2 text-left transition hover:opacity-80"
         >
-          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-white/35" /> : <ChevronDown className="h-3.5 w-3.5 text-white/55" />}
-          <span className="text-sm font-medium text-white/85">{page.label}</span>
-          <span className="tabular-nums text-[11px] text-white/30" title={page.path}>
+          {effectivelyCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-300" />}
+          <span className="text-sm font-medium text-slate-200">{page.label}</span>
+          <span className="text-xs text-slate-500" title={page.path}>
             {page.capabilities.length} {page.capabilities.length === 1 ? 'действие' : 'действий'}
           </span>
         </button>
         {hasViewCap && canToggle && (
           <div className="flex shrink-0 items-center gap-1">
-            <span className="mr-0.5 text-[11px] uppercase tracking-wider text-white/30">видят:</span>
+            <span className="mr-0.5 text-[11px] text-slate-500">видят:</span>
             {roles.filter((r) => r !== 'super_admin').map((role) => {
               const visible = isGranted(role, viewCapId)
               const saving = savingKey === `${role}:${viewCapId}`
@@ -477,10 +476,10 @@ function PageRow({
                   key={role}
                   onClick={() => onToggle(role, viewCapId, !visible)}
                   disabled={saving}
-                  className={`border px-1.5 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                  className={`rounded-full border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
                     visible
-                      ? 'border-[#00E676]/40 bg-[#00E676]/15 text-[#00E676] hover:bg-[#00E676]/25'
-                      : 'border-white/10 bg-white/5 text-white/35 line-through hover:bg-white/10'
+                      ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                      : 'border-white/10 bg-white/5 text-slate-500 line-through hover:bg-white/10'
                   }`}
                   title={visible ? `${roleLabel(role)}: страница видна — клик чтобы скрыть` : `${roleLabel(role)}: страница скрыта — клик чтобы показать`}
                 >
@@ -493,10 +492,10 @@ function PageRow({
       </div>
 
       {!effectivelyCollapsed && (
-        <div className="px-6 pb-3">
+        <div className="px-5 pb-3">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-white/40">
+              <tr className="text-left text-xs font-medium text-slate-400">
                 <th className="w-1/3 py-1 pr-3">Действие</th>
                 {roles.map((role) => (
                   <th key={role} className="px-2 py-1 text-center text-[11px]">
@@ -505,9 +504,9 @@ function PageRow({
                 ))}
               </tr>
             </thead>
-            <tbody className="text-white/80">
+            <tbody className="text-slate-200">
               {page.capabilities.map((cap) => (
-                <tr key={cap.id} className="border-t border-white/10">
+                <tr key={cap.id} className="border-t border-white/5">
                   <td className="py-1.5 pr-3 align-top">
                     <div className="flex items-center gap-1.5" title={cap.id}>
                       {severityBadge(cap.severity)}
@@ -523,12 +522,12 @@ function PageRow({
                     const key = `${role}:${cap.id}`
                     const saving = savingKey === key
                     return (
-                      <td key={role} className="py-1.5 px-2 text-center align-top">
+                      <td key={role} className="px-2 py-1.5 text-center align-top">
                         <button
                           onClick={() => canToggle && !isSuperAdminRow && onToggle(role, cap.id, !granted)}
                           disabled={saving || isSuperAdminRow || !canToggle}
-                          className={`inline-flex h-5 w-9 items-center border transition ${
-                            granted ? 'border-[#FFB800]/50 bg-[#FFB800]/30' : 'border-white/15 bg-white/5'
+                          className={`inline-flex h-5 w-9 items-center rounded-full transition ${
+                            granted ? 'bg-emerald-500/80' : 'bg-slate-700'
                           } ${saving ? 'opacity-50' : ''} ${(isSuperAdminRow || !canToggle) ? 'cursor-not-allowed opacity-70' : ''}`}
                           title={
                             !canToggle
@@ -541,8 +540,8 @@ function PageRow({
                           }
                         >
                           <span
-                            className={`inline-block h-3.5 w-3.5 transition-transform ${
-                              granted ? 'translate-x-4 bg-[#FFB800]' : 'translate-x-0.5 bg-white/60'
+                            className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                              granted ? 'translate-x-4' : 'translate-x-0.5'
                             }`}
                           />
                         </button>
@@ -555,18 +554,18 @@ function PageRow({
           </table>
           {canBulk && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-white/30">Пакетно по роли:</span>
+              <span className="text-xs text-slate-500">Пакетно по роли:</span>
               {roles.map((role) => (
-                <div key={role} className="inline-flex items-center gap-1 border border-white/10 bg-white/5 px-1.5 py-0.5">
-                  <span className="text-[11px] text-white/60">{roleLabel(role)}:</span>
+                <div key={role} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
+                  <span className="text-[11px] text-slate-300">{roleLabel(role)}:</span>
                   <button
                     onClick={() => onBulkSet(role, allCapIds, true)}
                     disabled={savingKey === `bulk:${role}`}
-                    className="text-[11px] text-[#00E676] hover:underline"
+                    className="text-[11px] text-emerald-300 hover:underline"
                   >
                     все вкл
                   </button>
-                  <span className="text-white/20">·</span>
+                  <span className="text-slate-600">·</span>
                   <button
                     onClick={() => {
                       if (confirm(`Выключить ВСЕ действия страницы «${page.label}» для роли «${roleLabel(role)}»?\n\nСтраница станет недоступна этой роли.`)) {
@@ -574,7 +573,7 @@ function PageRow({
                       }
                     }}
                     disabled={savingKey === `bulk:${role}`}
-                    className="text-[11px] text-[#FF3B30] hover:underline"
+                    className="text-[11px] text-rose-300 hover:underline"
                   >
                     все выкл
                   </button>

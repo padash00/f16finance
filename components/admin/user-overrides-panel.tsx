@@ -157,69 +157,72 @@ export function UserOverridesPanel({
   }, [search])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden border border-white/15 bg-[#0B0C0A] text-white shadow-2xl"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/40"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">Индивидуальные права — {staffName}</p>
-            <p className="text-[11px] text-white/40">
-              Роль: <span className="text-white/70">{roleLabel(role)}</span> · исключения поверх роли
-            </p>
+        <div className="relative overflow-hidden border-b border-white/10 px-5 py-4">
+          <div className="pointer-events-none absolute -left-10 -top-12 h-32 w-32 rounded-full bg-violet-500/15 blur-3xl" />
+          <div className="relative flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">Индивидуальные права — {staffName}</p>
+              <p className="text-xs text-slate-400">
+                Роль: <span className="text-slate-200">{roleLabel(role)}</span> · исключения поверх роли
+              </p>
+            </div>
+            <button onClick={onClose} className="text-slate-500 transition-colors hover:text-white">
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white">
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-10 text-white/40">
-            <Loader2 className="h-4 w-4 animate-spin" /> <span className="text-xs uppercase tracking-wider">Загружаем…</span>
+          <div className="flex items-center justify-center gap-2 p-10 text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin" /> Загружаем…
           </div>
         ) : error ? (
-          <div className="p-6 text-sm text-[#FF3B30]">Не удалось загрузить: {error}</div>
+          <div className="p-6 text-sm text-rose-300">Не удалось загрузить: {error}</div>
         ) : (
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            <p className="border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-white/50">
-              <span className="text-[#00E676]">Разрешить</span> — выдать право лично этому сотруднику, даже если роль его не даёт.{' '}
-              <span className="text-[#FF3B30]">Запретить</span> — отнять право, даже если роль его даёт.{' '}
-              <span className="text-white/70">По роли</span> — убрать исключение.
+            <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs leading-relaxed text-slate-400">
+              <span className="text-emerald-300">Разрешить</span> — выдать право лично этому сотруднику, даже если роль его не даёт.{' '}
+              <span className="text-rose-300">Запретить</span> — отнять право, даже если роль его даёт.{' '}
+              <span className="text-slate-200">По роли</span> — убрать исключение.
             </p>
 
             {/* Текущие исключения */}
             <div>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Текущие исключения ({exceptions.length})
               </div>
               {exceptions.length === 0 ? (
-                <p className="text-xs text-white/40">Нет исключений — права полностью по роли «{roleLabel(role)}».</p>
+                <p className="text-xs text-slate-500">Нет исключений — права полностью по роли «{roleLabel(role)}».</p>
               ) : (
-                <div className="space-y-px">
+                <div className="space-y-2">
                   {exceptions.map(({ cap, id, granted }) => (
                     <div
                       key={id}
-                      className="flex items-center justify-between gap-2 border border-white/10 bg-white/[0.02] px-3 py-2"
+                      className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           {granted ? (
-                            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-[#00E676]" />
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
                           ) : (
-                            <ShieldX className="h-3.5 w-3.5 shrink-0 text-[#FF3B30]" />
+                            <ShieldX className="h-3.5 w-3.5 shrink-0 text-rose-400" />
                           )}
-                          <span className="truncate text-sm text-white/85">{cap!.label}</span>
+                          <span className="truncate text-sm text-slate-200">{cap!.label}</span>
                         </div>
-                        <div className="text-[11px] text-white/35">
+                        <div className="text-[11px] text-slate-500">
                           {cap!.groupLabel} · {cap!.pageLabel} · по роли: {roleGrants(id) ? 'вкл' : 'выкл'}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <span
-                          className={`px-1.5 py-0.5 text-[11px] uppercase tracking-wider ${
-                            granted ? 'bg-[#00E676]/15 text-[#00E676]' : 'bg-[#FF3B30]/15 text-[#FF3B30]'
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            granted ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
                           }`}
                         >
                           {granted ? 'разрешено' : 'запрещено'}
@@ -227,7 +230,7 @@ export function UserOverridesPanel({
                         <button
                           onClick={() => setOverride(id, 'reset')}
                           disabled={saving === id}
-                          className="inline-flex items-center gap-1 border border-white/15 px-1.5 py-0.5 text-[11px] text-white/60 hover:bg-white/5 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300 transition-colors hover:bg-white/10 disabled:opacity-50"
                           title="Вернуть к роли"
                         >
                           {saving === id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
@@ -242,23 +245,23 @@ export function UserOverridesPanel({
 
             {/* Добавить исключение через поиск */}
             <div>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Добавить / изменить исключение
               </div>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Найти право или страницу…"
-                  className="w-full border border-white/15 bg-black py-2 pl-10 pr-3 text-sm text-white placeholder-white/25 focus:border-[#FFB800] focus:outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-white placeholder-slate-500 transition focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15"
                 />
               </div>
 
               {search.trim() && (
-                <div className="mt-2 space-y-px">
+                <div className="mt-2 space-y-1">
                   {searchResults.length === 0 ? (
-                    <p className="px-1 py-2 text-xs text-white/40">Ничего не найдено.</p>
+                    <p className="px-1 py-2 text-xs text-slate-500">Ничего не найдено.</p>
                   ) : (
                     searchResults.map((c) => {
                       const ov = overrides.get(c.id)
@@ -266,27 +269,27 @@ export function UserOverridesPanel({
                       return (
                         <div
                           key={c.id}
-                          className="flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-white/5"
+                          className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 hover:bg-white/5"
                         >
                           <div className="min-w-0">
-                            <div className="truncate text-sm text-white/85">{c.label}</div>
-                            <div className="text-[11px] text-white/35">
+                            <div className="truncate text-sm text-slate-200">{c.label}</div>
+                            <div className="text-[11px] text-slate-500">
                               {c.pageLabel} · по роли: {baseline ? 'вкл' : 'выкл'}
                               {ov !== undefined && (
-                                <span className={ov ? ' text-[#00E676]' : ' text-[#FF3B30]'}>
+                                <span className={ov ? ' text-emerald-400' : ' text-rose-400'}>
                                   {' '}· сейчас: {ov ? 'разрешено' : 'запрещено'}
                                 </span>
                               )}
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-center gap-1">
+                          <div className="flex shrink-0 items-center gap-1.5">
                             <button
                               onClick={() => setOverride(c.id, 'allow')}
                               disabled={saving === c.id}
-                              className={`border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] transition disabled:opacity-50 ${
                                 ov === true
-                                  ? 'border-[#00E676]/50 bg-[#00E676]/20 text-[#00E676]'
-                                  : 'border-white/15 text-white/60 hover:bg-[#00E676]/10'
+                                  ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-200'
+                                  : 'border-white/10 bg-white/5 text-slate-300 hover:bg-emerald-500/10'
                               }`}
                             >
                               разрешить
@@ -294,10 +297,10 @@ export function UserOverridesPanel({
                             <button
                               onClick={() => setOverride(c.id, 'deny')}
                               disabled={saving === c.id}
-                              className={`border px-2 py-0.5 text-[11px] transition disabled:opacity-50 ${
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] transition disabled:opacity-50 ${
                                 ov === false
-                                  ? 'border-[#FF3B30]/50 bg-[#FF3B30]/20 text-[#FF3B30]'
-                                  : 'border-white/15 text-white/60 hover:bg-[#FF3B30]/10'
+                                  ? 'border-rose-400/50 bg-rose-500/20 text-rose-200'
+                                  : 'border-white/10 bg-white/5 text-slate-300 hover:bg-rose-500/10'
                               }`}
                             >
                               запретить
@@ -306,7 +309,7 @@ export function UserOverridesPanel({
                               <button
                                 onClick={() => setOverride(c.id, 'reset')}
                                 disabled={saving === c.id}
-                                className="border border-white/15 px-1.5 py-0.5 text-[11px] text-white/50 hover:bg-white/5 disabled:opacity-50"
+                                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-400 transition-colors hover:bg-white/10 disabled:opacity-50"
                                 title="Вернуть к роли"
                               >
                                 <RotateCcw className="h-3 w-3" />
