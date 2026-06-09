@@ -3,15 +3,11 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
-}
-
-function canManage(access: { isSuperAdmin: boolean; staffRole: string }) {
-  // Capability checks (если есть выше) уже отсеивают; здесь — любой staff
-  return access.isSuperAdmin || !!access.staffRole
 }
 
 const ALLOWED_STATUS = new Set(['draft', 'confirmed', 'disputed', 'voided'])
@@ -83,7 +79,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireStaffCapability(access, 'incidents.update')
+    if (denied) return denied
 
     const { id } = await params
     const body = (await request.json().catch(() => ({}))) as PatchBody

@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server'
 
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
-}
-
-function canManageStore(access: {
-  isSuperAdmin: boolean
-  staffRole: string
-}) {
-  // Capability checks выше уже отсеивают; здесь — любой staff
-  return access.isSuperAdmin || !!access.staffRole
 }
 
 type CreateBody = {
@@ -30,7 +23,8 @@ export async function POST(
     const { id: supplierId } = await params
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireStaffCapability(access, 'store-suppliers.add_alias')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const body = (await request.json().catch(() => null)) as CreateBody | null
@@ -75,7 +69,8 @@ export async function DELETE(
     const { id: supplierId } = await params
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    const denied = await requireStaffCapability(access, 'store-suppliers.delete_alias')
+    if (denied) return denied
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)
