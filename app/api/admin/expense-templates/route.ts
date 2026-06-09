@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // SQL: create table if not exists expense_templates (
@@ -46,6 +47,8 @@ export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireStaffCapability(access, 'expenses.manage_templates')
+    if (denied) return denied
     const body = await req.json().catch(() => null)
     if (!body?.name || !body?.category || !body?.amount) {
       return json({ error: 'name, category, amount required' }, 400)
@@ -71,6 +74,8 @@ export async function DELETE(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireStaffCapability(access, 'expenses.manage_templates')
+    if (denied) return denied
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return json({ error: 'id required' }, 400)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase

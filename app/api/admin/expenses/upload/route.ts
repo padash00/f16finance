@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // NOTE: Before using this route, run this SQL in Supabase:
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const denied = await requireStaffCapability(access, 'expenses.import_file')
+    if (denied) return denied
 
     const formData = await request.formData()
     const file = formData.get('file') as File | null

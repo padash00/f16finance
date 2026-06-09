@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireStaffCapability } from '@/lib/server/capabilities'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -9,6 +10,9 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+
+    const denied = await requireStaffCapability(access, 'operators.send_credentials_telegram')
+    if (denied) return denied
 
     const body = await request.json().catch(() => null)
     const { operatorId, chatId, username, password, name } = body ?? {}
