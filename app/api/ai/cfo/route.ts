@@ -99,17 +99,39 @@ export async function POST(request: Request) {
       if (scope.allowedCompanyIds.length === 0) return json({ error: 'no-companies' }, 200)
       companiesQ = companiesQ.in('id', scope.allowedCompanyIds)
     }
-    let incQ = supabase.from('incomes').select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount').gte('date', prevFrom).lte('date', dateTo).range(0, 9999)
-    let expQ = supabase.from('expenses').select('date, company_id, category, cash_amount, kaspi_amount').gte('date', prevFrom).lte('date', dateTo).range(0, 9999)
-    if (scope.allowedCompanyIds) {
-      incQ = incQ.in('company_id', scope.allowedCompanyIds)
-      expQ = expQ.in('company_id', scope.allowedCompanyIds)
+
+    // Полная постраничная выборка (как reports/bundle) — БЕЗ обрезки на 10k строк.
+    // У расходов записей много (мелкие траты), поэтому range(0,9999) их сильно занижал.
+    const PAGE = 1000
+    const fetchAll = async (table: 'incomes' | 'expenses', columns: string) => {
+      const all: any[] = []
+      let from = 0
+      for (;;) {
+        let q = supabase
+          .from(table)
+          .select(columns)
+          .gte('date', prevFrom)
+          .lte('date', dateTo)
+          .order('date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (scope.allowedCompanyIds) q = q.in('company_id', scope.allowedCompanyIds)
+        const { data, error } = await q
+        if (error) throw error
+        const batch = data || []
+        all.push(...batch)
+        if (batch.length < PAGE) break
+        from += PAGE
+      }
+      return all
     }
 
-    const [companiesR, incR, expR] = await Promise.all([companiesQ, incQ, expQ])
+    const [companiesR, incomeRows, expenseRows] = await Promise.all([
+      companiesQ,
+      fetchAll('incomes', 'id, date, company_id, cash_amount, kaspi_amount, online_amount, card_amount'),
+      fetchAll('expenses', 'id, date, company_id, category, cash_amount, kaspi_amount'),
+    ])
     if (companiesR.error) throw companiesR.error
-    if (incR.error) throw incR.error
-    if (expR.error) throw expR.error
 
     const companies = (companiesR.data || []) as any[]
     const nameById = new Map(companies.map((c) => [String(c.id), c.name || c.code || '—']))
@@ -129,14 +151,14 @@ export async function POST(request: Request) {
     const FOT_KEYS = ['зарплат', 'оклад', 'фот', 'преми', 'бонус', 'salary', ' зп']
     let fotCur = 0
 
-    for (const row of incR.data || []) {
+    for (const row of incomeRows) {
       const v = incomeOf(row)
       if (!v) continue
       const cur = String(row.date) >= dateFrom
       const a = ensure(String(row.company_id))
       if (cur) { a.revCur += v; revCur += v; salesDays.add(String(row.date)) } else { a.revPrev += v; revPrev += v }
     }
-    for (const row of expR.data || []) {
+    for (const row of expenseRows) {
       const v = expenseOf(row)
       if (!v) continue
       const cur = String(row.date) >= dateFrom
