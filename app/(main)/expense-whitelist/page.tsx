@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, AlertCircle, Loader2 } from 'lucide-react'
+import { Plus, Trash2, AlertCircle, Loader2, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Vendor = {
   id: string
@@ -101,15 +101,13 @@ export default function ExpenseWhitelistPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/expenses">
-          <Button variant="outline" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Доверенные поставщики</h1>
-          <p className="text-sm text-muted-foreground">Вендоры, которым можно платить без чека (уборщик, дворник, регулярные услуги)</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Доверенные поставщики"
+        description="Вендоры, которым можно платить без чека (уборщик, дворник, регулярные услуги)"
+        icon={<ShieldCheck className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/expenses"
+      />
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start gap-2">

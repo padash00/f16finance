@@ -1,10 +1,11 @@
 'use client'
 
 import { ChangeEvent, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, FileUp, RefreshCw, Search, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileUp, GitCompareArrows, RefreshCw, Search, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Company = { id: string; name: string | null; code: string | null }
 type Operator = { id: string; name: string | null; short_name: string | null; is_active?: boolean | null }
@@ -307,10 +308,13 @@ export default function ShiftTelegramAuditPage() {
 
   return (
     <div className="app-page-wide space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Сверка Telegram и доходов</h1>
-        <p className="mt-1 text-sm text-slate-400">Файл Telegram читается только в браузере. В БД ничего не сохраняется.</p>
-      </div>
+      <AdminPageHeader
+        title="Сверка Telegram"
+        description="Файл Telegram читается только в браузере. В БД ничего не сохраняется."
+        icon={<GitCompareArrows className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+      />
 
       <Card className="space-y-4 border-white/10 bg-slate-950/80 p-4">
         <div className="grid gap-3 md:grid-cols-5">

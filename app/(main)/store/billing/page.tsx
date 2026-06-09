@@ -7,6 +7,7 @@ import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -511,37 +512,36 @@ export default function BillingPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-            <Wallet className="w-6 h-6 text-emerald-300" />
+      <AdminPageHeader
+        title="Долги и накладные"
+        description="Учёт обязательств перед поставщиками и история приёмок"
+        icon={<Wallet className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          activeTab === 'debts' && canExport ? (
+            <Button variant="outline" size="sm" onClick={() => void exportDebtsExcel()} disabled={filteredDebts.length === 0}>
+              <Download className="w-4 h-4 mr-1" /> Экспорт Excel
+            </Button>
+          ) : null
+        }
+        toolbar={
+          <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
+            <button
+              onClick={() => setActiveTab('debts')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'debts' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
+            >
+              <Wallet className="w-4 h-4" /> Долги
+            </button>
+            <button
+              onClick={() => setActiveTab('invoices')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'invoices' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
+            >
+              <FileText className="w-4 h-4" /> Накладные
+            </button>
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold">Долги и накладные</h1>
-            <p className="text-sm text-muted-foreground">Учёт обязательств перед поставщиками и история приёмок</p>
-          </div>
-        </div>
-        {activeTab === 'debts' && canExport ? (
-          <Button variant="outline" size="sm" onClick={() => void exportDebtsExcel()} disabled={filteredDebts.length === 0}>
-            <Download className="w-4 h-4 mr-1" /> Экспорт Excel
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
-        <button
-          onClick={() => setActiveTab('debts')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'debts' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
-        >
-          <Wallet className="w-4 h-4" /> Долги
-        </button>
-        <button
-          onClick={() => setActiveTab('invoices')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'invoices' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
-        >
-          <FileText className="w-4 h-4" /> Накладные
-        </button>
-      </div>
+        }
+      />
 
       {error ? (
         <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card>

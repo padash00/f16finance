@@ -13,6 +13,7 @@ import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CardSkeleton, TableSkeleton, StatGridSkeleton } from '@/components/skeleton'
@@ -976,25 +977,14 @@ export default function ExpensesPage() {
     <>
         <div className="app-page-wide space-y-6">
           {/* Header */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-900/30 via-gray-900 to-orange-900/30 p-6 border border-red-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-red-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            
-            <div className="relative z-10">
-              <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-red-500/20 rounded-xl">
-                    <Brain className="w-8 h-8 text-red-400" />
-                  </div>
-                  <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                      AI Журнал расходов
-                    </h1>
-                    <p className="text-sm text-gray-400">Умный контроль затрат и аналитика</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
+          <AdminPageHeader
+            title="Расходы"
+            description="Умный контроль затрат и аналитика"
+            icon={<Brain className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={
+              <>
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
@@ -1059,9 +1049,10 @@ export default function ExpensesPage() {
                       <Plus className="w-4 h-4 mr-1" /> Добавить
                     </Button>
                   ) : null}
-                </div>
-              </div>
-
+              </>
+            }
+            toolbar={
+              <>
               {/* Calendar */}
               {isCalendarOpen && (
                 <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
@@ -1314,8 +1305,9 @@ export default function ExpensesPage() {
                   )}
                 </div>
               )}
-            </div>
-          </div>
+              </>
+            }
+          />
 
           {/* Tabs */}
           <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">

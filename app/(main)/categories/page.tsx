@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -179,43 +180,40 @@ export default function CategoriesPage() {
   return (
     <div className="app-page-wide space-y-6">
 
-      {/* Хедер */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <Layers className="w-8 h-8 text-accent" />
-            Справочник категорий
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Управление статьями расходов и финансовыми группами
-          </p>
-        </div>
-        <Card className="px-4 py-2 border-border bg-card/50 flex flex-col items-center">
-          <span className="text-[10px] text-muted-foreground uppercase font-bold">Категорий</span>
-          <span className="text-xl font-bold text-foreground">{categories.length}</span>
-        </Card>
-      </div>
-
-      {/* Вкладки */}
-      <div className="flex gap-1 border-b border-border">
-        {([
-          { id: 'categories' as const, label: 'Категории расходов', icon: Tag },
-          { id: 'groups'     as const, label: 'Финансовые группы',  icon: BarChart3 },
-        ]).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === id
-                ? 'border-accent text-accent'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <AdminPageHeader
+        title="Справочник категорий"
+        description="Управление статьями расходов и финансовыми группами"
+        icon={<Layers className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        actions={
+          <Card className="px-4 py-2 border-border bg-card/50 flex flex-col items-center">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">Категорий</span>
+            <span className="text-xl font-bold text-foreground">{categories.length}</span>
+          </Card>
+        }
+        toolbar={
+          <div className="flex gap-1 border-b border-border">
+            {([
+              { id: 'categories' as const, label: 'Категории расходов', icon: Tag },
+              { id: 'groups'     as const, label: 'Финансовые группы',  icon: BarChart3 },
+            ]).map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === id
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* ═══ ВКЛАДКА 1: КАТЕГОРИИ ═══ */}
       {tab === 'categories' && (

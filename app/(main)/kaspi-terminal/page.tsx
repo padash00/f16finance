@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AlertTriangle, CheckCircle2, CreditCard, GitCompareArrows, ListOrdered, Pencil, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Row = {
   id: string
@@ -198,35 +199,32 @@ export default function KaspiTerminalPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      {/* Заголовок */}
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-blue-500/10 rounded-xl">
-          <CreditCard className="w-8 h-8 text-blue-400" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Безналичный POS терминал</h1>
-          <p className="text-muted-foreground mt-1">Суточные итоги с терминала — без привязки к оператору</p>
-        </div>
-      </div>
-
-      {/* Вкладки */}
-      <div className="flex gap-1 border-b border-border">
-        {([
-          { id: 'entries' as const, label: 'Записи', icon: ListOrdered },
-          { id: 'reconciliation' as const, label: 'Сверка с доходами', icon: GitCompareArrows },
-        ]).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === id ? 'border-blue-500 text-blue-400' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <AdminPageHeader
+        title="Безналичный терминал"
+        description="Суточные итоги с терминала — без привязки к оператору"
+        icon={<CreditCard className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/"
+        toolbar={(
+          <div className="flex gap-1 border-b border-border">
+            {([
+              { id: 'entries' as const, label: 'Записи', icon: ListOrdered },
+              { id: 'reconciliation' as const, label: 'Сверка с доходами', icon: GitCompareArrows },
+            ]).map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === id ? 'border-blue-500 text-blue-400' : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      />
 
       {/* Фильтры */}
       <Card className="p-4 border-border bg-card">

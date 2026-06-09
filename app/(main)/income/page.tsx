@@ -48,6 +48,7 @@ import {
   CreditCard as CardIcon,
 } from 'lucide-react'
 import Link from 'next/link'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useIncome } from '@/hooks/use-income'
 import { useCompanies } from '@/hooks/use-companies'
 import { useOperators } from '@/hooks/use-operators'
@@ -863,25 +864,14 @@ export default function IncomePage() {
     <>
         <div className="app-page-wide space-y-6">
           {/* Шапка */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-900/30 via-slate-900 to-amber-900/30 p-6 border border-amber-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            
-            <div className="relative z-10">
-              <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-amber-500/20 rounded-xl">
-                    <Brain className="w-8 h-8 text-amber-400" />
-                  </div>
-                  <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                      AI Журнал доходов
-                    </h1>
-                    <p className="text-sm text-slate-400">Умная аналитика и прогнозирование</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
+          <AdminPageHeader
+            title="Доходы"
+            description="Умная аналитика и прогнозирование"
+            icon={<Brain className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={(
+              <>
                   {/* Кнопка фильтров */}
                   <button
                     onClick={() => setShowFilters(!showFilters)}
@@ -936,9 +926,10 @@ export default function IncomePage() {
                       </Button>
                     </Link>
                   ) : null}
-                </div>
-              </div>
-
+              </>
+            )}
+            toolbar={(
+              <>
               {/* Календарь */}
               {isCalendarOpen && (
                 <div className="mt-4 p-4 bg-slate-900/95 backdrop-blur-xl border border-amber-500/20 rounded-2xl">
@@ -1164,30 +1155,31 @@ export default function IncomePage() {
                   )}
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* Date presets — always visible */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
-              <button
-                key={p}
-                onClick={() => setPreset(p)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                  activePreset === p
-                    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                    : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'
-                }`}
-              >
-                {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
-              </button>
-            ))}
-            {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
-              <span className="px-3 py-1.5 text-xs text-slate-400 border border-slate-700/50 rounded-lg">
-                {dateFrom && dateTo ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}` : 'Весь период'}
-              </span>
+              {/* Date presets — always visible */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPreset(p)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                      activePreset === p
+                        ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                        : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'
+                    }`}
+                  >
+                    {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? 'Месяц' : 'Все время'}
+                  </button>
+                ))}
+                {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
+                  <span className="px-3 py-1.5 text-xs text-slate-400 border border-slate-700/50 rounded-lg">
+                    {dateFrom && dateTo ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}` : 'Весь период'}
+                  </span>
+                )}
+              </div>
+              </>
             )}
-          </div>
+          />
 
           {/* Табы навигации */}
           <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">

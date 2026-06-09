@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useCapabilities } from '@/lib/client/use-capabilities'
-import { ArrowLeft, CheckCircle2, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type PendingExpense = {
   id: string
@@ -102,15 +102,13 @@ export default function PendingExpensesPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/expenses">
-          <Button variant="outline" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Ожидают одобрения</h1>
-          <p className="text-sm text-muted-foreground">Расходы без чека от менеджера, требуют решения владельца</p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Ожидают одобрения"
+        description="Расходы без чека от менеджера, требуют решения владельца"
+        icon={<Clock className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/expenses"
+      />
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start gap-2">
