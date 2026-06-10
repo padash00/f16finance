@@ -89,6 +89,22 @@ export async function GET(request: Request) {
       const shiftIds = shiftsWithoutOperator.map((s) => s.id)
       const firstOperatorIdByShift = new Map<string, string>()
 
+      // Способ 0 (самый надёжный): аудит-лог открытия смены. При открытии пишется
+      // настоящий operator_id (из operators), даже если в point_shifts.operator_id
+      // (staff) пусто из-за отсутствия линка operator→staff.
+      const { data: openLogs } = await supabase
+        .from('audit_log')
+        .select('entity_id, payload')
+        .eq('action', 'point_shift.open')
+        .in('entity_id', shiftIds)
+      for (const log of (openLogs || []) as any[]) {
+        const sid = String(log.entity_id || '')
+        const opId = log.payload?.operator_id
+        if (sid && opId && !firstOperatorIdByShift.has(sid)) {
+          firstOperatorIdByShift.set(sid, String(opId))
+        }
+      }
+
       // Способ A: одной выборкой — без вложенного join, только operator_id
       const { data: salesByShift } = await supabase
         .from('point_sales')

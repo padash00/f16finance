@@ -202,6 +202,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         shiftOperator = (opRes.data as any) || (stRes.data as any) || null
       }
     }
+    // Если оператора смены нет (operator_id пуст — нет линка operator→staff),
+    // берём настоящий operator_id из аудит-лога открытия смены, имя — из operators.
+    if (!shiftOperator) {
+      const { data: openLog } = await supabase
+        .from('audit_log')
+        .select('payload')
+        .eq('action', 'point_shift.open')
+        .eq('entity_id', id)
+        .limit(1)
+        .maybeSingle()
+      const opId = (openLog as any)?.payload?.operator_id
+      if (opId) {
+        const { data: op } = await supabase
+          .from('operators')
+          .select('id, full_name, short_name')
+          .eq('id', String(opId))
+          .maybeSingle()
+        if (op?.id) shiftOperator = op
+      }
+    }
 
     // Группируем позиции по продаже/возврату
     const saleItemsBySale = new Map<string, any[]>()
