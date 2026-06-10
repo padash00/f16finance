@@ -152,6 +152,7 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
             show_in_structure: body.payload.show_in_structure !== false,
+            organization_id: access.activeOrganization?.id || null,
           },
         ]).select('id,name,code,show_in_structure').single()
         if (error) throw error
@@ -213,6 +214,7 @@ export async function POST(req: Request) {
             phone: body.payload.phone?.trim() || null,
             email: body.payload.email?.trim() || null,
             role: body.payload.role?.trim() || 'operator',
+            organization_id: access.activeOrganization?.id || null,
           },
         ]).select('id,full_name,email,role').single()
         if (error) throw error

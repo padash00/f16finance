@@ -78,7 +78,7 @@ export default function PaymentProviderSettingsPage() {
   }
 
   return (
-    <div className="space-y-4 px-3 sm:px-4 py-4">
+    <div className="app-page-wide space-y-5">
       <AdminPageHeader
         title="Платёжный провайдер"
         description="Каждой компании можно назначить свой банк/провайдер. От этого зависят лейблы в интерфейсе (например «Kaspi POS» vs «Halyk POS»)."
