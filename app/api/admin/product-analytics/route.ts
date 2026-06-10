@@ -142,7 +142,13 @@ export async function GET(request: Request) {
       items_count: inStock.length,
     }
 
-    return json({ ok: true, data: { items, sales_totals, stock_totals } })
+    // Товары без закупочной цены → прибыль/оценка считаются неверно
+    const no_cost = {
+      sold: sold.filter((i) => i.purchase_price <= 0).length,
+      stock: inStock.filter((i) => i.purchase_price <= 0).length,
+    }
+
+    return json({ ok: true, data: { items, sales_totals, stock_totals, no_cost } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/product-analytics.GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка' }, 500)

@@ -6,7 +6,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
 import {
   Activity, RefreshCw, Loader2, TrendingUp, Receipt, Wallet, CreditCard,
-  Clock, Trophy, Store, Pause, Play, Users, Tags, Coins, Package, Search,
+  Clock, Trophy, Store, Pause, Play, Users, Tags, Coins, Package, Search, AlertTriangle,
 } from 'lucide-react'
 
 const REFRESH_MS = 12_000
@@ -46,6 +46,7 @@ type ProdData = {
   items: Item[]
   sales_totals: { revenue: number; profit: number; qty: number }
   stock_totals: { possible_sales: number; possible_profit: number; purchase_sum: number; total_qty: number; items_count: number }
+  no_cost?: { sold: number; stock: number }
 }
 type Company = { id: string; name: string }
 type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast' | 'points'
@@ -434,6 +435,19 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
           <Kpi label="Чистая прибыль" value={`${fmt(data.sales_totals.profit)} ₸`} accent="text-emerald-300" icon={<Coins className="h-4 w-4" />} big />
           <Kpi label="Количество продаж" value={`${fmt(data.sales_totals.qty)} шт`} accent="text-white" icon={<Receipt className="h-4 w-4" />} big />
         </div>
+      )}
+
+      {tab === 'profit' && (data.no_cost?.sold ?? 0) > 0 && (
+        <a href="/store/stock" className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-100 transition-colors hover:bg-amber-500/15">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+          <span><b>{data.no_cost!.sold}</b> проданных товаров без закупочной цены — прибыль завышена. Заполнить в каталоге →</span>
+        </a>
+      )}
+      {tab === 'stock' && (data.no_cost?.stock ?? 0) > 0 && (
+        <a href="/store/stock" className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-100 transition-colors hover:bg-amber-500/15">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+          <span><b>{data.no_cost!.stock}</b> товаров на остатке без закупочной цены — оценка неточная. Заполнить в каталоге →</span>
+        </a>
       )}
 
       <div className="flex flex-wrap items-center gap-2">

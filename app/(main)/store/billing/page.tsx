@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, Receipt, FileText, Wallet, X, Trash2 } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
+import { useStoreScope } from '@/components/store/store-scope'
 
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
@@ -94,6 +95,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  const { storeCompanyId } = useStoreScope()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -590,7 +593,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
           />
           <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="С" />
           <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="По" />
-          {activeTab === 'debts' && companies.length > 0 ? (
+          {activeTab === 'debts' && companies.length > 0 && !storeCompanyId ? (
             <Select value={companyFilter || '__all__'} onValueChange={(v) => setCompanyFilter(v === '__all__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="Все точки" /></SelectTrigger>
               <SelectContent>
