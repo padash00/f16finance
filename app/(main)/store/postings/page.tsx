@@ -251,7 +251,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
   }
 
   return (
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {embedded ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">

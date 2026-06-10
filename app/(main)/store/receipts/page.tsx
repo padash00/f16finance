@@ -912,7 +912,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
       {(() => {
         const hdrActions = (

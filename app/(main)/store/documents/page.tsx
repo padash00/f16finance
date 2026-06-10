@@ -24,37 +24,33 @@ export default function StoreDocumentsPage() {
   const [tab, setTab] = useState<Tab>('receipts')
 
   return (
-    <>
-      <div className="app-page-wide pt-4">
-        <AdminPageHeader
-          title="Документы"
-          description="Приёмка, оприходование, списания и ревизия — в одном месте"
-          icon={<FileText className="h-5 w-5" />}
-          accent="emerald"
-          backHref="/store"
-          toolbar={
-            <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-white/10 bg-slate-950/50 p-1">
-              {TABS.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${tab === key ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/10' : 'text-slate-400 hover:text-white'}`}
-                >
-                  <Icon className={`h-4 w-4 ${tab === key ? 'text-emerald-300' : ''}`} />
-                  {label}
-                </button>
-              ))}
-            </div>
-          }
-        />
-      </div>
+    <div className="app-page-wide space-y-4">
+      <AdminPageHeader
+        title="Документы"
+        description="Приёмка, оприходование, списания и ревизия — в одном месте"
+        icon={<FileText className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/store"
+        toolbar={
+          <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-white/10 bg-slate-950/50 p-1">
+            {TABS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${tab === key ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/10' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Icon className={`h-4 w-4 ${tab === key ? 'text-emerald-300' : ''}`} />
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
-      <div className="mt-2">
-        {tab === 'receipts' && <Receipts embedded />}
-        {tab === 'postings' && <Postings embedded />}
-        {tab === 'writeoffs' && <Writeoffs embedded />}
-        {tab === 'revisions' && <Revisions embedded />}
-      </div>
-    </>
+      {tab === 'receipts' && <Receipts embedded />}
+      {tab === 'postings' && <Postings embedded />}
+      {tab === 'writeoffs' && <Writeoffs embedded />}
+      {tab === 'revisions' && <Revisions embedded />}
+    </div>
   )
 }

@@ -674,7 +674,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
       {(() => {
         const hdrActions = (
