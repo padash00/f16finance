@@ -73,7 +73,7 @@ export async function GET(req: Request) {
     const supabase = getSupabase(req)
     const [companiesRes, staffRes, categoriesRes] = await Promise.allSettled([
       supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
-      supabase.from('staff').select('id, full_name, phone, email, role').order('full_name'),
+      supabase.from('staff').select('id, full_name, phone, email, role, is_active').eq('is_active', true).order('full_name'),
       supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name'),
     ])
 

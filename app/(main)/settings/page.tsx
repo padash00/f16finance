@@ -9,6 +9,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Archive,
   Save,
   X,
   Building2,
@@ -240,10 +241,19 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
-  const handleDeleteStaff = async (id: string) => {
-      if (!confirm('Удалить сотрудника?')) return
+  // Сотрудника с историей зарплаты удалить нельзя (FK на начисления/выплаты).
+  // Поэтому «убираем из команды» = архивируем (is_active=false), как на странице
+  // «Сотрудники». История сохраняется, восстановить можно там же.
+  const handleArchiveStaff = async (id: string, name: string) => {
+      if (!confirm(`Убрать «${name}» из команды (в архив)?\n\nИстория зарплаты сохранится. Восстановить можно на странице «Сотрудники».`)) return
       try {
-        await mutateSettings({ entity: 'staff', action: 'delete', id })
+        const response = await fetch('/api/admin/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'toggleStaffStatus', staffId: id, is_active: false }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(json?.error || 'Не удалось архивировать сотрудника')
         fetchData()
       } catch (err: any) {
         alert(err.message)
@@ -513,8 +523,8 @@ export default function SettingsPage() {
                                             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-purple-400" onClick={() => { setEditStaffId(s.id); setEditStaffData({ name: s.full_name, phone: s.phone || '', email: s.email || '', role: s.role || 'other' }) }}>
                                                 <Pencil className="w-3 h-3" />
                                             </Button>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteStaff(s.id)}>
-                                                <Trash2 className="w-3 h-3" />
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-amber-400" title="Убрать из команды (в архив)" onClick={() => handleArchiveStaff(s.id, s.full_name)}>
+                                                <Archive className="w-3 h-3" />
                                             </Button>
                                         </div>
                                     </div>
