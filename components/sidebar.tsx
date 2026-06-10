@@ -56,22 +56,22 @@ function SidebarItem({
       prefetch
       onClick={onClick}
       className={cn(
-        'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-all duration-300',
+        'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-all duration-200',
         active
-          ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-white shadow-lg shadow-amber-500/5'
+          ? 'bg-white/[0.07] text-white ring-1 ring-white/10'
           : 'text-slate-400 hover:bg-white/5 hover:text-white',
       )}
     >
       {active ? (
-        <div className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-amber-400 to-orange-500" />
+        <div className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-emerald-400 to-teal-500" />
       ) : null}
 
       <div
         className={cn(
-          'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-300',
+          'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
           active
-            ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-400'
-            : 'bg-slate-800/50 text-slate-500 group-hover:bg-slate-800 group-hover:text-slate-300',
+            ? 'bg-emerald-500/15 text-emerald-300'
+            : 'bg-white/5 text-slate-500 group-hover:bg-white/10 group-hover:text-slate-300',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -88,7 +88,7 @@ function SidebarItem({
             </span>
           ) : null}
           {item.isNew ? (
-            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-400 animate-pulse">
+            <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300">
               new
             </span>
           ) : null}
@@ -123,10 +123,8 @@ function SidebarSection({
   const style = sectionStyles[section.accentColor]
 
   return (
-    <div className="relative group">
-      <div className={cn('absolute -inset-1 rounded-2xl blur-md opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-gradient-to-r', style.gradient)} />
-
-      <div className="relative rounded-xl border border-white/5 bg-slate-900/50 p-3 backdrop-blur-sm transition-all duration-300 hover:border-white/10">
+    <div className="relative">
+      <div className="relative rounded-2xl border border-white/10 bg-slate-900/60 p-3 shadow-lg shadow-black/10 transition-colors duration-200 hover:border-white/15">
         <button type="button" onClick={onToggle} className="flex w-full items-center gap-3">
           <div
             className={cn(
@@ -190,14 +188,12 @@ function UserCard({
   roleLabel: string | null
 }) {
   return (
-    <div className="relative group">
-      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 blur opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-800/90 p-4 backdrop-blur-xl">
+    <div className="relative">
+      <div className="relative rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 blur opacity-50" />
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-700">
-              <User className="h-5 w-5 text-amber-300" />
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-emerald-400/25 to-sky-400/15 text-emerald-200">
+              <User className="h-5 w-5" />
             </div>
           </div>
           <div className="min-w-0 flex-1">
@@ -355,8 +351,7 @@ function SearchBar({
 }) {
   return (
     <div className="group relative w-full">
-      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 blur opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      <div className="relative flex items-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2.5 text-left text-sm text-slate-400 transition-all duration-300 group-hover:bg-slate-800/70 focus-within:border-amber-500/30 focus-within:bg-slate-800/80">
+      <div className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 text-left text-sm text-slate-400 transition-colors duration-200 focus-within:border-emerald-400/40 focus-within:bg-slate-950/70">
         <Search className="h-4 w-4 text-slate-500" />
         <input
           ref={inputRef}
