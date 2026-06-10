@@ -36,7 +36,10 @@ export async function GET(request: Request) {
 
     const empty = {
       from, to,
-      totals: { amount: 0, count: 0, avg_check: 0, cash: 0, cashless: 0 },
+      totals: { amount: 0, count: 0, avg_check: 0, cash: 0, cashless: 0, net_profit: 0 },
+      returns: { amount: 0, count: 0 },
+      receipts: { amount: 0, count: 0 },
+      prev: { amount: 0, delta_pct: null as number | null },
       last_hour: { amount: 0, count: 0 },
       payment: { cash: 0, kaspi: 0, card: 0, online: 0 },
       by_company: [] as any[],
@@ -56,7 +59,7 @@ export async function GET(request: Request) {
     let salesQuery = supabase
       .from('point_sales')
       .select(
-        'id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, company_id, operator_id, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name, category:category_id(name)))',
+        'id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, company_id, operator_id, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name, default_purchase_price, category:category_id(name)))',
       )
       .gte('sold_at', dayStart.toISOString())
       .lt('sold_at', dayEnd.toISOString())
@@ -85,7 +88,7 @@ export async function GET(request: Request) {
     )
 
     // Агрегаты
-    let amount = 0, cash = 0, kaspi = 0, card = 0, online = 0
+    let amount = 0, cash = 0, kaspi = 0, card = 0, online = 0, cost = 0
     let lastHourAmount = 0, lastHourCount = 0
     const hourMap: number[] = Array(24).fill(0)
     const hourCount: number[] = Array(24).fill(0)
@@ -127,6 +130,7 @@ export async function GET(request: Request) {
 
       for (const it of (s.items || []) as any[]) {
         const inv = Array.isArray(it.inventory_items) ? it.inventory_items[0] : it.inventory_items
+        cost += Number(inv?.default_purchase_price || 0) * Number(it.quantity || 0)
         const nm = inv?.name || it.universal_name || 'Товар'
         const row = itemMap.get(nm) || { name: nm, qty: 0, revenue: 0 }
         row.qty += Number(it.quantity || 0)
@@ -159,6 +163,31 @@ export async function GET(request: Request) {
       .map((c) => ({ name: c.name, qty: Math.round(c.qty * 100) / 100, revenue: round(c.revenue) }))
       .sort((a, b) => b.revenue - a.revenue)
 
+    // Возвраты, приёмка и прошлый период (best-effort)
+    const scopedIds = companyScope.allowedCompanyIds
+    const applyScope = (q: any) => {
+      if (companyId) q = q.eq('company_id', companyId)
+      if (scopedIds) q = q.in('company_id', scopedIds)
+      return q
+    }
+    const periodMs = dayEnd.getTime() - dayStart.getTime()
+    const prevStart = new Date(dayStart.getTime() - periodMs)
+    const locRes = await applyScope(supabase.from('inventory_locations').select('id').eq('is_active', true).not('company_id', 'is', null))
+    const locationIds = (((locRes as any).data || []) as any[]).map((l) => String(l.id)).filter((x) => x && x !== 'null')
+    const [returnsRes, receiptsRes, prevRes] = await Promise.all([
+      applyScope(supabase.from('point_returns').select('total_amount').gte('returned_at', dayStart.toISOString()).lt('returned_at', dayEnd.toISOString())),
+      locationIds.length ? supabase.from('inventory_receipts').select('total_amount').in('location_id', locationIds).gte('received_at', from).lte('received_at', to) : Promise.resolve({ data: [] as any[] }),
+      applyScope(supabase.from('point_sales').select('total_amount').gte('sold_at', prevStart.toISOString()).lt('sold_at', dayStart.toISOString())),
+    ])
+    const returnsRows = (((returnsRes as any).data) || []) as any[]
+    const receiptsRows = (((receiptsRes as any).data) || []) as any[]
+    const prevRows = (((prevRes as any).data) || []) as any[]
+    const returnsAmount = returnsRows.reduce((s, r) => s + Number(r.total_amount || 0), 0)
+    const receiptsAmount = receiptsRows.reduce((s, r) => s + Number(r.total_amount || 0), 0)
+    const prevAmount = prevRows.reduce((s, r) => s + Number(r.total_amount || 0), 0)
+    const netProfit = amount - cost
+    const deltaPct = prevAmount > 0 ? Math.round(((amount - prevAmount) / prevAmount) * 1000) / 10 : null
+
     const recent = sales.slice(0, 40).map((s) => ({
       id: s.id,
       sold_at: s.sold_at,
@@ -183,7 +212,11 @@ export async function GET(request: Request) {
           avg_check: count ? round(amount / count) : 0,
           cash: round(cash),
           cashless: round(kaspi + card + online),
+          net_profit: round(netProfit),
         },
+        returns: { amount: round(returnsAmount), count: returnsRows.length },
+        receipts: { amount: round(receiptsAmount), count: receiptsRows.length },
+        prev: { amount: round(prevAmount), delta_pct: deltaPct },
         last_hour: { amount: round(lastHourAmount), count: lastHourCount },
         payment: { cash: round(cash), kaspi: round(kaspi), card: round(card), online: round(online) },
         by_company: byCompanyArr,

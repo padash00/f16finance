@@ -5,8 +5,9 @@ import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
 import {
-  Activity, RefreshCw, Loader2, TrendingUp, Receipt, Wallet, CreditCard,
-  Clock, Trophy, Store, Pause, Play, Users, Tags, Coins, Package, Search, AlertTriangle,
+  Activity, RefreshCw, Loader2, TrendingUp, Receipt,
+  Clock, Trophy, Pause, Play, Users, Tags, Coins, Package, Search, AlertTriangle,
+  RotateCcw, Truck,
 } from 'lucide-react'
 
 const REFRESH_MS = 12_000
@@ -17,7 +18,7 @@ const ForecastEmbed = dynamic(() => import('@/app/(main)/inventory/forecast/page
 const PointsEmbed = dynamic(() => import('@/app/(main)/store/analytics/page'), { ssr: false, loading: embFallback })
 
 // ── Монитор ──
-type Totals = { amount: number; count: number; avg_check: number; cash: number; cashless: number }
+type Totals = { amount: number; count: number; avg_check: number; cash: number; cashless: number; net_profit: number }
 type ByCompany = { company_id: string; name: string; amount: number; count: number; avg_check: number }
 type ByHour = { hour: number; amount: number; count: number }
 type TopItem = { name: string; qty: number; revenue: number }
@@ -26,6 +27,9 @@ type ByOperator = { name: string; amount: number; count: number; avg_check: numb
 type ByCategory = { name: string; qty: number; revenue: number }
 type MonData = {
   totals: Totals
+  returns: { amount: number; count: number }
+  receipts: { amount: number; count: number }
+  prev: { amount: number; delta_pct: number | null }
   last_hour: { amount: number; count: number }
   payment: { cash: number; kaspi: number; card: number; online: number }
   by_company: ByCompany[]
@@ -266,7 +270,6 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
   const t = data?.totals
   const maxHour = useMemo(() => Math.max(1, ...(data?.by_hour.map((h) => h.amount) || [1])), [data])
   const activeHours = data?.by_hour.filter((h) => h.amount > 0) || []
-  const maxCompany = useMemo(() => Math.max(1, ...(data?.by_company.map((c) => c.amount) || [1])), [data])
   const maxOperator = useMemo(() => Math.max(1, ...(data?.by_operator.map((o) => o.amount) || [1])), [data])
   const maxCategory = useMemo(() => Math.max(1, ...(data?.by_category.map((c) => c.revenue) || [1])), [data])
 
@@ -275,105 +278,41 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Выручка" value={`${fmt(t!.amount)} ₸`} icon={<TrendingUp className="h-4 w-4" />} accent="text-emerald-300" big />
-        <Kpi label="Продаж" value={fmt(t!.count)} icon={<Receipt className="h-4 w-4" />} accent="text-white" big />
-        <Kpi label="Средний чек" value={`${fmt(t!.avg_check)} ₸`} icon={<Activity className="h-4 w-4" />} accent="text-white" />
-        <Kpi label="Наличные" value={`${fmt(t!.cash)} ₸`} icon={<Wallet className="h-4 w-4" />} accent="text-emerald-300" />
-        <Kpi label="Безнал" value={`${fmt(t!.cashless)} ₸`} icon={<CreditCard className="h-4 w-4" />} accent="text-sky-300" />
-        <Kpi label="За последний час" value={`${fmt(data.last_hour.amount)} ₸`} sub={`${data.last_hour.count} продаж`} icon={<Clock className="h-4 w-4" />} accent="text-amber-300" />
+      {/* 3 верхние карточки: Продажи / Возврат / Приёмка */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <StatCard label="Продажи" icon={<TrendingUp className="h-4 w-4" />} color="text-emerald-300" amount={t!.amount} count={t!.count} delta={data.prev.delta_pct} />
+        <StatCard label="Возврат" icon={<RotateCcw className="h-4 w-4" />} color="text-rose-300" amount={data.returns.amount} count={data.returns.count} />
+        <StatCard label="Приёмка" icon={<Truck className="h-4 w-4" />} color="text-sky-300" amount={data.receipts.amount} count={data.receipts.count} />
       </div>
 
-      {data.by_company.length > 0 && (
-        <div className={`${card} p-4`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Store className="h-4 w-4 text-sky-300" /> По точкам</div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data.by_company.map((c) => (
-              <div key={c.company_id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-white">{c.name}</span>
-                  <span className="shrink-0 text-xs text-slate-400">{c.count} продаж</span>
-                </div>
-                <div className="mt-1 text-xl font-bold tabular-nums text-emerald-300">{fmt(c.amount)} ₸</div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-sky-400/70" style={{ width: `${Math.round((c.amount / maxCompany) * 100)}%` }} /></div>
-                <div className="mt-1 text-[11px] text-slate-500">ср. чек {fmt(c.avg_check)} ₸</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-white"><Activity className="h-4 w-4 text-emerald-300" /> Лента продаж</span>
-            <span className="text-xs text-slate-500">последние {data.recent.length}</span>
-          </div>
-          <div className="max-h-[520px] divide-y divide-white/5 overflow-y-auto">
-            {data.recent.length === 0 ? <div className="px-4 py-12 text-center text-sm text-slate-400">Продаж нет</div> : data.recent.map((s) => {
-              const time = new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-              const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
-              const isNew = flashIds.has(s.id)
+      {/* График по часам + сетка KPI */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className={`${card} p-4 lg:col-span-2`}>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи по часам</div>
+          {activeHours.length === 0 ? <div className="flex h-40 items-center justify-center text-sm text-slate-500">Нет данных для отображения</div> : (
+            <div className="flex h-40 items-end gap-1">{activeHours.map((h) => {
+              const pct = Math.max(4, (h.amount / maxHour) * 100); const peak = h.amount === maxHour
               return (
-                <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isNew ? 'bg-emerald-500/10' : 'hover:bg-white/[0.02]'}`}>
-                  <div className="w-11 shrink-0 text-xs tabular-nums text-slate-400">{time}</div>
-                  <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-white">{s.items.length > 0 ? s.items.join(', ') : `${s.items_count} позиц.`}</div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500"><span className="text-sky-300/80">{s.company_name}</span>{s.operator_name !== '—' && <><span>·</span><span>{s.operator_name}</span></>}</div>
-                  </div>
-                  <div className="shrink-0 text-sm font-semibold tabular-nums text-white">{fmt(s.total_amount)} ₸</div>
+                <div key={h.hour} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${pad2(h.hour)}:00 — ${fmt(h.amount)} ₸ · ${h.count} продаж`}>
+                  <div className="flex w-full flex-1 flex-col justify-end"><div className={`w-full rounded-t transition-all ${peak ? 'bg-sky-400' : 'bg-sky-400/40'}`} style={{ height: `${pct}%` }} /></div>
+                  <div className="text-[10px] text-slate-500">{pad2(h.hour)}</div>
                 </div>
               )
-            })}
-          </div>
+            })}</div>
+          )}
         </div>
-
-        <div className="space-y-5">
-          <div className={`${card} p-4`}>
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Trophy className="h-4 w-4 text-amber-300" /> Топ товары</div>
-            {data.top_items.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
-              <div className="space-y-1.5">{data.top_items.map((it, i) => (
-                <div key={it.name} className="flex items-center gap-3 text-sm">
-                  <span className="w-5 shrink-0 text-center text-xs text-slate-500">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate text-slate-200">{it.name}</span>
-                  <span className="shrink-0 text-xs text-slate-400">{it.qty} шт</span>
-                  <span className="w-24 shrink-0 text-right font-medium tabular-nums text-emerald-300">{fmt(it.revenue)} ₸</span>
-                </div>
-              ))}</div>
-            )}
-          </div>
-
-          <div className={`${card} p-4`}>
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи по часам</div>
-            {activeHours.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
-              <div className="flex h-32 items-end gap-1">{activeHours.map((h) => {
-                const pct = Math.max(4, (h.amount / maxHour) * 100); const peak = h.amount === maxHour
-                return (
-                  <div key={h.hour} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${pad2(h.hour)}:00 — ${fmt(h.amount)} ₸ · ${h.count} продаж`}>
-                    <div className="flex w-full justify-center" style={{ height: 100 }}><div className="flex w-full flex-col justify-end"><div className={`w-full rounded-t transition-all ${peak ? 'bg-sky-400' : 'bg-sky-400/40'}`} style={{ height: `${pct}%` }} /></div></div>
-                    <div className="text-[10px] text-slate-500">{pad2(h.hour)}</div>
-                  </div>
-                )
-              })}</div>
-            )}
-          </div>
-
-          <div className={`${card} p-4`}>
-            <div className="mb-3 text-sm font-semibold text-white">Способы оплаты</div>
-            <div className="space-y-2">
-              <PayBar label="Наличные" amount={data.payment.cash} total={t!.amount} color="bg-emerald-500" />
-              <PayBar label="Безнал" amount={data.payment.kaspi} total={t!.amount} color="bg-amber-500" />
-              <PayBar label="Карта" amount={data.payment.card} total={t!.amount} color="bg-sky-500" />
-              <PayBar label="Онлайн" amount={data.payment.online} total={t!.amount} color="bg-violet-500" />
-            </div>
-          </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Kpi label="Выручка" value={`${fmt(t!.amount)} ₸`} icon={<TrendingUp className="h-4 w-4" />} accent="text-emerald-300" />
+          <Kpi label="Чистая прибыль" value={`${fmt(t!.net_profit)} ₸`} icon={<Coins className="h-4 w-4" />} accent={t!.net_profit >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+          <Kpi label="Средний чек" value={`${fmt(t!.avg_check)} ₸`} icon={<Activity className="h-4 w-4" />} accent="text-white" />
+          <Kpi label="За последний час" value={`${fmt(data.last_hour.amount)} ₸`} sub={`${data.last_hour.count} продаж`} icon={<Clock className="h-4 w-4" />} accent="text-amber-300" />
         </div>
       </div>
 
+      {/* По сотрудникам + По категориям */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className={`${card} p-4`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Users className="h-4 w-4 text-violet-300" /> По операторам</div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Users className="h-4 w-4 text-violet-300" /> По сотрудникам</div>
           {data.by_operator.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="space-y-2.5">{data.by_operator.map((o) => (
               <div key={o.name}>
@@ -395,7 +334,84 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
           )}
         </div>
       </div>
+
+      {/* Способы оплаты */}
+      <div className={`${card} p-4`}>
+        <div className="mb-3 text-sm font-semibold text-white">Способы оплаты</div>
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+          <PayBar label="Наличные" amount={data.payment.cash} total={t!.amount} color="bg-emerald-500" />
+          <PayBar label="Безнал" amount={data.payment.kaspi} total={t!.amount} color="bg-amber-500" />
+          <PayBar label="Карта" amount={data.payment.card} total={t!.amount} color="bg-sky-500" />
+          <PayBar label="Онлайн" amount={data.payment.online} total={t!.amount} color="bg-violet-500" />
+        </div>
+      </div>
+
+      {/* Лента продаж + Топ товары */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className={`${card} overflow-hidden`}>
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-semibold text-white"><Activity className="h-4 w-4 text-emerald-300" /> Лента продаж</span>
+            <span className="text-xs text-slate-500">последние {data.recent.length}</span>
+          </div>
+          <div className="max-h-[420px] divide-y divide-white/5 overflow-y-auto">
+            {data.recent.length === 0 ? <div className="px-4 py-12 text-center text-sm text-slate-400">Продаж нет</div> : data.recent.map((s) => {
+              const time = new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+              const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
+              const isNew = flashIds.has(s.id)
+              return (
+                <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isNew ? 'bg-emerald-500/10' : 'hover:bg-white/[0.02]'}`}>
+                  <div className="w-11 shrink-0 text-xs tabular-nums text-slate-400">{time}</div>
+                  <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-white">{s.items.length > 0 ? s.items.join(', ') : `${s.items_count} позиц.`}</div>
+                    {s.operator_name !== '—' && <div className="text-[11px] text-slate-500">{s.operator_name}</div>}
+                  </div>
+                  <div className="shrink-0 text-sm font-semibold tabular-nums text-white">{fmt(s.total_amount)} ₸</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        <div className={`${card} p-4`}>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Trophy className="h-4 w-4 text-amber-300" /> Топ товары</div>
+          {data.top_items.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
+            <div className="space-y-1.5">{data.top_items.map((it, i) => (
+              <div key={it.name} className="flex items-center gap-3 text-sm">
+                <span className="w-5 shrink-0 text-center text-xs text-slate-500">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate text-slate-200">{it.name}</span>
+                <span className="shrink-0 text-xs text-slate-400">{it.qty} шт</span>
+                <span className="w-24 shrink-0 text-right font-medium tabular-nums text-emerald-300">{fmt(it.revenue)} ₸</span>
+              </div>
+            ))}</div>
+          )}
+        </div>
+      </div>
     </>
+  )
+}
+
+function StatCard({ label, icon, color, amount, count, delta }: { label: string; icon: React.ReactNode; color: string; amount: number; count: number; delta?: number | null }) {
+  return (
+    <div className={`${card} p-4`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-white"><span className={color}>{icon}</span> {label}</div>
+        {delta != null && (
+          <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium ${delta >= 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
+            {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}%
+          </span>
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500">Сумма</div>
+          <div className="mt-0.5 text-xl font-bold tabular-nums text-white">{fmt(amount)} ₸</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500">Количество</div>
+          <div className="mt-0.5 text-xl font-bold tabular-nums text-white">{fmt(count)}</div>
+        </div>
+      </div>
+    </div>
   )
 }
 
