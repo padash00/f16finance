@@ -203,6 +203,41 @@ export async function proxy(request: NextRequest) {
 
   const requestedPath = url.pathname
 
+  // Объединённые страницы «Магазина»: отдельные маршруты схлопнуты в хабы-вкладки.
+  // Прямой заход на старый путь → редирект на хаб. Внутри хаба вкладки рендерят
+  // компоненты в процессе (dynamic import, без навигации по URL), поэтому работают.
+  // Точное совпадение — под-маршруты (/store/revisions/scan, /store/suppliers/[id],
+  // /store/audit) остаются доступными.
+  const STORE_MERGE_REDIRECTS: Record<string, string> = {
+    '/store/warehouse': '/store/stock',
+    '/store/showcase': '/store/stock',
+    '/store/movements': '/store/stock',
+    '/store/catalog': '/store/stock',
+    '/store/receipts': '/store/documents',
+    '/store/postings': '/store/documents',
+    '/store/writeoffs': '/store/documents',
+    '/store/revisions': '/store/documents',
+    '/store/requests': '/store/orders',
+    '/store/requests-journal': '/store/orders',
+    '/store/purchase-orders': '/store/orders',
+    '/store/suppliers': '/store/vendors',
+    '/store/billing': '/store/vendors',
+    '/store/consumables': '/store/vendors',
+    '/store/abc': '/sales-monitor',
+    '/store/forecast': '/sales-monitor',
+    '/store/analytics': '/sales-monitor',
+    '/pos-receipts': '/store/cashbox',
+    '/pos-returns': '/store/cashbox',
+    '/store/advertising': '/store/cashbox',
+    '/customers': '/store/clients',
+    '/discounts': '/store/clients',
+  }
+  const storeMergeTarget = STORE_MERGE_REDIRECTS[requestedPath]
+  if (storeMergeTarget) {
+    url.pathname = storeMergeTarget
+    return NextResponse.redirect(url)
+  }
+
   // Маркетинговые/юридические публичные страницы доступны всем,
   // в т.ч. залогиненным операторам/клиентам — не редиректим в /unauthorized
   const PUBLIC_MARKETING = ['/offer', '/privacy', '/terms', '/sla', '/cookies', '/club-management-system', '/operator-salary-system', '/profit-and-loss-ebitda', '/point-terminal']
