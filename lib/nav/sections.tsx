@@ -113,7 +113,6 @@ export const navSections: NavSection[] = [
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
       { href: '/expenses/pending', label: 'Ожидают одобрения', icon: ClipboardList, note: 'Расходы без чека на проверке', badgeColor: 'orange', isNew: true },
       { href: '/expense-whitelist', label: 'Доверенные поставщики', icon: Shield, note: 'Вендоры без чеков' },
-      { href: '/store/billing', label: 'Долги поставщикам', icon: Wallet, note: 'Открытые долги, оплата, накладные', isNew: true },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
     ],
   },

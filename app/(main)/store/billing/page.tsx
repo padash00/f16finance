@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Loader2, Receipt, FileText, Wallet, X } from 'lucide-react'
+import { Download, Loader2, Receipt, FileText, Wallet, X, Trash2 } from 'lucide-react'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
@@ -113,6 +113,8 @@ export default function BillingPage() {
   const [writeOffDebt, setWriteOffDebt] = useState<Debt | null>(null)
   const [writeOffReason, setWriteOffReason] = useState('')
   const [writingOff, setWritingOff] = useState(false)
+
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [reschedDebt, setReschedDebt] = useState<Debt | null>(null)
   const [reschedDate, setReschedDate] = useState('')
@@ -479,6 +481,24 @@ export default function BillingPage() {
     }
   }
 
+  const handleDeleteDebt = async (debt: Debt) => {
+    const label = debt.supplier?.organization_name || debt.supplier?.name || 'поставщик'
+    if (!confirm(`Удалить долг «${label}» на ${formatMoney(debt.total_amount)} ₸?\n\nЗапись будет удалена безвозвратно. Приход и расход не затрагиваются.`)) return
+    setDeletingId(debt.id)
+    setError(null)
+    try {
+      const response = await fetch(`/api/admin/store/debts/${debt.id}`, { method: 'DELETE' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить долг')
+      setSuccess('Долг удалён')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось удалить долг')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const submitPay = async () => {
     if (!payDebt) return
     if (!payReceiptUrl) {
@@ -697,38 +717,55 @@ export default function BillingPage() {
                         <div className="text-xs text-muted-foreground">Сумма</div>
                         <div className="text-lg font-semibold">{formatMoney(debt.total_amount)} ₸</div>
                       </div>
-                      {debt.status === 'open' ? (
-                        <div className="flex flex-col gap-1.5">
-                          {canPayDebt && (
-                            <Button onClick={() => openPay(debt)}>Оплатить</Button>
-                          )}
-                          {canReschedule && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setReschedDebt(debt)
-                                setReschedDate(debt.due_date || '')
-                                setReschedReason('')
-                              }}
-                            >
-                              Перенести срок
-                            </Button>
-                          )}
-                          {canWriteOff && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setWriteOffDebt(debt)
-                                setWriteOffReason('')
-                              }}
-                            >
-                              Списать
-                            </Button>
-                          )}
-                        </div>
-                      ) : null}
+                      <div className="flex flex-col gap-1.5">
+                        {debt.status === 'open' && (
+                          <>
+                            {canPayDebt && (
+                              <Button onClick={() => openPay(debt)}>Оплатить</Button>
+                            )}
+                            {canReschedule && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setReschedDebt(debt)
+                                  setReschedDate(debt.due_date || '')
+                                  setReschedReason('')
+                                }}
+                              >
+                                Перенести срок
+                              </Button>
+                            )}
+                            {canWriteOff && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setWriteOffDebt(debt)
+                                  setWriteOffReason('')
+                                }}
+                              >
+                                Списать
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        {canWriteOff && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                            disabled={deletingId === debt.id}
+                            onClick={() => handleDeleteDebt(debt)}
+                          >
+                            {deletingId === debt.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <><Trash2 className="w-3.5 h-3.5 mr-1" />Удалить</>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </Card>
