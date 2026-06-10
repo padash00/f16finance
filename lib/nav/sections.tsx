@@ -141,6 +141,7 @@ export const navSections: NavSection[] = [
       { href: '/store/revisions', label: 'Ревизия', icon: ScanSearch, note: 'Полная проверка склада и витрин' },
       { href: '/store/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
       { href: '/store/abc', label: 'ABC-анализ', icon: PieChart, note: 'Классификация товаров по выручке' },
+      { href: '/store/product-analytics', label: 'Аналитика товаров', icon: BarChart3, note: 'Продаваемые, доходные товары и остатки', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/store/forecast', label: 'Прогноз остатков', icon: PackageSearch, note: 'Прогноз по скорости продаж' },
       { href: '/pos', label: 'Касса (Web POS)', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
       { href: '/store/advertising', label: 'Реклама на экране клиента', icon: Clapperboard, note: 'Видео и картинки для второго монитора', badge: 'new', badgeColor: 'blue', isNew: true },
