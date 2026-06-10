@@ -155,7 +155,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       operatorIds.length
         ? supabase
             .from('operators')
-            .select('id, full_name, short_name')
+            .select('id, full_name:name, short_name')
             .in('id', operatorIds)
         : Promise.resolve({ data: [] as any[], error: null }),
       customerIds.length
@@ -196,7 +196,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       shiftOperator = operatorById.get(opId) || null
       if (!shiftOperator) {
         const [opRes, stRes] = await Promise.all([
-          supabase.from('operators').select('id, full_name, short_name').eq('id', opId).maybeSingle(),
+          supabase.from('operators').select('id, full_name:name, short_name').eq('id', opId).maybeSingle(),
           supabase.from('staff').select('id, full_name, short_name').eq('id', opId).maybeSingle(),
         ])
         shiftOperator = (opRes.data as any) || (stRes.data as any) || null
@@ -216,7 +216,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       if (opId) {
         const { data: op } = await supabase
           .from('operators')
-          .select('id, full_name, short_name')
+          .select('id, full_name:name, short_name')
           .eq('id', String(opId))
           .maybeSingle()
         if (op?.id) shiftOperator = op
@@ -280,7 +280,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!shiftWithOperator.operator || !shiftWithOperator.operator.id) {
       const { data: firstSale } = await supabase
         .from('point_sales')
-        .select('operator_id, operator:operators!operator_id(id, full_name, short_name)')
+        .select('operator_id, operator:operators!operator_id(id, full_name:name, short_name)')
         .eq('shift_id', id)
         .not('operator_id', 'is', null)
         .order('sold_at', { ascending: true })

@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     )
     if (directOpIds.length > 0) {
       const [opsRes, staffRes] = await Promise.all([
-        supabase.from('operators').select('id, full_name, short_name').in('id', directOpIds),
+        supabase.from('operators').select('id, full_name:name, short_name').in('id', directOpIds),
         supabase.from('staff').select('id, full_name, short_name').in('id', directOpIds),
       ])
       const byId = new Map<string, any>()
@@ -150,7 +150,7 @@ export async function GET(request: Request) {
       if (operatorIds.length > 0) {
         const { data: opsData } = await supabase
           .from('operators')
-          .select('id, full_name, short_name')
+          .select('id, full_name:name, short_name')
           .in('id', operatorIds)
         const operatorById = new Map<string, any>(
           (opsData || []).map((o: any) => [String(o.id), o]),
