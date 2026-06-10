@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   Activity, RefreshCw, Loader2, TrendingUp, Receipt, Wallet, CreditCard,
-  Clock, Trophy, Store, Pause, Play,
+  Clock, Trophy, Store, Pause, Play, Users, Tags,
 } from 'lucide-react'
 
 const REFRESH_MS = 12_000
@@ -17,12 +17,16 @@ type Recent = {
   id: string; sold_at: string; company_name: string; operator_name: string
   total_amount: number; payment_method: string; items: string[]; items_count: number
 }
+type ByOperator = { name: string; amount: number; count: number; avg_check: number }
+type ByCategory = { name: string; qty: number; revenue: number }
 type Data = {
   date: string
   totals: Totals
   last_hour: { amount: number; count: number }
   payment: { cash: number; kaspi: number; card: number; online: number }
   by_company: ByCompany[]
+  by_operator: ByOperator[]
+  by_category: ByCategory[]
   by_hour: ByHour[]
   top_items: TopItem[]
   recent: Recent[]
@@ -42,7 +46,8 @@ const fmt = (n: number) => Number(n || 0).toLocaleString('ru-RU')
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 export default function SalesMonitorPage() {
-  const today = new Date().toISOString().split('T')[0]
+  // «Сегодня» по времени Алматы (а не UTC), формат YYYY-MM-DD
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Almaty' })
   const [date, setDate] = useState(today)
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
@@ -101,6 +106,8 @@ export default function SalesMonitorPage() {
   const maxHour = useMemo(() => Math.max(1, ...(data?.by_hour.map((h) => h.amount) || [1])), [data])
   const activeHours = data?.by_hour.filter((h) => h.amount > 0) || []
   const maxCompany = useMemo(() => Math.max(1, ...(data?.by_company.map((c) => c.amount) || [1])), [data])
+  const maxOperator = useMemo(() => Math.max(1, ...(data?.by_operator.map((o) => o.amount) || [1])), [data])
+  const maxCategory = useMemo(() => Math.max(1, ...(data?.by_category.map((c) => c.revenue) || [1])), [data])
 
   return (
     <div className="app-page-wide space-y-5">
@@ -291,6 +298,61 @@ export default function SalesMonitorPage() {
                   <PayBar label="Онлайн" amount={data.payment.online} total={t!.amount} color="bg-violet-500" />
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* По операторам + по категориям */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className={`${card} p-4`}>
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+                <Users className="h-4 w-4 text-violet-300" /> По операторам
+              </div>
+              {data.by_operator.length === 0 ? (
+                <div className="py-6 text-center text-sm text-slate-400">Нет данных</div>
+              ) : (
+                <div className="space-y-2.5">
+                  {data.by_operator.map((o) => (
+                    <div key={o.name}>
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="truncate text-slate-200">{o.name}</span>
+                        <span className="shrink-0 font-semibold tabular-nums text-emerald-300">{fmt(o.amount)} ₸</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+                          <div className="h-full rounded-full bg-violet-400/70" style={{ width: `${Math.round((o.amount / maxOperator) * 100)}%` }} />
+                        </div>
+                        <span className="shrink-0 text-[11px] text-slate-500">{o.count} продаж · ср. {fmt(o.avg_check)} ₸</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={`${card} p-4`}>
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+                <Tags className="h-4 w-4 text-amber-300" /> По категориям
+              </div>
+              {data.by_category.length === 0 ? (
+                <div className="py-6 text-center text-sm text-slate-400">Нет данных</div>
+              ) : (
+                <div className="space-y-2.5">
+                  {data.by_category.map((c) => (
+                    <div key={c.name}>
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="truncate text-slate-200">{c.name}</span>
+                        <span className="shrink-0 font-semibold tabular-nums text-amber-300">{fmt(c.revenue)} ₸</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+                          <div className="h-full rounded-full bg-amber-400/70" style={{ width: `${Math.round((c.revenue / maxCategory) * 100)}%` }} />
+                        </div>
+                        <span className="shrink-0 text-[11px] text-slate-500">{c.qty} шт</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </>

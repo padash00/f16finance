@@ -38,17 +38,26 @@ export async function GET(request: Request) {
       last_hour: { amount: 0, count: 0 },
       payment: { cash: 0, kaspi: 0, card: 0, online: 0 },
       by_company: [] as any[],
+      by_operator: [] as any[],
+      by_category: [] as any[],
       by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0, count: 0 })),
       top_items: [] as any[],
       recent: [] as any[],
     }
 
+    // Календарный день по Алматы (UTC+5) по РЕАЛЬНОМУ времени продажи sold_at.
+    // sale_date — «бизнес-дата» смены (ночная смена висит на прошлой дате, даже
+    // продажи после полуночи), поэтому фильтруем по фактическому времени.
+    const dayStart = new Date(`${date}T00:00:00+05:00`)
+    const dayEnd = new Date(dayStart.getTime() + 24 * 3_600_000)
+
     let salesQuery = supabase
       .from('point_sales')
       .select(
-        'id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, company_id, operator_id, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name))',
+        'id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, company_id, operator_id, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name, category:category_id(name)))',
       )
-      .eq('sale_date', date)
+      .gte('sold_at', dayStart.toISOString())
+      .lt('sold_at', dayEnd.toISOString())
       .order('sold_at', { ascending: false })
 
     if (companyId) salesQuery = salesQuery.eq('company_id', companyId)
@@ -79,6 +88,8 @@ export async function GET(request: Request) {
     const hourMap: number[] = Array(24).fill(0)
     const hourCount: number[] = Array(24).fill(0)
     const byCompany = new Map<string, { company_id: string; name: string; amount: number; count: number }>()
+    const byOperator = new Map<string, { name: string; amount: number; count: number }>()
+    const byCategory = new Map<string, { name: string; qty: number; revenue: number }>()
     const itemMap = new Map<string, { name: string; qty: number; revenue: number }>()
     const cutoff = Date.now() - 3_600_000
 
@@ -104,13 +115,27 @@ export async function GET(request: Request) {
         byCompany.set(cid, c)
       }
 
+      const oid = String(s.operator_id || '')
+      if (oid) {
+        const o = byOperator.get(oid) || { name: operatorName.get(oid) || 'Оператор', amount: 0, count: 0 }
+        o.amount += total
+        o.count += 1
+        byOperator.set(oid, o)
+      }
+
       for (const it of (s.items || []) as any[]) {
-        const nm = (Array.isArray(it.inventory_items) ? it.inventory_items[0]?.name : it.inventory_items?.name) || it.universal_name || 'Товар'
-        const key = nm
-        const row = itemMap.get(key) || { name: nm, qty: 0, revenue: 0 }
+        const inv = Array.isArray(it.inventory_items) ? it.inventory_items[0] : it.inventory_items
+        const nm = inv?.name || it.universal_name || 'Товар'
+        const row = itemMap.get(nm) || { name: nm, qty: 0, revenue: 0 }
         row.qty += Number(it.quantity || 0)
         row.revenue += Number(it.total_price || 0)
-        itemMap.set(key, row)
+        itemMap.set(nm, row)
+
+        const cat = (Array.isArray(inv?.category) ? inv?.category[0]?.name : inv?.category?.name) || (inv ? 'Без категории' : 'Прочее')
+        const crow = byCategory.get(cat) || { name: cat, qty: 0, revenue: 0 }
+        crow.qty += Number(it.quantity || 0)
+        crow.revenue += Number(it.total_price || 0)
+        byCategory.set(cat, crow)
       }
     }
 
@@ -123,6 +148,14 @@ export async function GET(request: Request) {
     const byCompanyArr = Array.from(byCompany.values())
       .map((c) => ({ ...c, amount: round(c.amount), avg_check: c.count ? round(c.amount / c.count) : 0 }))
       .sort((a, b) => b.amount - a.amount)
+
+    const byOperatorArr = Array.from(byOperator.values())
+      .map((o) => ({ name: o.name, amount: round(o.amount), count: o.count, avg_check: o.count ? round(o.amount / o.count) : 0 }))
+      .sort((a, b) => b.amount - a.amount)
+
+    const byCategoryArr = Array.from(byCategory.values())
+      .map((c) => ({ name: c.name, qty: Math.round(c.qty * 100) / 100, revenue: round(c.revenue) }))
+      .sort((a, b) => b.revenue - a.revenue)
 
     const recent = sales.slice(0, 40).map((s) => ({
       id: s.id,
@@ -152,6 +185,8 @@ export async function GET(request: Request) {
         last_hour: { amount: round(lastHourAmount), count: lastHourCount },
         payment: { cash: round(cash), kaspi: round(kaspi), card: round(card), online: round(online) },
         by_company: byCompanyArr,
+        by_operator: byOperatorArr,
+        by_category: byCategoryArr,
         by_hour: hourMap.map((a, h) => ({ hour: h, amount: round(a), count: hourCount[h] })),
         top_items: topItems,
         recent,
