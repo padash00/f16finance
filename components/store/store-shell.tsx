@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   Activity, Boxes, Warehouse, FileText, ClipboardList, Building2,
   Receipt, Users2, Monitor, ReceiptText, ArrowLeft, Store, LogOut,
+  Clock, Settings,
 } from 'lucide-react'
 
 type Item = { href: string; label: string; icon: any; exact?: boolean }
@@ -18,9 +19,11 @@ const NAV: Item[] = [
   { href: '/store/orders', label: 'Заявки', icon: ClipboardList },
   { href: '/store/vendors', label: 'Поставщики', icon: Building2 },
   { href: '/store/cashbox', label: 'Касса', icon: Receipt },
+  { href: '/store/shifts', label: 'Смены', icon: Clock },
   { href: '/store/clients', label: 'Клиенты', icon: Users2 },
   { href: '/pos', label: 'Web POS', icon: Monitor },
   { href: '/store/receipt-settings', label: 'Реквизиты ККМ', icon: ReceiptText },
+  { href: '/store/settings', label: 'Настройки', icon: Settings },
 ]
 
 export function StoreShell({ children }: { children: React.ReactNode }) {
