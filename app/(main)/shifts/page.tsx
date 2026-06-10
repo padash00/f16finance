@@ -22,7 +22,6 @@ import {
   Search,
   Sun,
   Moon,
-  BarChart2,
 } from 'lucide-react'
 import {
   startOfWeek,
@@ -999,12 +998,6 @@ function ShiftsPageContent() {
                       Заполнить по прошлой неделе
                     </Button>
                   )}
-
-                  <Link href="/shifts/report">
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <BarChart2 className="h-4 w-4" /> Отчёт по смене
-                    </Button>
-                  </Link>
                 </>
               }
             />
