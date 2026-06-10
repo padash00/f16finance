@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2, Users } from 'lucide-react'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -180,25 +180,25 @@ export default function StoreAuditPage() {
   if (view === 'list') {
     return (
       <div className="app-page-wide space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
-            <ClipboardList className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-foreground">Аудит-ревизии</h1>
-            <p className="text-xs text-muted-foreground">Слепой подсчёт несколькими операторами по секциям</p>
-          </div>
-          <div className="ml-auto flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => void loadActs()} className="h-9 gap-1.5">
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Обновить
-            </Button>
-            <Button size="sm" onClick={() => { setView('create'); setLocationId(''); setAssignments([]); setComment(''); setMode('single') }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
-              <Plus className="h-3.5 w-3.5" />
-              Новый акт
-            </Button>
-          </div>
-        </div>
+        <AdminPageHeader
+          title="Аудит-ревизии"
+          description="Слепой подсчёт несколькими операторами по секциям"
+          icon={<ClipboardList className="h-5 w-5" />}
+          accent="emerald"
+          backHref="/store/revisions"
+          actions={
+            <>
+              <Button variant="outline" size="sm" onClick={() => void loadActs()} className="h-9 gap-1.5">
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                Обновить
+              </Button>
+              <Button size="sm" onClick={() => { setView('create'); setLocationId(''); setAssignments([]); setComment(''); setMode('single') }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
+                <Plus className="h-3.5 w-3.5" />
+                Новый акт
+              </Button>
+            </>
+          }
+        />
 
         {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</Card> : null}
 
@@ -226,10 +226,6 @@ export default function StoreAuditPage() {
             ))}
           </div>
         )}
-
-        <div>
-          <Link href="/store/revisions" className="text-xs text-muted-foreground hover:text-foreground">← Обычные ревизии</Link>
-        </div>
       </div>
     )
   }
@@ -238,10 +234,16 @@ export default function StoreAuditPage() {
   if (view === 'create') {
     return (
       <div className="app-page-tight space-y-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setView('list')} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> Назад</Button>
-          <h1 className="text-lg font-semibold text-foreground">Новый аудит-акт</h1>
-        </div>
+        <AdminPageHeader
+          title="Новый аудит-акт"
+          description="Зафиксируйте снимок остатков и назначьте операторов на секции"
+          icon={<ClipboardList className="h-5 w-5" />}
+          accent="emerald"
+          backHref="/store/audit"
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => setView('list')} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> Назад</Button>
+          }
+        />
         {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</Card> : null}
 
         <Card className="space-y-4 p-4">
@@ -315,10 +317,16 @@ export default function StoreAuditPage() {
   const hasConflicts = isOpen && !closeReport && rows.some((r) => r.conflict)
   return (
     <div className="app-page-tight space-y-4">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => { setView('list'); void loadActs() }} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> К списку</Button>
-        <h1 className="text-lg font-semibold text-foreground">Аудит-акт</h1>
-      </div>
+      <AdminPageHeader
+        title="Аудит-акт"
+        description="Подсчёт, расхождения и проведение ревизии"
+        icon={<ClipboardList className="h-5 w-5" />}
+        accent="emerald"
+        backHref="/store/audit"
+        actions={
+          <Button variant="ghost" size="sm" onClick={() => { setView('list'); void loadActs() }} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> К списку</Button>
+        }
+      />
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</Card> : null}
 
       {!detail ? (
