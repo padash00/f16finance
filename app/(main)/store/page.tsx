@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowRight, Boxes, ClipboardList, FileText, History, Package,
   Search, Loader2, Warehouse, Building2, Activity, Receipt, Users2,
+  PackagePlus, ArchiveX, ScanSearch,
 } from 'lucide-react'
 
 import { isAbortError } from '@/lib/is-abort-error'
@@ -196,20 +197,60 @@ export default function StoreOverviewPage() {
           <div className="px-4 py-10 text-center text-sm text-slate-400">Действий пока нет.</div>
         ) : (
           <div className="divide-y divide-white/5">
-            {timeline.map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs">
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-slate-200">{e.entity_type} · {e.action}</div>
-                  <div className="text-slate-500">{(e.actor_staff?.full_name || '').trim() || (e.actor_user_id ? `ID ${e.actor_user_id.slice(0, 8)}` : 'Система')}</div>
+            {timeline.map((e) => {
+              const m = activityMeta(e.entity_type, e.action)
+              const actor = (e.actor_staff?.full_name || '').trim()
+              const Icon = m.icon
+              return (
+                <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/5"><Icon className={`h-4 w-4 ${m.color}`} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-slate-200">{m.phrase}</div>
+                    {actor ? <div className="text-[11px] text-slate-500">{actor}</div> : null}
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-500">{new Date(e.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <span className="shrink-0 text-slate-500">{new Date(e.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
     </div>
   )
+}
+
+const ACTIVITY_PHRASE: Record<string, string> = {
+  'inventory-receipt:create': 'Приёмка создана',
+  'inventory-receipt:create_posting': 'Оприходование',
+  'inventory-receipt:update': 'Приёмка изменена',
+  'inventory-receipt:delete': 'Приёмка удалена',
+  'inventory-writeoff:create': 'Списание создано',
+  'inventory-writeoff:cancel': 'Списание отменено',
+  'inventory-request:create': 'Заявка создана',
+  'inventory-request:approve': 'Заявка одобрена',
+  'inventory-request:reject': 'Заявка отклонена',
+  'inventory-request:issue': 'Заявка выдана',
+  'inventory-request:receive': 'Заявка получена',
+  'inventory-revision:create': 'Ревизия создана',
+  'inventory-revision:apply': 'Ревизия проведена',
+  'inventory-posting:create': 'Оприходование',
+}
+const ENTITY_META: Record<string, { label: string; icon: any; color: string }> = {
+  'inventory-receipt': { label: 'Приёмка', icon: PackagePlus, color: 'text-sky-300' },
+  'inventory-writeoff': { label: 'Списание', icon: ArchiveX, color: 'text-rose-300' },
+  'inventory-request': { label: 'Заявка', icon: ClipboardList, color: 'text-violet-300' },
+  'inventory-revision': { label: 'Ревизия', icon: ScanSearch, color: 'text-amber-300' },
+  'inventory-posting': { label: 'Оприходование', icon: Package, color: 'text-emerald-300' },
+}
+const ACTION_FALLBACK: Record<string, string> = {
+  create: 'создано', create_posting: 'оприходование', approve: 'одобрено', reject: 'отклонено',
+  cancel: 'отменено', update: 'изменено', delete: 'удалено', issue: 'выдано', receive: 'получено',
+  apply: 'проведено', close: 'закрыто', open: 'открыто',
+}
+function activityMeta(entity: string, action: string): { phrase: string; icon: any; color: string } {
+  const meta = ENTITY_META[entity] || { label: String(entity || '').replace(/[-_]/g, ' '), icon: History, color: 'text-slate-400' }
+  const phrase = ACTIVITY_PHRASE[`${entity}:${action}`] || `${meta.label} · ${ACTION_FALLBACK[action] || action}`
+  return { phrase, icon: meta.icon, color: meta.color }
 }
 
 function Kpi({ label, value, hint, tone, loaded, href }: { label: string; value: number; hint: string; tone: 'normal' | 'amber' | 'rose'; loaded: boolean; href?: string }) {
