@@ -109,7 +109,7 @@ function actorLabel(staff: { full_name: string | null } | null | undefined, fall
   return '—'
 }
 
-export default function StoreRevisionsPage() {
+export default function StoreRevisionsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<RevisionsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -676,13 +676,8 @@ export default function StoreRevisionsPage() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <AdminPageHeader
-        title="Ревизии"
-        description="Сверка фактических остатков с системой"
-        icon={<ScanSearch className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
@@ -700,13 +695,7 @@ export default function StoreRevisionsPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
               Обновить
             </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                setFormSheetOpen(true)
-              }}
-              className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
-            >
+            <Button size="sm" onClick={() => { setFormSheetOpen(true) }} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
               <ClipboardCheck className="h-3.5 w-3.5" />
               Новый акт
             </Button>
@@ -723,8 +712,20 @@ export default function StoreRevisionsPage() {
               </Link>
             </Button>
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title="Ревизии"
+            description="Сверка фактических остатков с системой"
+            icon={<ScanSearch className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -71,7 +71,7 @@ function parseNum(v: string) {
   return Number.isFinite(n) ? n : 0
 }
 
-export default function StorePostingsPage() {
+export default function StorePostingsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can, isSuperAdmin, isLoading: capsLoading } = useCapabilities()
   const [role, setRole] = useState<SessionRole | null>(null)
   const [roleLoading, setRoleLoading] = useState(true)
@@ -252,18 +252,26 @@ export default function StorePostingsPage() {
 
   return (
     <div className="app-page-wide space-y-6">
-      <AdminPageHeader
-        title="Оприходование"
-        description="Ручное добавление товара на склад или витрину без поставщика. Только для владельца и суперадмина."
-        icon={<Upload className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={(
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
             {role?.roleLabel || 'Владелец'}
           </Badge>
-        )}
-      />
+        </div>
+      ) : (
+        <AdminPageHeader
+          title="Оприходование"
+          description="Ручное добавление товара на склад или витрину без поставщика. Только для владельца и суперадмина."
+          icon={<Upload className="h-5 w-5" />}
+          accent="emerald"
+          backHref="/"
+          actions={(
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+              {role?.roleLabel || 'Владелец'}
+            </Badge>
+          )}
+        />
+      )}
 
       <Card className="border-amber-500/20 bg-amber-500/5">
         <CardContent className="p-4 flex items-start gap-3">

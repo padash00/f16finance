@@ -50,7 +50,7 @@ import {
   parseUnitCost,
 } from '@/lib/store/receipts/format'
 
-export default function StoreReceiptsPage() {
+export default function StoreReceiptsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
   const canCreate = can('store-receipts.create')
   const canEdit = can('store-receipts.edit')
@@ -914,31 +914,22 @@ export default function StoreReceiptsPage() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <AdminPageHeader
-        title="Приёмка"
-        description="Приходные документы от поставщиков"
-        icon={<PackagePlus className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={(
+      {(() => {
+        const hdrActions = (
           <>
             <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
               Обновить
             </Button>
             {canCreate && (
-              <Button
-                size="sm"
-                onClick={() => setFormSheetOpen(true)}
-                className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700"
-              >
+              <Button size="sm" onClick={() => setFormSheetOpen(true)} className="h-9 gap-1.5 bg-amber-600 hover:bg-amber-700">
                 <PackagePlus className="h-3.5 w-3.5" />
                 Новый документ
               </Button>
             )}
           </>
-        )}
-        toolbar={(
+        )
+        const hdrToolbar = (
           <div className="inline-flex w-fit rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
             {(['all', 'warehouse', 'showcase'] as const).map((s) => (
               <button
@@ -951,8 +942,24 @@ export default function StoreReceiptsPage() {
               </button>
             ))}
           </div>
-        )}
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Приёмка"
+            description="Приходные документы от поставщиков"
+            icon={<PackagePlus className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">

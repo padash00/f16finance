@@ -113,7 +113,7 @@ function formatDate(value: string | null | undefined) {
   }).format(parsed)
 }
 
-export default function StoreWriteoffsPage() {
+export default function StoreWriteoffsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<WriteoffsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -432,13 +432,8 @@ export default function StoreWriteoffsPage() {
     <TooltipProvider delayDuration={200}>
     <div className="app-page-wide space-y-6">
       {/* Header */}
-      <AdminPageHeader
-        title="Списания"
-        description="Брак, просрочка, служебный расход — по складу и витринам"
-        icon={<ArchiveX className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
@@ -461,8 +456,20 @@ export default function StoreWriteoffsPage() {
               Новое списание
             </Button>
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title="Списания"
+            description="Брак, просрочка, служебный расход — по складу и витринам"
+            icon={<ArchiveX className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
