@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2, AlertCircle, Loader2, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
@@ -99,37 +98,57 @@ export default function ExpenseWhitelistPage() {
     }
   }
 
+  const inputCls = 'h-10 rounded-xl border border-white/10 bg-slate-950/50 px-3 text-sm text-white placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/15'
+
   return (
-    <div className="app-page-wide space-y-6">
+    <div className="app-page-wide space-y-5">
       <AdminPageHeader
         title="Доверенные поставщики"
-        description="Вендоры, которым можно платить без чека (уборщик, дворник, регулярные услуги)"
+        description="Кому можно платить без фото чека"
         icon={<ShieldCheck className="h-5 w-5" />}
         accent="emerald"
         backHref="/expenses"
       />
 
+      {/* Что это такое */}
+      <div className="flex gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4 text-sm text-emerald-50/80">
+        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+        <div>
+          <span className="font-semibold text-emerald-200">Что это.</span> Поставщики и получатели,
+          которым можно платить <span className="font-semibold text-white">без чека</span>. Когда добавляешь расход
+          и выбираешь такого — фото чека <span className="font-semibold text-white">не требуется</span>.
+          Удобно для зарплат, аренды, уборки, разовых выплат и регулярных услуг.
+          <div className="mt-1 text-xs text-emerald-100/50">
+            «Все точки» — действует на всех; можно ограничить конкретной точкой. Категория подставится в расход автоматически.
+          </div>
+        </div>
+      </div>
+
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+        <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>{error}</div>
         </div>
       )}
 
       {can('expense-whitelist.create') && (
-        <Card className="p-4 mb-6 space-y-3">
-          <h3 className="font-semibold">Добавить вендора</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-lg shadow-black/20 space-y-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300"><Plus className="h-4 w-4" /></span>
+            Добавить вендора
+          </h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
-              placeholder="Имя или название"
+              placeholder="Имя или название (напр. Дворник Геннадий)"
               value={form.vendor_name}
               onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))}
-              className="h-10 px-3 rounded-md border bg-background"
+              onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+              className={inputCls}
             />
             <select
               value={form.company_id}
               onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
-              className="h-10 px-3 rounded-md border bg-background"
+              className={inputCls}
             >
               <option value="">— Все точки —</option>
               {companies.map((c) => (
@@ -139,7 +158,7 @@ export default function ExpenseWhitelistPage() {
             <select
               value={form.default_category_id}
               onChange={(e) => setForm((f) => ({ ...f, default_category_id: e.target.value }))}
-              className="h-10 px-3 rounded-md border bg-background"
+              className={inputCls}
             >
               <option value="">— Категория по умолчанию —</option>
               {categories.map((c) => (
@@ -150,45 +169,62 @@ export default function ExpenseWhitelistPage() {
               placeholder="Заметка (опционально)"
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              className="h-10 px-3 rounded-md border bg-background"
+              className={inputCls}
             />
           </div>
-          <Button onClick={add} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          <Button onClick={add} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
             Добавить
           </Button>
-        </Card>
-      )}
-
-      {loading && items.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">Загрузка...</div>
-      ) : items.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">
-          Пока нет доверенных поставщиков
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {items.map((v) => (
-            <Card key={v.id} className="p-3 flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="font-medium">{v.vendor_name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {v.company_id ? companies.find((c) => c.id === v.company_id)?.name || '—' : 'Все точки'}
-                  {v.default_category_id && (
-                    <> · {categories.find((c) => c.id === v.default_category_id)?.name || '—'}</>
-                  )}
-                </div>
-                {v.notes && <div className="text-xs text-muted-foreground italic mt-1">{v.notes}</div>}
-              </div>
-              {can('expense-whitelist.delete') && (
-                <Button variant="ghost" size="icon" onClick={() => remove(v.id)}>
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </Button>
-              )}
-            </Card>
-          ))}
         </div>
       )}
+
+      {/* Список */}
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/20">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <span className="text-sm font-semibold text-white">Список</span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-400">{items.length}</span>
+        </div>
+
+        {loading && items.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-slate-400">
+            <Loader2 className="h-5 w-5 animate-spin" /> <span className="text-sm">Загрузка…</span>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-slate-400">
+            Пока нет доверенных поставщиков. Добавьте первого в форме выше.
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {items.map((v) => {
+              const companyName = v.company_id ? companies.find((c) => c.id === v.company_id)?.name || '—' : 'Все точки'
+              const categoryName = v.default_category_id ? categories.find((c) => c.id === v.default_category_id)?.name || '—' : null
+              return (
+                <div key={v.id} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-white/[0.03]">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-300">
+                      <ShieldCheck className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-white">{v.vendor_name}</div>
+                      <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-slate-400">
+                        <span className={v.company_id ? 'text-sky-300' : ''}>{companyName}</span>
+                        {categoryName && <><span className="text-slate-600">·</span><span>{categoryName}</span></>}
+                        {v.notes && <><span className="text-slate-600">·</span><span className="italic text-slate-500">{v.notes}</span></>}
+                      </div>
+                    </div>
+                  </div>
+                  {can('expense-whitelist.delete') && (
+                    <Button variant="ghost" size="icon" className="shrink-0 text-slate-500 hover:text-rose-400" title="Архивировать" onClick={() => remove(v.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
