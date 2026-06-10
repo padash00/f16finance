@@ -127,7 +127,7 @@ function parseNum(v: string) {
   return Number.isFinite(n) ? Math.max(0, n) : 0
 }
 
-export default function WarehousePage() {
+export default function WarehousePage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
   const canEdit = can('store-warehouse.edit')
   const canCreateItem = can('store-warehouse.create_item')
@@ -727,15 +727,10 @@ export default function WarehousePage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
-      <AdminPageHeader
-        title={warehouseLoc ? warehouseLoc.name : 'Склад'}
-        description="Итого = подсобка + витрина"
-        icon={<Warehouse className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             {companies.length > 1 && (
               <div className="relative">
@@ -768,8 +763,20 @@ export default function WarehousePage() {
               </Button>
             )}
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title={warehouseLoc ? warehouseLoc.name : 'Склад'}
+            description="Итого = подсобка + витрина"
+            icon={<Warehouse className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Stats strip */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">

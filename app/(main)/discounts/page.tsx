@@ -98,7 +98,7 @@ function generatePromoCode(): string {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function DiscountsPage() {
+export default function DiscountsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
   const canCreate = can('discounts.create')
   const canEdit = can('discounts.edit')
@@ -347,14 +347,9 @@ export default function DiscountsPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6">
-      <AdminPageHeader
-        title="Скидки и промокоды"
-        description="Скидки, промокоды и акции"
-        icon={<Tag className="h-5 w-5" />}
-        accent="blue"
-        backHref="/"
-        actions={
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
+      {(() => {
+        const actions = (
           <>
             <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -366,8 +361,21 @@ export default function DiscountsPage() {
               </Button>
             )}
           </>
+        )
+        if (embedded) {
+          return <div className="flex justify-end">{actions}</div>
         }
-      />
+        return (
+          <AdminPageHeader
+            title="Скидки и промокоды"
+            description="Скидки, промокоды и акции"
+            icon={<Tag className="h-5 w-5" />}
+            accent="blue"
+            backHref="/"
+            actions={actions}
+          />
+        )
+      })()}
 
       {error && (
         <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">

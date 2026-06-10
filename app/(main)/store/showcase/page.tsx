@@ -111,7 +111,7 @@ function formatDate(s: string) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ShowcasePage() {
+export default function ShowcasePage({ embedded = false }: { embedded?: boolean } = {}) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
   const [showcase, setShowcase] = useState<ShowcaseLocation>(null)
@@ -301,15 +301,10 @@ export default function ShowcasePage() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
-      <AdminPageHeader
-        title={showcase ? showcase.name : 'Витрина'}
-        description={warehouse ? `Склад: ${warehouse.name}` : 'Склад не настроен'}
-        icon={<Store className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             {companies.length > 1 && (
               <div className="relative">
@@ -348,8 +343,20 @@ export default function ShowcasePage() {
               Запросить со склада
             </Button>
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title={showcase ? showcase.name : 'Витрина'}
+            description={warehouse ? `Склад: ${warehouse.name}` : 'Склад не настроен'}
+            icon={<Store className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Stats strip */}
       <div className="grid grid-cols-3 gap-3">

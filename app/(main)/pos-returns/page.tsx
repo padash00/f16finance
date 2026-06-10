@@ -76,7 +76,7 @@ function shortId(id: string) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function PosReturnsPage() {
+export default function PosReturnsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -211,23 +211,30 @@ export default function PosReturnsPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
-      <AdminPageHeader
-        title="Возврат товара"
-        description="Оформление возврата по чеку"
-        icon={<RotateCcw className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
-          (sale || result) ? (
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Новый возврат
-            </Button>
-          ) : null
-        }
-      />
+      {(() => {
+        const hdrActions = (sale || result) ? (
+          <Button variant="outline" size="sm" onClick={handleReset}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Новый возврат
+          </Button>
+        ) : null
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {hdrActions}
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Возврат товара"
+            description="Оформление возврата по чеку"
+            icon={<RotateCcw className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Success Result */}
       {result && (

@@ -79,7 +79,7 @@ const fmtDate = (value: string | null | undefined) => {
   }
 }
 
-export default function PurchaseOrdersPage() {
+export default function PurchaseOrdersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -251,19 +251,14 @@ export default function PurchaseOrdersPage() {
   }, [orders])
 
   return (
-    <div className="app-page max-w-[1600px] space-y-5">
-      <AdminPageHeader
-        title="Заявки поставщикам"
-        description="Заказы на закуп товара. Создавайте вручную, скоро — авто по остаткам."
-        icon={<ClipboardList className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={(
+    <div className={embedded ? 'space-y-5' : 'app-page max-w-[1600px] space-y-5'}>
+      {(() => {
+        const hdrActions = (
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="w-4 h-4 mr-1" /> Создать заявку
           </Button>
-        )}
-        toolbar={(
+        )
+        const hdrToolbar = (
           <div className="flex flex-wrap gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
             {(['all', 'draft', 'sent', 'received', 'cancelled'] as const).map((s) => (
               <button
@@ -277,8 +272,24 @@ export default function PurchaseOrdersPage() {
               </button>
             ))}
           </div>
-        )}
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Заявки поставщикам"
+            description="Заказы на закуп товара. Создавайте вручную, скоро — авто по остаткам."
+            icon={<ClipboardList className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card> : null}

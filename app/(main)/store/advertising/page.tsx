@@ -33,7 +33,7 @@ type Ad = {
   updated_at: string
 }
 
-export default function AdvertisingPage() {
+export default function AdvertisingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [companies, setCompanies] = useState<CompanyOption[]>([])
   const [companyId, setCompanyId] = useState<string>('')
   const [ads, setAds] = useState<Ad[]>([])
@@ -207,13 +207,9 @@ export default function AdvertisingPage() {
   const activeCount = ads.filter((a) => a.is_active).length
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <AdminPageHeader
-        title="Реклама на экране клиента"
-        description="Видео и картинки крутятся на втором мониторе, когда касса простаивает между клиентами"
-        icon={<Clapperboard className="h-5 w-5" />}
-        accent="amber"
-        actions={
+    <div className={embedded ? 'space-y-6' : 'space-y-6 p-4 md:p-6'}>
+      {(() => {
+        const hdrActions = (
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={companyId}
@@ -242,8 +238,21 @@ export default function AdvertisingPage() {
               Загрузить
             </Button>
           </div>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {hdrActions}
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Реклама на экране клиента"
+            description="Видео и картинки крутятся на втором мониторе, когда касса простаивает между клиентами"
+            icon={<Clapperboard className="h-5 w-5" />}
+            accent="amber"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {error && (
         <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</Card>

@@ -86,7 +86,7 @@ function formatDate(iso: string) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function CustomersPage() {
+export default function CustomersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
   const canCreate = can('customers.create')
   const canEdit = can('customers.edit')
@@ -307,34 +307,42 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6">
-      <div className="mb-6">
-        <AdminPageHeader
-          title="Клиенты"
-          description="База клиентов и программа лояльности"
-          accent="emerald"
-          icon={<Users className="h-5 w-5" aria-hidden />}
-          actions={
-            <>
-              {canExport && (
-                <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={customers.length === 0}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Экспорт PDF
-                </Button>
-              )}
-              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => void load()} disabled={loading} aria-label="Обновить">
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
+      {(() => {
+        const actions = (
+          <>
+            {canExport && (
+              <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={customers.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Экспорт PDF
               </Button>
-              {canCreate && (
-              <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
-                <Plus className="mr-2 h-4 w-4" />
-                Добавить клиента
-              </Button>
-              )}
-            </>
-          }
-        />
-      </div>
+            )}
+            <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => void load()} disabled={loading} aria-label="Обновить">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            {canCreate && (
+            <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Добавить клиента
+            </Button>
+            )}
+          </>
+        )
+        if (embedded) {
+          return <div className="mb-6 flex justify-end">{actions}</div>
+        }
+        return (
+          <div className="mb-6">
+            <AdminPageHeader
+              title="Клиенты"
+              description="База клиентов и программа лояльности"
+              accent="emerald"
+              icon={<Users className="h-5 w-5" aria-hidden />}
+              actions={actions}
+            />
+          </div>
+        )
+      })()}
 
       {/* Stats */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">

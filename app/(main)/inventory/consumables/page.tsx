@@ -69,7 +69,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function ConsumablesPageContent() {
+export function ConsumablesPageContent({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -297,20 +297,29 @@ export function ConsumablesPageContent() {
   }
 
   return (
-    <div className="app-page-wide space-y-4">
-      <AdminPageHeader
-        title="Расходники"
-        description="Нормы потребления и контроль остатков по точкам"
-        icon={<Package2 className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+    <div className={embedded ? 'space-y-4' : 'app-page-wide space-y-4'}>
+      {(() => {
+        const hdrActions = (
           <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleRefreshClick} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Расходники"
+            description="Нормы потребления и контроль остатков по точкам"
+            icon={<Package2 className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {error && <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">{error}</div>}
       {success && <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">{success}</div>}

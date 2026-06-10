@@ -208,7 +208,7 @@ function requestTimeline(request: InventoryRequest) {
   ]
 }
 
-function StoreRequestsJournalPageContent() {
+function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: boolean }) {
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -375,15 +375,10 @@ function StoreRequestsJournalPageContent() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
-      <AdminPageHeader
-        title="Журнал заявок"
-        description="История: создана → одобрена → выдана → получена"
-        icon={<History className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             <Button variant="outline" size="sm" onClick={() => void load(undefined, { soft: true })} disabled={loading || refreshing} className="h-9 gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
@@ -393,8 +388,8 @@ function StoreRequestsJournalPageContent() {
               Экспорт CSV
             </Button>
           </>
-        }
-        toolbar={
+        )
+        const hdrToolbar = (
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -438,8 +433,24 @@ function StoreRequestsJournalPageContent() {
               Сбросить
             </Button>
           </div>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Журнал заявок"
+            description="История: создана → одобрена → выдана → получена"
+            icon={<History className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
@@ -746,10 +757,10 @@ function StoreRequestsJournalPageContent() {
   )
 }
 
-export default function StoreRequestsJournalPage() {
+export default function StoreRequestsJournalPage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <Suspense fallback={null}>
-      <StoreRequestsJournalPageContent />
+      <StoreRequestsJournalPageContent embedded={embedded} />
     </Suspense>
   )
 }

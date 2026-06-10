@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   Activity, RefreshCw, Loader2, TrendingUp, Receipt, Wallet, CreditCard,
@@ -8,6 +9,11 @@ import {
 } from 'lucide-react'
 
 const REFRESH_MS = 12_000
+
+const embFallback = () => <div className="flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
+const AbcEmbed = dynamic(() => import('@/app/(main)/store/abc/page'), { ssr: false, loading: embFallback })
+const ForecastEmbed = dynamic(() => import('@/app/(main)/inventory/forecast/page').then((m) => m.InventoryForecastPageContent), { ssr: false, loading: embFallback })
+const PointsEmbed = dynamic(() => import('@/app/(main)/store/analytics/page'), { ssr: false, loading: embFallback })
 
 // ── Монитор ──
 type Totals = { amount: number; count: number; avg_check: number; cash: number; cashless: number }
@@ -41,7 +47,7 @@ type ProdData = {
   stock_totals: { possible_sales: number; possible_profit: number; purchase_sum: number; total_qty: number; items_count: number }
 }
 type Company = { id: string; name: string }
-type Tab = 'monitor' | 'best' | 'profit' | 'stock'
+type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast' | 'points'
 
 const card = 'rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/20'
 const inputCls = 'rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder-slate-500 [color-scheme:dark] focus:border-emerald-400/50 focus:outline-none'
@@ -63,7 +69,11 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'best', label: 'Продаваемые' },
   { key: 'profit', label: 'Доходные' },
   { key: 'stock', label: 'Остатки' },
+  { key: 'abc', label: 'ABC' },
+  { key: 'forecast', label: 'Прогноз' },
+  { key: 'points', label: 'Аналитика точек' },
 ]
+const EMBED_TABS: Tab[] = ['abc', 'forecast', 'points']
 
 export default function SalesMonitorPage() {
   const today = almatyDate()
@@ -88,7 +98,8 @@ export default function SalesMonitorPage() {
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
 
   const isToday = to === today
-  const isProduct = tab !== 'monitor'
+  const isEmbed = EMBED_TABS.includes(tab)
+  const isProduct = tab === 'best' || tab === 'profit' || tab === 'stock'
 
   function applyPreset(p: typeof preset) {
     setPreset(p)
@@ -133,8 +144,9 @@ export default function SalesMonitorPage() {
     } catch (e: any) { setError(e?.message || 'Ошибка') } finally { setLoading(false) }
   }, [from, to, companyId])
 
-  // Загрузка по активной вкладке
+  // Загрузка по активной вкладке (встраиваемые аналитики грузят себя сами)
   useEffect(() => {
+    if (EMBED_TABS.includes(tab)) return
     if (tab === 'monitor') { seenIds.current = new Set(); loadMonitor() }
     else loadProducts()
   }, [tab, loadMonitor, loadProducts])
@@ -185,7 +197,8 @@ export default function SalesMonitorPage() {
         }
       />
 
-      {/* Период + фильтры */}
+      {/* Период + фильтры (для встроенных аналитик — у них свои фильтры) */}
+      {!isEmbed && (
       <div className="flex flex-wrap items-center gap-2">
         {([['today', 'Сегодня'], ['yesterday', 'Вчера'], ['7d', '7 дней'], ['30d', '30 дней'], ['month', 'Месяц']] as const).map(([k, lbl]) => (
           <button
@@ -212,6 +225,7 @@ export default function SalesMonitorPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Статус (только монитор) */}
       {tab === 'monitor' && (
@@ -232,7 +246,10 @@ export default function SalesMonitorPage() {
 
       {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">{error}</div>}
 
-      {tab === 'monitor'
+      {tab === 'abc' ? <AbcEmbed embedded /> :
+       tab === 'forecast' ? <ForecastEmbed embedded /> :
+       tab === 'points' ? <PointsEmbed embedded /> :
+       tab === 'monitor'
         ? <MonitorView data={mon} loading={loading} flashIds={flashIds} />
         : <ProductView data={prod} loading={loading} tab={tab} category={category} setCategory={setCategory} q={q} />}
     </div>

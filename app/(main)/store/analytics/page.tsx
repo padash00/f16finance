@@ -76,7 +76,7 @@ function formatDateTime(value: string | null | undefined) {
   }).format(parsed)
 }
 
-export default function StoreAnalyticsPage() {
+export default function StoreAnalyticsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<'showcase' | 'warehouse'>('showcase')
   const [data, setData] = useState<AnalyticsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -251,14 +251,9 @@ export default function StoreAnalyticsPage() {
   }, [data?.balances])
 
   return (
-    <div className="app-page-wide space-y-6">
-      <AdminPageHeader
-        title="Аналитика точек"
-        description="Приход на витрины, продажи, долги, возвраты и риски по остаткам."
-        icon={<Store className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
+      {(() => {
+        const hdrActions = (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 gap-1.5">
@@ -275,8 +270,8 @@ export default function StoreAnalyticsPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        }
-        toolbar={
+        )
+        const hdrToolbar = (
           <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
             <button
               type="button"
@@ -293,8 +288,24 @@ export default function StoreAnalyticsPage() {
               Склад (запасы)
             </button>
           </div>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Аналитика точек"
+            description="Приход на витрины, продажи, долги, возвраты и риски по остаткам."
+            icon={<Store className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {error ? (
         <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>

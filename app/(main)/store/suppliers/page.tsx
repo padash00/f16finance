@@ -34,7 +34,7 @@ const fmtDate = (value: string | null | undefined) => {
   }
 }
 
-export default function SuppliersListPage() {
+export default function SuppliersListPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,14 +74,9 @@ export default function SuppliersListPage() {
   }, [suppliers, query])
 
   return (
-    <div className="app-page-wide space-y-6">
-      <AdminPageHeader
-        title="Поставщики"
-        description="Все поставщики, обороты, долги и алиасы"
-        icon={<Building2 className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        toolbar={(
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
+      {(() => {
+        const hdrToolbar = (
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -91,8 +86,22 @@ export default function SuppliersListPage() {
               className="pl-9"
             />
           </div>
-        )}
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Поставщики"
+            description="Все поставщики, обороты, долги и алиасы"
+            icon={<Building2 className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
 

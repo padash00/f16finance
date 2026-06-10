@@ -78,7 +78,7 @@ const fmtDate = (value: string | null | undefined) => {
   }
 }
 
-export default function BillingPage() {
+export default function BillingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
   const canPayDebt = can('store-billing.pay_debt')
   const canWriteOff = can('store-billing.write_off_debt')
@@ -531,21 +531,16 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6">
-      <AdminPageHeader
-        title="Долги и накладные"
-        description="Учёт обязательств перед поставщиками и история приёмок"
-        icon={<Wallet className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
+      {(() => {
+        const hdrActions = (
           activeTab === 'debts' && canExport ? (
             <Button variant="outline" size="sm" onClick={() => void exportDebtsExcel()} disabled={filteredDebts.length === 0}>
               <Download className="w-4 h-4 mr-1" /> Экспорт PDF
             </Button>
           ) : null
-        }
-        toolbar={
+        )
+        const hdrToolbar = (
           <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
             <button
               onClick={() => setActiveTab('debts')}
@@ -560,8 +555,24 @@ export default function BillingPage() {
               <FileText className="w-4 h-4" /> Накладные
             </button>
           </div>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Долги и накладные"
+            description="Учёт обязательств перед поставщиками и история приёмок"
+            icon={<Wallet className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {error ? (
         <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card>

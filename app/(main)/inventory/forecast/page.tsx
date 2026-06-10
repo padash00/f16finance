@@ -78,7 +78,7 @@ function daysLeftColor(daysLeft: number | null) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export function InventoryForecastPageContent() {
+export function InventoryForecastPageContent({ embedded = false }: { embedded?: boolean } = {}) {
   const { companies } = useCompanies()
   const [companyId, setCompanyId] = useState('')
   const [locationId, setLocationId] = useState('')
@@ -152,14 +152,9 @@ export function InventoryForecastPageContent() {
   ]
 
   return (
-    <div className="app-page-wide space-y-4">
-      <AdminPageHeader
-        title="Прогноз остатков"
-        description="Основано на продажах за последние 30 дней"
-        icon={<PackageSearch className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+    <div className={embedded ? 'space-y-4' : 'app-page-wide space-y-4'}>
+      {(() => {
+        const hdrActions = (
           <>
             {companies.length > 0 && (
               <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
@@ -192,8 +187,20 @@ export function InventoryForecastPageContent() {
               Обновить
             </Button>
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title="Прогноз остатков"
+            description="Основано на продажах за последние 30 дней"
+            icon={<PackageSearch className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

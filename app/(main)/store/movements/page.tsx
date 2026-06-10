@@ -106,7 +106,7 @@ function movementTypeClass(type: string) {
   return 'border-white/10 bg-white/[0.05] text-muted-foreground'
 }
 
-function StoreMovementsPageContent() {
+function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<MovementsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -217,15 +217,10 @@ function StoreMovementsPageContent() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
-      <AdminPageHeader
-        title="Журнал движений"
-        description="Приёмки, выдачи, продажи, долги, возвраты и корректировки"
-        icon={<History className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             <Link href="/store/writeoffs">
               <Button variant="outline" size="sm" className="h-9 gap-1.5">
@@ -238,8 +233,20 @@ function StoreMovementsPageContent() {
               Обновить
             </Button>
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title="Журнал движений"
+            description="Приёмки, выдачи, продажи, долги, возвраты и корректировки"
+            icon={<History className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -388,10 +395,10 @@ function StoreMovementsPageContent() {
   )
 }
 
-export default function StoreMovementsPage() {
+export default function StoreMovementsPage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <Suspense fallback={null}>
-      <StoreMovementsPageContent />
+      <StoreMovementsPageContent embedded={embedded} />
     </Suspense>
   )
 }

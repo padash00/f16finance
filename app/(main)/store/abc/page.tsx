@@ -91,7 +91,7 @@ const XYZ_LABEL: Record<XyzClass, string> = {
   Z: 'Непредсказуемый',
 }
 
-export default function StoreAbcPage() {
+export default function StoreAbcPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<'sales' | 'stock'>('sales')
   const [period, setPeriod] = useState<number>(30)
   const [loading, setLoading] = useState(true)
@@ -207,14 +207,9 @@ export default function StoreAbcPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6">
-      <AdminPageHeader
-        title="ABC-анализ"
-        description={tab === 'sales' ? `По продажам · ${period} дн` : 'По текущим запасам склада'}
-        icon={<BarChart3 className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
+      {(() => {
+        const hdrActions = (
           <>
             <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={exportCsv} disabled={filteredRows.length === 0}>
               <Download className="h-3.5 w-3.5" />
@@ -225,8 +220,8 @@ export default function StoreAbcPage() {
               Обновить
             </Button>
           </>
-        }
-        toolbar={
+        )
+        const hdrToolbar = (
           <div className="flex flex-wrap items-center gap-2">
             <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
               <button
@@ -259,8 +254,24 @@ export default function StoreAbcPage() {
               </div>
             ) : null}
           </div>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="ABC-анализ"
+            description={tab === 'sales' ? `По продажам · ${period} дн` : 'По текущим запасам склада'}
+            icon={<BarChart3 className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div> : null}
 

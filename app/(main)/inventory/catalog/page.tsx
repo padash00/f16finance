@@ -308,7 +308,7 @@ function ItemForm({
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
-export function CatalogPageContent() {
+export function CatalogPageContent({ embedded = false }: { embedded?: boolean } = {}) {
   const { can } = useCapabilities()
   const canCreate = can('store-catalog.create')
   const canEdit = can('store-catalog.edit')
@@ -655,7 +655,7 @@ export function CatalogPageContent() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="app-page max-w-[1400px] space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page max-w-[1400px] space-y-6'}>
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-foreground px-4 py-2 text-sm text-background shadow-lg">
@@ -664,13 +664,8 @@ export function CatalogPageContent() {
       )}
 
       {/* Header */}
-      <AdminPageHeader
-        title="Каталог товаров"
-        description={loading ? 'Загрузка...' : `${items.length} позиций в базе`}
-        icon={<Package className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             {canExport && (
               <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
@@ -705,8 +700,20 @@ export function CatalogPageContent() {
               </Button>
             )}
           </>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">{hdrActions}</div>
+        ) : (
+          <AdminPageHeader
+            title="Каталог товаров"
+            description={loading ? 'Загрузка...' : `${items.length} позиций в базе`}
+            icon={<Package className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+          />
+        )
+      })()}
 
       {/* ── Summary cards ──────────────────────────────────────────────────── */}
       {!loading && items.length > 0 && (

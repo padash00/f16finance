@@ -223,7 +223,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-function PosReceiptsPageContent() {
+function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
   const [sales, setSales] = useState<Sale[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -333,20 +333,15 @@ function PosReceiptsPageContent() {
         }
       `}</style>
 
-      <div className="app-page-wide space-y-6">
+      <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
         {/* Header */}
-        <AdminPageHeader
-          title="История чеков"
-          description="Просмотр и повторная печать чеков POS"
-          icon={<Receipt className="h-5 w-5" />}
-          accent="emerald"
-          backHref="/"
-          actions={
+        {(() => {
+          const hdrActions = (
             <Button variant="ghost" size="sm" onClick={() => void load(page)} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-          }
-          toolbar={
+          )
+          const hdrToolbar = (
             <div className="flex flex-wrap gap-3">
               {/* Date from */}
               <div className="flex flex-col gap-1 min-w-[140px]">
@@ -423,8 +418,24 @@ function PosReceiptsPageContent() {
                 </Button>
               </div>
             </div>
-          }
-        />
+          )
+          return embedded ? (
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              {hdrToolbar}
+              <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+            </div>
+          ) : (
+            <AdminPageHeader
+              title="История чеков"
+              description="Просмотр и повторная печать чеков POS"
+              icon={<Receipt className="h-5 w-5" />}
+              accent="emerald"
+              backHref="/"
+              actions={hdrActions}
+              toolbar={hdrToolbar}
+            />
+          )
+        })()}
 
         {/* Error */}
         {error && (
@@ -543,10 +554,10 @@ function PosReceiptsPageContent() {
   )
 }
 
-export default function PosReceiptsPage() {
+export default function PosReceiptsPage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <Suspense fallback={null}>
-      <PosReceiptsPageContent />
+      <PosReceiptsPageContent embedded={embedded} />
     </Suspense>
   )
 }

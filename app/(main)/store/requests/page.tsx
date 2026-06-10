@@ -207,7 +207,7 @@ function requestItemsCount(request: InventoryRequest) {
   return asArray(request.items).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
 }
 
-function StoreRequestsPageContent() {
+function StoreRequestsPageContent({ embedded = false }: { embedded?: boolean }) {
   const { can } = useCapabilities()
   const canApprove = can('store-requests.approve')
   const canBulkApprove = can('store-requests.bulk_approve')
@@ -525,15 +525,10 @@ function StoreRequestsPageContent() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="app-page-wide space-y-6">
+    <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {/* Header */}
-      <AdminPageHeader
-        title="Заявки точек"
-        description="Решения по пополнению витрин со склада"
-        icon={<ClipboardList className="h-5 w-5" />}
-        accent="emerald"
-        backHref="/"
-        actions={
+      {(() => {
+        const hdrActions = (
           <>
             <Link href="/store/requests-journal">
               <Button variant="outline" size="sm" className="h-9 gap-1.5">
@@ -571,8 +566,8 @@ function StoreRequestsPageContent() {
               </DropdownMenuContent>
             </DropdownMenu>
           </>
-        }
-        toolbar={
+        )
+        const hdrToolbar = (
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -605,8 +600,24 @@ function StoreRequestsPageContent() {
             <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
             <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
           </div>
-        }
-      />
+        )
+        return embedded ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {hdrToolbar}
+            <div className="flex flex-wrap items-center gap-2">{hdrActions}</div>
+          </div>
+        ) : (
+          <AdminPageHeader
+            title="Заявки точек"
+            description="Решения по пополнению витрин со склада"
+            icon={<ClipboardList className="h-5 w-5" />}
+            accent="emerald"
+            backHref="/"
+            actions={hdrActions}
+            toolbar={hdrToolbar}
+          />
+        )
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -961,10 +972,10 @@ function StoreRequestsPageContent() {
   )
 }
 
-export default function StoreRequestsPage() {
+export default function StoreRequestsPage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <Suspense fallback={null}>
-      <StoreRequestsPageContent />
+      <StoreRequestsPageContent embedded={embedded} />
     </Suspense>
   )
 }
