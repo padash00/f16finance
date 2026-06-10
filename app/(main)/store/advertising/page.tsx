@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreScope } from '@/components/store/store-scope'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
@@ -36,6 +37,7 @@ type Ad = {
 export default function AdvertisingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [companies, setCompanies] = useState<CompanyOption[]>([])
   const [companyId, setCompanyId] = useState<string>('')
+  const { storeCompanyId } = useStoreScope()
   const [ads, setAds] = useState<Ad[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -211,17 +213,19 @@ export default function AdvertisingPage({ embedded = false }: { embedded?: boole
       {(() => {
         const hdrActions = (
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              className="h-9 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-slate-200 outline-none focus:border-amber-500/40"
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {!storeCompanyId && (
+              <select
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className="h-9 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm text-slate-200 outline-none focus:border-amber-500/40"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               ref={fileRef}
               type="file"

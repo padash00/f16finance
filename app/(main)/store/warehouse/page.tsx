@@ -55,6 +55,7 @@ import {
 import { isAbortError } from '@/lib/is-abort-error'
 import { LabelPrintDialog } from '@/components/store/label-print-dialog'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreScope } from '@/components/store/store-scope'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 import type { LabelItem } from '@/components/store/label-print-dialog'
 
@@ -136,6 +137,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
+  const { storeCompanyId } = useStoreScope()
   const [warehouseLoc, setWarehouseLoc] = useState<LocationRef | null>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -732,7 +734,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {(() => {
         const hdrActions = (
           <>
-            {companies.length > 1 && (
+            {companies.length > 1 && !storeCompanyId && (
               <div className="relative">
                 <select
                   value={selectedCompanyId || ''}

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreScope } from '@/components/store/store-scope'
 import { isAbortError } from '@/lib/is-abort-error'
 
 type Company = {
@@ -70,6 +71,8 @@ const emptySettings = (companyId: string): Settings => ({
 export default function ReceiptSettingsPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState('')
+  const { storeCompanyId } = useStoreScope()
+  useEffect(() => { if (storeCompanyId) setSelectedCompanyId(storeCompanyId) }, [storeCompanyId])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -165,19 +168,21 @@ export default function ReceiptSettingsPage() {
         backHref="/"
         actions={
           <>
-            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-              <SelectTrigger className="h-9 min-w-[220px]">
-                <SelectValue placeholder="Выберите точку" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                    {c.code ? ` · ${c.code}` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!storeCompanyId && (
+              <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                <SelectTrigger className="h-9 min-w-[220px]">
+                  <SelectValue placeholder="Выберите точку" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                      {c.code ? ` · ${c.code}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Button
               size="sm"
               onClick={handleSave}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreScope } from '@/components/store/store-scope'
 import {
   Activity, RefreshCw, Loader2, TrendingUp, Receipt, Wallet, CreditCard,
   Clock, Trophy, Store, Pause, Play, Users, Tags, Coins, Package, Search,
@@ -83,6 +84,7 @@ export default function SalesMonitorPage() {
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
   const [companyId, setCompanyId] = useState('')
+  const { storeCompanyId } = useStoreScope()
   const [companies, setCompanies] = useState<Company[]>([])
   const [category, setCategory] = useState('')
   const [q, setQ] = useState('')
@@ -214,10 +216,12 @@ export default function SalesMonitorPage() {
           <span className="text-slate-500">—</span>
           <input type="date" value={to} max={today} onChange={(e) => { setTo(e.target.value); setPreset('custom') }} className={inputCls} />
         </div>
-        <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={inputCls}>
-          <option value="">Все точки</option>
-          {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {!storeCompanyId && (
+          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={inputCls}>
+            <option value="">Все точки</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
         {isProduct && (
           <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

@@ -37,6 +37,7 @@ import { Search } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreScope } from '@/components/store/store-scope'
 import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ function formatDate(s: string) {
 export default function ShowcasePage({ embedded = false }: { embedded?: boolean } = {}) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
+  const { storeCompanyId } = useStoreScope()
   const [showcase, setShowcase] = useState<ShowcaseLocation>(null)
   const [warehouse, setWarehouse] = useState<WarehouseLocation>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
@@ -306,7 +308,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       {(() => {
         const hdrActions = (
           <>
-            {companies.length > 1 && (
+            {companies.length > 1 && !storeCompanyId && (
               <div className="relative">
                 <select
                   value={selectedCompanyId || ''}

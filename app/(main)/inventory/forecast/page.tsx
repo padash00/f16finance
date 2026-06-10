@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useStoreScope } from '@/components/store/store-scope'
 import { useCompanies } from '@/hooks/use-companies'
 import { isAbortError } from '@/lib/is-abort-error'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
@@ -81,6 +82,8 @@ function daysLeftColor(daysLeft: number | null) {
 export function InventoryForecastPageContent({ embedded = false }: { embedded?: boolean } = {}) {
   const { companies } = useCompanies()
   const [companyId, setCompanyId] = useState('')
+  const { storeCompanyId } = useStoreScope()
+  useEffect(() => { if (storeCompanyId) setCompanyId(storeCompanyId) }, [storeCompanyId])
   const [locationId, setLocationId] = useState('')
   const [locations, setLocations] = useState<Location[]>([])
   const [forecast, setForecast] = useState<ForecastItem[]>([])
@@ -156,7 +159,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
       {(() => {
         const hdrActions = (
           <>
-            {companies.length > 0 && (
+            {companies.length > 0 && !storeCompanyId && (
               <Select value={companyId || '__all'} onValueChange={v => setCompanyId(v === '__all' ? '' : v)}>
                 <SelectTrigger className="h-9 w-[180px]">
                   <SelectValue placeholder="Все компании" />
