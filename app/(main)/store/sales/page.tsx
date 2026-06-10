@@ -21,6 +21,7 @@ const PointsEmbed = dynamic(() => import('@/app/(main)/store/analytics/page'), {
 type Totals = { amount: number; count: number; avg_check: number; cash: number; cashless: number; net_profit: number }
 type ByCompany = { company_id: string; name: string; amount: number; count: number; avg_check: number }
 type ByHour = { hour: number; amount: number; count: number }
+type ByDay = { date: string; amount: number; count: number }
 type TopItem = { name: string; qty: number; revenue: number }
 type Recent = { id: string; sold_at: string; company_name: string; operator_name: string; total_amount: number; payment_method: string; items: string[]; items_count: number }
 type ByOperator = { name: string; amount: number; count: number; avg_check: number }
@@ -36,6 +37,7 @@ type MonData = {
   by_operator: ByOperator[]
   by_category: ByCategory[]
   by_hour: ByHour[]
+  by_day: ByDay[]
   top_items: TopItem[]
   recent: Recent[]
 }
@@ -269,7 +271,8 @@ export default function SalesMonitorPage() {
 function MonitorView({ data, loading, flashIds }: { data: MonData | null; loading: boolean; flashIds: Set<string> }) {
   const t = data?.totals
   const maxHour = useMemo(() => Math.max(1, ...(data?.by_hour.map((h) => h.amount) || [1])), [data])
-  const activeHours = data?.by_hour.filter((h) => h.amount > 0) || []
+  const useDaily = (data?.by_day?.length || 0) > 1
+  const maxDay = useMemo(() => Math.max(1, ...(data?.by_day?.map((d) => d.amount) || [1])), [data])
   const maxOperator = useMemo(() => Math.max(1, ...(data?.by_operator.map((o) => o.amount) || [1])), [data])
   const maxCategory = useMemo(() => Math.max(1, ...(data?.by_category.map((c) => c.revenue) || [1])), [data])
 
@@ -288,14 +291,29 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
       {/* График по часам + сетка KPI */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className={`${card} p-4 lg:col-span-2`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи по часам</div>
-          {activeHours.length === 0 ? <div className="flex h-40 items-center justify-center text-sm text-slate-500">Нет данных для отображения</div> : (
-            <div className="flex h-40 items-end gap-1">{activeHours.map((h) => {
-              const pct = Math.max(4, (h.amount / maxHour) * 100); const peak = h.amount === maxHour
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи {useDaily ? 'по дням' : 'по часам'}</div>
+          {(t!.amount === 0) ? (
+            <div className="flex h-44 items-center justify-center text-sm text-slate-500">Нет данных для отображения</div>
+          ) : useDaily ? (
+            <div className="flex h-44 gap-1">{data.by_day.map((d) => {
+              const pct = d.amount > 0 ? Math.max(3, Math.round((d.amount / maxDay) * 100)) : 0
+              const peak = d.amount === maxDay && d.amount > 0
+              const label = `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`
               return (
-                <div key={h.hour} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${pad2(h.hour)}:00 — ${fmt(h.amount)} ₸ · ${h.count} продаж`}>
-                  <div className="flex w-full flex-1 flex-col justify-end"><div className={`w-full rounded-t transition-all ${peak ? 'bg-sky-400' : 'bg-sky-400/40'}`} style={{ height: `${pct}%` }} /></div>
-                  <div className="text-[10px] text-slate-500">{pad2(h.hour)}</div>
+                <div key={d.date} className="flex min-w-0 flex-1 flex-col justify-end gap-1" title={`${label} — ${fmt(d.amount)} ₸ · ${d.count} продаж`}>
+                  <div className="flex flex-1 items-end"><div className={`w-full rounded-t transition-all ${peak ? 'bg-sky-400' : 'bg-sky-400/50'}`} style={{ height: `${pct}%` }} /></div>
+                  <div className="truncate text-center text-[9px] text-slate-500">{label}</div>
+                </div>
+              )
+            })}</div>
+          ) : (
+            <div className="flex h-44 gap-1">{(data.by_hour || []).map((h) => {
+              const pct = h.amount > 0 ? Math.max(3, Math.round((h.amount / maxHour) * 100)) : 0
+              const peak = h.amount === maxHour && h.amount > 0
+              return (
+                <div key={h.hour} className="flex min-w-0 flex-1 flex-col justify-end gap-1" title={`${pad2(h.hour)}:00 — ${fmt(h.amount)} ₸ · ${h.count} продаж`}>
+                  <div className="flex flex-1 items-end"><div className={`w-full rounded-t transition-all ${peak ? 'bg-sky-400' : 'bg-sky-400/40'}`} style={{ height: `${pct}%` }} /></div>
+                  <div className="text-center text-[9px] text-slate-500">{pad2(h.hour)}</div>
                 </div>
               )
             })}</div>
