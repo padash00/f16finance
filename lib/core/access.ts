@@ -414,7 +414,6 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/forecast', label: 'AI Прогноз' },
       { path: '/goals', label: 'Цели и план' },
       { path: '/reports', label: 'Отчёты' },
-      { path: '/reports/monthly', label: 'Ежемесячный отчёт' },
       { path: '/weekly-report', label: 'Недельный отчёт' },
     ],
   },

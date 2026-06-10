@@ -188,7 +188,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       {
         id: 'reports',
         path: '/reports',
-        extraPaths: ['/reports/monthly'],
         label: 'Отчёты',
         capabilities: [
           { id: 'reports.view', label: 'Просмотр отчётов', severity: 'low' },
