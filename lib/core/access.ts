@@ -121,7 +121,7 @@ export const ADMIN_PATHS = [
   '/tasks',
   '/shifts',
   '/shifts/*',
-  '/sales-monitor',
+  '/store/sales',
   '/debug',
   '/settings',
   '/telegram',
@@ -177,7 +177,7 @@ const MANAGER_PATHS = [
   '/operators/*',
   '/shifts',
   '/shifts/*',
-  '/sales-monitor',
+  '/store/sales',
   '/salary',
   '/salary/*',
   '/point-debts',
@@ -237,7 +237,7 @@ const OWNER_PATHS = [
   '/tasks',
   '/shifts',
   '/shifts/*',
-  '/sales-monitor',
+  '/store/sales',
   '/knowledge-admin',
 ] as const
 

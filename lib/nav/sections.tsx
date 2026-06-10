@@ -76,6 +76,8 @@ export type NavSection = {
   accentColor: 'amber' | 'emerald' | 'yellow' | 'blue' | 'fuchsia' | 'slate'
   icon: any
   items: NavItem[]
+  /** Если задано — клик по заголовку секции в верхнем меню сразу переходит сюда (а не только открывает дропдаун). */
+  homeHref?: string
 }
 
 export const navSections: NavSection[] = [
@@ -124,13 +126,14 @@ export const navSections: NavSection[] = [
     subtitle: 'Склад, витрины и движение товара',
     accentColor: 'emerald',
     icon: Boxes,
+    homeHref: '/store/sales',
     items: [
       { href: '/store', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
       { href: '/store/stock', label: 'Склад', icon: Warehouse, note: 'Склад, витрина, движения, каталог' },
       { href: '/store/documents', label: 'Документы', icon: FileText, note: 'Приёмка, оприходование, списания, ревизия' },
       { href: '/store/orders', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек, журнал, заказы поставщикам' },
       { href: '/store/vendors', label: 'Поставщики', icon: Building2, note: 'Поставщики, долги, накладные, расходники' },
-      { href: '/sales-monitor', label: 'Аналитика', icon: Activity, note: 'Монитор продаж, товары, ABC, прогноз', badge: 'live', badgeColor: 'green', isNew: true },
+      { href: '/store/sales', label: 'Аналитика', icon: Activity, note: 'Монитор продаж, товары, ABC, прогноз', badge: 'live', badgeColor: 'green', isNew: true },
       { href: '/store/cashbox', label: 'Касса', icon: Receipt, note: 'Чеки, возвраты, реклама на экране' },
       { href: '/pos', label: 'Web POS', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
       { href: '/store/clients', label: 'Клиенты', icon: Users2, note: 'Клиенты, лояльность, скидки и промокоды' },

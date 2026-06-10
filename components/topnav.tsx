@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Building2,
   ChevronDown,
@@ -161,6 +161,7 @@ function SectionButton({
   const style = sectionStyles[section.accentColor]
   const active = section.items.some((item) => isActiveItem(pathname, item.href))
   const SectionIcon = section.icon
+  const router = useRouter()
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -189,7 +190,14 @@ function SectionButton({
     >
       <button
         type="button"
-        onClick={() => (isOpen ? onClose() : onOpen())}
+        onClick={() => {
+          if (section.homeHref) {
+            router.push(section.homeHref)
+            onClose()
+          } else {
+            isOpen ? onClose() : onOpen()
+          }
+        }}
         className={cn(
           'flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200',
           active

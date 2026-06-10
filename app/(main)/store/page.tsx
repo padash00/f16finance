@@ -33,7 +33,7 @@ const HUBS = [
   { href: '/store/documents', label: 'Документы', note: 'Приёмка, оприходование, списания, ревизия', icon: FileText, color: 'text-sky-300' },
   { href: '/store/orders', label: 'Заявки', note: 'Заявки точек и заказы поставщикам', icon: ClipboardList, color: 'text-violet-300' },
   { href: '/store/vendors', label: 'Поставщики', note: 'Поставщики, долги, расходники', icon: Building2, color: 'text-amber-300' },
-  { href: '/sales-monitor', label: 'Аналитика', note: 'Продажи, товары, ABC, прогноз', icon: Activity, color: 'text-emerald-300' },
+  { href: '/store/sales', label: 'Аналитика', note: 'Продажи, товары, ABC, прогноз', icon: Activity, color: 'text-emerald-300' },
   { href: '/store/cashbox', label: 'Касса', note: 'Чеки, возвраты, реклама', icon: Receipt, color: 'text-sky-300' },
   { href: '/store/clients', label: 'Клиенты', note: 'Клиенты и скидки', icon: Users2, color: 'text-violet-300' },
 ]
@@ -155,7 +155,7 @@ export default function StoreOverviewPage() {
         <div className={`${card} p-4`}>
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="flex items-center gap-2 text-sm font-semibold text-white"><AlertTriangle className="h-4 w-4 text-amber-300" /> Скоро закончится</span>
-            <Link href="/sales-monitor" className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link href="/store/sales" className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="flex flex-wrap gap-2">
             {topLowStock.map((b) => (
