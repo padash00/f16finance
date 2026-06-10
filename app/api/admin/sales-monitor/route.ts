@@ -23,7 +23,9 @@ export async function GET(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)
-    const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0]
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Almaty' })
+    const from = url.searchParams.get('from') || url.searchParams.get('date') || today
+    const to = url.searchParams.get('to') || from
     const companyId = url.searchParams.get('company_id') || ''
 
     const companyScope = await resolveCompanyScope({
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
     })
 
     const empty = {
-      date,
+      from, to,
       totals: { amount: 0, count: 0, avg_check: 0, cash: 0, cashless: 0 },
       last_hour: { amount: 0, count: 0 },
       payment: { cash: 0, kaspi: 0, card: 0, online: 0 },
@@ -48,8 +50,8 @@ export async function GET(request: Request) {
     // Календарный день по Алматы (UTC+5) по РЕАЛЬНОМУ времени продажи sold_at.
     // sale_date — «бизнес-дата» смены (ночная смена висит на прошлой дате, даже
     // продажи после полуночи), поэтому фильтруем по фактическому времени.
-    const dayStart = new Date(`${date}T00:00:00+05:00`)
-    const dayEnd = new Date(dayStart.getTime() + 24 * 3_600_000)
+    const dayStart = new Date(`${from}T00:00:00+05:00`)
+    const dayEnd = new Date(new Date(`${to}T00:00:00+05:00`).getTime() + 24 * 3_600_000)
 
     let salesQuery = supabase
       .from('point_sales')
@@ -174,7 +176,7 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        date,
+        from, to,
         totals: {
           amount: round(amount),
           count,
