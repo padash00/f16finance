@@ -40,8 +40,7 @@ export async function GET(request: Request) {
          status, shift_type, opened_at, closed_at,
          opening_cash, closing_cash, closing_kaspi, totals_json,
          z_report_url, x_report_url, handover_from_shift_id,
-         company:company_id ( id, name, code ),
-         operator:staff!operator_id ( id, full_name, short_name )`,
+         company:company_id ( id, name, code )`,
       )
       .order('opened_at', { ascending: false })
       .limit(limit)
@@ -63,7 +62,26 @@ export async function GET(request: Request) {
 
     const shifts = (data || []) as any[]
 
-    // Fallback: для смен без staff-оператора подтягиваем оператора-кассира
+    // Оператор смены — это кассир из таблицы `operators` (а НЕ админ-`staff`).
+    // Прямой lookup по operator_id; staff — как запас (если смену открыл админ).
+    const directOpIds = Array.from(
+      new Set(shifts.map((s) => s.operator_id).filter(Boolean) as string[]),
+    )
+    if (directOpIds.length > 0) {
+      const [opsRes, staffRes] = await Promise.all([
+        supabase.from('operators').select('id, full_name, short_name').in('id', directOpIds),
+        supabase.from('staff').select('id, full_name, short_name').in('id', directOpIds),
+      ])
+      const byId = new Map<string, any>()
+      for (const o of (opsRes.data || []) as any[]) byId.set(String(o.id), o)
+      for (const st of (staffRes.data || []) as any[]) if (!byId.has(String(st.id))) byId.set(String(st.id), st)
+      for (const s of shifts) {
+        const op = s.operator_id ? byId.get(String(s.operator_id)) : null
+        if (op) s.operator = { id: op.id, full_name: op.full_name, short_name: op.short_name }
+      }
+    }
+
+    // Fallback: для смен без оператора подтягиваем оператора-кассира
     // (а) из первой продажи смены через shift_id
     // (б) если shift_id не проставлен в продажах — через окно времени смены и компанию
     const shiftsWithoutOperator = shifts.filter((s) => !s.operator || !s.operator.id)

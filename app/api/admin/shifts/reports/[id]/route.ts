@@ -41,7 +41,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
          z_report_url, x_report_url, totals_json,
          handover_from_shift_id, closed_by, created_at, updated_at,
          company:company_id ( id, name, code ),
-         operator:staff!operator_id ( id, full_name, short_name ),
          closer:staff!closed_by ( id, full_name, short_name )`,
       )
       .eq('id', id)
@@ -188,6 +187,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ((customersRes.data || []) as any[]).map((c) => [String(c.id), c]),
     )
 
+    // Оператор смены — кассир из таблицы `operators` (а НЕ админ-`staff`).
+    // Резолвим по operator_id: сначала из уже загруженных операторов продаж,
+    // потом прямым запросом в operators, staff — как запас.
+    let shiftOperator: any = null
+    if ((shift as any).operator_id) {
+      const opId = String((shift as any).operator_id)
+      shiftOperator = operatorById.get(opId) || null
+      if (!shiftOperator) {
+        const [opRes, stRes] = await Promise.all([
+          supabase.from('operators').select('id, full_name, short_name').eq('id', opId).maybeSingle(),
+          supabase.from('staff').select('id, full_name, short_name').eq('id', opId).maybeSingle(),
+        ])
+        shiftOperator = (opRes.data as any) || (stRes.data as any) || null
+      }
+    }
+
     // Группируем позиции по продаже/возврату
     const saleItemsBySale = new Map<string, any[]>()
     for (const it of (saleItemsRes.data || []) as any[]) {
@@ -220,7 +235,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const sales = salesRows.map((s) => ({
       ...s,
-      operator: s.operator_id ? operatorById.get(String(s.operator_id)) || null : null,
+      // Если у продажи нет своего оператора — показываем оператора смены.
+      operator:
+        (s.operator_id ? operatorById.get(String(s.operator_id)) || null : null) ||
+        shiftOperator ||
+        null,
       customer: s.customer_id ? customerById.get(String(s.customer_id)) || null : null,
       items: saleItemsBySale.get(String(s.id)) || [],
     }))
@@ -229,8 +248,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       items: returnItemsByReturn.get(String(r.id)) || [],
     }))
 
-    // Fallback: если staff-оператор смены пустой, подтягиваем из первой продажи
     const shiftWithOperator = shift as any
+    if (shiftOperator?.id) {
+      shiftWithOperator.operator = {
+        id: shiftOperator.id,
+        full_name: shiftOperator.full_name,
+        short_name: shiftOperator.short_name,
+      }
+    }
+    // Крайний fallback: если оператора смены так и нет — берём из первой продажи
     if (!shiftWithOperator.operator || !shiftWithOperator.operator.id) {
       const { data: firstSale } = await supabase
         .from('point_sales')
