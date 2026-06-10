@@ -27,12 +27,6 @@ export function ReportsMethodologyBanner({
     return `/income?${p.toString()}`
   }, [dateFrom, dateTo, companyId])
 
-  const kaspiHref = useMemo(() => {
-    const p = new URLSearchParams({ from: dateFrom, to: dateTo, tab: 'reconciliation' })
-    if (companyId !== 'all') p.set('company_id', companyId)
-    return `/kaspi-terminal?${p.toString()}`
-  }, [dateFrom, dateTo, companyId])
-
   return (
     <div className="rounded-2xl border border-white/10 bg-gray-900/30 backdrop-blur-sm overflow-hidden">
       <button
@@ -70,13 +64,6 @@ export function ReportsMethodologyBanner({
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-gray-800/60 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
             >
               Доходы за период
-              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-            </Link>
-            <Link
-              href={kaspiHref}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-gray-800/60 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
-            >
-              Сверка Безналичный с доходами
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />
             </Link>
           </div>

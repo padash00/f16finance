@@ -165,15 +165,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         ],
       },
       {
-        id: 'kaspi-terminal',
-        path: '/kaspi-terminal',
-        label: 'безналичный терминал',
-        capabilities: [
-          ...crud('kaspi-terminal', { exportData: true }),
-          { id: 'kaspi-terminal.reconcile', label: 'Реконсиляция платежей', severity: 'medium' },
-        ],
-      },
-      {
         id: 'weekly-report',
         path: '/weekly-report',
         label: 'Еженедельный отчёт',
@@ -900,14 +891,6 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
         capabilities: [
           { id: 'logs.view', label: 'Просмотр журнала', severity: 'low' },
           { id: 'logs.export', label: 'Выгрузка журнала', severity: 'medium' },
-        ],
-      },
-      {
-        id: 'shift-telegram-audit',
-        path: '/shift-telegram-audit',
-        label: 'Аудит смен в Telegram',
-        capabilities: [
-          { id: 'shift-telegram-audit.view', label: 'Просмотр аудита', severity: 'low' },
         ],
       },
       {

@@ -38,7 +38,6 @@ import {
   PieChart,
   Radar,
   RotateCcw,
-  ScanSearch,
   Settings2,
   Shield,
   Store,
@@ -110,8 +109,6 @@ export const navSections: NavSection[] = [
     icon: PieChart,
     items: [
       { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
-      { href: '/kaspi-terminal', label: 'Безналичный терминал', icon: CreditCard, note: 'Суточные итоги с POS' },
-      { href: '/shift-telegram-audit', label: 'Сверка Telegram', icon: ScanSearch, note: 'Смена: Telegram против сайта', badge: 'new', badgeColor: 'blue' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
       { href: '/expenses/pending', label: 'Ожидают одобрения', icon: ClipboardList, note: 'Расходы без чека на проверке', badgeColor: 'orange', isNew: true },
       { href: '/expense-whitelist', label: 'Доверенные поставщики', icon: Shield, note: 'Вендоры без чеков' },
