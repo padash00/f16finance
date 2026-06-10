@@ -18,6 +18,7 @@ import {
   ClipboardList,
   FolderKanban,
   Gauge,
+  Activity,
   KeyRound,
   Landmark,
   LayoutDashboard,
@@ -174,6 +175,7 @@ export const navSections: NavSection[] = [
     accentColor: 'blue',
     icon: Workflow,
     items: [
+      { href: '/sales-monitor', label: 'Монитор продаж', icon: Activity, note: 'Продажи и аналитика в реальном времени', badge: 'live', badgeColor: 'green', isNew: true },
       { href: '/simulation', label: 'Симуляция выручки', icon: Calculator, note: 'Потенциал по зонам vs факт', badge: 'new', badgeColor: 'blue', isNew: true },
       { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },

@@ -1,0 +1,164 @@
+import { NextResponse } from 'next/server'
+
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
+}
+
+const round = (n: number) => Math.round(Number(n) || 0)
+
+/**
+ * Живой монитор продаж: агрегаты за дату + разбивка по точкам, по часам,
+ * топ-товары, разбивка оплат, продажи за последний час и лента последних продаж
+ * с именами точки/оператора. Используется страницей /sales-monitor (авто-обновление).
+ */
+export async function GET(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const url = new URL(request.url)
+    const date = url.searchParams.get('date') || new Date().toISOString().split('T')[0]
+    const companyId = url.searchParams.get('company_id') || ''
+
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    const empty = {
+      date,
+      totals: { amount: 0, count: 0, avg_check: 0, cash: 0, cashless: 0 },
+      last_hour: { amount: 0, count: 0 },
+      payment: { cash: 0, kaspi: 0, card: 0, online: 0 },
+      by_company: [] as any[],
+      by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0, count: 0 })),
+      top_items: [] as any[],
+      recent: [] as any[],
+    }
+
+    let salesQuery = supabase
+      .from('point_sales')
+      .select(
+        'id, sold_at, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, company_id, operator_id, items:point_sale_items(quantity, total_price, universal_name, inventory_items(name))',
+      )
+      .eq('sale_date', date)
+      .order('sold_at', { ascending: false })
+
+    if (companyId) salesQuery = salesQuery.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) return json({ ok: true, data: empty })
+      salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+
+    const { data: salesRaw, error: salesError } = await salesQuery
+    if (salesError) throw salesError
+    const sales = (salesRaw || []) as any[]
+
+    // Имена точек и операторов
+    const companyIds = Array.from(new Set(sales.map((s) => s.company_id).filter(Boolean)))
+    const operatorIds = Array.from(new Set(sales.map((s) => s.operator_id).filter(Boolean)))
+    const [companiesRes, operatorsRes] = await Promise.all([
+      companyIds.length ? supabase.from('companies').select('id, name').in('id', companyIds) : Promise.resolve({ data: [] as any[] }),
+      operatorIds.length ? supabase.from('operators').select('id, name, short_name').in('id', operatorIds) : Promise.resolve({ data: [] as any[] }),
+    ])
+    const companyName = new Map<string, string>((companiesRes.data || []).map((c: any) => [String(c.id), c.name]))
+    const operatorName = new Map<string, string>(
+      (operatorsRes.data || []).map((o: any) => [String(o.id), o.short_name?.trim() || o.name?.trim() || 'Оператор']),
+    )
+
+    // Агрегаты
+    let amount = 0, cash = 0, kaspi = 0, card = 0, online = 0
+    let lastHourAmount = 0, lastHourCount = 0
+    const hourMap: number[] = Array(24).fill(0)
+    const hourCount: number[] = Array(24).fill(0)
+    const byCompany = new Map<string, { company_id: string; name: string; amount: number; count: number }>()
+    const itemMap = new Map<string, { name: string; qty: number; revenue: number }>()
+    const cutoff = Date.now() - 3_600_000
+
+    for (const s of sales) {
+      const total = Number(s.total_amount || 0)
+      amount += total
+      cash += Number(s.cash_amount || 0)
+      kaspi += Number(s.kaspi_amount || 0)
+      card += Number(s.card_amount || 0)
+      online += Number(s.online_amount || 0)
+
+      const t = new Date(s.sold_at)
+      const h = t.getHours()
+      hourMap[h] += total
+      hourCount[h] += 1
+      if (t.getTime() >= cutoff) { lastHourAmount += total; lastHourCount += 1 }
+
+      const cid = String(s.company_id || '')
+      if (cid) {
+        const c = byCompany.get(cid) || { company_id: cid, name: companyName.get(cid) || 'Точка', amount: 0, count: 0 }
+        c.amount += total
+        c.count += 1
+        byCompany.set(cid, c)
+      }
+
+      for (const it of (s.items || []) as any[]) {
+        const nm = (Array.isArray(it.inventory_items) ? it.inventory_items[0]?.name : it.inventory_items?.name) || it.universal_name || 'Товар'
+        const key = nm
+        const row = itemMap.get(key) || { name: nm, qty: 0, revenue: 0 }
+        row.qty += Number(it.quantity || 0)
+        row.revenue += Number(it.total_price || 0)
+        itemMap.set(key, row)
+      }
+    }
+
+    const count = sales.length
+    const topItems = Array.from(itemMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 8)
+      .map((v) => ({ name: v.name, qty: Math.round(v.qty * 100) / 100, revenue: round(v.revenue) }))
+
+    const byCompanyArr = Array.from(byCompany.values())
+      .map((c) => ({ ...c, amount: round(c.amount), avg_check: c.count ? round(c.amount / c.count) : 0 }))
+      .sort((a, b) => b.amount - a.amount)
+
+    const recent = sales.slice(0, 40).map((s) => ({
+      id: s.id,
+      sold_at: s.sold_at,
+      company_name: companyName.get(String(s.company_id || '')) || '—',
+      operator_name: s.operator_id ? operatorName.get(String(s.operator_id)) || '—' : '—',
+      total_amount: round(s.total_amount),
+      payment_method: s.payment_method,
+      items: ((s.items || []) as any[])
+        .map((it) => (Array.isArray(it.inventory_items) ? it.inventory_items[0]?.name : it.inventory_items?.name) || it.universal_name)
+        .filter(Boolean)
+        .slice(0, 4),
+      items_count: (s.items || []).length,
+    }))
+
+    return json({
+      ok: true,
+      data: {
+        date,
+        totals: {
+          amount: round(amount),
+          count,
+          avg_check: count ? round(amount / count) : 0,
+          cash: round(cash),
+          cashless: round(kaspi + card + online),
+        },
+        last_hour: { amount: round(lastHourAmount), count: lastHourCount },
+        payment: { cash: round(cash), kaspi: round(kaspi), card: round(card), online: round(online) },
+        by_company: byCompanyArr,
+        by_hour: hourMap.map((a, h) => ({ hour: h, amount: round(a), count: hourCount[h] })),
+        top_items: topItems,
+        recent,
+      },
+    })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/sales-monitor.GET', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка' }, 500)
+  }
+}
