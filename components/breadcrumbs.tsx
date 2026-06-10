@@ -61,6 +61,8 @@ export function Breadcrumbs() {
 
   const crumbs = useMemo(() => buildCrumbs(pathname), [pathname])
 
+  // В модуле «Магазин» свой StoreShell — хлебные крошки не показываем.
+  if (pathname === '/store' || pathname.startsWith('/store/')) return null
   if (crumbs.length === 0) return null
   if (crumbs.length === 1 && (pathname === '/dashboard' || pathname === '/')) return null
 

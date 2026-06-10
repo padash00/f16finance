@@ -184,7 +184,7 @@ function SectionButton({
       className="relative"
       onMouseEnter={() => {
         cancelClose()
-        onOpen()
+        if (!section.homeHref) onOpen()
       }}
       onMouseLeave={scheduleClose}
     >
@@ -216,7 +216,7 @@ function SectionButton({
         />
       </button>
 
-      {isOpen ? (
+      {isOpen && !section.homeHref ? (
         <div onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
           <MegaMenuPanel section={section} pathname={pathname} align={align} onNavigate={onClose} />
         </div>
@@ -534,6 +534,8 @@ export function TopNav() {
     setOpenSectionId(null)
   }, [pathname])
 
+  // Внутри модуля «Магазин» верхнее меню скрыто — там свой StoreShell.
+  if (pathname === '/store' || pathname.startsWith('/store/')) return null
 
   return (
     <>
