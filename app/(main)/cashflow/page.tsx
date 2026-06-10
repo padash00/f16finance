@@ -255,7 +255,7 @@ export default function CashFlowPage() {
                   className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 hover:bg-slate-700/50 disabled:opacity-40 border border-slate-700 rounded-xl text-sm text-slate-200 transition-colors"
                 >
                   <Download className="w-4 h-4 text-emerald-400" />
-                  Excel
+                  PDF
                 </button>
               ) : undefined
             }

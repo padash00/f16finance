@@ -1003,7 +1003,7 @@ export default function SalaryPage() {
                     className="h-8 gap-1.5 rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10"
                   >
                     <Download className="h-3.5 w-3.5" />
-                    Excel
+                    PDF
                   </Button>
                   <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
                     <button

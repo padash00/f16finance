@@ -479,7 +479,7 @@ export default function AccessPage() {
                     className="border-white/10 bg-white/5 hover:bg-white/10"
                   >
                     <Download className="w-4 h-4 mr-2" />
-                    Скачать Excel
+                    Скачать PDF
                   </Button>
                 )}
 

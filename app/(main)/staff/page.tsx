@@ -537,7 +537,7 @@ export default function StaffPageSmart() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
                 {canExport && (
-                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт Excel">
+                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт PDF">
                     <Download className="h-4 w-4" />
                   </Button>
                 )}

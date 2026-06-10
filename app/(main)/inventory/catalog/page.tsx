@@ -675,7 +675,7 @@ export function CatalogPageContent() {
             {canExport && (
               <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
                 <Download className="w-3.5 h-3.5 mr-1.5" />
-                Экспорт Excel
+                Экспорт PDF
               </Button>
             )}
             {canBulkZeroStock && (

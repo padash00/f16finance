@@ -272,7 +272,7 @@ export function AbcAnalysisPageContent() {
           <>
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
               <Download className="mr-2 h-4 w-4" />
-              Скачать Excel
+              Скачать PDF
             </Button>
             <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />

@@ -541,7 +541,7 @@ export default function BillingPage() {
         actions={
           activeTab === 'debts' && canExport ? (
             <Button variant="outline" size="sm" onClick={() => void exportDebtsExcel()} disabled={filteredDebts.length === 0}>
-              <Download className="w-4 h-4 mr-1" /> Экспорт Excel
+              <Download className="w-4 h-4 mr-1" /> Экспорт PDF
             </Button>
           ) : null
         }

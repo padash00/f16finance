@@ -319,7 +319,7 @@ export default function CustomersPage() {
               {canExport && (
                 <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={customers.length === 0}>
                   <Download className="mr-2 h-4 w-4" />
-                  Экспорт Excel
+                  Экспорт PDF
                 </Button>
               )}
               <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => void load()} disabled={loading} aria-label="Обновить">

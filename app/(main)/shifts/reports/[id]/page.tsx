@@ -390,7 +390,7 @@ export default function ShiftReportDetailPage({
             {shift && (
               <Button variant="outline" size="sm" onClick={exportExcel}>
                 <FileDown className="h-4 w-4" />
-                Excel
+                PDF
               </Button>
             )}
             {shift && shift.status === 'open' && canCloseForce && (

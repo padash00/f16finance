@@ -1532,7 +1532,7 @@ export default function ProfitabilityPage() {
               <div className="flex-1 min-w-[240px]">
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-emerald-200 flex items-center gap-2">
                   <Download className="h-4 w-4" />
-                  Отчёт для инвестора (Excel)
+                  Отчёт для инвестора (PDF)
                 </h2>
                 <p className="mt-1 text-xs text-emerald-100/70">
                   Детальная P&L выбранной точки за период {periodLabel} + общая сводка по всем точкам для сравнения.
@@ -1555,7 +1555,7 @@ export default function ProfitabilityPage() {
                   className="bg-emerald-600 text-white hover:bg-emerald-500"
                 >
                   <Download className="mr-2 h-4 w-4" />
-                  {investorExporting ? 'Готовим…' : 'Скачать Excel'}
+                  {investorExporting ? 'Готовим…' : 'Скачать PDF'}
                 </Button>
               </div>
             </div>
@@ -1575,7 +1575,7 @@ export default function ProfitabilityPage() {
                   <p className="mt-0.5 text-xs text-muted-foreground/70">Полный P&amp;L по каждой точке за весь выбранный период. Ручные оверрайды (POS, ФОТ, налоги) разнесены по доле выручки.</p>
                 </div>
                 <Button size="sm" variant="outline" className="shrink-0 gap-1.5" disabled={allPointsExporting} onClick={() => void handleExportAllPoints()}>
-                  <Download className="h-4 w-4" /> {allPointsExporting ? 'Выгрузка…' : 'Все точки (Excel)'}
+                  <Download className="h-4 w-4" /> {allPointsExporting ? 'Выгрузка…' : 'Все точки (PDF)'}
                 </Button>
               </div>
               <div className="overflow-x-auto">

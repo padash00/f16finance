@@ -490,7 +490,7 @@ export default function AIAnalysisPage() {
                   className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Excel
+                  PDF
                 </Button>
               )}
 
