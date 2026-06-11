@@ -92,6 +92,7 @@ type BotUser = {
   name: string
   entityId: string
   operatorId?: string
+  organizationId?: string | null
 }
 
 async function identifyBotUser(telegramUserId: string): Promise<BotUser> {
@@ -113,13 +114,13 @@ async function identifyBotUser(telegramUserId: string): Promise<BotUser> {
   try {
     const { data } = await supabase
       .from('staff')
-      .select('id, full_name, role')
+      .select('id, full_name, role, organization_id')
       .eq('telegram_chat_id', telegramUserId)
       .eq('is_active', true)
       .maybeSingle()
     if (data) {
       const role = (data.role as BotUserRole) || 'unknown'
-      return { role, name: data.full_name, entityId: data.id }
+      return { role, name: data.full_name, entityId: data.id, organizationId: data.organization_id || null }
     }
   } catch {}
 
@@ -134,7 +135,21 @@ async function identifyBotUser(telegramUserId: string): Promise<BotUser> {
     if (data) {
       const profiles = data.operator_profiles as Array<{ full_name: string | null }> | null
       const displayName = profiles?.[0]?.full_name || data.name || 'Оператор'
-      return { role: 'operator', name: displayName, entityId: data.id, operatorId: data.id }
+      // Организация оператора — через его привязку к компании (для изоляции копилота).
+      let orgId: string | null = null
+      try {
+        const { data: asg } = await supabase
+          .from('operator_company_assignments')
+          .select('company_id')
+          .eq('operator_id', data.id)
+          .limit(1)
+          .maybeSingle()
+        if (asg?.company_id) {
+          const { data: comp } = await supabase.from('companies').select('organization_id').eq('id', asg.company_id).maybeSingle()
+          orgId = comp?.organization_id || null
+        }
+      } catch {}
+      return { role: 'operator', name: displayName, entityId: data.id, operatorId: data.id, organizationId: orgId }
     }
   } catch {}
 
@@ -2760,6 +2775,7 @@ export async function POST(req: Request) {
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
             isSuperAdmin: botUser.role === 'super_admin',
+            organizationId: botUser.organizationId,
             chatId: Number(chatId),
             callbackData: callbackData.slice(3), // отрезаем cp:
           })
@@ -3276,6 +3292,7 @@ export async function POST(req: Request) {
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
             isSuperAdmin: botUser.role === 'super_admin',
+            organizationId: botUser.organizationId,
             chatId: Number(chatId),
             text: transcript,
           })
@@ -3356,6 +3373,7 @@ export async function POST(req: Request) {
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
             isSuperAdmin: botUser.role === 'super_admin',
+            organizationId: botUser.organizationId,
             chatId: Number(chatId),
             text: userText,
           })
@@ -3676,6 +3694,7 @@ export async function POST(req: Request) {
             userId: botUser.entityId || telegramUserId,
             role: botUser.role === 'unknown' ? null : botUser.role,
             isSuperAdmin: botUser.role === 'super_admin',
+            organizationId: botUser.organizationId,
             chatId: Number(chatId),
             text,
           })
