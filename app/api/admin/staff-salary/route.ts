@@ -486,6 +486,27 @@ export async function POST(req: Request) {
       return json({ ok: true })
     }
 
+    // ── Pay debt (отметить активные долги сотрудника как оплаченные) ─────────
+    if (action === 'payStaffDebt') {
+      const { staff_id } = body
+      if (!staff_id) return json({ error: 'staff_id обязателен' }, 400)
+      if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
+      const { data: debts, error: fetchErr } = await supabase
+        .from('staff_adjustments')
+        .select('id, amount')
+        .eq('staff_id', staff_id)
+        .eq('kind', 'debt')
+        .eq('status', 'active')
+      if (fetchErr) throw fetchErr
+      const ids = (debts || []).map((d: any) => String(d.id))
+      if (ids.length === 0) return json({ error: 'Нет активного долга' }, 400)
+      const { error: updErr } = await supabase.from('staff_adjustments').update({ status: 'paid' }).in('id', ids)
+      if (updErr) throw updErr
+      const total = (debts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
+      await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: String(staff_id), action: 'pay_debt', payload: { staff_id, count: ids.length, total } })
+      return json({ ok: true, data: { count: ids.length, total } })
+    }
+
     // ── Add extra day (manager shift bonus) ─────────────────────────────────
     if (action === 'addExtraDay') {
       const { staff_id, date, custom_amount } = body

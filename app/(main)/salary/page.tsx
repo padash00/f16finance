@@ -662,6 +662,7 @@ export default function SalaryPage() {
   const [tab, setTab] = useState<'operators' | 'operator-events' | 'staff' | 'events'>('operators')
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
   const [markDebtSaving, setMarkDebtSaving] = useState(false)
+  const [payStaffDebtId, setPayStaffDebtId] = useState<string | null>(null)
 
   // ─── Admin staff salary state ───────────────────────────────────────────
   const [staffSalary, setStaffSalary] = useState<StaffSalaryData | null>(null)
@@ -885,6 +886,19 @@ export default function SalaryPage() {
       await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeAdjustment', id }) })
       await loadStaffSalary()
     } catch (e: any) { setError(e?.message || 'Ошибка') }
+  }
+
+  const payStaffDebt = async (s: StaffMember, debtAmount: number) => {
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
+    if (!window.confirm(`Отметить долг ${money(debtAmount)} сотрудника ${s.full_name} как оплаченный?`)) return
+    setPayStaffDebtId(s.id)
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'payStaffDebt', staff_id: s.id }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось отметить долг как оплаченный') }
+    finally { setPayStaffDebtId(null) }
   }
 
   const deleteStaffPayment = async (id: string, amount: number) => {
@@ -1624,6 +1638,12 @@ export default function SalaryPage() {
                           )}
                           {!isDismissed && canStaffAddExtraDay && (
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                          )}
+                          {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
+                            <Button type="button" disabled={payStaffDebtId === s.id} variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void payStaffDebt(s, calc.debts)}>
+                              {payStaffDebtId === s.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wallet className="mr-1.5 h-3.5 w-3.5" />}
+                              Оплата долга ({money(calc.debts)})
+                            </Button>
                           )}
                           {!isDismissed && canStaffCreatePayment && (
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
