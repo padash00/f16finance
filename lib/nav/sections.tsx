@@ -238,6 +238,7 @@ export function buildOwnerNavSections(): NavSection[] {
   const pointDevicesItem = getSectionItem('system', '/point-devices')
   const operatorAnalyticsItem = getSectionItem('operator-space', '/operator-analytics')
   const subscriptionItem = getSectionItem('system', '/subscription')
+  const settingsItem = getSectionItem('system', '/settings')
 
   const sections: NavSection[] = []
 
@@ -255,6 +256,17 @@ export function buildOwnerNavSections(): NavSection[] {
     sections.push({
       ...opsSection,
       items: pointDevicesItem ? [...opsSection.items, pointDevicesItem] : opsSection.items,
+    })
+  }
+
+  if (settingsItem) {
+    sections.push({
+      id: 'owner-system',
+      title: 'Настройки',
+      subtitle: 'Точки, компании и справочники',
+      accentColor: 'slate',
+      icon: Settings2,
+      items: settingsItem ? [settingsItem] : [],
     })
   }
 

@@ -215,7 +215,9 @@ export async function GET(request: Request) {
     // ── Low stock alerts (showcase = catalog - warehouse; flag items at/below threshold) ──
     let lowStockStage = 'start'
     if (canSeeShowcase) try {
-      const allowedCompanySet = allowedCompanyIds?.length ? new Set(allowedCompanyIds) : null
+      // null = супер-админ/legacy (все компании). Пустой массив = скоуп без компаний
+      // (Test без точек) → НЕ показываем чужое (NEVER-pattern). Раньше []→null = утечка.
+      const allowedCompanySet = allowedCompanyIds === null ? null : new Set(allowedCompanyIds)
 
       // Showcase activated only for points that have an active point_display location.
       lowStockStage = 'enabled-point-display-locations'
