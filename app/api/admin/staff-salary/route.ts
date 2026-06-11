@@ -496,7 +496,7 @@ export async function POST(req: Request) {
         .select('id, amount')
         .eq('staff_id', staff_id)
         .eq('kind', 'debt')
-        .eq('status', 'active')
+        .or('status.is.null,status.eq.active')
       if (fetchErr) throw fetchErr
       const ids = (debts || []).map((d: any) => String(d.id))
       if (ids.length === 0) return json({ error: 'Нет активного долга' }, 400)
