@@ -802,7 +802,6 @@ export async function PATCH(req: Request) {
           feature_id: (feat as any).id,
           source_type: 'manual',
           enabled: true,
-          created_by: access.user?.id || null,
         }))
         const { error: grantErr } = await supabase.from('company_features').insert(rows)
         if (grantErr) return json({ error: `Не удалось выдать: ${grantErr.message}` }, 500)
