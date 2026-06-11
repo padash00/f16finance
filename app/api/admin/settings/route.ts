@@ -71,10 +71,26 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const supabase = getSupabase(req)
+
+    // Изоляция: не-супер-админ видит только компании/команду/категории своей орг.
+    // (service-role обходит RLS → фильтруем явно по organization_id.) NEVER-pattern:
+    // без валидной орг — пустой uuid → ничего.
+    const orgId = access.activeOrganization?.id || null
+    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+
+    let companiesQuery = supabase.from('companies').select('id, name, code, show_in_structure').order('name')
+    let staffQuery = supabase.from('staff').select('id, full_name, phone, email, role, is_active').eq('is_active', true).order('full_name')
+    let categoriesQuery = supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name')
+    if (scopeOrg) {
+      companiesQuery = companiesQuery.eq('organization_id', scopeOrg)
+      staffQuery = staffQuery.eq('organization_id', scopeOrg)
+      categoriesQuery = categoriesQuery.eq('organization_id', scopeOrg)
+    }
+
     const [companiesRes, staffRes, categoriesRes] = await Promise.allSettled([
-      supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
-      supabase.from('staff').select('id, full_name, phone, email, role, is_active').eq('is_active', true).order('full_name'),
-      supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name'),
+      companiesQuery,
+      staffQuery,
+      categoriesQuery,
     ])
 
     const companies =
