@@ -66,9 +66,13 @@ export async function POST(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
+    // Привязываем точку к активной организации — иначе она «ничья» и не попадёт
+    // в скоуп организации (новый клиент не увидит свою же точку).
+    const organizationId = access.activeOrganization?.id || null
+
     const { data, error } = await supabase
       .from('companies')
-      .insert([{ name, code, show_in_structure: showInStructure }])
+      .insert([{ name, code, show_in_structure: showInStructure, organization_id: organizationId }])
       .select('id, name, code')
       .single()
 

@@ -33,10 +33,14 @@ export async function GET(req: Request) {
     if (denied) return denied as any
 
     const supabase = getSupabase(req)
-    const result = await supabase
+    let catQuery = supabase
       .from('expense_categories')
       .select('id, name, accounting_group, monthly_budget')
       .order('name')
+    // Скоуп по организации (+ глобальные дефолты с organization_id IS NULL).
+    const orgId = access.activeOrganization?.id || null
+    if (orgId) catQuery = catQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    const result = await catQuery
     if (result.error) throw result.error
     const categories = result.data ?? []
 
@@ -121,6 +125,7 @@ export async function POST(req: Request) {
         name,
         accounting_group: String(body?.accounting_group || '').trim() || 'operating',
         monthly_budget: Number(body?.monthly_budget || 0) || 0,
+        organization_id: access.activeOrganization?.id || null,
       }])
       .select('id, name, accounting_group, monthly_budget')
       .single()
