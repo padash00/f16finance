@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorRows } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 
 function thisWeekStart(): string {
   const now = new Date()
@@ -44,6 +44,13 @@ export const getOperatorSalaryTool: CopilotTool = {
     const operatorId = String(input.operator_id || '')
     const weekStart = String(input.week_start || '').trim() || thisWeekStart()
     if (!operatorId) return { ok: false, message: 'Не выбран оператор.' }
+
+    // Мультитенантная изоляция: оператор должен принадлежать своей организации
+    // (нельзя смотреть зарплату по подставленному чужому operator_id).
+    const allowedOpIds = await scopedOperatorIds(ctx)
+    if (allowedOpIds && !allowedOpIds.includes(operatorId)) {
+      return { ok: false, message: 'Оператор не найден.' }
+    }
 
     const { data: op } = await ctx.supabase.from('operators').select('id, name, short_name').eq('id', operatorId).single()
     if (!op) return { ok: false, message: 'Оператор не найден.' }

@@ -8,6 +8,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -88,6 +89,20 @@ export const writeoffItemTool: CopilotTool = {
 
     if (!locationId || !itemId || qty <= 0 || !reason) {
       return { ok: false, message: 'Не хватает данных.' }
+    }
+
+    // Мультитенантная изоляция: списывать можно только из места хранения своей организации.
+    // inventory_items — глобальный каталог (без company_id), скоуп — через локацию.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids) {
+      const { data: loc } = await ctx.supabase
+        .from('inventory_locations')
+        .select('id, company_id')
+        .eq('id', locationId)
+        .single()
+      if (!loc || (loc.company_id && !ids.includes(String(loc.company_id)))) {
+        return { ok: false, message: 'Место хранения не найдено.' }
+      }
     }
 
     // Тянем последнюю unit_cost для этого товара (чтобы сумма списания была реальной)

@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const refundSaleTool: CopilotTool = {
   name: 'refund_sale',
@@ -46,8 +47,14 @@ export const refundSaleTool: CopilotTool = {
     const reason = String(input.reason || '').trim()
     if (!saleId || !reason) return { ok: false, message: 'Нужны продажа и причина.' }
 
-    const { data: sale } = await ctx.supabase.from('point_sales').select('id, total_amount, refunded_at').eq('id', saleId).single()
+    const { data: sale } = await ctx.supabase.from('point_sales').select('id, total_amount, refunded_at, company_id').eq('id', saleId).single()
     if (!sale) return { ok: false, message: 'Продажа не найдена.' }
+
+    // Мультитенантная изоляция: возврат можно оформить только по продаже своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && sale.company_id && !ids.includes(String(sale.company_id))) {
+      return { ok: false, message: 'Продажа не найдена.' }
+    }
     if (sale.refunded_at) return { ok: false, message: 'Уже возвращена.' }
 
     const { error } = await ctx.supabase

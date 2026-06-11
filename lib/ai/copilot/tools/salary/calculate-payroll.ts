@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorRows } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 
 export const calculatePayrollTool: CopilotTool = {
   name: 'calculate_payroll',
@@ -32,6 +32,10 @@ export const calculatePayrollTool: CopilotTool = {
     const start = String(input.period_start || '')
     const end = String(input.period_end || '')
     if (!operatorId || !start || !end) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: считать зарплату можно только оператору своей организации.
+    const allowedOps = await scopedOperatorIds(ctx)
+    if (allowedOps && !allowedOps.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
 
     const { data: opRow } = await ctx.supabase.from('operators').select('name, short_name').eq('id', operatorId).single()
 

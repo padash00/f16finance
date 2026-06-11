@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const createInventoryRequestTool: CopilotTool = {
@@ -60,6 +60,10 @@ export const createInventoryRequestTool: CopilotTool = {
     if (!companyId || !itemId || quantity <= 0) {
       return { ok: false, message: 'Не хватает данных.' }
     }
+
+    // Мультитенантная изоляция: заявку можно создать только для точки своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     // Создаём заявку (status='new')
     const { data: req, error: reqErr } = await ctx.supabase

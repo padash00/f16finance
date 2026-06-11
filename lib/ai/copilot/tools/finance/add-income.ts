@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -76,6 +76,11 @@ export const addIncomeTool: CopilotTool = {
     const online = Number(input.online_amount || 0)
 
     if (!companyId) return { ok: false, message: 'Не указана точка.' }
+
+    // Мультитенантная изоляция: записывать выручку можно только на точке своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
+
     const total = cash + kaspi + card + online
     if (total <= 0) return { ok: false, message: 'Сумма равна нулю — нечего записывать.' }
 

@@ -32,7 +32,11 @@ export const cancelReminderTool: CopilotTool = {
     const reminderId = String(input.reminder_id || '')
     if (!reminderId) return { ok: false, message: 'Не выбрано.' }
 
-    const { data: before } = await ctx.supabase.from('reminders').select('text').eq('id', reminderId).single()
+    // Мультитенантная изоляция: отменять можно только напоминание своей организации.
+    let beforeQ = ctx.supabase.from('reminders').select('text, organization_id').eq('id', reminderId)
+    if (ctx.organizationId) beforeQ = beforeQ.eq('organization_id', ctx.organizationId)
+    const { data: before } = await beforeQ.maybeSingle()
+    if (!before) return { ok: false, message: 'Напоминание не найдено.' }
     const { error } = await ctx.supabase.from('reminders').update({ status: 'cancelled' }).eq('id', reminderId)
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }
 

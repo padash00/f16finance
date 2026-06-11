@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedOperatorRows } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const assignShiftTool: CopilotTool = {
@@ -59,6 +59,11 @@ export const assignShiftTool: CopilotTool = {
     const date = String(input.date || '')
     const shiftType = String(input.shift_type || 'day')
     if (!operatorId || !companyId || !date) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: оператор и точка должны быть своей организации.
+    const [allowedOps, allowedCos] = await Promise.all([scopedOperatorIds(ctx), scopedCompanyIds(ctx)])
+    if (allowedOps && !allowedOps.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
+    if (allowedCos && !allowedCos.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     // Берём operator_name из таблицы (он required в schema shifts).
     const { data: opRow } = await ctx.supabase

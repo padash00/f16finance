@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const getPendingRequestsTool: CopilotTool = {
   name: 'get_pending_requests',
@@ -13,12 +14,16 @@ export const getPendingRequestsTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
-    const { data, error } = await ctx.supabase
+    // Мультитенантная изоляция: только заявки точек своей организации.
+    const scopeIds = await scopedCompanyIds(ctx)
+    let query = ctx.supabase
       .from('inventory_requests')
       .select('id, status, created_at, comment, requesting_company_id')
       .in('status', ['new', 'disputed'])
       .order('created_at', { ascending: false })
       .limit(20)
+    if (scopeIds) query = query.in('requesting_company_id', scopeIds)
+    const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
 
     const rows = data || []

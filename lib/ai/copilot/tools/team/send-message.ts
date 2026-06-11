@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, scopedOperatorIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 const TELEGRAM_API = 'https://api.telegram.org'
@@ -61,6 +61,10 @@ export const sendMessageToOperatorTool: CopilotTool = {
     const message = String(input.message || '').trim()
     if (!operatorId || !message) return { ok: false, message: 'Нужны оператор и текст.' }
 
+    // Мультитенантная изоляция: писать можно только оператору своей организации.
+    const allowedOps = await scopedOperatorIds(ctx)
+    if (allowedOps && !allowedOps.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
+
     const { data: op, error } = await ctx.supabase
       .from('operators')
       .select('id, name, short_name, telegram_chat_id')
@@ -114,11 +118,20 @@ export const broadcastToOperatorsTool: CopilotTool = {
     const message = String(input.message || '').trim()
     if (!message) return { ok: false, message: 'Текст обязателен.' }
 
+    // Мультитенантная изоляция: если указана точка — она должна быть своей организации.
+    const allowedCos = await scopedCompanyIds(ctx)
+    if (companyId && allowedCos && !allowedCos.includes(companyId)) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
+
     let opQuery = ctx.supabase
       .from('operators')
       .select('id, name, telegram_chat_id, operator_company_assignments!operator_id(company_id, is_active)')
       .eq('is_active', true)
       .not('telegram_chat_id', 'is', null)
+    // Рассылка ограничена операторами своей организации (даже при «всем операторам»).
+    const allowedOps = await scopedOperatorIds(ctx)
+    if (allowedOps) opQuery = opQuery.in('id', allowedOps)
 
     const { data: ops } = await opQuery
     let targets = (ops || []) as any[]

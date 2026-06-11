@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const takeTaskTool: CopilotTool = {
   name: 'take_task',
@@ -36,8 +37,14 @@ export const takeTaskTool: CopilotTool = {
     const taskId = String(input.task_id || '')
     if (!taskId) return { ok: false, message: 'Не выбрана задача.' }
 
-    const { data: task, error: getErr } = await ctx.supabase.from('tasks').select('id, title, status').eq('id', taskId).single()
+    const { data: task, error: getErr } = await ctx.supabase.from('tasks').select('id, title, status, company_id').eq('id', taskId).single()
     if (getErr || !task) return { ok: false, message: 'Задача не найдена.' }
+
+    // Мультитенантная изоляция: брать в работу можно только задачу своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && task.company_id && !ids.includes(String(task.company_id))) {
+      return { ok: false, message: 'Задача не найдена.' }
+    }
 
     const { error } = await ctx.supabase
       .from('tasks')

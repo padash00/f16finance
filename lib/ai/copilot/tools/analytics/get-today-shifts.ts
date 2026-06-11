@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { resolveCompanyNames, resolveOperatorNames } from '../../query-helpers'
+import { resolveCompanyNames, resolveOperatorNames, scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -20,11 +20,15 @@ export const getTodayShiftsTool: CopilotTool = {
   params: [],
   handler: async (_input, ctx) => {
     const today = todayISO()
-    const { data, error } = await ctx.supabase
+    let query = ctx.supabase
       .from('shifts')
       .select('id, shift_type, operator_name, operator_id, company_id')
       .eq('date', today)
       .order('shift_type')
+    // Мультитенантная изоляция: только смены точек своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids) query = query.in('company_id', ids)
+    const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
 
     const rows = data || []

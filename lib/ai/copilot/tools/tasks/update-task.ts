@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const updateTaskTool: CopilotTool = {
   name: 'update_task',
@@ -62,6 +63,14 @@ export const updateTaskTool: CopilotTool = {
     if (!taskId) return { ok: false, message: 'Не выбрана задача.' }
     if (!newTitle && !newDescription && !newDueDate) {
       return { ok: false, message: 'Нечего менять.' }
+    }
+
+    // Мультитенантная изоляция: менять можно только задачу своей организации.
+    const { data: task } = await ctx.supabase.from('tasks').select('id, company_id').eq('id', taskId).single()
+    if (!task) return { ok: false, message: 'Задача не найдена.' }
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && task.company_id && !ids.includes(String(task.company_id))) {
+      return { ok: false, message: 'Задача не найдена.' }
     }
 
     const updates: Record<string, unknown> = {}

@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const updateExpenseTool: CopilotTool = {
   name: 'update_expense',
@@ -76,10 +77,16 @@ export const updateExpenseTool: CopilotTool = {
 
     const { data: existing, error: getErr } = await ctx.supabase
       .from('expenses')
-      .select('id, cash_amount, kaspi_amount, category, comment')
+      .select('id, cash_amount, kaspi_amount, category, comment, company_id')
       .eq('id', expenseId)
       .single()
     if (getErr || !existing) return { ok: false, message: 'Расход не найден.' }
+
+    // Мультитенантная изоляция: менять можно только расход своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && existing.company_id && !ids.includes(String(existing.company_id))) {
+      return { ok: false, message: 'Расход не найден.' }
+    }
 
     const updates: Record<string, unknown> = {}
     if (newAmount != null && newAmount > 0) {

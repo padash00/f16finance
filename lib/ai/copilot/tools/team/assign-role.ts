@@ -42,7 +42,11 @@ export const assignRoleTool: CopilotTool = {
     const role = String(input.role || '')
     if (!staffId || !['owner', 'manager', 'other'].includes(role)) return { ok: false, message: 'Не хватает данных.' }
 
-    const { data: before } = await ctx.supabase.from('staff').select('full_name, role').eq('id', staffId).single()
+    // Мультитенантная изоляция: менять роль можно только сотруднику своей организации.
+    let beforeQ = ctx.supabase.from('staff').select('full_name, role, organization_id').eq('id', staffId)
+    if (ctx.organizationId) beforeQ = beforeQ.eq('organization_id', ctx.organizationId)
+    const { data: before } = await beforeQ.maybeSingle()
+    if (!before) return { ok: false, message: 'Сотрудник не найден.' }
     const { error } = await ctx.supabase.from('staff').update({ role }).eq('id', staffId)
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }
 

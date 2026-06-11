@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const cancelShiftTool: CopilotTool = {
   name: 'cancel_shift',
@@ -62,6 +63,12 @@ export const cancelShiftTool: CopilotTool = {
       .eq('id', shiftId)
       .single()
     if (getErr || !shift) return { ok: false, message: 'Смена не найдена.' }
+
+    // Мультитенантная изоляция: отменять можно только смену своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && shift.company_id && !ids.includes(String(shift.company_id))) {
+      return { ok: false, message: 'Смена не найдена.' }
+    }
 
     // В таблице shifts нет колонки status — отмена = удаление записи.
     const { error } = await ctx.supabase.from('shifts').delete().eq('id', shiftId)

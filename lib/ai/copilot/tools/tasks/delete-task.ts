@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const deleteTaskTool: CopilotTool = {
   name: 'delete_task',
@@ -36,7 +37,14 @@ export const deleteTaskTool: CopilotTool = {
     const taskId = String(input.task_id || '')
     if (!taskId) return { ok: false, message: 'Не выбрана задача.' }
 
-    const { data: task } = await ctx.supabase.from('tasks').select('id, title').eq('id', taskId).single()
+    const { data: task } = await ctx.supabase.from('tasks').select('id, title, company_id').eq('id', taskId).single()
+    if (!task) return { ok: false, message: 'Задача не найдена.' }
+
+    // Мультитенантная изоляция: удалять можно только задачу своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && task.company_id && !ids.includes(String(task.company_id))) {
+      return { ok: false, message: 'Задача не найдена.' }
+    }
 
     const { error } = await ctx.supabase.from('tasks').delete().eq('id', taskId)
     if (error) return { ok: false, message: `Не удалось удалить: ${error.message}` }

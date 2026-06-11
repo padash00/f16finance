@@ -31,6 +31,8 @@ export const updateItemPriceTool: CopilotTool = {
     const newPrice = Number(input.new_price || 0)
     if (!itemId || newPrice < 0) return { ok: false, message: 'Не хватает данных.' }
 
+    // TODO isolation: inventory_items — глобальный каталог без company_id/organization_id,
+    // ownership-проверку по тенанту тут сделать нельзя (товары общие для всех точек).
     const { data: item } = await ctx.supabase.from('inventory_items').select('name, sale_price').eq('id', itemId).single()
     if (!item) return { ok: false, message: 'Товар не найден.' }
 

@@ -42,7 +42,11 @@ export const closeGoalTool: CopilotTool = {
     const outcome = String(input.outcome || '')
     if (!goalId || !outcome) return { ok: false, message: 'Не хватает данных.' }
 
-    const { data: goal } = await ctx.supabase.from('goals').select('title').eq('id', goalId).single()
+    // Мультитенантная изоляция: закрывать можно только цель своей организации.
+    let goalQ = ctx.supabase.from('goals').select('title, organization_id').eq('id', goalId)
+    if (ctx.organizationId) goalQ = goalQ.eq('organization_id', ctx.organizationId)
+    const { data: goal } = await goalQ.maybeSingle()
+    if (!goal) return { ok: false, message: 'Цель не найдена.' }
     const { error } = await ctx.supabase
       .from('goals')
       .update({ status: outcome, closed_at: new Date().toISOString() })

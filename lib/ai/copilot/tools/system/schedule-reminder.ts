@@ -42,7 +42,8 @@ export const scheduleReminderTool: CopilotTool = {
 
     const { data, error } = await ctx.supabase
       .from('reminders')
-      .insert([{ text, remind_at: isoTime, audience, created_by: ctx.userId, status: 'pending' }])
+      // Мультитенантная изоляция: привязываем напоминание к своей организации.
+      .insert([{ text, remind_at: isoTime, audience, created_by: ctx.userId, status: 'pending', organization_id: ctx.organizationId || null }])
       .select('id')
       .single()
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }

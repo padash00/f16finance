@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -43,12 +44,16 @@ export const getPaymentBreakdownTool: CopilotTool = {
     const days = period === 'week' ? 6 : period === 'month' ? 29 : 89
     const from = addDaysISO(today, -days)
 
-    const { data } = await ctx.supabase
+    // Мультитенантная изоляция: только выручка точек своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    let query = ctx.supabase
       .from('incomes')
       .select('cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', from)
       .lte('date', today)
       .range(0, 19999)
+    if (ids) query = query.in('company_id', ids)
+    const { data } = await query
 
     let cash = 0
     let kaspi = 0

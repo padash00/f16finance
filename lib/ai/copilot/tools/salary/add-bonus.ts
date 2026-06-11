@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedOperatorRows } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds, scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -89,6 +89,12 @@ export const addBonusTool: CopilotTool = {
     if (!operatorId || !companyId || amount <= 0 || !reason) {
       return { ok: false, message: 'Не хватает данных.' }
     }
+
+    // Мультитенантная изоляция: бонус можно дать только оператору и точке своей организации.
+    const [allowedOps, allowedCos] = await Promise.all([scopedOperatorIds(ctx), scopedCompanyIds(ctx)])
+    if (allowedOps && !allowedOps.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
+    if (allowedCos && !allowedCos.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
+
     const today = todayISO()
     const weekStart = weekStartISO(today)
     const salaryWeekId = await ensureSalaryWeekId(ctx.supabase, operatorId, weekStart)

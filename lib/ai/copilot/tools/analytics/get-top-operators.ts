@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorRows } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -45,13 +45,17 @@ export const getTopOperatorsTool: CopilotTool = {
     const ops = await scopedOperatorRows(ctx)
     const opMap = new Map((ops || []).map((o: any) => [String(o.id), o]))
 
-    const { data: incomes } = await ctx.supabase
+    // Мультитенантная изоляция: только выручка операторов своей организации.
+    const opIds = await scopedOperatorIds(ctx)
+    let incomesQ = ctx.supabase
       .from('incomes')
       .select('operator_id, cash_amount, kaspi_amount, card_amount, online_amount, shift_id, date')
       .gte('date', from)
       .lte('date', today)
       .not('operator_id', 'is', null)
       .range(0, 19999)
+    if (opIds) incomesQ = incomesQ.in('operator_id', opIds)
+    const { data: incomes } = await incomesQ
 
     const stats = new Map<string, { rev: number; shifts: Set<string> }>()
     for (const r of (incomes || []) as any[]) {

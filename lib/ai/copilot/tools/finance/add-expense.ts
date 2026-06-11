@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -76,6 +76,10 @@ export const addExpenseTool: CopilotTool = {
     if (amount <= 0 || !companyId || !category) {
       return { ok: false, message: 'Не хватает данных (сумма, точка, категория).' }
     }
+
+    // Мультитенантная изоляция: создавать расход можно только на точке своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     const today = todayISO()
     const cashAmount = method === 'cash' ? amount : 0

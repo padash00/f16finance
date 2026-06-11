@@ -8,6 +8,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -74,6 +75,20 @@ export const addStockTool: CopilotTool = {
 
     if (!locationId || !itemId || qty <= 0 || !reason) {
       return { ok: false, message: 'Не хватает данных.' }
+    }
+
+    // Мультитенантная изоляция: оприходовать можно только в место хранения своей организации.
+    // inventory_items — глобальный каталог (без company_id), скоуп — через локацию.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids) {
+      const { data: loc } = await ctx.supabase
+        .from('inventory_locations')
+        .select('id, company_id')
+        .eq('id', locationId)
+        .single()
+      if (!loc || (loc.company_id && !ids.includes(String(loc.company_id)))) {
+        return { ok: false, message: 'Место хранения не найдено.' }
+      }
     }
 
     // unit_cost = 0 для оприходования без накладной (это не закупка)

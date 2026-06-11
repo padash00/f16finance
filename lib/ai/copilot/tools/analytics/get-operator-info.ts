@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorRows } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -54,6 +54,12 @@ export const getOperatorInfoTool: CopilotTool = {
     const operatorId = String(input.operator_id || '')
     const period = String(input.period || 'week')
     if (!operatorId) return { ok: false, message: 'Не выбран оператор.' }
+
+    // Мультитенантная изоляция: оператор должен принадлежать своей организации.
+    const allowedOpIds = await scopedOperatorIds(ctx)
+    if (allowedOpIds && !allowedOpIds.includes(operatorId)) {
+      return { ok: false, message: 'Оператор не найден.' }
+    }
 
     const today = todayISO()
     let from = today

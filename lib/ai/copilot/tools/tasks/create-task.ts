@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorRows } from '../../query-helpers'
+import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const createTaskTool: CopilotTool = {
@@ -55,6 +55,10 @@ export const createTaskTool: CopilotTool = {
     const dueDate = String(input.due_date || '').trim() || null
 
     if (!operatorId || !title) return { ok: false, message: 'Не хватает данных (оператор, заголовок).' }
+
+    // Мультитенантная изоляция: ставить задачу можно только оператору своей организации.
+    const allowedOps = await scopedOperatorIds(ctx)
+    if (allowedOps && !allowedOps.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
 
     const { data, error } = await ctx.supabase
       .from('tasks')

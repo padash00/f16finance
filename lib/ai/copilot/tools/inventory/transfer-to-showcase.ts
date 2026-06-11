@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const transferToShowcaseTool: CopilotTool = {
@@ -47,6 +47,10 @@ export const transferToShowcaseTool: CopilotTool = {
     const itemId = String(input.item_id || '')
     const quantity = Number(input.quantity || 0)
     if (!companyId || !itemId || quantity <= 0) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: переносить можно только на точку своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     // Используем RPC если есть, иначе через INSERT в movements
     const { error } = await ctx.supabase.rpc('inventory_transfer_warehouse_to_showcase', {

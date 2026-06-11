@@ -13,11 +13,14 @@ export const listGoalsTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
-    const { data, error } = await ctx.supabase
+    let q = ctx.supabase
       .from('goals')
       .select('id, title, target_value, period_end, status')
       .eq('status', 'active')
       .order('period_end')
+    // Мультитенантная изоляция: только цели своей организации (goals.organization_id).
+    if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+    const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '🎯 Активных целей нет.' }
 

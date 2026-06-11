@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 export const setKpiPlanTool: CopilotTool = {
@@ -43,6 +43,10 @@ export const setKpiPlanTool: CopilotTool = {
     const target = Number(input.target_amount || 0)
     const monthInput = String(input.month || '').trim()
     if (!companyId || target <= 0) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: план можно ставить только для точки своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     let year: number, month: number
     if (monthInput && /^\d{4}-\d{2}$/.test(monthInput)) {

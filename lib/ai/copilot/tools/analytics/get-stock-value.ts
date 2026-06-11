@@ -4,6 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const getStockValueTool: CopilotTool = {
   name: 'get_stock_value',
@@ -13,9 +14,25 @@ export const getStockValueTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
-    const { data: balances, error } = await ctx.supabase
+    // Мультитенантная изоляция: остатки только по локациям своей организации
+    // (inventory_balances не имеет company_id — резолвим локации через inventory_locations).
+    const ids = await scopedCompanyIds(ctx)
+    let allowedLocationIds: string[] | null = null
+    if (ids) {
+      const { data: locs } = await ctx.supabase
+        .from('inventory_locations')
+        .select('id')
+        .in('company_id', ids)
+      const locIds = (locs || []).map((l: any) => String(l.id))
+      if (locIds.length === 0) return { ok: true, message: '📦 Остатков нет.' }
+      allowedLocationIds = locIds
+    }
+
+    let balancesQ = ctx.supabase
       .from('inventory_balances')
       .select('quantity, item:item_id(name, sale_price), location:location_id(name, kind)')
+    if (allowedLocationIds) balancesQ = balancesQ.in('location_id', allowedLocationIds)
+    const { data: balances, error } = await balancesQ
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!balances?.length) return { ok: true, message: '📦 Остатков нет.' }
 

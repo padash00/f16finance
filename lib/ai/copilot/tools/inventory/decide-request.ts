@@ -5,6 +5,25 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
+
+/**
+ * Мультитенантная изоляция: проверяем, что заявка принадлежит своей организации
+ * (по requesting_company_id). Возвращает текст ошибки или null если доступ есть.
+ */
+async function assertRequestInScope(ctx: any, reqId: string): Promise<string | null> {
+  const { data: req, error } = await ctx.supabase
+    .from('inventory_requests')
+    .select('id, requesting_company_id')
+    .eq('id', reqId)
+    .single()
+  if (error || !req) return 'Заявка не найдена.'
+  const ids = await scopedCompanyIds(ctx)
+  if (ids && req.requesting_company_id && !ids.includes(String(req.requesting_company_id))) {
+    return 'Заявка не найдена.'
+  }
+  return null
+}
 
 async function getPendingRequests(ctx: any) {
   const { data } = await ctx.supabase
@@ -51,6 +70,9 @@ export const approveRequestTool: CopilotTool = {
   handler: async (input, ctx) => {
     const reqId = String(input.request_id || '')
     if (!reqId) return { ok: false, message: 'Не выбрана заявка.' }
+
+    const scopeErr = await assertRequestInScope(ctx, reqId)
+    if (scopeErr) return { ok: false, message: scopeErr }
 
     // Используем существующую RPC inventory_decide_request
     const { error } = await ctx.supabase.rpc('inventory_decide_request', {
@@ -103,6 +125,9 @@ export const declineRequestTool: CopilotTool = {
     const reqId = String(input.request_id || '')
     const reason = String(input.reason || '').trim()
     if (!reqId || !reason) return { ok: false, message: 'Нужны заявка и причина.' }
+
+    const scopeErr = await assertRequestInScope(ctx, reqId)
+    if (scopeErr) return { ok: false, message: scopeErr }
 
     const { error } = await ctx.supabase.rpc('inventory_decide_request', {
       p_request_id: reqId,

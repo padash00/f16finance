@@ -8,6 +8,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -94,6 +95,19 @@ export const createReceiptTool: CopilotTool = {
 
     if (!locationId || !itemId || qty <= 0 || unitCost < 0) {
       return { ok: false, message: 'Не хватает данных.' }
+    }
+
+    // Мультитенантная изоляция: приходовать можно только на склад своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids) {
+      const { data: loc } = await ctx.supabase
+        .from('inventory_locations')
+        .select('id, company_id')
+        .eq('id', locationId)
+        .single()
+      if (!loc || (loc.company_id && !ids.includes(String(loc.company_id)))) {
+        return { ok: false, message: 'Склад не найден.' }
+      }
     }
 
     const totalCost = qty * unitCost

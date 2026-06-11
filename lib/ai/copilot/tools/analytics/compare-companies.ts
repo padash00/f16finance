@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -87,6 +87,13 @@ export const compareCompaniesTool: CopilotTool = {
     const period = String(input.period || 'month')
     if (!a || !b) return { ok: false, message: 'Нужны две точки.' }
     if (a === b) return { ok: false, message: 'Выбери разные точки.' }
+
+    // Мультитенантная изоляция: обе точки должны принадлежать своей организации
+    // (нельзя сравнивать чужие точки по подставленному id).
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && (!ids.includes(a) || !ids.includes(b))) {
+      return { ok: false, message: 'Точка не найдена.' }
+    }
 
     const today = todayISO()
     const from = period === 'week' ? addDaysISO(today, -6) : addDaysISO(today, -29)

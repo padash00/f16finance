@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const deleteExpenseTool: CopilotTool = {
   name: 'delete_expense',
@@ -58,10 +59,16 @@ export const deleteExpenseTool: CopilotTool = {
 
     const { data: exp, error: getErr } = await ctx.supabase
       .from('expenses')
-      .select('id, cash_amount, kaspi_amount, category, date')
+      .select('id, cash_amount, kaspi_amount, category, date, company_id')
       .eq('id', expenseId)
       .single()
     if (getErr || !exp) return { ok: false, message: 'Расход не найден.' }
+
+    // Мультитенантная изоляция: удалять можно только расход своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && exp.company_id && !ids.includes(String(exp.company_id))) {
+      return { ok: false, message: 'Расход не найден.' }
+    }
 
     const { error } = await ctx.supabase.from('expenses').delete().eq('id', expenseId)
     if (error) return { ok: false, message: `Не удалось удалить: ${error.message}` }

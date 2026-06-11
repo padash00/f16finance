@@ -5,7 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { resolveCompanyNames } from '../../query-helpers'
+import { resolveCompanyNames, scopedCompanyIds } from '../../query-helpers'
 
 export const deleteIncomeTool: CopilotTool = {
   name: 'delete_income',
@@ -46,6 +46,18 @@ export const deleteIncomeTool: CopilotTool = {
   handler: async (input, ctx) => {
     const incomeId = String(input.income_id || '')
     if (!incomeId) return { ok: false, message: 'Не выбрана запись.' }
+
+    // Мультитенантная изоляция: удалять можно только выручку своей организации.
+    const { data: inc, error: getErr } = await ctx.supabase
+      .from('incomes')
+      .select('id, company_id')
+      .eq('id', incomeId)
+      .single()
+    if (getErr || !inc) return { ok: false, message: 'Запись не найдена.' }
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && inc.company_id && !ids.includes(String(inc.company_id))) {
+      return { ok: false, message: 'Запись не найдена.' }
+    }
 
     const { error } = await ctx.supabase.from('incomes').delete().eq('id', incomeId)
     if (error) return { ok: false, message: `Не удалось удалить: ${error.message}` }

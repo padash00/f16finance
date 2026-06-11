@@ -13,12 +13,15 @@ export const listRemindersTool: CopilotTool = {
   severity: 'low',
   params: [],
   handler: async (_input, ctx) => {
-    const { data, error } = await ctx.supabase
+    let q = ctx.supabase
       .from('reminders')
       .select('id, text, remind_at, audience, status')
       .eq('status', 'pending')
       .order('remind_at')
       .limit(50)
+    // Мультитенантная изоляция: только напоминания своей организации (reminders.organization_id).
+    if (ctx.organizationId) q = q.eq('organization_id', ctx.organizationId)
+    const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: '⏰ Активных напоминаний нет.' }
 

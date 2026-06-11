@@ -5,7 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { resolveCompanyNames } from '../../query-helpers'
+import { resolveCompanyNames, scopedCompanyIds } from '../../query-helpers'
 
 export const approveExpenseTool: CopilotTool = {
   name: 'approve_expense',
@@ -51,10 +51,16 @@ export const approveExpenseTool: CopilotTool = {
 
     const { data: exp, error: getErr } = await ctx.supabase
       .from('expenses')
-      .select('id, status, cash_amount, kaspi_amount, category')
+      .select('id, status, cash_amount, kaspi_amount, category, company_id')
       .eq('id', expenseId)
       .single()
     if (getErr || !exp) return { ok: false, message: 'Расход не найден.' }
+
+    // Мультитенантная изоляция: одобрять можно только расход своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && exp.company_id && !ids.includes(String(exp.company_id))) {
+      return { ok: false, message: 'Расход не найден.' }
+    }
     if (exp.status === 'approved') return { ok: false, message: 'Уже одобрен.' }
 
     const { error } = await ctx.supabase
@@ -123,6 +129,18 @@ export const declineExpenseTool: CopilotTool = {
     const expenseId = String(input.expense_id || '')
     const reason = String(input.reason || '').trim()
     if (!expenseId || !reason) return { ok: false, message: 'Нужны расход и причина.' }
+
+    // Мультитенантная изоляция: отклонять можно только расход своей организации.
+    const { data: exp, error: getErr } = await ctx.supabase
+      .from('expenses')
+      .select('id, company_id')
+      .eq('id', expenseId)
+      .single()
+    if (getErr || !exp) return { ok: false, message: 'Расход не найден.' }
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && exp.company_id && !ids.includes(String(exp.company_id))) {
+      return { ok: false, message: 'Расход не найден.' }
+    }
 
     const { error } = await ctx.supabase
       .from('expenses')

@@ -50,7 +50,11 @@ export const snoozeReminderTool: CopilotTool = {
     const map: Record<string, number> = { '15m': 15 * 60_000, '1h': 60 * 60_000, '3h': 3 * 60 * 60_000, '1d': 86_400_000, '3d': 3 * 86_400_000 }
     const ms = map[snooze] || 15 * 60_000
 
-    const { data: before } = await ctx.supabase.from('reminders').select('text, remind_at').eq('id', reminderId).single()
+    // Мультитенантная изоляция: откладывать можно только напоминание своей организации.
+    let beforeQ = ctx.supabase.from('reminders').select('text, remind_at, organization_id').eq('id', reminderId)
+    if (ctx.organizationId) beforeQ = beforeQ.eq('organization_id', ctx.organizationId)
+    const { data: before } = await beforeQ.maybeSingle()
+    if (!before) return { ok: false, message: 'Напоминание не найдено.' }
     const newTime = new Date(Date.now() + ms).toISOString()
     const { error } = await ctx.supabase.from('reminders').update({ remind_at: newTime }).eq('id', reminderId)
     if (error) return { ok: false, message: `Не удалось: ${error.message}` }

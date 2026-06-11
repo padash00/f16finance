@@ -35,6 +35,13 @@ export const getCustomerInfoTool: CopilotTool = {
     const { data: customer } = await ctx.supabase.from('customers').select('*').eq('id', customerId).single()
     if (!customer) return { ok: false, message: 'Клиент не найден.' }
 
+    // Мультитенантная изоляция: клиент должен принадлежать точке своей организации
+    // (нельзя смотреть карточку клиента по подставленному чужому id).
+    const allowedIds = await scopedCompanyIds(ctx)
+    if (allowedIds && customer.company_id && !allowedIds.includes(String(customer.company_id))) {
+      return { ok: false, message: 'Клиент не найден.' }
+    }
+
     const { count: salesCount } = await ctx.supabase
       .from('point_sales')
       .select('id', { count: 'exact', head: true })

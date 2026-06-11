@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { resolveOperatorNames } from '../../query-helpers'
+import { resolveOperatorNames, scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -20,13 +20,17 @@ export const getOverdueTasksTool: CopilotTool = {
   params: [],
   handler: async (_input, ctx) => {
     const today = todayISO()
-    const { data, error } = await ctx.supabase
+    // Мультитенантная изоляция: только задачи точек своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    let query = ctx.supabase
       .from('tasks')
-      .select('id, title, due_date, operator_id')
+      .select('id, title, due_date, operator_id, company_id')
       .eq('status', 'open')
       .lt('due_date', today)
       .order('due_date')
       .limit(30)
+    if (ids) query = query.in('company_id', ids)
+    const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
 
     const rows = data || []

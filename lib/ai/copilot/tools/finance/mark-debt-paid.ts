@@ -9,7 +9,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
-import { resolveCompanyNames } from '../../query-helpers'
+import { resolveCompanyNames, scopedCompanyIds } from '../../query-helpers'
 
 export const markDebtPaidTool: CopilotTool = {
   name: 'mark_debt_paid',
@@ -55,10 +55,16 @@ export const markDebtPaidTool: CopilotTool = {
 
     const { data: debt, error: getErr } = await ctx.supabase
       .from('point_debt_items')
-      .select('id, total_amount, client_name, status')
+      .select('id, total_amount, client_name, status, company_id')
       .eq('id', debtId)
       .single()
     if (getErr || !debt) return { ok: false, message: 'Долг не найден.' }
+
+    // Мультитенантная изоляция: закрывать можно только долг своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && debt.company_id && !ids.includes(String(debt.company_id))) {
+      return { ok: false, message: 'Долг не найден.' }
+    }
     if (debt.status === 'deleted') return { ok: false, message: 'Долг уже закрыт.' }
 
     // Помечаем как deleted (это статус "закрыт/оплачен" в point_debt_items)

@@ -5,6 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
+import { scopedCompanyIds } from '../../query-helpers'
 
 function todayISO(): string {
   const d = new Date()
@@ -43,12 +44,16 @@ export const queryAnomaliesTool: CopilotTool = {
     const today = todayISO()
     const from = addDaysISO(today, -(days - 1))
 
-    const { data: rows } = await ctx.supabase
+    // Мультитенантная изоляция: только выручка точек своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    let rowsQ = ctx.supabase
       .from('incomes')
       .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', from)
       .lte('date', today)
       .range(0, 19999)
+    if (ids) rowsQ = rowsQ.in('company_id', ids)
+    const { data: rows } = await rowsQ
 
     if (!rows || rows.length === 0) return { ok: true, message: 'Нет данных за период.' }
 

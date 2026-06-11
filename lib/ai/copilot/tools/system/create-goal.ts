@@ -71,6 +71,8 @@ export const createGoalTool: CopilotTool = {
         target_value: targetValue,
         period_end: periodEndISO,
         status: 'active',
+        // Мультитенантная изоляция: привязываем цель к своей организации.
+        organization_id: ctx.organizationId || null,
       }])
       .select('id')
       .single()

@@ -4,7 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions } from '../../query-helpers'
+import { companyOptions, scopedCompanyIds } from '../../query-helpers'
 import { writeAuditLog } from '@/lib/server/audit'
 
 function todayISO(): string {
@@ -47,6 +47,10 @@ export const addKaspiRecordTool: CopilotTool = {
     const amount = Number(input.amount || 0)
     const date = String(input.date || '').trim() || todayISO()
     if (!companyId || amount <= 0) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: запись по терминалу можно создать только на точке своей организации.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids && !ids.includes(companyId)) return { ok: false, message: 'Точка не найдена.' }
 
     const { data, error } = await ctx.supabase
       .from('kaspi_terminal_records')

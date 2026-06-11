@@ -31,6 +31,8 @@ export const archiveItemTool: CopilotTool = {
     const reason = String(input.reason || '').trim()
     if (!itemId || !reason) return { ok: false, message: 'Не хватает данных.' }
 
+    // TODO isolation: inventory_items — глобальный каталог без company_id/organization_id,
+    // ownership-проверку по тенанту тут сделать нельзя (товары общие для всех точек).
     const { data: before } = await ctx.supabase.from('inventory_items').select('name').eq('id', itemId).single()
     const { error } = await ctx.supabase
       .from('inventory_items')

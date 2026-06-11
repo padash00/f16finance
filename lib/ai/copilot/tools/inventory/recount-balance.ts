@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedCompanyIds } from '../../query-helpers'
 
 export const recountBalanceTool: CopilotTool = {
   name: 'recount_balance',
@@ -47,6 +48,20 @@ export const recountBalanceTool: CopilotTool = {
     const qty = Number(input.actual_quantity)
     const comment = String(input.comment || '').trim() || null
     if (!itemId || !locationId || isNaN(qty) || qty < 0) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: пересчитывать можно только место хранения своей организации.
+    // inventory_items — глобальный каталог (без company_id), скоуп — через локацию.
+    const ids = await scopedCompanyIds(ctx)
+    if (ids) {
+      const { data: loc } = await ctx.supabase
+        .from('inventory_locations')
+        .select('id, company_id')
+        .eq('id', locationId)
+        .single()
+      if (!loc || (loc.company_id && !ids.includes(String(loc.company_id)))) {
+        return { ok: false, message: 'Место хранения не найдено.' }
+      }
+    }
 
     const { data: existing } = await ctx.supabase
       .from('inventory_balances')

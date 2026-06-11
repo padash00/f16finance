@@ -43,6 +43,8 @@ export const updateStockThresholdTool: CopilotTool = {
     const threshold = Number(input.threshold || 0)
     if (!itemId) return { ok: false, message: 'Не выбран товар.' }
 
+    // TODO isolation: inventory_items — глобальный каталог без company_id/organization_id,
+    // ownership-проверку по тенанту тут сделать нельзя (товары общие для всех точек).
     const { data: item } = await ctx.supabase.from('inventory_items').select('id, name').eq('id', itemId).single()
     if (!item) return { ok: false, message: 'Товар не найден.' }
 

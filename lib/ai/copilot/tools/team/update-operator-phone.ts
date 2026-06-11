@@ -5,6 +5,7 @@
 
 import type { CopilotTool } from '../../types'
 import { writeAuditLog } from '@/lib/server/audit'
+import { scopedOperatorIds } from '../../query-helpers'
 
 export const updateOperatorPhoneTool: CopilotTool = {
   name: 'update_operator_phone',
@@ -30,6 +31,10 @@ export const updateOperatorPhoneTool: CopilotTool = {
     const operatorId = String(input.operator_id || '')
     const phone = String(input.new_phone || '').trim()
     if (!operatorId || !phone) return { ok: false, message: 'Не хватает данных.' }
+
+    // Мультитенантная изоляция: менять можно только оператора своей организации.
+    const allowed = await scopedOperatorIds(ctx)
+    if (allowed && !allowed.includes(operatorId)) return { ok: false, message: 'Оператор не найден.' }
 
     const { data: before } = await ctx.supabase.from('operators').select('name, phone').eq('id', operatorId).single()
     const { error } = await ctx.supabase.from('operators').update({ phone }).eq('id', operatorId)
