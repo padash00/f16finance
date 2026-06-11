@@ -104,11 +104,13 @@ export async function GET(request: Request) {
       balanceMap[b.item_id] = (balanceMap[b.item_id] || 0) + Number(b.quantity || 0)
     }
 
-    // Fetch item details
-    const { data: items, error: itemsError } = await supabase
+    // Fetch item details — только своя орг
+    let itemsQuery = supabase
       .from('inventory_items')
       .select('id, name, low_stock_threshold, is_active, category:inventory_categories(name)')
       .eq('is_active', true)
+    if (!access.isSuperAdmin) itemsQuery = itemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const { data: items, error: itemsError } = await itemsQuery
     if (itemsError) throw itemsError
 
     // Build forecast

@@ -65,18 +65,29 @@ export async function GET(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+    // Изоляция: каталог только своей орг (inventory_items.organization_id).
+    // NEVER-pattern: не-супер-админ без орг → пустой uuid → ничего.
+    const orgId = access.activeOrganization?.id || null
+    const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+
     // Fetch all inventory items with their category
-    const { data: items, error: itemsError } = await supabase
+    let itemsQuery = supabase
       .from('inventory_items')
       .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, category:inventory_categories(id, name)')
       .order('name', { ascending: true })
+    if (scopeOrg) itemsQuery = itemsQuery.eq('organization_id', scopeOrg)
+    const { data: items, error: itemsError } = await itemsQuery
 
     if (itemsError) throw itemsError
 
     // v8: total = warehouse + showcase. catalog_total больше не используется.
-    const { data: balances, error: balancesError } = await supabase
+    const itemIds = (items || []).map((i: any) => String(i.id))
+    let balancesQuery = supabase
       .from('inventory_balances')
       .select('item_id, quantity, loc:inventory_locations(location_type)')
+    // Балансы только по товарам своей орг (inventory_balances не имеет org-колонки).
+    if (scopeOrg) balancesQuery = balancesQuery.in('item_id', itemIds.length ? itemIds : ['00000000-0000-0000-0000-000000000000'])
+    const { data: balances, error: balancesError } = await balancesQuery
 
     if (balancesError) throw balancesError
 

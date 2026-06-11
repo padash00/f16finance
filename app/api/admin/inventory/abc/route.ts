@@ -199,11 +199,13 @@ export async function GET(request: Request) {
     const itemIds = Object.keys(itemMap).filter((id) => id && id !== 'null' && id !== 'undefined')
     void itemIds // используется только для документации scope; реальный лукап — через allItems ниже
 
-    // Also fetch items with zero sales (C-class candidates)
-    const { data: allItems, error: allItemsError } = await supabase
+    // Also fetch items with zero sales (C-class candidates) — только своя орг
+    let allItemsQuery = supabase
       .from('inventory_items')
       .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
       .eq('is_active', true)
+    if (!access.isSuperAdmin) allItemsQuery = allItemsQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const { data: allItems, error: allItemsError } = await allItemsQuery
     if (allItemsError) throw allItemsError
 
     // Загружаем остатки складов (warehouse) этой точки/области — для stock_value и slow-movers.

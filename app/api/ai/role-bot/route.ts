@@ -16,6 +16,7 @@
 
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { generateAiText } from '@/lib/ai/provider'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -89,6 +90,14 @@ async function buildSnapshotForRole(access: any, role: string, supabase: any) {
   const sections: any[] = []
   const userId = access.user?.id
   const orgId = access.activeOrganization?.id || null
+
+  // Мультитенантный скоуп: null = супер-админ (всё), массив (в т.ч. пустой) = только
+  // свои компании/операторы. Пустой массив + .in() → 0 строк (NEVER-pattern).
+  const companyScope = await resolveCompanyScope({ activeOrganizationId: orgId, isSuperAdmin: access.isSuperAdmin })
+  const scopedCompanyIds: string[] | null = companyScope.allowedCompanyIds
+  const scopedOperatorIds: string[] | null = access.isSuperAdmin
+    ? null
+    : await listOrganizationOperatorIds({ activeOrganizationId: orgId, isSuperAdmin: access.isSuperAdmin })
 
   if (role === 'operator' && access.operatorAuth) {
     const operatorId = access.operatorAuth.operator_id
@@ -168,26 +177,32 @@ async function buildSnapshotForRole(access: any, role: string, supabase: any) {
   if (role === 'manager') {
     const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
 
-    // Открытые задачи
-    const { data: tasks } = await supabase
+    // Открытые задачи (скоуп по операторам своей орг)
+    let tasksQ = supabase
       .from('point_tasks')
       .select('title, operator_id, status, priority, due_date')
       .in('status', ['open', 'in_progress'])
       .limit(50)
+    if (scopedOperatorIds) tasksQ = tasksQ.in('operator_id', scopedOperatorIds)
+    const { data: tasks } = await tasksQ
 
     // Незакрытые смены
-    const { data: shifts } = await supabase
+    let shiftsQ = supabase
       .from('point_shifts')
       .select('id, operator_id, shift_type, opened_at, status')
       .eq('status', 'open')
       .limit(50)
+    if (scopedOperatorIds) shiftsQ = shiftsQ.in('operator_id', scopedOperatorIds)
+    const { data: shifts } = await shiftsQ
 
     // Инциденты
-    const { data: incidents } = await supabase
+    let incidentsQ = supabase
       .from('point_incidents')
       .select('title, operator_id, status, fine_amount, occurred_at')
       .gte('occurred_at', monthAgo)
       .limit(30)
+    if (scopedOperatorIds) incidentsQ = incidentsQ.in('operator_id', scopedOperatorIds)
+    const { data: incidents } = await incidentsQ
 
     sections.push({ title: 'Активные задачи', data: tasks || [] })
     sections.push({ title: 'Открытые смены сейчас', data: shifts || [] })
@@ -196,12 +211,14 @@ async function buildSnapshotForRole(access: any, role: string, supabase: any) {
   }
 
   if (role === 'marketer') {
-    // Клиенты, бронирования, скидки
-    const { data: bookings } = await supabase
+    // Клиенты, бронирования, скидки (скоуп по компаниям своей орг)
+    let bookingsQ = supabase
       .from('client_bookings')
       .select('client_name, status, created_at, amount')
       .order('created_at', { ascending: false })
       .limit(30)
+    if (scopedCompanyIds) bookingsQ = bookingsQ.in('company_id', scopedCompanyIds)
+    const { data: bookings } = await bookingsQ
 
     sections.push({ title: 'Последние бронирования', data: bookings || [] })
     return sections
@@ -209,11 +226,12 @@ async function buildSnapshotForRole(access: any, role: string, supabase: any) {
 
   // owner / super_admin — широкий снапшот
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-  const [incRes, expRes, debtRes] = await Promise.all([
-    supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount, online_amount').gte('date', monthAgo).limit(200),
-    supabase.from('expenses').select('date, category, cash_amount, kaspi_amount, comment').gte('date', monthAgo).limit(100),
-    supabase.from('point_debts').select('operator_id, amount, week_start, comment').gt('amount', 0).limit(50),
-  ])
+  let incQ = supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount, online_amount').gte('date', monthAgo).limit(200)
+  let expQ = supabase.from('expenses').select('date, category, cash_amount, kaspi_amount, comment').gte('date', monthAgo).limit(100)
+  let debtQ = supabase.from('point_debts').select('operator_id, amount, week_start, comment').gt('amount', 0).limit(50)
+  if (scopedCompanyIds) { incQ = incQ.in('company_id', scopedCompanyIds); expQ = expQ.in('company_id', scopedCompanyIds) }
+  if (scopedOperatorIds) debtQ = debtQ.in('operator_id', scopedOperatorIds)
+  const [incRes, expRes, debtRes] = await Promise.all([incQ, expQ, debtQ])
 
   sections.push({ title: 'Доходы за 30 дней', data: incRes.data || [] })
   sections.push({ title: 'Расходы за 30 дней', data: expRes.data || [] })
