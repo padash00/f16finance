@@ -106,6 +106,11 @@ export default function OrgDetailPage() {
   const [invNote, setInvNote] = useState('')
   const [savingInvoice, setSavingInvoice] = useState(false)
   const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null)
+  const [ownerEmail, setOwnerEmail] = useState('')
+  const [ownerFullName, setOwnerFullName] = useState('')
+  const [ownerPwd, setOwnerPwd] = useState('')
+  const [creatingOwner, setCreatingOwner] = useState(false)
+  const [createdOwner, setCreatedOwner] = useState<{ email: string; password: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // editable fields
@@ -200,6 +205,35 @@ export default function OrgDetailPage() {
       setError(err.message)
     } finally {
       setSavingInvoice(false)
+    }
+  }
+
+  const handleCreateOwner = async () => {
+    setCreatingOwner(true)
+    setError(null)
+    setCreatedOwner(null)
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: id,
+          action: 'provisionOwner',
+          ownerEmail: ownerEmail.trim(),
+          ownerFullName: ownerFullName.trim() || null,
+          ownerPassword: ownerPwd.trim() || null,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось создать аккаунт')
+      setCreatedOwner(data?.owner || null)
+      setOwnerEmail('')
+      setOwnerFullName('')
+      setOwnerPwd('')
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setCreatingOwner(false)
     }
   }
 
@@ -583,6 +617,35 @@ export default function OrgDetailPage() {
             <p className="mt-2 text-[11px] text-slate-600">
               🛡 жёлтые — legacy-гранты, зелёные — пакет/add-ons. Это эффективные права (пока без enforcement).
             </p>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Создать аккаунт владельца */}
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <h2 className="mb-1 text-sm font-semibold text-white">Аккаунт владельца</h2>
+        <p className="mb-3 text-xs text-slate-500">Создаёт логин владельца этой организации (роль owner). Под ним клиент видит только свои данные.</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="Email" className="border-white/10 bg-slate-900/60 text-white" />
+          <Input value={ownerFullName} onChange={(e) => setOwnerFullName(e.target.value)} placeholder="Имя (необяз.)" className="border-white/10 bg-slate-900/60 text-white" />
+          <Input value={ownerPwd} onChange={(e) => setOwnerPwd(e.target.value)} placeholder="Пароль (или сгенерируем)" className="border-white/10 bg-slate-900/60 text-white" />
+        </div>
+        <div className="mt-2">
+          <Button onClick={handleCreateOwner} disabled={creatingOwner || !ownerEmail.trim()} className="bg-emerald-600 text-white hover:bg-emerald-500">
+            {creatingOwner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Создать аккаунт
+          </Button>
+        </div>
+        {createdOwner ? (
+          <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3 text-sm text-emerald-100">
+            <div className="font-medium">Аккаунт создан — передайте клиенту:</div>
+            <div className="mt-1 font-mono text-xs text-white">Email: {createdOwner.email}</div>
+            {createdOwner.password ? (
+              <div className="font-mono text-xs text-white">Пароль: {createdOwner.password}</div>
+            ) : (
+              <div className="text-xs text-emerald-200/80">Пароль задан вручную (виден только вам).</div>
+            )}
+            <div className="mt-1 text-[11px] text-emerald-200/70">Вход: ordaops.kz/login. При первом входе попросит сменить пароль.</div>
           </div>
         ) : null}
       </div>

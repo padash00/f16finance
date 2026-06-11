@@ -585,6 +585,56 @@ export async function PATCH(req: Request) {
 
     const supabase = getSupabase()
 
+    // ── Создать аккаунт владельца для существующей организации ──
+    if (body?.action === 'provisionOwner') {
+      const ownerEmail = String(body?.ownerEmail || '').trim().toLowerCase()
+      const ownerFullName = String(body?.ownerFullName || '').trim() || null
+      if (!ownerEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ownerEmail)) {
+        return json({ error: 'Укажите корректный email' }, 400)
+      }
+      const customPassword = String(body?.ownerPassword || '').trim()
+      const ownerPassword = customPassword || generatePassword()
+
+      const created = await supabase.auth.admin.createUser({
+        email: ownerEmail,
+        password: ownerPassword,
+        email_confirm: true,
+        user_metadata: { must_change_password: !customPassword, full_name: ownerFullName },
+      })
+      if (created.error || !created.data?.user?.id) {
+        const msg = String(created.error?.message || '')
+        const taken = /already|registered|exists/i.test(msg)
+        return json({ error: taken ? 'Этот email уже занят — используйте другой' : `Не удалось создать аккаунт: ${msg || 'ошибка'}` }, 400)
+      }
+      const authUserId = String(created.data.user.id)
+
+      const staffRes = await supabase
+        .from('staff')
+        .insert([{ full_name: ownerFullName || ownerEmail, role: 'owner', monthly_salary: 0, email: ownerEmail, is_active: true, organization_id: organizationId }])
+        .select('id')
+        .single()
+      const staffId = staffRes.data ? String((staffRes.data as any).id) : null
+
+      if (staffId) {
+        await supabase.auth.admin.updateUserById(authUserId, {
+          user_metadata: { must_change_password: !customPassword, full_name: ownerFullName, staff_id: staffId },
+        }).then(() => {}, () => {})
+      }
+
+      await supabase.from('organization_members').insert([{
+        organization_id: organizationId,
+        staff_id: staffId,
+        user_id: authUserId,
+        email: ownerEmail,
+        role: 'owner',
+        status: 'active',
+        is_default: true,
+        metadata: { full_name: ownerFullName, provisioned: true },
+      }]).then(() => {}, () => {})
+
+      return json({ ok: true, owner: { email: ownerEmail, password: ownerPassword, userId: authUserId } })
+    }
+
     // ── Организация ──
     const orgPatch: Record<string, unknown> = {}
     if (body?.name !== undefined) orgPatch.name = String(body.name || '').trim()
