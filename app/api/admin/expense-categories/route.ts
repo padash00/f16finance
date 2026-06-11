@@ -38,8 +38,9 @@ export async function GET(req: Request) {
       .select('id, name, accounting_group, monthly_budget')
       .order('name')
     // Скоуп по организации (+ глобальные дефолты с organization_id IS NULL).
+    // Супер-админ видит все категории (как и остальные данные — он вне скоупа).
     const orgId = access.activeOrganization?.id || null
-    if (orgId) catQuery = catQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    if (orgId && !access.isSuperAdmin) catQuery = catQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`)
     const result = await catQuery
     if (result.error) throw result.error
     const categories = result.data ?? []
