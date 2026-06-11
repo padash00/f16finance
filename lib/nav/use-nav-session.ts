@@ -45,6 +45,8 @@ export function useNavSession(): NavSession {
   const [activeOrganization, setActiveOrganization] = useState<SessionRoleInfo['activeOrganization']>(null)
   const [subscriptionFeatures, setSubscriptionFeatures] = useState<Partial<Record<SubscriptionFeature, boolean>>>({})
   const [rolePermissionOverrides, setRolePermissionOverrides] = useState<Array<{ path: string; enabled: boolean }>>([])
+  const [orgFeatures, setOrgFeatures] = useState<string[]>([])
+  const [featuresAllAccess, setFeaturesAllAccess] = useState(true)
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false)
 
   useEffect(() => {
@@ -79,6 +81,8 @@ export function useNavSession(): NavSession {
             | undefined) || {},
         )
         setRolePermissionOverrides(Array.isArray(json?.rolePermissionOverrides) ? json.rolePermissionOverrides : [])
+        setOrgFeatures(Array.isArray(json?.orgFeatures) ? json.orgFeatures : [])
+        setFeaturesAllAccess(json?.featuresAllAccess !== false)
       }
     }
 
@@ -121,8 +125,14 @@ export function useNavSession(): NavSession {
 
   const filterSection = useCallback((section: NavSection): NavSection => ({
     ...section,
-    items: section.items.filter((item) => {
+    // Секция с feature, которой нет у орг (и не allAccess) — прячем целиком.
+    items: (section.feature && !featuresAllAccess && !orgFeatures.includes(section.feature))
+      ? []
+      : section.items.filter((item) => {
       if (item.href === '/operator-lead' && !isLeadOperator) return false
+
+      // Гейтинг по фиче пакета (company_features). allAccess → не гейтим.
+      if (item.feature && !featuresAllAccess && !orgFeatures.includes(item.feature)) return false
 
       // Если страница есть в каталоге capabilities — приоритет у новой модели.
       // Capabilities ещё не загружены — fallback на старую логику;
@@ -144,7 +154,7 @@ export function useNavSession(): NavSession {
         rolePermissionOverrides,
       })
     }),
-  }), [isLeadOperator, capsLoading, canDo, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures, rolePermissionOverrides])
+  }), [isLeadOperator, capsLoading, canDo, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures, rolePermissionOverrides, orgFeatures, featuresAllAccess])
 
   return {
     userEmail,
