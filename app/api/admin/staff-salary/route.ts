@@ -486,25 +486,69 @@ export async function POST(req: Request) {
       return json({ ok: true })
     }
 
-    // ── Pay debt (отметить активные долги сотрудника как оплаченные) ─────────
+    // ── Pay debt: закрыть долги сотрудника ──────────────────────────────────
+    // Долг сотрудника складывается из:
+    //  1) операторских клиентских долгов (debts + point_debt_items) по операторам,
+    //     привязанным к этому staff через operator_staff_links (или сам id оператора);
+    //  2) админских корректировок staff_adjustments (kind=debt).
+    // Помечаем всё оплаченным (как операторский markDebtsPaid: деньги вернули,
+    // инвентарь со сканера убираем).
     if (action === 'payStaffDebt') {
       const { staff_id } = body
       if (!staff_id) return json({ error: 'staff_id обязателен' }, 400)
       if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
-      const { data: debts, error: fetchErr } = await supabase
+
+      const paidAt = new Date().toISOString()
+      let marked = 0
+      let total = 0
+
+      // Операторы этого сотрудника (+ сам id — вдруг это оператор)
+      const operatorIds = new Set<string>([String(staff_id)])
+      const { data: links } = await supabase
+        .from('operator_staff_links')
+        .select('operator_id')
+        .eq('staff_id', staff_id)
+      for (const l of (links || []) as any[]) if (l.operator_id) operatorIds.add(String(l.operator_id))
+      const opIds = Array.from(operatorIds)
+
+      // 1) Клиентские долги операторов
+      const { data: opDebts, error: opErr } = await supabase
+        .from('debts')
+        .select('id, amount')
+        .in('operator_id', opIds)
+        .eq('status', 'active')
+      if (opErr) throw opErr
+      const opDebtIds = (opDebts || []).map((d: any) => String(d.id))
+      if (opDebtIds.length) {
+        await supabase.from('debts').update({ status: 'paid', paid_at: paidAt }).in('id', opDebtIds)
+        await supabase
+          .from('point_debt_items')
+          .update({ status: 'deleted', deleted_at: paidAt })
+          .in('operator_id', opIds)
+          .eq('status', 'active')
+        marked += opDebtIds.length
+        total += (opDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
+      }
+
+      // 2) Админские корректировки-долги
+      const { data: adjDebts, error: adjErr } = await supabase
         .from('staff_adjustments')
         .select('id, amount')
         .eq('staff_id', staff_id)
         .eq('kind', 'debt')
         .or('status.is.null,status.eq.active')
-      if (fetchErr) throw fetchErr
-      const ids = (debts || []).map((d: any) => String(d.id))
-      if (ids.length === 0) return json({ error: 'Нет активного долга' }, 400)
-      const { error: updErr } = await supabase.from('staff_adjustments').update({ status: 'paid' }).in('id', ids)
-      if (updErr) throw updErr
-      const total = (debts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
-      await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: String(staff_id), action: 'pay_debt', payload: { staff_id, count: ids.length, total } })
-      return json({ ok: true, data: { count: ids.length, total } })
+      if (adjErr) throw adjErr
+      const adjIds = (adjDebts || []).map((d: any) => String(d.id))
+      if (adjIds.length) {
+        await supabase.from('staff_adjustments').update({ status: 'paid' }).in('id', adjIds)
+        marked += adjIds.length
+        total += (adjDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
+      }
+
+      if (marked === 0) return json({ error: 'Нет активного долга' }, 400)
+
+      await writeAuditLog(supabase, { entityType: 'debt', entityId: String(staff_id), action: 'pay_debt_bulk', payload: { staff_id, count: marked, total } })
+      return json({ ok: true, data: { count: marked, total } })
     }
 
     // ── Add extra day (manager shift bonus) ─────────────────────────────────
