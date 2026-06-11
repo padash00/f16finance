@@ -48,9 +48,9 @@ export type OrganizationLimitKey = 'companies' | 'staff' | 'operators' | 'point_
 
 export type OrganizationUsage = Record<OrganizationLimitKey, number>
 
-// Temporary rollback: restore the old F16-style single-tenant behavior
-// while the SaaS layer is being redesigned safely.
-export const LEGACY_SINGLE_TENANT_MODE = true
+// Мультитенантная изоляция ВКЛЮЧЕНА (2026-06-11). Каждая организация видит
+// только свои данные. Откат: вернуть = true (поведение «всё видно всем»).
+export const LEGACY_SINGLE_TENANT_MODE = false
 
 const ZERO_ORGANIZATION_USAGE: OrganizationUsage = {
   companies: 0,
