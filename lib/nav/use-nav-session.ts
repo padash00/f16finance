@@ -23,6 +23,8 @@ export type NavSession = {
   activeOrganization: SessionRoleInfo['activeOrganization']
   subscriptionFeatures: Partial<Record<SubscriptionFeature, boolean>>
   rolePermissionOverrides: Array<{ path: string; enabled: boolean }>
+  orgFeatures: string[]
+  featuresAllAccess: boolean
   isSwitchingOrganization: boolean
   handleLogout: () => Promise<void>
   handleSwitchOrganization: (organizationId: string) => Promise<void>
@@ -170,6 +172,8 @@ export function useNavSession(): NavSession {
     activeOrganization,
     subscriptionFeatures,
     rolePermissionOverrides,
+    orgFeatures,
+    featuresAllAccess,
     isSwitchingOrganization,
     handleLogout,
     handleSwitchOrganization,

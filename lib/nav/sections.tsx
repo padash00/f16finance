@@ -230,6 +230,22 @@ export function getSectionItem(sectionId: string, href: string) {
   return getSectionById(sectionId)?.items.find((item) => item.href === href)
 }
 
+/** Код фичи (company_features), требуемый для пути. null = путь не гейтится. */
+export function getPathFeature(pathname: string): string | null {
+  for (const section of navSections) {
+    for (const item of section.items) {
+      if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+        return item.feature || section.feature || null
+      }
+    }
+  }
+  // /store/* — секция магазина целиком (часть роутов может не быть в items)
+  if (pathname === '/store' || pathname.startsWith('/store/')) {
+    return navSections.find((s) => s.id === 'store')?.feature || null
+  }
+  return null
+}
+
 export function buildOwnerNavSections(): NavSection[] {
   const commandSection = getSectionById('command')
   const financeSection = getSectionById('finance')
