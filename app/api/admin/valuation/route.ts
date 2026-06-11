@@ -83,10 +83,12 @@ export async function GET(req: Request) {
       monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
     }
 
-    // ── Категории расходов → финансовая группа ──────────────────────────────
-    const { data: categoryRows, error: catErr } = await supabase
+    // ── Категории расходов → финансовая группа (только своя орг) ─────────────
+    let catQuery = supabase
       .from('expense_categories')
       .select('name, accounting_group')
+    if (!access.isSuperAdmin) catQuery = catQuery.eq('organization_id', access.activeOrganization?.id || '00000000-0000-0000-0000-000000000000')
+    const { data: categoryRows, error: catErr } = await catQuery
     if (catErr) throw catErr
     const groupByCategoryName = new Map<string, string>()
     for (const row of (categoryRows || []) as any[]) {
