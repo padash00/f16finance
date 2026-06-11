@@ -8,9 +8,18 @@
 -- Остальные permissive (shifts, чат, зарплаты, планы…) — отдельной волной,
 -- после проверки каждой (нужна scoped-замена, чтобы не сломать страницы).
 
--- operator_auth — УЧЁТКИ ОПЕРАТОРОВ. Чтение только через service_role (API).
--- Браузер/anon не должен читать это никогда (это была дыра и до мультитенанта).
+-- operator_auth — УЧЁТКИ ОПЕРАТОРОВ. Была "Anyone can read" (public, true) — дыра.
+-- НО при входе LoginForm читает СВОЮ строку (user_id) из браузера, чтобы получить
+-- operator_id. Поэтому не глухой deny, а self-scoped: оператор видит ТОЛЬКО свою
+-- строку (user_id = auth.uid()). Чужие учётки не читаются. Админ читает через
+-- service_role API.
 drop policy if exists "Anyone can read operator_auth" on public.operator_auth;
+drop policy if exists operator_auth_select_self on public.operator_auth;
+create policy operator_auth_select_self
+  on public.operator_auth
+  for select
+  to authenticated
+  using (user_id = auth.uid());
 
 -- expenses — есть scoped expenses_select_same_company (can_access_company)
 drop policy if exists "public read expenses"  on public.expenses;
