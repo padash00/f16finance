@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  Download,
   Eye,
   EyeOff,
   FolderOpen,
@@ -702,6 +703,36 @@ export default function PointDevicesPage() {
           </Button>
         }
       />
+
+      {/* Операторская программа — скачивание + инструкция */}
+      <Card className="border-white/10 bg-gradient-to-br from-blue-500/[0.07] to-transparent p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-blue-400/30 bg-blue-500/15">
+              <Monitor className="h-5 w-5 text-blue-300" />
+            </span>
+            <div>
+              <div className="text-base font-semibold text-white">Операторская программа</div>
+              <p className="mt-0.5 max-w-xl text-sm text-slate-400">
+                Касса для операторов: смены, продажи, долги, чеки. Установите на компьютер точки и введите токен проекта (ниже).
+              </p>
+              <ol className="mt-2 list-decimal space-y-0.5 pl-4 text-xs text-slate-500">
+                <li>Скачайте и установите программу на ПК точки.</li>
+                <li>При первом запуске введите <b className="text-slate-300">токен проекта</b> (кнопка «глаз» у проекта ниже).</li>
+                <li>Выберите точку — и можно работать.</li>
+              </ol>
+            </div>
+          </div>
+          <a
+            href={process.env.NEXT_PUBLIC_OPERATOR_DOWNLOAD_URL || 'https://github.com/padash00/f16finance/releases/latest'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500"
+          >
+            <Download className="h-4 w-4" /> Скачать для Windows
+          </a>
+        </div>
+      </Card>
 
       {error ? (
         <Card className="border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card>
