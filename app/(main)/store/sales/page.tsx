@@ -273,8 +273,6 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
   const maxHour = useMemo(() => Math.max(1, ...(data?.by_hour.map((h) => h.amount) || [1])), [data])
   const useDaily = (data?.by_day?.length || 0) > 1
   const maxDay = useMemo(() => Math.max(1, ...(data?.by_day?.map((d) => d.amount) || [1])), [data])
-  const maxOperator = useMemo(() => Math.max(1, ...(data?.by_operator.map((o) => o.amount) || [1])), [data])
-  const maxCategory = useMemo(() => Math.max(1, ...(data?.by_category.map((c) => c.revenue) || [1])), [data])
 
   if (loading && !data) return <Loading />
   if (!data) return null
@@ -327,40 +325,79 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
         </div>
       </div>
 
-      {/* По сотрудникам + По категориям */}
+      {/* Информация о сотрудниках + товары по категориям */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className={`${card} p-4`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Users className="h-4 w-4 text-violet-300" /> По сотрудникам</div>
-          {data.by_operator.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
-            <div className="space-y-2.5">{data.by_operator.map((o) => (
-              <div key={o.name}>
-                <div className="flex items-baseline justify-between gap-2 text-sm"><span className="truncate text-slate-200">{o.name}</span><span className="shrink-0 font-semibold tabular-nums text-emerald-300">{fmt(o.amount)} ₸</span></div>
-                <div className="mt-1 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-violet-400/70" style={{ width: `${Math.round((o.amount / maxOperator) * 100)}%` }} /></div><span className="shrink-0 text-[11px] text-slate-500">{o.count} продаж · ср. {fmt(o.avg_check)} ₸</span></div>
-              </div>
-            ))}</div>
+        <div className={`${card} overflow-hidden`}>
+          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white"><Users className="h-4 w-4 text-violet-300" /> Информация о сотрудниках</div>
+          {data.by_operator.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-2 font-medium">ФИО</th>
+                  <th className="px-4 py-2 text-right font-medium">Продаж</th>
+                  <th className="px-4 py-2 text-right font-medium">Ср. чек</th>
+                  <th className="px-4 py-2 text-right font-medium">Сумма</th>
+                </tr></thead>
+                <tbody className="divide-y divide-white/5">{data.by_operator.map((o) => (
+                  <tr key={o.name} className="transition-colors hover:bg-white/[0.02]">
+                    <td className="px-4 py-2.5 text-white">{o.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">{o.count}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-400">{fmt(o.avg_check)} ₸</td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-300">{fmt(o.amount)} ₸</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           )}
         </div>
-        <div className={`${card} p-4`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Tags className="h-4 w-4 text-amber-300" /> По категориям</div>
-          {data.by_category.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
-            <div className="space-y-2.5">{data.by_category.map((c) => (
-              <div key={c.name}>
-                <div className="flex items-baseline justify-between gap-2 text-sm"><span className="truncate text-slate-200">{c.name}</span><span className="shrink-0 font-semibold tabular-nums text-amber-300">{fmt(c.revenue)} ₸</span></div>
-                <div className="mt-1 flex items-center gap-2"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-amber-400/70" style={{ width: `${Math.round((c.revenue / maxCategory) * 100)}%` }} /></div><span className="shrink-0 text-[11px] text-slate-500">{c.qty} шт</span></div>
-              </div>
-            ))}</div>
+        <div className={`${card} overflow-hidden`}>
+          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white"><Tags className="h-4 w-4 text-amber-300" /> Товары по категориям</div>
+          {data.by_category.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-2 font-medium">Категория</th>
+                  <th className="px-4 py-2 text-right font-medium">Количество</th>
+                  <th className="px-4 py-2 text-right font-medium">Сумма</th>
+                </tr></thead>
+                <tbody className="divide-y divide-white/5">{data.by_category.map((c) => (
+                  <tr key={c.name} className="transition-colors hover:bg-white/[0.02]">
+                    <td className="px-4 py-2.5 text-white">{c.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">{fmt(c.qty)}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-300">{fmt(c.revenue)} ₸</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
 
       {/* Способы оплаты */}
-      <div className={`${card} p-4`}>
-        <div className="mb-3 text-sm font-semibold text-white">Способы оплаты</div>
-        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-          <PayBar label="Наличные" amount={data.payment.cash} total={t!.amount} color="bg-emerald-500" />
-          <PayBar label="Безнал" amount={data.payment.kaspi} total={t!.amount} color="bg-amber-500" />
-          <PayBar label="Карта" amount={data.payment.card} total={t!.amount} color="bg-sky-500" />
-          <PayBar label="Онлайн" amount={data.payment.online} total={t!.amount} color="bg-violet-500" />
+      <div className={`${card} overflow-hidden`}>
+        <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">Способы оплаты</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <th className="px-4 py-2 font-medium">Способ оплаты</th>
+              <th className="px-4 py-2 text-right font-medium">Сумма продаж</th>
+              <th className="px-4 py-2 text-right font-medium">Доля</th>
+            </tr></thead>
+            <tbody className="divide-y divide-white/5">
+              {[
+                { label: 'Наличные', amount: data.payment.cash },
+                { label: 'Безнал (Kaspi)', amount: data.payment.kaspi },
+                { label: 'Карта', amount: data.payment.card },
+                { label: 'Онлайн', amount: data.payment.online },
+              ].map((p) => (
+                <tr key={p.label} className="transition-colors hover:bg-white/[0.02]">
+                  <td className="px-4 py-2.5 text-slate-200">{p.label}</td>
+                  <td className="px-4 py-2.5 text-right font-medium tabular-nums text-white">{fmt(p.amount)} ₸</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{t!.amount > 0 ? Math.round((p.amount / t!.amount) * 100) : 0}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -551,18 +588,6 @@ function Kpi({ label, value, sub, icon, accent, big }: { label: string; value: s
       <div className="flex items-center justify-between text-xs uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-slate-400">{icon}</span></div>
       <div className={`mt-1.5 font-bold tabular-nums ${accent} ${big ? 'text-2xl' : 'text-xl'}`}>{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
-    </div>
-  )
-}
-
-function PayBar({ label, amount, total, color }: { label: string; amount: number; total: number; color: string }) {
-  const pct = total > 0 ? Math.round((amount / total) * 100) : 0
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-16 shrink-0 text-xs text-slate-400">{label}</div>
-      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-white/5"><div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} /></div>
-      <div className="w-24 shrink-0 text-right text-sm font-medium tabular-nums text-white">{fmt(amount)} ₸</div>
-      <div className="w-8 shrink-0 text-right text-xs text-slate-500">{pct}%</div>
     </div>
   )
 }
