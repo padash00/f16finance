@@ -93,8 +93,47 @@ export async function GET(req: Request) {
       }
     }
 
+    // Эффективные фичи организации (company_features) для гейтинга сайдбара по пакетам.
+    // allAccess=true → не гейтим (супер-админ, F16 с legacy-грантом, или орг без
+    // настроенных entitlements). Иначе показываем только купленные модули.
+    let orgFeatures: string[] = []
+    let featuresAllAccess = isSuperAdmin
+    try {
+      const orgId = access.activeOrganization?.id || null
+      if (!isSuperAdmin && orgId) {
+        const { data: cos } = await adminSupabase.from('companies').select('id').eq('organization_id', orgId)
+        const cids = (cos || []).map((c: any) => String(c.id))
+        if (cids.length === 0) {
+          featuresAllAccess = true // нет точек/конфига → не гейтим
+        } else {
+          const { data: cf } = await adminSupabase
+            .from('company_features')
+            .select('source_type, enabled, ends_at, feature:feature_id(code)')
+            .in('company_id', cids)
+            .eq('enabled', true)
+          const now = Date.now()
+          let hasLegacy = false
+          const codes = new Set<string>()
+          for (const row of (cf || []) as any[]) {
+            const ends = row.ends_at ? new Date(row.ends_at).getTime() : null
+            if (ends && ends < now) continue
+            if (row.source_type === 'legacy') hasLegacy = true
+            const feat = Array.isArray(row.feature) ? row.feature[0] : row.feature
+            if (feat?.code) codes.add(String(feat.code))
+          }
+          orgFeatures = Array.from(codes)
+          // legacy-грант (страховка F16) или вообще нет грантов → полный доступ.
+          if (hasLegacy || codes.size === 0) featuresAllAccess = true
+        }
+      }
+    } catch {
+      featuresAllAccess = true // таблиц может не быть / сбой — не ломаем доступ
+    }
+
     return NextResponse.json({
       ok: true,
+      orgFeatures,
+      featuresAllAccess,
       userId: user.id,
       operatorId: operatorAuth ? String((operatorAuth as any).operator_id || '') : null,
       email: user.email || null,

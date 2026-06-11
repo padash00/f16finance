@@ -65,6 +65,9 @@ export type NavItem = {
   badge?: string
   badgeColor?: 'purple' | 'blue' | 'green' | 'red' | 'orange' | 'default'
   isNew?: boolean
+  /** Код фичи (company_features). Если задан и у орг его нет — пункт скрыт
+   *  (кроме allAccess: супер-админ / F16-legacy / орг без entitlements). */
+  feature?: string
 }
 
 export type NavSection = {
@@ -76,6 +79,8 @@ export type NavSection = {
   items: NavItem[]
   /** Если задано — клик по заголовку секции в верхнем меню сразу переходит сюда (а не только открывает дропдаун). */
   homeHref?: string
+  /** Код фичи (company_features). Если задан и у орг его нет — секция скрыта целиком. */
+  feature?: string
 }
 
 export const navSections: NavSection[] = [
@@ -89,7 +94,7 @@ export const navSections: NavSection[] = [
       { href: '/dashboard', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
       { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/forecast', label: 'AI Прогноз', icon: Radar, note: 'Прогноз 30/60/90 дней', badge: 'AI', badgeColor: 'purple', isNew: true },
-      { href: '/ai-cfo', label: 'AI Финдиректор', icon: Briefcase, note: 'Карточки: вывод → причина → действие', badge: 'AI', badgeColor: 'purple', isNew: true },
+      { href: '/ai-cfo', label: 'AI Финдиректор', icon: Briefcase, note: 'Карточки: вывод → причина → действие', badge: 'AI', badgeColor: 'purple', isNew: true, feature: 'ai.cfo' },
       { href: '/goals', label: 'Цели и план', icon: Target, note: 'Плановые показатели', badge: 'new', badgeColor: 'blue' },
       { href: '/reports', label: 'Отчеты', icon: BarChart3, note: 'Сводные метрики' },
       { href: '/weekly-report', label: 'Недельный отчет', icon: CalendarRange, note: 'Ритм недели' },
@@ -122,6 +127,7 @@ export const navSections: NavSection[] = [
     accentColor: 'emerald',
     icon: Boxes,
     homeHref: '/store/sales',
+    feature: 'shop.catalog',
     items: [
       { href: '/store', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
       { href: '/store/stock', label: 'Склад', icon: Warehouse, note: 'Склад, витрина, движения, каталог' },

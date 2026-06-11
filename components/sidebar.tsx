@@ -389,6 +389,8 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
   const [organizations, setOrganizations] = useState<NonNullable<SessionRoleInfo['organizations']>>([])
   const [activeOrganization, setActiveOrganization] = useState<SessionRoleInfo['activeOrganization']>(null)
   const [subscriptionFeatures, setSubscriptionFeatures] = useState<Partial<Record<SubscriptionFeature, boolean>>>({})
+  const [orgFeatures, setOrgFeatures] = useState<string[]>([])
+  const [featuresAllAccess, setFeaturesAllAccess] = useState(true)
   const [rolePermissionOverrides, setRolePermissionOverrides] = useState<
   Array<{ path: string; enabled: boolean }>
 >([])
@@ -446,6 +448,8 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
           ((json?.activeSubscription as SessionRoleInfo['activeSubscription'] | null)?.plan?.features as Partial<Record<SubscriptionFeature, boolean>> | undefined) || {},
         )
         setRolePermissionOverrides(Array.isArray(json?.rolePermissionOverrides) ? json.rolePermissionOverrides : [])
+        setOrgFeatures(Array.isArray(json?.orgFeatures) ? json.orgFeatures : [])
+        setFeaturesAllAccess(json?.featuresAllAccess !== false)
         // Super admin sees all sections expanded
         if (superAdmin) {
           setOpenSections(Object.fromEntries(navSections.map((s) => [s.id, true])))
@@ -490,11 +494,18 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
     const query = searchQuery.trim().toLowerCase()
 
     return baseSections
+      // Секция с feature, которой нет у орг (и не allAccess) — скрываем целиком.
+      .filter((section) => !(section.feature && !featuresAllAccess && !orgFeatures.includes(section.feature)))
       .map((section) => ({
         ...section,
         items: section.items
           .filter((item) => {
             if (item.href === '/operator-lead' && !isLeadOperator) {
+              return false
+            }
+
+            // Гейтинг по фиче пакета (company_features). allAccess → не гейтим.
+            if (item.feature && !featuresAllAccess && !orgFeatures.includes(item.feature)) {
               return false
             }
 
@@ -530,7 +541,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
         const sectionText = `${section.title} ${section.subtitle}`.toLowerCase()
         return sectionText.includes(query)
       })
-  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures, rolePermissionOverrides, capsLoading, canDo])
+  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures, rolePermissionOverrides, capsLoading, canDo, orgFeatures, featuresAllAccess])
 
   useEffect(() => {
     if (!searchQuery.trim()) return
