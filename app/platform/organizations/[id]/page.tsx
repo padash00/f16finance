@@ -112,6 +112,7 @@ export default function OrgDetailPage() {
   const [creatingOwner, setCreatingOwner] = useState(false)
   const [createdOwner, setCreatedOwner] = useState<{ email: string; password: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [okMsg, setOkMsg] = useState<string | null>(null)
 
   // editable fields
   const [name, setName] = useState('')
@@ -149,6 +150,9 @@ export default function OrgDetailPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error || 'Не удалось назначить пакет')
       if (data?.organization) setOrg(data.organization)
+      const pkgName = (packages.find((p) => p.code === code)?.name) || code
+      setOkMsg(`Пакет назначен: ${pkgName}. Функции пакета включены.`)
+      setTimeout(() => setOkMsg(null), 3500)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -317,6 +321,8 @@ export default function OrgDetailPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error || 'Не удалось сохранить')
       if (data?.organization) setOrg(data.organization)
+      setOkMsg(enabled ? 'Функция выдана.' : 'Функция снята.')
+      setTimeout(() => setOkMsg(null), 2500)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -778,6 +784,12 @@ export default function OrgDetailPage() {
           </p>
         )}
       </div>
+
+      {okMsg && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl border border-emerald-500/30 bg-emerald-600/90 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-black/30">
+          ✓ {okMsg}
+        </div>
+      )}
 
       {/* Save */}
       <div className="mt-5 flex items-center gap-3">
