@@ -24,6 +24,10 @@ export async function GET(request: Request) {
     const staffId = url.searchParams.get('staff_id')
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+    // Изоляция по организации (null = legacy-строки видны своей орг).
+    const orgId = access.activeOrganization?.id || null
+    const orgScope = orgId ? `organization_id.is.null,organization_id.eq.${orgId}` : null
+
     let articleQuery = supabase
       .from('knowledge_articles')
       .select('id, title, slug, version, severity, requires_confirmation, is_published')
@@ -31,6 +35,7 @@ export async function GET(request: Request) {
       .eq('is_published', true)
       .order('title', { ascending: true })
     if (articleId) articleQuery = articleQuery.eq('id', articleId)
+    if (orgScope) articleQuery = articleQuery.or(orgScope)
 
     const { data: articles, error: articleError } = await articleQuery
     if (articleError) throw articleError
@@ -46,6 +51,7 @@ export async function GET(request: Request) {
       .limit(2000)
     if (articleId) confirmQuery = confirmQuery.eq('article_id', articleId)
     if (staffId) confirmQuery = confirmQuery.eq('staff_id', staffId)
+    if (orgScope) confirmQuery = confirmQuery.or(orgScope)
 
     const { data: confirmations, error: confirmError } = await confirmQuery
     if (confirmError) throw confirmError

@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, streamAiText, type AiMessage } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -117,6 +118,16 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as { company_id?: string | null; stream?: boolean | null }
     const selectedCompanyId = typeof body.company_id === 'string' && body.company_id.trim().length > 0 ? body.company_id.trim() : null
 
+    // Изоляция: доступные компании активной организации (null = без фильтра при LEGACY/суперадмине).
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const scopedIds = companyScope.allowedCompanyIds
+    if (selectedCompanyId && scopedIds && !scopedIds.includes(selectedCompanyId)) {
+      return NextResponse.json({ error: 'forbidden-company' }, { status: 403 })
+    }
+
     const dateTo = todayISO()
     const dateFrom = addDaysISO(dateTo, -89) // 90 days of history
 
@@ -131,6 +142,7 @@ export async function POST(request: Request) {
         .order('date', { ascending: true })
         .range(from, to)
       if (selectedCompanyId) query = query.eq('company_id', selectedCompanyId)
+      else if (scopedIds) query = query.in('company_id', scopedIds)
       return query
     })
     const expensesPromise = fetchAllRows((from, to) => {
@@ -142,6 +154,7 @@ export async function POST(request: Request) {
         .order('date', { ascending: true })
         .range(from, to)
       if (selectedCompanyId) query = query.eq('company_id', selectedCompanyId)
+      else if (scopedIds) query = query.in('company_id', scopedIds)
       return query
     })
 
@@ -155,6 +168,7 @@ export async function POST(request: Request) {
         .lte('period_start', dateTo)
         .gte('period_end', dateFrom)
       if (selectedCompanyId) kpiQuery = kpiQuery.eq('company_id', selectedCompanyId)
+      else if (scopedIds) kpiQuery = kpiQuery.in('company_id', scopedIds)
       const { data } = await kpiQuery
       return (data || []) as Array<{ company_id: string; target_amount: number; period_start: string; period_end: string }>
     })().catch(() => [] as Array<{ company_id: string; target_amount: number; period_start: string; period_end: string }>)

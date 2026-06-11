@@ -36,6 +36,9 @@ export async function GET(request: Request) {
 
     if (staffId) query = query.eq('staff_id', staffId)
     if (status && status !== 'all') query = query.eq('status', status)
+    // Изоляция по организации
+    const orgId = access.activeOrganization?.id || null
+    if (orgId) query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
 
     const { data, error } = await query
     if (error) throw error

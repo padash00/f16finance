@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { renderWeeklyHTML, PDF_OPTIONS } from '@/lib/reports/orda-weekly-template'
 import { buildWeeklyContract, type WeeklyActData } from '@/lib/reports/build-weekly-contract'
@@ -66,11 +67,17 @@ export async function GET(req: Request) {
     if (planWeek) {
       try {
         const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-        const { data: planRows } = await supabase
+        const planScope = await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+        let planQuery = supabase
           .from('purchase_plan_items')
           .select('company_id, day_of_week, category, title, supplier, quantity, amount, status')
           .eq('week_start', planWeek)
           .order('day_of_week', { ascending: true })
+        if (planScope.allowedCompanyIds) planQuery = planQuery.in('company_id', planScope.allowedCompanyIds)
+        const { data: planRows } = await planQuery
         const nameById = new Map<string, string>(
           ((actJson.data as WeeklyActData).companies || []).map((c) => [String(c.id), c.name]),
         )
