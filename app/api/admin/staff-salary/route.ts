@@ -356,11 +356,18 @@ export async function GET(req: Request) {
     const missingAdvanceExpenseCount = [...expectedAdvanceSourceIds].filter((id) => !actualAdvanceSourceIds.has(id)).length
     const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
 
+    const { data: debtPaymentsData } = await supabase
+      .from('staff_debt_payments')
+      .select('id, staff_id, amount, comment, paid_at, status')
+      .eq('status', 'active')
+      .order('paid_at', { ascending: false })
+
     return json({
       // Capability checks выше уже отсеивают; здесь — любой staff
       can_edit: access.isSuperAdmin || !!access.staffRole,
       staff: [...baseStaff, ...virtualStaffFromOperators],
       adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments],
+      debtPayments: debtPaymentsData ?? [],
       payments: paymentsRes.data ?? [],
       salaryRules: rulesRes.data ?? [],
       consistency: {
@@ -499,8 +506,7 @@ export async function POST(req: Request) {
       if (staffOutOfScope(staff_id)) return json({ error: 'forbidden' }, 403)
 
       const paidAt = new Date().toISOString()
-      let marked = 0
-      let total = 0
+      const comment = typeof body.comment === 'string' && body.comment.trim() ? body.comment.trim() : null
 
       // Операторы этого сотрудника (+ сам id — вдруг это оператор)
       const operatorIds = new Set<string>([String(staff_id)])
@@ -511,44 +517,70 @@ export async function POST(req: Request) {
       for (const l of (links || []) as any[]) if (l.operator_id) operatorIds.add(String(l.operator_id))
       const opIds = Array.from(operatorIds)
 
-      // 1) Клиентские долги операторов
-      const { data: opDebts, error: opErr } = await supabase
-        .from('debts')
-        .select('id, amount')
-        .in('operator_id', opIds)
-        .eq('status', 'active')
-      if (opErr) throw opErr
-      const opDebtIds = (opDebts || []).map((d: any) => String(d.id))
-      if (opDebtIds.length) {
-        await supabase.from('debts').update({ status: 'paid', paid_at: paidAt }).in('id', opDebtIds)
-        await supabase
-          .from('point_debt_items')
-          .update({ status: 'deleted', deleted_at: paidAt })
-          .in('operator_id', opIds)
-          .eq('status', 'active')
-        marked += opDebtIds.length
-        total += (opDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
-      }
-
-      // 2) Админские корректировки-долги
-      const { data: adjDebts, error: adjErr } = await supabase
-        .from('staff_adjustments')
-        .select('id, amount')
-        .eq('staff_id', staff_id)
-        .eq('kind', 'debt')
-        .or('status.is.null,status.eq.active')
-      if (adjErr) throw adjErr
+      // Собираем затронутые строки (запоминаем id для возможной отмены)
+      const { data: opDebts } = await supabase
+        .from('debts').select('id, amount').in('operator_id', opIds).eq('status', 'active')
+      const debtIds = (opDebts || []).map((d: any) => String(d.id))
+      const { data: items } = await supabase
+        .from('point_debt_items').select('id').in('operator_id', opIds).eq('status', 'active')
+      const itemIds = (items || []).map((i: any) => String(i.id))
+      const { data: adjDebts } = await supabase
+        .from('staff_adjustments').select('id, amount').eq('staff_id', staff_id).eq('kind', 'debt').or('status.is.null,status.eq.active')
       const adjIds = (adjDebts || []).map((d: any) => String(d.id))
-      if (adjIds.length) {
-        await supabase.from('staff_adjustments').update({ status: 'paid' }).in('id', adjIds)
-        marked += adjIds.length
-        total += (adjDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
-      }
 
-      if (marked === 0) return json({ error: 'Нет активного долга' }, 400)
+      if (debtIds.length === 0 && adjIds.length === 0) return json({ error: 'Нет активного долга' }, 400)
 
-      await writeAuditLog(supabase, { entityType: 'debt', entityId: String(staff_id), action: 'pay_debt_bulk', payload: { staff_id, count: marked, total } })
-      return json({ ok: true, data: { count: marked, total } })
+      const total =
+        (opDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0) +
+        (adjDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
+
+      if (debtIds.length) await supabase.from('debts').update({ status: 'paid', paid_at: paidAt }).in('id', debtIds)
+      if (itemIds.length) await supabase.from('point_debt_items').update({ status: 'deleted', deleted_at: paidAt }).in('id', itemIds)
+      if (adjIds.length) await supabase.from('staff_adjustments').update({ status: 'paid' }).in('id', adjIds)
+
+      const { data: rec, error: recErr } = await supabase
+        .from('staff_debt_payments')
+        .insert({
+          staff_id,
+          amount: Math.round(total),
+          comment,
+          debt_ids: debtIds,
+          item_ids: itemIds,
+          adjustment_ids: adjIds,
+          status: 'active',
+          organization_id: access.activeOrganization?.id || null,
+          paid_at: paidAt,
+          paid_by: access.user?.id || null,
+        })
+        .select('id')
+        .single()
+      if (recErr) throw recErr
+
+      await writeAuditLog(supabase, { entityType: 'staff-debt-payment', entityId: String(rec.id), action: 'create', payload: { staff_id, total, count: debtIds.length + adjIds.length } })
+      return json({ ok: true, data: { id: rec.id, count: debtIds.length + adjIds.length, total } })
+    }
+
+    // ── Void debt payment (аннулировать оплату долга → вернуть долги активными) ─
+    if (action === 'voidStaffDebtPayment') {
+      const { id } = body
+      if (!id) return json({ error: 'id обязателен' }, 400)
+      const { data: rec, error: recErr } = await supabase
+        .from('staff_debt_payments').select('*').eq('id', id).maybeSingle()
+      if (recErr) throw recErr
+      if (!rec?.id) return json({ error: 'Платёж не найден' }, 404)
+      if (staffOutOfScope((rec as any).staff_id)) return json({ error: 'forbidden' }, 403)
+      if (rec.status === 'voided') return json({ ok: true })
+
+      const debtIds = ((rec.debt_ids || []) as string[])
+      const itemIds = ((rec.item_ids || []) as string[])
+      const adjIds = ((rec.adjustment_ids || []) as string[])
+      if (debtIds.length) await supabase.from('debts').update({ status: 'active', paid_at: null }).in('id', debtIds)
+      if (itemIds.length) await supabase.from('point_debt_items').update({ status: 'active', deleted_at: null }).in('id', itemIds)
+      if (adjIds.length) await supabase.from('staff_adjustments').update({ status: 'active' }).in('id', adjIds)
+      await supabase.from('staff_debt_payments').update({ status: 'voided', voided_at: new Date().toISOString() }).eq('id', id)
+
+      await writeAuditLog(supabase, { entityType: 'staff-debt-payment', entityId: String(id), action: 'void', payload: { staff_id: (rec as any).staff_id } })
+      return json({ ok: true })
     }
 
     // ── Add extra day (manager shift bonus) ─────────────────────────────────

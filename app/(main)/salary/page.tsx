@@ -70,11 +70,13 @@ type StaffTimelineEvent = {
   comment: string | null
   status?: string
 }
+type StaffDebtPayment = { id: string; staff_id: string; amount: number; comment: string | null; paid_at: string; status: string }
 type StaffSalaryData = {
   can_edit?: boolean
   staff: StaffMember[]
   adjustments: StaffAdjustment[]
   payments: StaffPayment[]
+  debtPayments?: StaffDebtPayment[]
   salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[]
   consistency?: {
     has_issues: boolean
@@ -662,7 +664,10 @@ export default function SalaryPage() {
   const [tab, setTab] = useState<'operators' | 'operator-events' | 'staff' | 'events'>('operators')
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
   const [markDebtSaving, setMarkDebtSaving] = useState(false)
-  const [payStaffDebtId, setPayStaffDebtId] = useState<string | null>(null)
+  const [payDebtModal, setPayDebtModal] = useState<{ staff: StaffMember; amount: number } | null>(null)
+  const [payDebtComment, setPayDebtComment] = useState('')
+  const [payDebtSaving, setPayDebtSaving] = useState(false)
+  const [voidDebtPayId, setVoidDebtPayId] = useState<string | null>(null)
 
   // ─── Admin staff salary state ───────────────────────────────────────────
   const [staffSalary, setStaffSalary] = useState<StaffSalaryData | null>(null)
@@ -888,17 +893,34 @@ export default function SalaryPage() {
     } catch (e: any) { setError(e?.message || 'Ошибка') }
   }
 
-  const payStaffDebt = async (s: StaffMember, debtAmount: number) => {
+  const openPayDebt = (s: StaffMember, amount: number) => {
     if (!canEditStaffSalary) return setError('Доступ только для просмотра')
-    if (!window.confirm(`Отметить долг ${money(debtAmount)} сотрудника ${s.full_name} как оплаченный?`)) return
-    setPayStaffDebtId(s.id)
+    setPayDebtModal({ staff: s, amount })
+    setPayDebtComment('')
+  }
+  const confirmPayStaffDebt = async () => {
+    if (!payDebtModal) return
+    setPayDebtSaving(true)
     try {
-      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'payStaffDebt', staff_id: s.id }) })
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'payStaffDebt', staff_id: payDebtModal.staff.id, comment: payDebtComment.trim() || null }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      setPayDebtModal(null)
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось оплатить долг') }
+    finally { setPayDebtSaving(false) }
+  }
+  const voidStaffDebtPayment = async (id: string) => {
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
+    if (!window.confirm('Аннулировать оплату долга? Долг снова станет активным.')) return
+    setVoidDebtPayId(id)
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'voidStaffDebtPayment', id }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
       await loadStaffSalary()
-    } catch (e: any) { setError(e?.message || 'Не удалось отметить долг как оплаченный') }
-    finally { setPayStaffDebtId(null) }
+    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать') }
+    finally { setVoidDebtPayId(null) }
   }
 
   const deleteStaffPayment = async (id: string, amount: number) => {
@@ -1640,8 +1662,8 @@ export default function SalaryPage() {
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           )}
                           {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
-                            <Button type="button" disabled={payStaffDebtId === s.id} variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void payStaffDebt(s, calc.debts)}>
-                              {payStaffDebtId === s.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wallet className="mr-1.5 h-3.5 w-3.5" />}
+                            <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
+                              <Wallet className="mr-1.5 h-3.5 w-3.5" />
                               Оплата долга ({money(calc.debts)})
                             </Button>
                           )}
@@ -1684,6 +1706,32 @@ export default function SalaryPage() {
                           Долги и другие корректировки не пропали: они закрыты выплатой и показаны ниже в последних выплатах.
                         </div>
                       ) : null}
+                      {(() => {
+                        const debtPays = (staffSalary.debtPayments || []).filter((p) => p.staff_id === s.id)
+                        if (debtPays.length === 0) return null
+                        return (
+                          <div className="mt-3">
+                            <div className="mb-1 text-xs text-slate-500">Оплаченные долги:</div>
+                            <div className="space-y-1.5">
+                              {debtPays.map((p) => (
+                                <div key={p.id} className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 text-xs">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">оплата долга</span>
+                                    <span className="font-medium text-white">{money(p.amount)}</span>
+                                    <span className="text-slate-500">{String(p.paid_at || '').slice(0, 10)}</span>
+                                    {p.comment ? <span className="text-slate-400">{p.comment}</span> : null}
+                                  </div>
+                                  {canEditStaffSalary ? (
+                                    <button type="button" title="Аннулировать оплату долга" disabled={voidDebtPayId === p.id} className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
+                                      {voidDebtPayId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()}
                       {recentPayments.length > 0 ? (
                         <div className="mt-3">
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
@@ -1996,6 +2044,30 @@ export default function SalaryPage() {
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{chatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+
+      {payDebtModal ? (
+        <Modal title="Оплата долга" subtitle={payDebtModal.staff.full_name} onClose={() => setPayDebtModal(null)}>
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-center">
+              <div className="text-[11px] uppercase tracking-wide text-rose-400/70">Сумма долга к оплате</div>
+              <div className="mt-1 text-2xl font-bold text-rose-200">{money(payDebtModal.amount)}</div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Долг будет помечен оплаченным и убран из вычета зарплаты. Запись появится в «Оплаченные долги» — её можно аннулировать (долг вернётся активным).
+            </p>
+            <div>
+              <label className="mb-2 block text-sm text-slate-300">Комментарий (необязательно)</label>
+              <textarea className={textarea} placeholder="Например: вернул наличными" value={payDebtComment} onChange={(e) => setPayDebtComment(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setPayDebtModal(null)}>Отмена</Button>
+              <Button type="button" onClick={() => void confirmPayStaffDebt()} disabled={payDebtSaving} className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50">
+                {payDebtSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="mr-1.5 h-4 w-4" />Оплатить долг</>}
+              </Button>
+            </div>
+          </div>
         </Modal>
       ) : null}
 
