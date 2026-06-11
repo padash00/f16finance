@@ -235,7 +235,7 @@ export async function GET(req: Request) {
     }
 
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
-    type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[] }
+    type DebtAccum = { amount: number; latestCreatedAt: string; comments: string[]; debtIds: string[]; itemIds: string[] }
     const debtByStaff = new Map<string, DebtAccum>()
 
     function resolveDebtStaffId(operatorId: string | null, clientName: string | null): string | null {
@@ -249,17 +249,16 @@ export async function GET(req: Request) {
       return null
     }
 
-    function accumDebt(staffId: string, amount: number, comment: string | null, createdAt: string | null) {
+    function accumDebt(staffId: string, amount: number, comment: string | null, createdAt: string | null, debtId?: string | null, itemId?: string | null) {
       if (amount <= 0) return
       const now = createdAt || new Date().toISOString()
-      const existing = debtByStaff.get(staffId)
-      if (existing) {
-        existing.amount += amount
-        if (now > existing.latestCreatedAt) existing.latestCreatedAt = now
-        if (comment) existing.comments.push(String(comment))
-      } else {
-        debtByStaff.set(staffId, { amount, latestCreatedAt: now, comments: comment ? [String(comment)] : [] })
-      }
+      const existing = debtByStaff.get(staffId) || { amount: 0, latestCreatedAt: now, comments: [] as string[], debtIds: [] as string[], itemIds: [] as string[] }
+      existing.amount += amount
+      if (now > existing.latestCreatedAt) existing.latestCreatedAt = now
+      if (comment) existing.comments.push(String(comment))
+      if (debtId) existing.debtIds.push(String(debtId))
+      if (itemId) existing.itemIds.push(String(itemId))
+      debtByStaff.set(staffId, existing)
     }
 
     // Step 1: full weeks from debts table — only weeks that started AFTER pay_date.
@@ -275,7 +274,7 @@ export async function GET(req: Request) {
         if (!weekStart || weekStart <= lastPay.payDate) continue  // skip weeks on/before pay_date
       }
 
-      accumDebt(staffId, Math.round(Number(row.amount || 0)), row.comment, null)
+      accumDebt(staffId, Math.round(Number(row.amount || 0)), row.comment, null, String(row.id), null)
     }
 
     // Step 2: partial week from point_debt_items — items created AFTER pay_date
@@ -298,7 +297,7 @@ export async function GET(req: Request) {
       if (itemDate < lastPay.payDate) continue
       if (itemDate === lastPay.payDate && itemCreatedAt <= lastPay.createdAt) continue
 
-      accumDebt(staffId, Math.round(Number(row.total_amount || 0)), row.comment, itemCreatedAt)
+      accumDebt(staffId, Math.round(Number(row.total_amount || 0)), row.comment, itemCreatedAt, null, String(row.id))
     }
 
     const todayISO = new Date().toISOString().slice(0, 10)
@@ -313,6 +312,8 @@ export async function GET(req: Request) {
       created_at: new Date().toISOString(),
       comment: accum.comments.slice(0, 5).join(' · ') || 'Долги из операторской программы',
       status: 'active',
+      debt_ids: accum.debtIds,
+      item_ids: accum.itemIds,
     }))
 
     const paymentRows = (paymentsRes.data ?? []) as any[]
@@ -508,31 +509,43 @@ export async function POST(req: Request) {
       const paidAt = new Date().toISOString()
       const comment = typeof body.comment === 'string' && body.comment.trim() ? body.comment.trim() : null
 
-      // Операторы этого сотрудника (+ сам id — вдруг это оператор)
-      const operatorIds = new Set<string>([String(staff_id)])
-      const { data: links } = await supabase
-        .from('operator_staff_links')
-        .select('operator_id')
-        .eq('staff_id', staff_id)
-      for (const l of (links || []) as any[]) if (l.operator_id) operatorIds.add(String(l.operator_id))
-      const opIds = Array.from(operatorIds)
+      // Источники долга. Фронт шлёт точные id из синтетической корректировки (как
+      // их посчитал GET). Если не прислал — резолвим сами (операторы + staff_adjustments).
+      let debtIds: string[] = Array.isArray(body.debt_ids) ? body.debt_ids.map((x: any) => String(x)) : []
+      let itemIds: string[] = Array.isArray(body.item_ids) ? body.item_ids.map((x: any) => String(x)) : []
+      let adjIds: string[] = Array.isArray(body.adjustment_ids) ? body.adjustment_ids.map((x: any) => String(x)) : []
 
-      // Собираем затронутые строки (запоминаем id для возможной отмены)
-      const { data: opDebts } = await supabase
-        .from('debts').select('id, amount').in('operator_id', opIds).eq('status', 'active')
-      const debtIds = (opDebts || []).map((d: any) => String(d.id))
-      const { data: items } = await supabase
-        .from('point_debt_items').select('id').in('operator_id', opIds).eq('status', 'active')
-      const itemIds = (items || []).map((i: any) => String(i.id))
-      const { data: adjDebts } = await supabase
-        .from('staff_adjustments').select('id, amount').eq('staff_id', staff_id).eq('kind', 'debt').or('status.is.null,status.eq.active')
-      const adjIds = (adjDebts || []).map((d: any) => String(d.id))
+      if (debtIds.length === 0 && adjIds.length === 0 && itemIds.length === 0) {
+        const operatorIds = new Set<string>([String(staff_id)])
+        const { data: links } = await supabase.from('operator_staff_links').select('operator_id').eq('staff_id', staff_id)
+        for (const l of (links || []) as any[]) if (l.operator_id) operatorIds.add(String(l.operator_id))
+        const opIds = Array.from(operatorIds)
+        const { data: od } = await supabase.from('debts').select('id').in('operator_id', opIds).eq('status', 'active')
+        debtIds = (od || []).map((d: any) => String(d.id))
+        const { data: it } = await supabase.from('point_debt_items').select('id').in('operator_id', opIds).eq('status', 'active')
+        itemIds = (it || []).map((i: any) => String(i.id))
+        const { data: ad } = await supabase.from('staff_adjustments').select('id').eq('staff_id', staff_id).eq('kind', 'debt').or('status.is.null,status.eq.active')
+        adjIds = (ad || []).map((a: any) => String(a.id))
+      }
+
+      // Валидация + сумма: оставляем только реально активные строки.
+      let total = 0
+      if (debtIds.length) {
+        const { data: dd } = await supabase.from('debts').select('id, amount').in('id', debtIds).eq('status', 'active')
+        debtIds = (dd || []).map((d: any) => String(d.id))
+        total += (dd || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
+      }
+      if (itemIds.length) {
+        const { data: ii } = await supabase.from('point_debt_items').select('id').in('id', itemIds).eq('status', 'active')
+        itemIds = (ii || []).map((i: any) => String(i.id))
+      }
+      if (adjIds.length) {
+        const { data: aa } = await supabase.from('staff_adjustments').select('id, amount').in('id', adjIds).eq('kind', 'debt').or('status.is.null,status.eq.active')
+        adjIds = (aa || []).map((a: any) => String(a.id))
+        total += (aa || []).reduce((s: number, a: any) => s + Number(a.amount || 0), 0)
+      }
 
       if (debtIds.length === 0 && adjIds.length === 0) return json({ error: 'Нет активного долга' }, 400)
-
-      const total =
-        (opDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0) +
-        (adjDebts || []).reduce((s: number, d: any) => s + Number(d.amount || 0), 0)
 
       if (debtIds.length) await supabase.from('debts').update({ status: 'paid', paid_at: paidAt }).in('id', debtIds)
       if (itemIds.length) await supabase.from('point_debt_items').update({ status: 'deleted', deleted_at: paidAt }).in('id', itemIds)

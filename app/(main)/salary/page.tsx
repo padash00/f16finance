@@ -900,9 +900,17 @@ export default function SalaryPage() {
   }
   const confirmPayStaffDebt = async () => {
     if (!payDebtModal) return
+    const staffId = payDebtModal.staff.id
+    const adjs = (staffSalary?.adjustments || []) as any[]
+    const synthetic = adjs.find((a) => a.id === `operator-debt:${staffId}`)
+    const debt_ids = (synthetic?.debt_ids || []) as string[]
+    const item_ids = (synthetic?.item_ids || []) as string[]
+    const adjustment_ids = adjs
+      .filter((a) => a.staff_id === staffId && a.kind === 'debt' && !String(a.id).startsWith('operator-debt:') && (a.status === 'active' || !a.status))
+      .map((a) => a.id)
     setPayDebtSaving(true)
     try {
-      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'payStaffDebt', staff_id: payDebtModal.staff.id, comment: payDebtComment.trim() || null }) })
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'payStaffDebt', staff_id: staffId, debt_ids, item_ids, adjustment_ids, comment: payDebtComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
       setPayDebtModal(null)
