@@ -162,11 +162,17 @@ export async function POST(req: Request) {
       if (denied) return denied as any
 
       if (body.action === 'create') {
-        if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')
+        const companyName = body.payload.name?.trim()
+        if (!companyName) return badRequest('Название компании обязательно')
+        // code NOT NULL: если не задан — генерируем из названия (латиница) или фолбэк.
+        const code =
+          body.payload.code?.trim().toUpperCase() ||
+          companyName.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) ||
+          `POINT${Date.now().toString().slice(-5)}`
         const { data, error } = await supabase.from('companies').insert([
           {
-            name: body.payload.name.trim(),
-            code: body.payload.code?.trim() || null,
+            name: companyName,
+            code,
             show_in_structure: body.payload.show_in_structure !== false,
             organization_id: access.activeOrganization?.id || null,
           },

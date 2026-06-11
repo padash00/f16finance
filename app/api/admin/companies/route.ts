@@ -55,12 +55,17 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => null)) as { name?: string | null; code?: string | null; showInStructure?: boolean | null } | null
     const name = String(body?.name || '').trim()
-    const code = String(body?.code || '').trim() || null
     const showInStructure = body?.showInStructure !== false
 
     if (!name) {
       return json({ error: 'Название точки обязательно' }, 400)
     }
+
+    // code NOT NULL: если не задан — генерируем из названия (латиница) или фолбэк.
+    const code =
+      String(body?.code || '').trim().toUpperCase() ||
+      name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) ||
+      `POINT${Date.now().toString().slice(-5)}`
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
