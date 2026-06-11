@@ -253,6 +253,7 @@ export function getPathFeature(pathname: string): string | null {
 export function buildOwnerNavSections(): NavSection[] {
   const commandSection = getSectionById('command')
   const financeSection = getSectionById('finance')
+  const storeSection = getSectionById('store')
   const teamSection = getSectionById('team')
   const opsSection = getSectionById('ops')
   const pointDevicesItem = getSectionItem('system', '/point-devices')
@@ -264,6 +265,8 @@ export function buildOwnerNavSections(): NavSection[] {
 
   if (commandSection) sections.push(commandSection)
   if (financeSection) sections.push(financeSection)
+  // «Магазин» — гейтится по shop.catalog (виден только если пакет/орг его даёт).
+  if (storeSection) sections.push(storeSection)
 
   if (teamSection) {
     sections.push({
