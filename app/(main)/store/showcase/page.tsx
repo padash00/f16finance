@@ -13,6 +13,7 @@ import {
   Minus,
   Package,
   Plus,
+  Printer,
   RefreshCw,
   ShoppingBag,
   Store,
@@ -38,6 +39,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
+import { LabelPrintDialog } from '@/components/store/label-print-dialog'
+import type { LabelItem } from '@/components/store/label-print-dialog'
 import { isAbortError } from '@/lib/is-abort-error'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -119,6 +122,8 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
   const [showcase, setShowcase] = useState<ShowcaseLocation>(null)
   const [warehouse, setWarehouse] = useState<WarehouseLocation>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showPrintLabels, setShowPrintLabels] = useState(false)
   const [warehouseItems, setWarehouseItems] = useState<WarehouseItem[]>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -326,6 +331,12 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Обновить
             </Button>
+            {selectedIds.size > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setShowPrintLabels(true)} className="h-9 gap-1.5">
+                <Printer className="h-3.5 w-3.5" />
+                Ценники ({selectedIds.size})
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -446,7 +457,15 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
             <table className="w-full min-w-[720px] text-sm">
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2.5 pl-4 pr-2 font-normal">Товар</th>
+                  <th className="w-9 py-2.5 pl-4 pr-1 font-normal">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-amber-500"
+                      checked={filteredBalances.length > 0 && filteredBalances.every((b) => selectedIds.has(b.item_id))}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredBalances.map((b) => b.item_id)) : new Set())}
+                    />
+                  </th>
+                  <th className="py-2.5 px-2 font-normal">Товар</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Итого</th>
@@ -465,7 +484,15 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                   const rowBg = isLow && !isZero ? 'bg-amber-500/[0.03]' : isZero ? 'bg-rose-500/[0.03]' : ''
                   return (
                     <tr key={b.item_id} className={`transition hover:bg-white/[0.02] ${rowBg}`}>
-                      <td className="min-w-0 max-w-0 py-2.5 pl-4 pr-2 align-middle">
+                      <td className="w-9 py-2.5 pl-4 pr-1 align-middle">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 accent-amber-500"
+                          checked={selectedIds.has(b.item_id)}
+                          onChange={() => setSelectedIds((prev) => { const n = new Set(prev); if (n.has(b.item_id)) n.delete(b.item_id); else n.add(b.item_id); return n })}
+                        />
+                      </td>
+                      <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
@@ -505,6 +532,21 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
           </div>
         )}
       </Card>
+
+      {showPrintLabels && (
+        <LabelPrintDialog
+          items={balances
+            .filter((b) => selectedIds.has(b.item_id) && b.item != null)
+            .map((b): LabelItem => ({
+              item_id: b.item_id,
+              name: b.item!.name || 'Товар',
+              barcode: b.item!.barcode || '',
+              sale_price: b.item!.sale_price ?? null,
+              unit: b.item!.unit || 'шт',
+            }))}
+          onClose={() => setShowPrintLabels(false)}
+        />
+      )}
 
       {/* Request history */}
       <Card className="border-white/10 bg-card/70">
