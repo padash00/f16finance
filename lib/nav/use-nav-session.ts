@@ -127,8 +127,12 @@ export function useNavSession(): NavSession {
 
   const filterSection = useCallback((section: NavSection): NavSection => ({
     ...section,
-    // Секция с feature, которой нет у орг (и не allAccess) — прячем целиком.
-    items: (section.feature && !featuresAllAccess && !orgFeatures.includes(section.feature))
+    // Секция скрыта целиком, если у орг нет нужной фичи (feature) или ни одной из
+    // featuresAny — и не allAccess.
+    items: (!featuresAllAccess && (
+      (!!section.feature && !orgFeatures.includes(section.feature)) ||
+      (!!section.featuresAny?.length && !section.featuresAny.some((f) => orgFeatures.includes(f)))
+    ))
       ? []
       : section.items.filter((item) => {
       if (item.href === '/operator-lead' && !isLeadOperator) return false

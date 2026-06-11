@@ -81,6 +81,8 @@ export type NavSection = {
   homeHref?: string
   /** Код фичи (company_features). Если задан и у орг его нет — секция скрыта целиком. */
   feature?: string
+  /** Любая из фич (any-of). Если задано и у орг нет НИ ОДНОЙ — секция скрыта. */
+  featuresAny?: string[]
 }
 
 export const navSections: NavSection[] = [
@@ -147,6 +149,7 @@ export const navSections: NavSection[] = [
     subtitle: 'Люди, структура и начисления',
     accentColor: 'yellow',
     icon: Users,
+    featuresAny: ['club.pos', 'shop.catalog', 'service.jobs', 'restaurant.recipes_lite'],
     items: [
       { href: '/salary', label: 'Зарплата', icon: Wallet, note: 'Расчеты и выплаты' },
       { href: '/salary/rules', label: 'Правила зарплаты', icon: ListChecks, note: 'Ставки и бонусы' },
@@ -164,6 +167,7 @@ export const navSections: NavSection[] = [
     subtitle: 'Планы, задачи и ритм',
     accentColor: 'blue',
     icon: Workflow,
+    featuresAny: ['club.pos', 'shop.catalog', 'service.jobs', 'restaurant.recipes_lite'],
     items: [
       { href: '/simulation', label: 'Симуляция выручки', icon: Calculator, note: 'Потенциал по зонам vs факт', badge: 'new', badgeColor: 'blue', isNew: true },
       { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },

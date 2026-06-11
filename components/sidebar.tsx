@@ -494,8 +494,13 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
     const query = searchQuery.trim().toLowerCase()
 
     return baseSections
-      // Секция с feature, которой нет у орг (и не allAccess) — скрываем целиком.
-      .filter((section) => !(section.feature && !featuresAllAccess && !orgFeatures.includes(section.feature)))
+      // Секция скрыта, если у орг нет feature или ни одной из featuresAny (и не allAccess).
+      .filter((section) => {
+        if (featuresAllAccess) return true
+        if (section.feature && !orgFeatures.includes(section.feature)) return false
+        if (section.featuresAny?.length && !section.featuresAny.some((f) => orgFeatures.includes(f))) return false
+        return true
+      })
       .map((section) => ({
         ...section,
         items: section.items
