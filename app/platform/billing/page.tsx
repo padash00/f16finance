@@ -59,6 +59,8 @@ function planToEdit(plan: Plan): EditState {
 
 export default function BillingPage() {
   const [plans, setPlans] = useState<Plan[]>([])
+  const [packages, setPackages] = useState<any[]>([])
+  const [addons, setAddons] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editState, setEditState] = useState<EditState | null>(null)
@@ -69,7 +71,11 @@ export default function BillingPage() {
   const load = () => {
     fetch('/api/admin/organizations')
       .then(r => r.json())
-      .then(data => setPlans(data.plans || []))
+      .then(data => {
+        setPlans(data.plans || [])
+        setPackages(data.packages || [])
+        setAddons(data.addons || [])
+      })
       .finally(() => setLoading(false))
   }
 
@@ -341,6 +347,58 @@ export default function BillingPage() {
             <code className="text-slate-400">subscription_plans</code>.
           </div>
         )}
+      </div>
+
+      {/* Отраслевые пакеты */}
+      <div className="mb-4 mt-10">
+        <h2 className="text-xl font-semibold text-white">Отраслевые пакеты</h2>
+        <p className="mt-1 text-sm text-slate-400">Что продаём клиенту наружу. Назначаются организации в её карточке (раздел «Пакет и модули»).</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {packages.map((p: any) => (
+          <div key={p.code} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-white">{p.name}</h3>
+              {p.vertical && <span className="shrink-0 rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">{p.vertical}</span>}
+            </div>
+            {p.description && <p className="mt-1 text-sm text-slate-400">{p.description}</p>}
+            <div className="mt-3 text-lg font-bold text-white">{Number(p.price_kzt || 0).toLocaleString('ru')} ₸<span className="text-xs font-normal text-slate-500">/мес</span></div>
+            {Array.isArray(p.feature_codes) && p.feature_codes.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {p.feature_codes.map((c: string) => (
+                  <span key={c} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-300">{c}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {packages.length === 0 && <div className="col-span-3 py-6 text-center text-sm text-slate-500">Пакеты не настроены (таблица <code className="text-slate-400">packages</code>).</div>}
+      </div>
+
+      {/* Дополнительные модули */}
+      <div className="mb-4 mt-10">
+        <h2 className="text-xl font-semibold text-white">Дополнительные модули (add-ons)</h2>
+        <p className="mt-1 text-sm text-slate-400">Докупаются к любому пакету.</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {addons.map((a: any) => (
+          <div key={a.code} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-white">{a.name}</h3>
+              {a.billing_unit && <span className="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-slate-400">{a.billing_unit}</span>}
+            </div>
+            {a.description && <p className="mt-1 text-sm text-slate-400">{a.description}</p>}
+            <div className="mt-3 text-lg font-bold text-white">{Number(a.price_kzt || 0).toLocaleString('ru')} ₸</div>
+            {Array.isArray(a.feature_codes) && a.feature_codes.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {a.feature_codes.map((c: string) => (
+                  <span key={c} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-300">{c}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {addons.length === 0 && <div className="col-span-3 py-6 text-center text-sm text-slate-500">Модули не настроены (таблица <code className="text-slate-400">addons</code>).</div>}
       </div>
     </div>
   )
