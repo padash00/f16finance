@@ -38,6 +38,7 @@ export const getRecentActionsTool: CopilotTool = {
       .order('created_at', { ascending: false })
       .limit(20)
     if (entityType) q = q.eq('entity_type', entityType)
+    if (ctx.organizationId) q = q.or(`organization_id.is.null,organization_id.eq.${ctx.organizationId}`)
 
     const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }

@@ -11,6 +11,8 @@ type AuditEntry = {
   entityId: string
   action: string
   payload?: Record<string, unknown> | null
+  /** Явная организация события. Если не задана — выводится из company_id в payload. */
+  organizationId?: string | null
 }
 
 type NotificationEntry = {
@@ -30,7 +32,25 @@ type SystemErrorEntry = {
 
 const actorCache = new Map<string, { checkedAt: number; isLeader: boolean; isSuperAdmin: boolean; label: string; role: string | null }>()
 const companyNameCache = new Map<string, { checkedAt: number; name: string }>()
+const companyOrgCache = new Map<string, { checkedAt: number; orgId: string | null }>()
 const CACHE_TTL_MS = 5 * 60_000
+
+// Организация компании (для тегирования audit_log по организации). Кэш на 5 мин.
+async function resolveCompanyOrg(companyId: string | null): Promise<string | null> {
+  if (!companyId || !hasAdminSupabaseCredentials()) return null
+  const now = Date.now()
+  const cached = companyOrgCache.get(companyId)
+  if (cached && now - cached.checkedAt < CACHE_TTL_MS) return cached.orgId
+  try {
+    const admin = createAdminSupabaseClient()
+    const { data } = await admin.from('companies').select('organization_id').eq('id', companyId).maybeSingle()
+    const orgId = (data?.organization_id as string | null) || null
+    companyOrgCache.set(companyId, { checkedAt: now, orgId })
+    return orgId
+  } catch {
+    return null
+  }
+}
 
 // Дедупликация одинаковых событий: ключ "actor:entityType:action:companyId" → { count, firstSeenAt, timer }
 const dedupeCache = new Map<string, { count: number; firstSeenAt: number; timer: NodeJS.Timeout | null; entry: AuditEntry; actorLabel: string }>()
@@ -237,12 +257,15 @@ async function notifyLeaderAudit(entry: AuditEntry) {
 
 export async function writeAuditLog(client: any, entry: AuditEntry) {
   try {
+    // Тегируем организацией: явная или выведенная из company_id в payload.
+    const organizationId = entry.organizationId || (await resolveCompanyOrg(pickCompanyId(entry.payload)))
     const row = {
       actor_user_id: entry.actorUserId || null,
       entity_type: entry.entityType,
       entity_id: entry.entityId,
       action: entry.action,
       payload: entry.payload || null,
+      organization_id: organizationId,
     }
     const { error } = await client.from('audit_log').insert([row])
 

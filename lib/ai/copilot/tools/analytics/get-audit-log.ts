@@ -41,6 +41,7 @@ export const getAuditLogTool: CopilotTool = {
       .order('created_at', { ascending: false })
       .limit(50)
     if (entityType) query = query.eq('entity_type', entityType)
+    if (ctx.organizationId) query = query.or(`organization_id.is.null,organization_id.eq.${ctx.organizationId}`)
 
     const { data, error } = await query
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }

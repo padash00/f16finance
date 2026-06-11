@@ -47,6 +47,10 @@ export async function GET(request: Request) {
     else query = query.in('entity_type', STORE_AUDIT_ENTITY_TYPES)
     if (entityId) query = query.eq('entity_id', entityId)
 
+    // Изоляция по организации (старые строки без org — видны своей орг).
+    const orgId = access.activeOrganization?.id || null
+    if (orgId) query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+
     const { data: rows, error } = await query
     if (error) throw error
 

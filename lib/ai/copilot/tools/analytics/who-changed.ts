@@ -20,13 +20,15 @@ export const whoChangedTool: CopilotTool = {
     const entityId = String(input.entity_id || '').trim()
     if (!entityType || !entityId) return { ok: false, message: 'Не хватает данных.' }
 
-    const { data, error } = await ctx.supabase
+    let q = ctx.supabase
       .from('audit_log')
       .select('action, payload, created_at, actor_user_id')
       .eq('entity_type', entityType)
       .eq('entity_id', entityId)
       .order('created_at', { ascending: false })
       .limit(30)
+    if (ctx.organizationId) q = q.or(`organization_id.is.null,organization_id.eq.${ctx.organizationId}`)
+    const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
     if (!data?.length) return { ok: true, message: 'Записей о изменениях нет.' }
 
