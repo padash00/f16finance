@@ -782,24 +782,30 @@ export async function PATCH(req: Request) {
       const enabled = body.setFeatureGrant.enabled === true
       const { data: comps } = await supabase.from('companies').select('id').eq('organization_id', organizationId)
       const companyIds = (comps || []).map((c: any) => String(c.id))
+      // Гранты хранятся per-точка → без единой точки выдавать некуда.
+      if (companyIds.length === 0) {
+        return json({ error: 'У организации нет ни одной точки. Сначала добавьте точку — права выдаются на точки.' }, 400)
+      }
       const { data: feat } = await supabase.from('features').select('id').eq('code', code).maybeSingle()
-      if (feat?.id && companyIds.length) {
-        await supabase
-          .from('company_features')
-          .delete()
-          .in('company_id', companyIds)
-          .eq('feature_id', (feat as any).id)
-          .eq('source_type', 'manual')
-        if (enabled) {
-          const rows = companyIds.map((cid) => ({
-            company_id: cid,
-            feature_id: (feat as any).id,
-            source_type: 'manual',
-            enabled: true,
-            created_by: access.user?.id || null,
-          }))
-          await supabase.from('company_features').insert(rows)
-        }
+      if (!feat?.id) {
+        return json({ error: `Неизвестная функция: ${code}` }, 400)
+      }
+      await supabase
+        .from('company_features')
+        .delete()
+        .in('company_id', companyIds)
+        .eq('feature_id', (feat as any).id)
+        .eq('source_type', 'manual')
+      if (enabled) {
+        const rows = companyIds.map((cid) => ({
+          company_id: cid,
+          feature_id: (feat as any).id,
+          source_type: 'manual',
+          enabled: true,
+          created_by: access.user?.id || null,
+        }))
+        const { error: grantErr } = await supabase.from('company_features').insert(rows)
+        if (grantErr) return json({ error: `Не удалось выдать: ${grantErr.message}` }, 500)
       }
     }
 
