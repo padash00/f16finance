@@ -229,6 +229,8 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             short_name: body.payload.short_name?.trim() || null,
             is_active: true,
+            // Привязка к организации — иначе оператор «ничей» и не виден своей орг.
+            organization_id: access.activeOrganization?.id || null,
           },
         ])
         .select('*')

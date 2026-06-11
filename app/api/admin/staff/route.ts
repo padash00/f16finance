@@ -160,6 +160,9 @@ export async function POST(req: Request) {
             phone: payload.phone?.trim() || null,
             email: payload.email?.trim() || null,
             is_active: true,
+            // Привязка к организации — иначе сотрудник «ничей»: не пройдёт RLS
+            // staff_select_own_org и не попадёт в listOrganizationStaffIds.
+            organization_id: activeOrganizationId,
           },
         ])
         .select('*')

@@ -583,26 +583,35 @@ export async function listOrganizationOperatorIds(params: {
   // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
   if (!activeOrganizationId) return []
 
+  const ids = new Set<string>()
+
+  // 1) Операторы организации напрямую (operators.organization_id) — включая
+  //    ещё не назначенных на точку (иначе новый/неназначенный оператор невидим).
+  let opQuery = supabase.from('operators').select('id').eq('organization_id', activeOrganizationId)
+  if (!includeInactive) opQuery = opQuery.eq('is_active', true)
+  const { data: byOrg, error: orgErr } = await opQuery
+  if (orgErr) throw orgErr
+  for (const row of (byOrg || []) as any[]) {
+    const id = String(row.id || '')
+    if (id) ids.add(id)
+  }
+
+  // 2) Плюс назначенные на точки этой орг (страховка, если org_id не проставлен).
   let assignQuery = supabase
     .from('operator_company_assignments')
     .select('operator_id, company:company_id(organization_id)')
   if (!includeInactive) assignQuery = assignQuery.eq('is_active', true)
-
   const { data, error } = await assignQuery
-
   if (error) throw error
+  for (const row of (data || []) as any[]) {
+    const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
+    if (String(company?.organization_id || '') === activeOrganizationId) {
+      const id = String(row.operator_id || '')
+      if (id) ids.add(id)
+    }
+  }
 
-  return Array.from(
-    new Set(
-      ((data || []) as any[])
-        .filter((row) => {
-          const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
-          return String(company?.organization_id || '') === activeOrganizationId
-        })
-        .map((row) => String(row.operator_id || ''))
-        .filter(Boolean),
-    ),
-  )
+  return Array.from(ids)
 }
 
 export async function resolveCompanyScope(params: {
