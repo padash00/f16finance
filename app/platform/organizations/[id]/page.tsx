@@ -412,6 +412,40 @@ export default function OrgDetailPage() {
                   </div>
                 )}
               </div>
+              {/* Отраслевой пакет — переключение прямо в подписке */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-400">Отраслевой пакет</label>
+                {packages.length === 0 ? (
+                  <p className="text-xs text-slate-600">Каталог пакетов пуст (примени миграцию).</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {packages.map((p) => {
+                      const active = org.packageCode === p.code
+                      return (
+                        <button
+                          key={p.code}
+                          onClick={() => handleAssignPackage(p.code)}
+                          disabled={savingPkg}
+                          className={`rounded-xl border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${
+                            active
+                              ? 'border-violet-500/50 bg-violet-500/10 text-white'
+                              : 'border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <div className="font-medium">{p.name}</div>
+                          <div className="text-[11px] text-slate-500">{p.price_kzt.toLocaleString('ru')} ₸/мес</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                {org.packageCode && (
+                  <p className="text-[11px] text-emerald-400/80">
+                    Активный пакет: {packages.find((p) => p.code === org.packageCode)?.name || org.packageCode} — его функции включены автоматически.
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-400">Действие над подпиской</label>
                 <select
@@ -536,35 +570,9 @@ export default function OrgDetailPage() {
       <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
           <Package className="h-4 w-4 text-violet-400" />
-          Пакет и модули
+          Дополнительные модули
         </h2>
-        <p className="mb-4 text-xs text-slate-500">Отраслевой пакет и платные add-ons организации.</p>
-
-        <label className="mb-1.5 block text-[11px] text-slate-500">Отраслевой пакет</label>
-        <div className="mb-5 flex flex-wrap gap-2">
-          {packages.length === 0 ? (
-            <span className="text-xs text-slate-600">Каталог пакетов пуст (примени миграцию).</span>
-          ) : (
-            packages.map((p) => {
-              const active = org.packageCode === p.code
-              return (
-                <button
-                  key={p.code}
-                  onClick={() => handleAssignPackage(p.code)}
-                  disabled={savingPkg}
-                  className={`rounded-xl border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${
-                    active
-                      ? 'border-violet-500/50 bg-violet-500/10 text-white'
-                      : 'border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-[11px] text-slate-500">{p.price_kzt.toLocaleString('ru')} ₸/мес</div>
-                </button>
-              )
-            })
-          )}
-        </div>
+        <p className="mb-4 text-xs text-slate-500">Платные add-ons поверх пакета (отраслевой пакет — в блоке «Подписка»).</p>
 
         <label className="mb-1.5 block text-[11px] text-slate-500">Дополнительные модули</label>
         <div className="grid gap-2 sm:grid-cols-2">
