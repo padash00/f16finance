@@ -168,6 +168,29 @@ export async function GET(request: Request) {
       }
     }
 
+    // Живые суммы для ОТКРЫТЫХ смен (closing_cash/kaspi ещё пустые → берём из продаж).
+    const openShiftIds = shifts.filter((s) => s.status === 'open').map((s) => s.id)
+    if (openShiftIds.length > 0) {
+      const { data: openSales } = await supabase
+        .from('point_sales')
+        .select('shift_id, cash_amount, kaspi_amount, total_amount')
+        .in('shift_id', openShiftIds)
+      const byShift = new Map<string, { sales: number; cash: number; kaspi: number; count: number }>()
+      for (const r of (openSales || []) as any[]) {
+        const k = String(r.shift_id || '')
+        if (!k) continue
+        const a = byShift.get(k) || { sales: 0, cash: 0, kaspi: 0, count: 0 }
+        a.sales += Number(r.total_amount || 0)
+        a.cash += Number(r.cash_amount || 0)
+        a.kaspi += Number(r.kaspi_amount || 0)
+        a.count += 1
+        byShift.set(k, a)
+      }
+      for (const s of shifts) {
+        if (s.status === 'open') s.live_totals = byShift.get(String(s.id)) || { sales: 0, cash: 0, kaspi: 0, count: 0 }
+      }
+    }
+
     return json({ ok: true, data: { shifts } })
   } catch (error) {
     return json(
