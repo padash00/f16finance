@@ -1,15 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Printer, Minus, Plus } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Printer, Minus, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
 
 export type LabelItem = {
   item_id: string
@@ -72,7 +66,17 @@ body{font-family:Arial,sans-serif;background:#fff}
 export function LabelPrintDialog({ items, onClose }: Props) {
   const [copies, setCopies] = useState(1)
   const [printing, setPrinting] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const barcodeRefs = useRef<Record<string, SVGSVGElement | null>>({})
+
+  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onClose])
 
   useEffect(() => {
     // Dynamically import jsbarcode and render barcodes
@@ -116,76 +120,58 @@ export function LabelPrintDialog({ items, onClose }: Props) {
     setTimeout(() => setPrinting(false), 800)
   }
 
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Печать ценников</DialogTitle>
-        </DialogHeader>
+  if (!mounted) return null
 
-        <div className="space-y-4 py-2">
-          {/* Copies */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Копий каждого ценника</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-7 w-7"
-                onClick={() => setCopies((c) => Math.max(1, c - 1))}
-                disabled={copies <= 1}
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <span className="w-6 text-center text-sm font-semibold">{copies}</span>
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-7 w-7"
-                onClick={() => setCopies((c) => Math.min(20, c + 1))}
-                disabled={copies >= 20}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Items list */}
-          <div className="rounded-lg border border-white/10 bg-muted/30 divide-y divide-white/5 max-h-64 overflow-y-auto">
-            {items.map((item) => (
-              <div key={item.item_id} className="flex items-center gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">{item.barcode}</p>
-                </div>
-                <span className="shrink-0 text-sm font-semibold">{formatPrice(item.sale_price)}</span>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Итого: {items.length * copies} ценник{items.length * copies === 1 ? '' : 'а'} · формат 58mm
-          </p>
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/40">
+        {/* Шапка */}
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Printer className="h-4 w-4 text-amber-300" /> Печать ценников</h2>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
 
-        {/* Hidden SVG elements for barcode rendering */}
-        <div className="hidden">
+        {/* Копии */}
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+          <span className="text-sm text-slate-400">Копий каждого ценника</span>
+          <div className="flex items-center gap-2">
+            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.max(1, c - 1))} disabled={copies <= 1}><Minus className="h-3 w-3" /></Button>
+            <span className="w-6 text-center text-sm font-semibold text-white">{copies}</span>
+            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.min(20, c + 1))} disabled={copies >= 20}><Plus className="h-3 w-3" /></Button>
+          </div>
+        </div>
+
+        {/* Список товаров */}
+        <div className="min-h-0 flex-1 divide-y divide-white/5 overflow-y-auto">
           {items.map((item) => (
-            <svg
-              key={item.item_id}
-              ref={(el) => { barcodeRefs.current[item.item_id] = el }}
-            />
+            <div key={item.item_id} className="flex items-center gap-3 px-5 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-white">{item.name}</p>
+                <p className="truncate text-xs text-slate-500">{item.barcode}</p>
+              </div>
+              <span className="shrink-0 text-sm font-semibold text-white">{formatPrice(item.sale_price)}</span>
+            </div>
           ))}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
-          <Button onClick={handlePrint} disabled={printing} className="gap-2">
-            <Printer className="h-4 w-4" />
-            {printing ? 'Открываю...' : `Печать (${items.length * copies} шт.)`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {/* Подвал */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-5 py-3">
+          <p className="text-xs text-slate-500">Итого: {items.length * copies} ценник{items.length * copies === 1 ? '' : 'а'} · 58mm</p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onClose}>Отмена</Button>
+            <Button onClick={handlePrint} disabled={printing} className="gap-2"><Printer className="h-4 w-4" />{printing ? 'Открываю…' : `Печать (${items.length * copies})`}</Button>
+          </div>
+        </div>
+
+        {/* Скрытые SVG для генерации штрихкодов */}
+        <div className="hidden">
+          {items.map((item) => (
+            <svg key={item.item_id} ref={(el) => { barcodeRefs.current[item.item_id] = el }} />
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
