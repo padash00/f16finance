@@ -37,13 +37,25 @@ export async function GET(req: Request) {
   const supabase = createAdminSupabaseClient()
   const date = yesterdayKZISO()
 
-  const [incomesRes, expensesRes] = await Promise.all([
-    supabase
-      .from('incomes')
-      .select('cash_amount, kaspi_amount, online_amount, card_amount, operator_id, company_id, companies(name, code)')
-      .eq('date', date),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category').eq('date', date),
-  ])
+  // Мультитенант: если задан TELEGRAM_OWNER_ORG_ID — отчёт только по его точкам.
+  // Не задан → по всем (текущее поведение для единственного тенанта F16).
+  const ownerOrgId = process.env.TELEGRAM_OWNER_ORG_ID || null
+  let ownerCompanyIds: string[] | null = null
+  if (ownerOrgId) {
+    const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', ownerOrgId)
+    ownerCompanyIds = (cos || []).map((c: any) => String(c.id))
+  }
+
+  let incQ = supabase
+    .from('incomes')
+    .select('cash_amount, kaspi_amount, online_amount, card_amount, operator_id, company_id, companies(name, code)')
+    .eq('date', date)
+  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category').eq('date', date)
+  if (ownerCompanyIds) {
+    incQ = incQ.in('company_id', ownerCompanyIds)
+    expQ = expQ.in('company_id', ownerCompanyIds)
+  }
+  const [incomesRes, expensesRes] = await Promise.all([incQ, expQ])
 
   // Fetch operator names for operators that worked today
   const operatorIds = [...new Set(

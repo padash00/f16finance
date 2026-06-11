@@ -43,13 +43,24 @@ export async function GET(req: Request) {
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
   const insights: string[] = []
 
+  // Мультитенант: TELEGRAM_OWNER_ORG_ID → отчёт только по точкам этой орг.
+  // Не задан → по всем (текущее поведение для единственного тенанта).
+  const ownerOrgId = process.env.TELEGRAM_OWNER_ORG_ID || null
+  let ownerCompanyIds: string[] | null = null
+  if (ownerOrgId) {
+    const { data: cos } = await supabase.from('companies').select('id').eq('organization_id', ownerOrgId)
+    ownerCompanyIds = (cos || []).map((c: any) => String(c.id))
+  }
+
   try {
     // 1. Сравнение выручки (вчера vs средняя за 7 дней)
-    const { data: weekIncomes } = await supabase
+    let incQ = supabase
       .from('incomes')
       .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', weekAgo)
       .lte('date', today)
+    if (ownerCompanyIds) incQ = incQ.in('company_id', ownerCompanyIds)
+    const { data: weekIncomes } = await incQ
     if (weekIncomes && weekIncomes.length > 0) {
       const byDate = new Map<string, number>()
       for (const i of weekIncomes as any[]) {
@@ -69,12 +80,14 @@ export async function GET(req: Request) {
     }
 
     // 2. Операторы работающие много дней подряд
-    const { data: shifts } = await supabase
+    let shiftsQ = supabase
       .from('shifts')
       .select('operator_id, date, operator:operator_id(name, short_name)')
       .gte('date', weekAgo)
       .lte('date', today)
       .order('date', { ascending: false })
+    if (ownerCompanyIds) shiftsQ = shiftsQ.in('company_id', ownerCompanyIds)
+    const { data: shifts } = await shiftsQ
     if (shifts) {
       const byOp = new Map<string, { name: string; dates: Set<string> }>()
       for (const sh of shifts as any[]) {
@@ -127,11 +140,13 @@ export async function GET(req: Request) {
 
     // 5. Расходы за неделю vs предыдущую
     const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
-    const { data: expenses } = await supabase
+    let expQ = supabase
       .from('expenses')
       .select('date, cash_amount, kaspi_amount')
       .gte('date', twoWeeksAgo)
       .lte('date', today)
+    if (ownerCompanyIds) expQ = expQ.in('company_id', ownerCompanyIds)
+    const { data: expenses } = await expQ
     if (expenses && expenses.length > 0) {
       const thisWeek = (expenses as any[]).filter((e) => e.date >= weekAgo).reduce((s, e) => s + Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0), 0)
       const prevWeek = (expenses as any[]).filter((e) => e.date < weekAgo).reduce((s, e) => s + Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0), 0)
