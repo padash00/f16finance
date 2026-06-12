@@ -188,6 +188,69 @@ export async function POST(request: Request) {
   }
 }
 
+// ─── PATCH: редактировать техкарту (+ заменить состав) ───────────────────────
+export async function PATCH(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const gate = await requireOrgFeature(access, 'restaurant.recipes_lite')
+    if (gate) return gate
+
+    const orgId = getOrgId(access)
+    const body = (await request.json().catch(() => null)) as any
+    const id = String(body?.id || '').trim()
+    if (!id) return json({ error: 'id обязателен' }, 400)
+    const name = String(body?.name || '').trim()
+    if (!name) return json({ error: 'Название обязательно' }, 400)
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    let upd = supabase
+      .from('recipes')
+      .update({
+        name,
+        category: body?.category?.trim() || null,
+        output_qty: Number(body?.output_qty) || 1,
+        output_unit: String(body?.output_unit || 'порц').trim() || 'порц',
+        yield_factor: Number(body?.yield_factor) || 1,
+        sale_item_id: body?.sale_item_id || null,
+        is_semi_finished: body?.is_semi_finished === true,
+        notes: body?.notes?.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+    if (!access.isSuperAdmin && orgId) upd = upd.eq('organization_id', orgId) // нельзя править чужую
+    const { error } = await upd
+    if (error) throw error
+
+    if (Array.isArray(body?.components)) {
+      await supabase.from('recipe_components').delete().eq('recipe_id', id)
+      const comps = body.components as ComponentInput[]
+      const rows = comps
+        .filter((c) => (c.ingredient_id || c.component_recipe_id || c.name) && Number(c.qty) > 0)
+        .map((c, i) => ({
+          recipe_id: id,
+          ingredient_id: c.ingredient_id || null,
+          component_recipe_id: c.component_recipe_id || null,
+          name: c.name?.trim() || null,
+          qty: Number(c.qty) || 0,
+          unit: String(c.unit || 'г').trim() || 'г',
+          waste_pct: Number(c.waste_pct) || 0,
+          sort_order: i,
+        }))
+      if (rows.length) {
+        const { error: cErr } = await supabase.from('recipe_components').insert(rows)
+        if (cErr) throw cErr
+      }
+    }
+
+    await writeAuditLog(supabase, { entityType: 'recipe', entityId: id, action: 'update', payload: { name } })
+    return json({ ok: true })
+  } catch (error: any) {
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
 // ─── DELETE ?id= ─────────────────────────────────────────────────────────────
 export async function DELETE(request: Request) {
   try {

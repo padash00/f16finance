@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
-import { ChefHat, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 
 type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null }
 type Comp = { id?: string; ingredient_id: string | null; component_recipe_id: string | null; name: string | null; qty: number; unit: string; waste_pct: number }
@@ -28,6 +28,7 @@ export default function ProductionPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // форма
@@ -78,8 +79,21 @@ export default function ProductionPage() {
   useEffect(() => { load() }, [load])
 
   const resetForm = () => {
+    setEditingId(null)
     setName(''); setCategory(''); setOutputQty('1'); setOutputUnit('порц'); setYieldPct('0')
     setComps([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
+  }
+
+  const openEdit = (r: Recipe) => {
+    setEditingId(r.id)
+    setName(r.name); setCategory(r.category || ''); setOutputQty(String(r.output_qty)); setOutputUnit(r.output_unit)
+    setYieldPct(String(Math.round((1 - (r.yield_factor || 1)) * 100)))
+    setComps(
+      (r.components || []).length
+        ? r.components.map((c) => ({ ingredient_id: c.ingredient_id || null, component_recipe_id: c.component_recipe_id || null, name: c.name || null, qty: Number(c.qty) || 0, unit: c.unit || 'г', waste_pct: Number(c.waste_pct) || 0 }))
+        : [{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }],
+    )
+    setShowForm(true)
   }
 
   const save = async () => {
@@ -88,8 +102,9 @@ export default function ProductionPage() {
     try {
       const yf = 1 - (Number(yieldPct) || 0) / 100
       const res = await fetch('/api/admin/production/recipes', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: editingId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...(editingId ? { id: editingId } : {}),
           name: name.trim(), category: category.trim() || null,
           output_qty: Number(outputQty) || 1, output_unit: outputUnit.trim() || 'порц',
           yield_factor: yf > 0 ? yf : 1,
@@ -173,7 +188,7 @@ export default function ProductionPage() {
       {showForm && (
         <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Новая техкарта</h3>
+            <h3 className="text-sm font-semibold text-white">{editingId ? 'Редактирование техкарты' : 'Новая техкарта'}</h3>
             <button onClick={() => { setShowForm(false); resetForm() }} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -238,6 +253,7 @@ export default function ProductionPage() {
                   <div className="text-[11px] text-slate-500">Себестоимость порции</div>
                   <div className="text-base font-bold tabular-nums text-emerald-300">{money(r.portion_cost)}</div>
                 </div>
+                <button onClick={() => openEdit(r)} className="text-slate-500 transition hover:text-emerald-300"><Pencil className="h-4 w-4" /></button>
                 <button onClick={() => remove(r.id, r.name)} className="text-slate-500 transition hover:text-rose-300"><Trash2 className="h-4 w-4" /></button>
               </div>
             ))}
