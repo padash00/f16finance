@@ -117,7 +117,7 @@ export async function GET(request: Request) {
     // Каталог ингредиентов своей орг (для формы)
     const { data: ingredients } = await supabase
       .from('ingredients')
-      .select('id, name, unit, purchase_price, category')
+      .select('id, name, unit, purchase_price, category, stock_qty')
       .eq('organization_id', scopeOrg)
       .eq('is_active', true)
       .order('name')

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 
-type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null }
+type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null; stock_qty?: number | null }
 type Comp = { id?: string; ingredient_id: string | null; component_recipe_id: string | null; name: string | null; qty: number; unit: string; waste_pct: number }
 type Recipe = {
   id: string
@@ -74,6 +74,38 @@ export default function ProductionPage() {
     if (!confirm(`Удалить ингредиент «${nm}»?`)) return
     const res = await fetch(`/api/admin/production/ingredients?id=${id}`, { method: 'DELETE' })
     if (res.ok) await load(); else setErr('Не удалось удалить')
+  }
+
+  const stockAction = async (action: string, payload: any, okMsg?: string) => {
+    setErr(null)
+    const res = await fetch('/api/admin/production/stock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...payload }) })
+    const j = await res.json().catch(() => null)
+    if (!res.ok || !j?.ok) { setErr(j?.error || 'Ошибка'); return null }
+    await load()
+    return j
+  }
+  const receiptIng = async (ing: Ingredient) => {
+    const v = window.prompt(`Приход «${ing.name}» — сколько ${ing.unit} поступило?`, '')
+    if (v == null) return
+    const qty = Number(v)
+    if (!(qty > 0)) { setErr('Введите число > 0'); return }
+    await stockAction('receipt', { ingredient_id: ing.id, qty })
+  }
+  const countIng = async (ing: Ingredient) => {
+    const v = window.prompt(`Ревизия «${ing.name}» — фактический остаток (${ing.unit})? Ожидаемый: ${Number(ing.stock_qty || 0)}`, String(Number(ing.stock_qty || 0)))
+    if (v == null) return
+    const counted = Number(v)
+    if (!Number.isFinite(counted)) { setErr('Введите число'); return }
+    const j = await stockAction('count', { ingredient_id: ing.id, counted })
+    if (j) {
+      const variance = Number(j.variance || 0)
+      if (variance !== 0) setErr(variance < 0 ? `Недостача ${Math.abs(variance)} ${ing.unit}` : `Излишек ${variance} ${ing.unit}`)
+    }
+  }
+  const writeoffSales = async () => {
+    if (!confirm(`Списать ингредиенты по продажам за ${anFrom} — ${anTo}? Остатки уменьшатся на теоретический расход.`)) return
+    const j = await stockAction('writeoff_sales', { from: anFrom, to: anTo })
+    if (j) setErr(null)
   }
 
   const load = useCallback(async () => {
@@ -196,10 +228,14 @@ export default function ProductionPage() {
           ) : (
             <div className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10">
               {ingredients.map((ing) => (
-                <div key={ing.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                <div key={ing.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 text-sm">
                   <span className="text-white">{ing.name} <span className="text-[11px] text-slate-500">/ {ing.unit}</span></span>
-                  <div className="flex items-center gap-3">
-                    <span className="tabular-nums text-slate-300">{money(Number(ing.purchase_price || 0))} / {ing.unit}</span>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="tabular-nums text-slate-400">{money(Number(ing.purchase_price || 0))}/{ing.unit}</span>
+                    <span className="text-[11px] text-slate-500">остаток</span>
+                    <span className={`tabular-nums ${Number(ing.stock_qty || 0) < 0 ? 'text-rose-300' : 'text-white'}`}>{Number(ing.stock_qty || 0)} {ing.unit}</span>
+                    <button onClick={() => receiptIng(ing)} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-emerald-300 hover:bg-white/10">+ приход</button>
+                    <button onClick={() => countIng(ing)} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10">ревизия</button>
                     <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
@@ -274,6 +310,9 @@ export default function ProductionPage() {
             <input className={inputCls} type="date" value={anTo} onChange={(e) => setAnTo(e.target.value)} />
             <button onClick={runAnalysis} disabled={anLoading} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {anLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Посчитать
+            </button>
+            <button onClick={writeoffSales} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/20" title="Списать теоретический расход ингредиентов со склада за период">
+              Списать со склада
             </button>
           </div>
         </div>
