@@ -49,6 +49,8 @@ export default function ProductionPage() {
   const [anTo, setAnTo] = useState(todayISO)
   const [analysis, setAnalysis] = useState<any>(null)
   const [anLoading, setAnLoading] = useState(false)
+  const [showJournal, setShowJournal] = useState(false)
+  const [movements, setMovements] = useState<any[]>([])
 
   // ингредиенты
   const [showIng, setShowIng] = useState(false)
@@ -133,6 +135,16 @@ export default function ProductionPage() {
 
   useEffect(() => { load() }, [load])
 
+  const loadJournal = async () => {
+    const next = !showJournal
+    setShowJournal(next)
+    if (next) {
+      const res = await fetch('/api/admin/production/stock', { cache: 'no-store' })
+      const j = await res.json().catch(() => null)
+      if (j?.ok) setMovements(j.movements || [])
+    }
+  }
+
   const resetForm = () => {
     setEditingId(null)
     setName(''); setCategory(''); setOutputQty('1'); setOutputUnit('порц'); setYieldPct('0'); setSaleItemId('')
@@ -199,6 +211,9 @@ export default function ProductionPage() {
             <button onClick={() => setShowIng((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10">
               Ингредиенты ({ingredients.length})
             </button>
+            <button onClick={loadJournal} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10">
+              Журнал
+            </button>
             <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500">
               <Plus className="h-3.5 w-3.5" /> Новая техкарта
             </button>
@@ -240,6 +255,39 @@ export default function ProductionPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showJournal && (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Журнал движений ингредиентов</h3>
+            <button onClick={() => setShowJournal(false)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+          {movements.length === 0 ? (
+            <p className="text-xs text-slate-500">Движений нет.</p>
+          ) : (
+            <div className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10">
+              {movements.map((m) => {
+                const kindLabel = m.kind === 'receipt' ? 'приход' : m.kind === 'count' ? 'ревизия' : m.kind === 'sale_writeoff' ? 'списание (продажи)' : 'ручное'
+                return (
+                  <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-white">{m.ingredient_name}</span>
+                      <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-400">{kindLabel}</span>
+                      {m.period_from ? <span className="text-[11px] text-slate-500">{m.period_from}…{m.period_to}</span> : null}
+                      <span className="text-[11px] text-slate-500">{new Date(m.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className={`tabular-nums ${Number(m.qty_delta) < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{Number(m.qty_delta) > 0 ? '+' : ''}{Number(m.qty_delta)} {m.ingredient_unit}</span>
+                      {m.variance != null && Number(m.variance) !== 0 ? <span className={`tabular-nums ${Number(m.variance) < 0 ? 'text-rose-300' : 'text-amber-300'}`}>расхожд. {Number(m.variance) > 0 ? '+' : ''}{Number(m.variance)}</span> : null}
+                      <span className="tabular-nums text-slate-400">остаток {Number(m.balance_after)} {m.ingredient_unit}</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

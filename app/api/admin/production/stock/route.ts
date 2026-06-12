@@ -67,6 +67,34 @@ async function theoreticalUsage(supabase: any, orgId: string | null, isSuperAdmi
   return usage
 }
 
+// GET — журнал движений (последние 100) своей орг.
+export async function GET(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canManage(access)) return json({ error: 'forbidden' }, 403)
+    const gate = await requireOrgFeature(access, 'restaurant.recipes_lite')
+    if (gate) return gate
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ ok: true, movements: [] })
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const { data, error } = await supabase
+      .from('ingredient_movements')
+      .select('id, ingredient_id, kind, qty_delta, balance_after, variance, comment, period_from, period_to, created_at, ingredient:ingredient_id(name, unit)')
+      .eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (error) throw error
+    const movements = (data || []).map((m: any) => {
+      const ing = Array.isArray(m.ingredient) ? m.ingredient[0] : m.ingredient
+      return { ...m, ingredient_name: ing?.name || '—', ingredient_unit: ing?.unit || '' }
+    })
+    return json({ ok: true, movements })
+  } catch (error: any) {
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
