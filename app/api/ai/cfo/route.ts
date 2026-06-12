@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
 import { generateAiText, type AiMessage } from '@/lib/ai/provider'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { requireOrgFeature } from '@/lib/server/entitlements'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { resolveCompanyScope } from '@/lib/server/organizations'
@@ -62,6 +63,10 @@ export async function POST(request: Request) {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
+
+    // Платная фича AI CFO: при ENTITLEMENTS_ENFORCE=true вернёт 402, если не куплена.
+    const gate = await requireOrgFeature(access, 'ai.cfo')
+    if (gate) return gate
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-cfo:${access.user?.id || ip}`, 15, 60_000)

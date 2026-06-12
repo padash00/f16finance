@@ -32,6 +32,10 @@ export async function GET(request: Request) {
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+  // Изоляция: владелец видит флаги только своей орг; супер-админ — все.
+  const orgId = access.activeOrganization?.id || null
+  const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+
   let query = supabase
     .from('chat_moderation_flags')
     .select('*')
@@ -42,15 +46,18 @@ export async function GET(request: Request) {
   if (status !== 'all') {
     query = query.eq('status', status)
   }
+  if (scopeOrg) query = query.eq('organization_id', scopeOrg)
 
   const { data, error } = await query
   if (error) return json({ error: error.message }, 500)
 
   // Кол-во pending для бейджа
-  const { count: pendingCount } = await supabase
+  let pendingQuery = supabase
     .from('chat_moderation_flags')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'pending')
+  if (scopeOrg) pendingQuery = pendingQuery.eq('organization_id', scopeOrg)
+  const { count: pendingCount } = await pendingQuery
 
   return json({ flags: data || [], pendingCount: pendingCount || 0 })
 }
@@ -69,7 +76,9 @@ export async function PATCH(request: Request) {
   }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-  const { error } = await supabase
+  const orgId = access.activeOrganization?.id || null
+  const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
+  let upd = supabase
     .from('chat_moderation_flags')
     .update({
       status: body.status,
@@ -78,6 +87,8 @@ export async function PATCH(request: Request) {
       reviewer_note: body.note || null,
     })
     .eq('id', body.id)
+  if (scopeOrg) upd = upd.eq('organization_id', scopeOrg) // нельзя править чужой флаг
+  const { error } = await upd
   if (error) return json({ error: error.message }, 500)
 
   return json({ ok: true })
