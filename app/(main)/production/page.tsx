@@ -14,10 +14,12 @@ type Recipe = {
   output_unit: string
   yield_factor: number
   is_semi_finished: boolean
+  sale_item_id: string | null
   components: Comp[]
   recipe_cost: number
   portion_cost: number
 }
+type SaleItem = { id: string; name: string; sale_price: number | null }
 
 const money = (n: number) => Number(n || 0).toLocaleString('ru-RU') + ' ₸'
 const inputCls = 'rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40'
@@ -25,6 +27,7 @@ const inputCls = 'rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 te
 export default function ProductionPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -38,6 +41,14 @@ export default function ProductionPage() {
   const [outputUnit, setOutputUnit] = useState('порц')
   const [yieldPct, setYieldPct] = useState('0') // потери %
   const [comps, setComps] = useState<Comp[]>([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
+  const [saleItemId, setSaleItemId] = useState('')
+
+  // анализ продаж
+  const todayISO = new Date().toISOString().slice(0, 10)
+  const [anFrom, setAnFrom] = useState(todayISO)
+  const [anTo, setAnTo] = useState(todayISO)
+  const [analysis, setAnalysis] = useState<any>(null)
+  const [anLoading, setAnLoading] = useState(false)
 
   // ингредиенты
   const [showIng, setShowIng] = useState(false)
@@ -73,20 +84,33 @@ export default function ProductionPage() {
       if (!res.ok || !j.ok) throw new Error(j.error || 'Ошибка')
       setRecipes(j.recipes || [])
       setIngredients(j.ingredients || [])
+      setSaleItems(j.saleItems || [])
     } catch (e: any) { setErr(e?.message || 'Ошибка') } finally { setLoading(false) }
   }, [])
+
+  const runAnalysis = useCallback(async () => {
+    setAnLoading(true); setErr(null)
+    try {
+      const p = new URLSearchParams({ from: anFrom, to: anTo })
+      const res = await fetch(`/api/admin/production/analysis?${p}`, { cache: 'no-store' })
+      const j = await res.json()
+      if (!res.ok || !j.ok) throw new Error(j.error || 'Ошибка')
+      setAnalysis(j)
+    } catch (e: any) { setErr(e?.message || 'Ошибка') } finally { setAnLoading(false) }
+  }, [anFrom, anTo])
 
   useEffect(() => { load() }, [load])
 
   const resetForm = () => {
     setEditingId(null)
-    setName(''); setCategory(''); setOutputQty('1'); setOutputUnit('порц'); setYieldPct('0')
+    setName(''); setCategory(''); setOutputQty('1'); setOutputUnit('порц'); setYieldPct('0'); setSaleItemId('')
     setComps([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
   }
 
   const openEdit = (r: Recipe) => {
     setEditingId(r.id)
     setName(r.name); setCategory(r.category || ''); setOutputQty(String(r.output_qty)); setOutputUnit(r.output_unit)
+    setSaleItemId(r.sale_item_id || '')
     setYieldPct(String(Math.round((1 - (r.yield_factor || 1)) * 100)))
     setComps(
       (r.components || []).length
@@ -107,7 +131,7 @@ export default function ProductionPage() {
           ...(editingId ? { id: editingId } : {}),
           name: name.trim(), category: category.trim() || null,
           output_qty: Number(outputQty) || 1, output_unit: outputUnit.trim() || 'порц',
-          yield_factor: yf > 0 ? yf : 1,
+          yield_factor: yf > 0 ? yf : 1, sale_item_id: saleItemId || null,
           components: comps.filter((c) => c.ingredient_id && Number(c.qty) > 0),
         }),
       })
@@ -201,6 +225,14 @@ export default function ProductionPage() {
             <input className={inputCls} type="number" placeholder="Потери выхода, %" value={yieldPct} onChange={(e) => setYieldPct(e.target.value)} />
           </div>
 
+          <div className="mt-3">
+            <label className="mb-1 block text-xs text-slate-400">Блюдо в продаже (для анализа продаж — что списывать при продаже)</label>
+            <select className={`${inputCls} w-full`} value={saleItemId} onChange={(e) => setSaleItemId(e.target.value)}>
+              <option value="">— не связано —</option>
+              {saleItems.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+
           <div className="mt-4">
             <div className="mb-2 text-xs font-medium text-slate-400">Состав (ингредиенты на весь выход)</div>
             <div className="space-y-2">
@@ -232,6 +264,61 @@ export default function ProductionPage() {
         </div>
       )}
 
+      {/* Анализ продаж — теоретический food cost */}
+      <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-white">Анализ продаж · теоретический food cost</h3>
+          <div className="flex items-center gap-2">
+            <input className={inputCls} type="date" value={anFrom} onChange={(e) => setAnFrom(e.target.value)} />
+            <span className="text-slate-500">—</span>
+            <input className={inputCls} type="date" value={anTo} onChange={(e) => setAnTo(e.target.value)} />
+            <button onClick={runAnalysis} disabled={anLoading} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+              {anLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Посчитать
+            </button>
+          </div>
+        </div>
+        {analysis ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Kpi label="Продано блюд" value={String(analysis.totals.sold)} accent="text-white" />
+              <Kpi label="Выручка" value={money(analysis.totals.revenue)} accent="text-white" />
+              <Kpi label="Food cost (теор.)" value={money(analysis.totals.food_cost)} accent="text-amber-300" />
+              <Kpi label="Food cost %" value={`${analysis.totals.food_cost_pct}%`} accent={analysis.totals.food_cost_pct > 35 ? 'text-rose-300' : 'text-emerald-300'} />
+            </div>
+            {analysis.rows.length === 0 ? (
+              <p className="text-xs text-slate-500">Нет продаж связанных блюд за период. Свяжи техкарты с блюдами в продаже (поле «Блюдо в продаже»).</p>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-white/10">
+                <div className="grid grid-cols-6 gap-2 border-b border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] uppercase tracking-wide text-slate-500">
+                  <span className="col-span-2">Блюдо</span><span className="text-right">Продано</span><span className="text-right">Себест.</span><span className="text-right">Food cost</span><span className="text-right">FC %</span>
+                </div>
+                {analysis.rows.map((r: any) => (
+                  <div key={r.recipe_id} className="grid grid-cols-6 gap-2 px-3 py-2 text-sm">
+                    <span className="col-span-2 truncate text-white">{r.name}</span>
+                    <span className="text-right tabular-nums text-slate-300">{r.sold_qty}</span>
+                    <span className="text-right tabular-nums text-slate-400">{money(r.portion_cost)}</span>
+                    <span className="text-right tabular-nums text-amber-300">{money(r.food_cost)}</span>
+                    <span className={`text-right tabular-nums ${r.food_cost_pct > 35 ? 'text-rose-300' : 'text-emerald-300'}`}>{r.food_cost_pct}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {analysis.ingredients.length > 0 && (
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-slate-400">Теоретический расход ингредиентов</div>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.ingredients.map((g: any) => (
+                    <span key={g.ingredient_id} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-300">{g.name}: <b className="text-white">{g.qty} {g.unit}</b> · {money(g.cost)}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Выбери период → «Посчитать». Покажет теоретический food cost и расход ингредиентов по проданным блюдам (нужно связать техкарты с блюдами).</p>
+        )}
+      </div>
+
       <div className="rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/20 overflow-hidden">
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <span className="text-sm font-semibold text-white">Техкарты</span>
@@ -260,6 +347,15 @@ export default function ProductionPage() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function Kpi({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`mt-1 text-base font-bold tabular-nums ${accent}`}>{value}</div>
     </div>
   )
 }

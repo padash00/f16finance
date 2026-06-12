@@ -122,7 +122,15 @@ export async function GET(request: Request) {
       .eq('is_active', true)
       .order('name')
 
-    return json({ ok: true, recipes: out, ingredients: ingredients || [] })
+    // Товары продажи (для связи техкарта → блюдо в чеке)
+    const { data: saleItems } = await supabase
+      .from('inventory_items')
+      .select('id, name, sale_price')
+      .eq('organization_id', scopeOrg)
+      .eq('is_active', true)
+      .order('name')
+
+    return json({ ok: true, recipes: out, ingredients: ingredients || [], saleItems: saleItems || [] })
   } catch (error: any) {
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
