@@ -118,25 +118,39 @@ export async function GET(req: Request) {
       .limit(200)
     if (allowedStaffIds) paymentsQuery.in('staff_id', allowedStaffIds)
 
+    // Долги/позиции — скоуп по ТОЧКАМ орг (company_id тегирован надёжно), а не по
+    // тегированию операторов: раньше owner-оператор без organization_id выпадал из
+    // allowedOperatorIds → долги владельца показывались «−0».
+    const adminOpDebtsQuery = supabase
+      .from('debts')
+      .select('id, operator_id, amount, client_name, week_start, comment')
+      .eq('status', 'active')
+    if (scope.allowedCompanyIds) adminOpDebtsQuery.in('company_id', scope.allowedCompanyIds)
+
+    const adminOpDebtItemsQuery = supabase
+      .from('point_debt_items')
+      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
+      .eq('status', 'active')
+    if (scope.allowedCompanyIds) adminOpDebtItemsQuery.in('company_id', scope.allowedCompanyIds)
+
+    const [adminOpDebtsRes, adminOpDebtItemsRes] = await Promise.all([adminOpDebtsQuery, adminOpDebtItemsQuery])
+    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
+    if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
+
+    // Операторы для маппинга долг→staff: org-операторы ∪ операторы из этих долгов
+    // (owner-оператор попадёт в маппинг; не утечка — долг уже в точке орг, плюс
+    // фильтр is_admin_staff). Виртуальным staff он не станет, т.к. маппится в baseStaff.
+    const debtOperatorIds = Array.from(new Set([
+      ...((adminOpDebtsRes.data ?? []) as any[]).map((r) => String(r.operator_id || '')).filter(Boolean),
+      ...((adminOpDebtItemsRes.data ?? []) as any[]).map((r) => String(r.operator_id || '')).filter(Boolean),
+    ]))
     const adminOpsQuery = supabase
       .from('operators')
       .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff')
       .eq('is_active', true)
       .eq('is_admin_staff', true)
       .order('name')
-    if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
-
-    const adminOpDebtsQuery = supabase
-      .from('debts')
-      .select('id, operator_id, amount, client_name, week_start, comment')
-      .eq('status', 'active')
-    if (allowedOperatorIds) adminOpDebtsQuery.in('operator_id', allowedOperatorIds)
-
-    const adminOpDebtItemsQuery = supabase
-      .from('point_debt_items')
-      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
-      .eq('status', 'active')
-    if (allowedOperatorIds) adminOpDebtItemsQuery.in('operator_id', allowedOperatorIds)
+    if (allowedOperatorIds) adminOpsQuery.in('id', Array.from(new Set([...allowedOperatorIds, ...debtOperatorIds])))
 
     const expensesQuery = supabase
       .from('expenses')
@@ -144,7 +158,7 @@ export async function GET(req: Request) {
       .in('source_type', ['salary_payment', 'salary_advance'])
     if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, expensesRes] = await Promise.all([
       staffQuery,
       adjQuery,
       paymentsQuery,
@@ -153,8 +167,6 @@ export async function GET(req: Request) {
         .select('company_code, shift_type, base_per_shift')
         .eq('is_active', true),
       adminOpsQuery,
-      adminOpDebtsQuery,
-      adminOpDebtItemsQuery,
       expensesQuery,
     ])
 
@@ -163,8 +175,6 @@ export async function GET(req: Request) {
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
-    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
-    if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
     if (expensesRes.error) throw expensesRes.error
 
     // Все staff (вкл. архивных) — для матчинга operator↔staff, чтобы уволенный
