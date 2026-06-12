@@ -55,6 +55,7 @@ import {
   Workflow,
   Wrench,
   Zap,
+  ChefHat,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -169,6 +170,7 @@ export const navSections: NavSection[] = [
     icon: Workflow,
     featuresAny: ['club.pos', 'shop.catalog', 'service.jobs', 'restaurant.recipes_lite'],
     items: [
+      { href: '/production', label: 'Техкарты', icon: ChefHat, note: 'Рецептуры и food cost (ресторан)', feature: 'restaurant.recipes_lite', badge: 'new', badgeColor: 'green', isNew: true },
       { href: '/simulation', label: 'Симуляция выручки', icon: Calculator, note: 'Потенциал по зонам vs факт', badge: 'new', badgeColor: 'blue', isNew: true },
       { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
