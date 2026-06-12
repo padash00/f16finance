@@ -121,11 +121,17 @@ export async function GET(req: Request) {
     // Долги/позиции — скоуп по ТОЧКАМ орг (company_id тегирован надёжно), а не по
     // тегированию операторов: раньше owner-оператор без organization_id выпадал из
     // allowedOperatorIds → долги владельца показывались «−0».
+    // У debts есть organization_id. Скоупим по нему + organization_id IS NULL
+    // (ручные долги без оператора/точки/тега — напр. долг владельца — мапятся к
+    // сотруднику по имени; isolation держит staff-скоуп при атрибуции).
+    const debtsOrgId = access.activeOrganization?.id || null
     const adminOpDebtsQuery = supabase
       .from('debts')
       .select('id, operator_id, amount, client_name, week_start, comment')
       .eq('status', 'active')
-    if (scope.allowedCompanyIds) adminOpDebtsQuery.in('company_id', scope.allowedCompanyIds)
+    if (scope.allowedCompanyIds && debtsOrgId) {
+      adminOpDebtsQuery.or(`organization_id.eq.${debtsOrgId},organization_id.is.null`)
+    }
 
     const adminOpDebtItemsQuery = supabase
       .from('point_debt_items')
