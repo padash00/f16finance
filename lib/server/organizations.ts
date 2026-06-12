@@ -502,7 +502,7 @@ export async function listOrganizationCompanyIds(params: {
   // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
   if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && !activeOrganizationId) return []
   let query = supabase.from('companies').select('id')
-  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
+  if (!LEGACY_SINGLE_TENANT_MODE && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
   }
 
@@ -525,7 +525,7 @@ export async function listOrganizationCompanyCodes(params: {
   // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
   if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && !activeOrganizationId) return []
   let query = supabase.from('companies').select('code')
-  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
+  if (!LEGACY_SINGLE_TENANT_MODE && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
   }
 
@@ -548,7 +548,7 @@ export async function listOrganizationStaffIds(params: {
   // NEVER-pattern: обычный пользователь без валидной орг → пусто (не «все»).
   if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && !activeOrganizationId) return []
   let query = supabase.from('staff').select('id')
-  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
+  if (!LEGACY_SINGLE_TENANT_MODE && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
   }
 
@@ -572,7 +572,7 @@ export async function listOrganizationOperatorIds(params: {
   }
 
   // Legacy/суперадмин — все операторы (намеренно).
-  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin) {
+  if (LEGACY_SINGLE_TENANT_MODE || (isSuperAdmin && !activeOrganizationId)) {
     let q = supabase.from('operators').select('id')
     if (!includeInactive) q = q.eq('is_active', true)
     const { data, error } = await q
@@ -622,7 +622,7 @@ export async function resolveCompanyScope(params: {
   const { activeOrganizationId, requestedCompanyId, isSuperAdmin } = params
 
   // Legacy-режим и суперадмин — без фильтра (видят всё). Намеренно.
-  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin) {
+  if (LEGACY_SINGLE_TENANT_MODE || (isSuperAdmin && !activeOrganizationId)) {
     return {
       allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : null,
       organizationId: null,
