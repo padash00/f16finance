@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { ChefHat, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 
-type Ingredient = { id: string; name: string; unit: string | null; default_purchase_price: number | null }
-type Comp = { id?: string; item_id: string | null; component_recipe_id: string | null; name: string | null; qty: number; unit: string; waste_pct: number }
+type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null }
+type Comp = { id?: string; ingredient_id: string | null; component_recipe_id: string | null; name: string | null; qty: number; unit: string; waste_pct: number }
 type Recipe = {
   id: string
   name: string
@@ -36,7 +36,33 @@ export default function ProductionPage() {
   const [outputQty, setOutputQty] = useState('1')
   const [outputUnit, setOutputUnit] = useState('порц')
   const [yieldPct, setYieldPct] = useState('0') // потери %
-  const [comps, setComps] = useState<Comp[]>([{ item_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
+  const [comps, setComps] = useState<Comp[]>([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
+
+  // ингредиенты
+  const [showIng, setShowIng] = useState(false)
+  const [ingName, setIngName] = useState('')
+  const [ingUnit, setIngUnit] = useState('г')
+  const [ingPrice, setIngPrice] = useState('')
+  const [savingIng, setSavingIng] = useState(false)
+
+  const addIngredient = async () => {
+    if (!ingName.trim()) { setErr('Укажите название ингредиента'); return }
+    setSavingIng(true); setErr(null)
+    try {
+      const res = await fetch('/api/admin/production/ingredients', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: ingName.trim(), unit: ingUnit.trim() || 'г', purchase_price: Number(ingPrice) || 0 }),
+      })
+      const j = await res.json()
+      if (!res.ok || !j.ok) throw new Error(j.error || 'Ошибка')
+      setIngName(''); setIngPrice(''); await load()
+    } catch (e: any) { setErr(e?.message || 'Ошибка') } finally { setSavingIng(false) }
+  }
+  const deleteIngredient = async (id: string, nm: string) => {
+    if (!confirm(`Удалить ингредиент «${nm}»?`)) return
+    const res = await fetch(`/api/admin/production/ingredients?id=${id}`, { method: 'DELETE' })
+    if (res.ok) await load(); else setErr('Не удалось удалить')
+  }
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
@@ -53,7 +79,7 @@ export default function ProductionPage() {
 
   const resetForm = () => {
     setName(''); setCategory(''); setOutputQty('1'); setOutputUnit('порц'); setYieldPct('0')
-    setComps([{ item_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
+    setComps([{ ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
   }
 
   const save = async () => {
@@ -67,7 +93,7 @@ export default function ProductionPage() {
           name: name.trim(), category: category.trim() || null,
           output_qty: Number(outputQty) || 1, output_unit: outputUnit.trim() || 'порц',
           yield_factor: yf > 0 ? yf : 1,
-          components: comps.filter((c) => c.item_id && Number(c.qty) > 0),
+          components: comps.filter((c) => c.ingredient_id && Number(c.qty) > 0),
         }),
       })
       const j = await res.json()
@@ -83,7 +109,7 @@ export default function ProductionPage() {
   }
 
   const setComp = (i: number, patch: Partial<Comp>) => setComps((prev) => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
-  const addComp = () => setComps((prev) => [...prev, { item_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
+  const addComp = () => setComps((prev) => [...prev, { ingredient_id: null, component_recipe_id: null, name: null, qty: 0, unit: 'г', waste_pct: 0 }])
   const delComp = (i: number) => setComps((prev) => prev.filter((_, idx) => idx !== i))
 
   return (
@@ -99,6 +125,9 @@ export default function ProductionPage() {
             <button onClick={load} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Обновить
             </button>
+            <button onClick={() => setShowIng((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10">
+              Ингредиенты ({ingredients.length})
+            </button>
             <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500">
               <Plus className="h-3.5 w-3.5" /> Новая техкарта
             </button>
@@ -107,6 +136,39 @@ export default function ProductionPage() {
       />
 
       {err && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">{err}</div>}
+
+      {showIng && (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Ингредиенты (сырьё для техкарт)</h3>
+            <button onClick={() => setShowIng(false)} className="text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">Мука, сыр, тесто — с ценой за базовую единицу (г/мл/шт). Из них собираются техкарты.</p>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <input className={`${inputCls} flex-1 min-w-[180px]`} placeholder="Название (Мука)" value={ingName} onChange={(e) => setIngName(e.target.value)} />
+            <input className={`${inputCls} w-24`} placeholder="ед. (г)" value={ingUnit} onChange={(e) => setIngUnit(e.target.value)} />
+            <input className={`${inputCls} w-32`} type="number" placeholder="цена за ед." value={ingPrice} onChange={(e) => setIngPrice(e.target.value)} />
+            <button onClick={addIngredient} disabled={savingIng} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+              {savingIng ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Добавить
+            </button>
+          </div>
+          {ingredients.length === 0 ? (
+            <p className="text-xs text-slate-500">Ингредиентов нет. Добавьте первый — потом из них соберёте техкарту.</p>
+          ) : (
+            <div className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10">
+              {ingredients.map((ing) => (
+                <div key={ing.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-white">{ing.name} <span className="text-[11px] text-slate-500">/ {ing.unit}</span></span>
+                  <div className="flex items-center gap-3">
+                    <span className="tabular-nums text-slate-300">{money(Number(ing.purchase_price || 0))} / {ing.unit}</span>
+                    <button onClick={() => deleteIngredient(ing.id, ing.name)} className="text-slate-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-black/20">
@@ -129,12 +191,12 @@ export default function ProductionPage() {
             <div className="space-y-2">
               {comps.map((c, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2">
-                  <select className={`${inputCls} min-w-[200px] flex-1`} value={c.item_id || ''} onChange={(e) => {
+                  <select className={`${inputCls} min-w-[200px] flex-1`} value={c.ingredient_id || ''} onChange={(e) => {
                     const ing = ingredients.find((x) => x.id === e.target.value)
-                    setComp(i, { item_id: e.target.value || null, name: ing?.name || null, unit: ing?.unit || c.unit })
+                    setComp(i, { ingredient_id: e.target.value || null, name: ing?.name || null, unit: ing?.unit || c.unit })
                   }}>
                     <option value="">— ингредиент —</option>
-                    {ingredients.map((ing) => <option key={ing.id} value={ing.id}>{ing.name}</option>)}
+                    {ingredients.map((ing) => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
                   </select>
                   <input className={`${inputCls} w-24`} type="number" placeholder="кол-во" value={c.qty || ''} onChange={(e) => setComp(i, { qty: Number(e.target.value) })} />
                   <input className={`${inputCls} w-20`} placeholder="ед." value={c.unit} onChange={(e) => setComp(i, { unit: e.target.value })} />

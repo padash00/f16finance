@@ -6,7 +6,7 @@
 // yield_factor < 1 = технологические потери выхода (напр. 0.97 = 3% ужарки).
 
 export type RecipeComponent = {
-  item_id?: string | null
+  ingredient_id?: string | null
   component_recipe_id?: string | null
   name?: string | null
   qty: number
@@ -29,21 +29,21 @@ export type RecipeCost = {
 
 export function computeRecipeCost(params: {
   recipe: Recipe
-  itemCostById: Map<string, number>
+  ingredientCostById: Map<string, number>
   nestedPortionCostById: Map<string, number>
 }): RecipeCost {
-  const { recipe, itemCostById, nestedPortionCostById } = params
+  const { recipe, ingredientCostById, nestedPortionCostById } = params
   let total = 0
   const components: Array<{ name: string; cost: number }> = []
 
   for (const c of recipe.components || []) {
     const wasteMul = 1 + (Number(c.waste_pct) || 0) / 100
     let unitCost = 0
-    if (c.item_id) unitCost = itemCostById.get(String(c.item_id)) || 0
+    if (c.ingredient_id) unitCost = ingredientCostById.get(String(c.ingredient_id)) || 0
     else if (c.component_recipe_id) unitCost = nestedPortionCostById.get(String(c.component_recipe_id)) || 0
     const cost = (Number(c.qty) || 0) * wasteMul * unitCost
     total += cost
-    components.push({ name: String(c.name || c.item_id || c.component_recipe_id || '—'), cost })
+    components.push({ name: String(c.name || c.ingredient_id || c.component_recipe_id || '—'), cost })
   }
 
   const outputQty = Number(recipe.output_qty) || 1
@@ -60,9 +60,9 @@ export function computeRecipeCost(params: {
  */
 export function resolveAllRecipeCosts(params: {
   recipes: Recipe[]
-  itemCostById: Map<string, number>
+  ingredientCostById: Map<string, number>
 }): Map<string, RecipeCost> {
-  const { recipes, itemCostById } = params
+  const { recipes, ingredientCostById } = params
   const byId = new Map(recipes.map((r) => [String(r.id), r]))
   const memo = new Map<string, RecipeCost>()
   const inProgress = new Set<string>()
@@ -82,7 +82,7 @@ export function resolveAllRecipeCosts(params: {
       }
     }
     inProgress.delete(id)
-    const cost = computeRecipeCost({ recipe, itemCostById, nestedPortionCostById: nested })
+    const cost = computeRecipeCost({ recipe, ingredientCostById, nestedPortionCostById: nested })
     memo.set(id, cost)
     return cost
   }

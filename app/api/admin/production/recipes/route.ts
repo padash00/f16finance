@@ -23,7 +23,7 @@ function getOrgId(access: any): string | null {
 }
 
 type ComponentInput = {
-  item_id?: string | null
+  ingredient_id?: string | null
   component_recipe_id?: string | null
   name?: string | null
   qty?: number
@@ -58,25 +58,25 @@ export async function GET(request: Request) {
     if (recipeIds.length) {
       const { data: comps, error: cErr } = await supabase
         .from('recipe_components')
-        .select('id, recipe_id, item_id, component_recipe_id, name, qty, unit, waste_pct, sort_order')
+        .select('id, recipe_id, ingredient_id, component_recipe_id, name, qty, unit, waste_pct, sort_order')
         .in('recipe_id', recipeIds)
         .order('sort_order')
       if (cErr) throw cErr
       components = comps || []
     }
 
-    // Цены ингредиентов
-    const itemIds = Array.from(new Set(components.map((c) => c.item_id).filter(Boolean))) as string[]
-    const itemCostById = new Map<string, number>()
-    const itemNameById = new Map<string, string>()
-    if (itemIds.length) {
-      const { data: items } = await supabase
-        .from('inventory_items')
-        .select('id, name, default_purchase_price')
-        .in('id', itemIds)
-      for (const it of items || []) {
-        itemCostById.set(String(it.id), Number((it as any).default_purchase_price || 0))
-        itemNameById.set(String(it.id), String((it as any).name || ''))
+    // Цены ингредиентов (из каталога ингредиентов своей орг)
+    const ingIds = Array.from(new Set(components.map((c) => c.ingredient_id).filter(Boolean))) as string[]
+    const ingredientCostById = new Map<string, number>()
+    const ingredientNameById = new Map<string, string>()
+    if (ingIds.length) {
+      const { data: ings } = await supabase
+        .from('ingredients')
+        .select('id, name, purchase_price')
+        .in('id', ingIds)
+      for (const it of ings || []) {
+        ingredientCostById.set(String(it.id), Number((it as any).purchase_price || 0))
+        ingredientNameById.set(String(it.id), String((it as any).name || ''))
       }
     }
 
@@ -94,15 +94,15 @@ export async function GET(request: Request) {
       output_qty: Number(r.output_qty || 1),
       yield_factor: Number(r.yield_factor || 1),
       components: (compsByRecipe.get(String(r.id)) || []).map((c: any) => ({
-        item_id: c.item_id,
+        ingredient_id: c.ingredient_id,
         component_recipe_id: c.component_recipe_id,
-        name: c.name || (c.item_id ? itemNameById.get(String(c.item_id)) : c.component_recipe_id ? recipeName.get(String(c.component_recipe_id)) : null),
+        name: c.name || (c.ingredient_id ? ingredientNameById.get(String(c.ingredient_id)) : c.component_recipe_id ? recipeName.get(String(c.component_recipe_id)) : null),
         qty: Number(c.qty || 0),
         unit: c.unit,
         waste_pct: Number(c.waste_pct || 0),
       })),
     }))
-    const costs = resolveAllRecipeCosts({ recipes: costInput, itemCostById })
+    const costs = resolveAllRecipeCosts({ recipes: costInput, ingredientCostById })
 
     const out = (recipes || []).map((r: any) => {
       const cost = costs.get(String(r.id)) || { recipeCost: 0, portionCost: 0, components: [] }
@@ -114,14 +114,13 @@ export async function GET(request: Request) {
       }
     })
 
-    // Каталог ингредиентов для формы (товары своей орг)
-    let ingQuery = supabase
-      .from('inventory_items')
-      .select('id, name, unit, default_purchase_price')
+    // Каталог ингредиентов своей орг (для формы)
+    const { data: ingredients } = await supabase
+      .from('ingredients')
+      .select('id, name, unit, purchase_price, category')
+      .eq('organization_id', scopeOrg)
       .eq('is_active', true)
       .order('name')
-    if (!access.isSuperAdmin || orgId) ingQuery = ingQuery.eq('organization_id', scopeOrg)
-    const { data: ingredients } = await ingQuery
 
     return json({ ok: true, recipes: out, ingredients: ingredients || [] })
   } catch (error: any) {
@@ -166,10 +165,10 @@ export async function POST(request: Request) {
 
     const comps = (Array.isArray(body?.components) ? body.components : []) as ComponentInput[]
     const rows = comps
-      .filter((c) => (c.item_id || c.component_recipe_id || c.name) && Number(c.qty) > 0)
+      .filter((c) => (c.ingredient_id || c.component_recipe_id || c.name) && Number(c.qty) > 0)
       .map((c, i) => ({
         recipe_id: (recipe as any).id,
-        item_id: c.item_id || null,
+        ingredient_id: c.ingredient_id || null,
         component_recipe_id: c.component_recipe_id || null,
         name: c.name?.trim() || null,
         qty: Number(c.qty) || 0,
