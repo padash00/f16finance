@@ -82,7 +82,11 @@ export async function resolveOrganizationByHost(hostHeader: string | null | unde
   if (!normalized) return null
 
   const baseHost = getTenantBaseHost().toLowerCase()
-  if (normalized === baseHost || normalized === `www.${baseHost}`) return null
+  // apex (ordaops.kz) и www → дефолтная организация (F16). Так apex и f16.ordaops.kz —
+  // один контекст владельца. Другие тенанты — только через свой поддомен.
+  if (normalized === baseHost || normalized === `www.${baseHost}`) {
+    return await resolveDefaultOrganization()
+  }
   if (!normalized.endsWith(`.${baseHost}`)) return null
 
   const slug = normalized.slice(0, -(baseHost.length + 1))
