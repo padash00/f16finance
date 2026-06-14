@@ -6,6 +6,7 @@ import {
   ensureInventoryLocationAccess,
   fetchOpenTransferRequestsForLocation,
   postInventoryStocktake,
+  type InventoryScope,
 } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -16,6 +17,35 @@ function json(data: unknown, status = 200) {
 
 function canManageStore(access: { isSuperAdmin: boolean; staffRole: string }) {
   return access.isSuperAdmin || !!access.staffRole
+}
+
+// Мутации акта (создать/закрыть/отменить/пересчёт/решение) меняют остатки и создают
+// долги — требуем owner/manager, а не любую staffRole ('other' не должен закрывать акт).
+function canMutateAudit(access: { isSuperAdmin: boolean; staffRole?: string; staffMember?: { role?: string } }) {
+  if (access.isSuperAdmin) return true
+  const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
+  return role === 'owner' || role === 'manager'
+}
+
+function resolveInventoryScope(access: any, allowedCompanyIds: string[] | null): InventoryScope {
+  return { organizationId: access.activeOrganization?.id || null, allowedCompanyIds, isSuperAdmin: access.isSuperAdmin }
+}
+
+// Загружает акт и проверяет доступ к его локации (тенант-изоляция).
+// Возвращает { act } либо { response } с готовым 403/404.
+async function loadActWithGuard(
+  supabase: any,
+  actId: string,
+  scope: InventoryScope,
+): Promise<{ act: any } | { response: NextResponse }> {
+  const { data: act } = await supabase.from('inventory_audit_acts').select('*').eq('id', actId).maybeSingle()
+  if (!act) return { response: json({ error: 'act-not-found' }, 404) }
+  try {
+    await ensureInventoryLocationAccess(supabase, String((act as any).location_id), scope)
+  } catch {
+    return { response: json({ error: 'forbidden' }, 403) }
+  }
+  return { act }
 }
 
 const UUID_RE = /^[0-9a-fA-F-]{36}$/
@@ -31,12 +61,19 @@ export async function GET(request: Request) {
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({ activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin })
+    const inventoryScope = resolveInventoryScope(access, companyScope.allowedCompanyIds)
     const url = new URL(request.url)
     const actId = url.searchParams.get('act')
     const formLocation = url.searchParams.get('form')
 
     // ── Данные для формы создания (операторы точки + категории) ──────────────
     if (formLocation && UUID_RE.test(formLocation)) {
+      try {
+        await ensureInventoryLocationAccess(supabase, formLocation, inventoryScope)
+      } catch {
+        return json({ error: 'forbidden' }, 403)
+      }
       const { data: loc } = await supabase.from('inventory_locations').select('id, company_id, name, location_type').eq('id', formLocation).maybeSingle()
       const companyId = (loc as any)?.company_id || null
       const [assignRes, catRes] = await Promise.all([
@@ -61,8 +98,9 @@ export async function GET(request: Request) {
 
     // ── Детали акта ──────────────────────────────────────────────────────────
     if (actId && UUID_RE.test(actId)) {
-      const { data: act } = await supabase.from('inventory_audit_acts').select('*').eq('id', actId).maybeSingle()
-      if (!act) return json({ error: 'act-not-found' }, 404)
+      const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
+      if ('response' in guarded) return guarded.response
+      const act = guarded.act
       const [assigns, snap, counts, loc] = await Promise.all([
         supabase.from('inventory_audit_assignments').select('id, operator_id, category_id, label').eq('act_id', actId),
         supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId),
@@ -152,12 +190,17 @@ export async function GET(request: Request) {
       })
     }
 
-    // ── Список актов ─────────────────────────────────────────────────────────
-    const { data: acts } = await supabase
+    // ── Список актов (только своей орг/точек) ─────────────────────────────────
+    let actsQuery = supabase
       .from('inventory_audit_acts')
       .select('id, company_id, location_id, status, comment, opened_at, closed_at, stocktake_id')
       .order('opened_at', { ascending: false })
       .limit(50)
+    if (companyScope.allowedCompanyIds) {
+      // [] (скоуп без компаний) → .in(..., []) вернёт 0 строк (NEVER-pattern)
+      actsQuery = actsQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data: acts } = await actsQuery
     const actRows = (acts || []) as any[]
     const locIds = Array.from(new Set(actRows.map((a) => String(a.location_id))))
     const actIds = actRows.map((a) => String(a.id))
@@ -198,12 +241,12 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    if (!canMutateAudit(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null
     const companyScope = await resolveCompanyScope({ activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin })
-    const inventoryScope = { organizationId: access.activeOrganization?.id || null, allowedCompanyIds: companyScope.allowedCompanyIds, isSuperAdmin: access.isSuperAdmin }
+    const inventoryScope = resolveInventoryScope(access, companyScope.allowedCompanyIds)
     const body = (await request.json().catch(() => null)) as any
     const action = String(body?.action || '')
 
@@ -211,7 +254,11 @@ export async function POST(request: Request) {
     if (action === 'create') {
       const locationId = String(body?.location_id || '').trim()
       if (!UUID_RE.test(locationId)) return json({ error: 'location-required' }, 400)
-      await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+      try {
+        await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
+      } catch {
+        return json({ error: 'forbidden' }, 403)
+      }
 
       const { data: loc } = await supabase.from('inventory_locations').select('id, company_id').eq('id', locationId).maybeSingle()
       const companyId = (loc as any)?.company_id || null
@@ -257,8 +304,10 @@ export async function POST(request: Request) {
     if (action === 'close') {
       const actId = String(body?.act_id || '').trim()
       if (!UUID_RE.test(actId)) return json({ error: 'act-required' }, 400)
-      const { data: act } = await supabase.from('inventory_audit_acts').select('*').eq('id', actId).maybeSingle()
-      if (!act) return json({ error: 'act-not-found' }, 404)
+      // Тенант-изоляция: нельзя закрыть чужой акт (и заодно проверка существования).
+      const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
+      if ('response' in guarded) return guarded.response
+      const act = guarded.act
       if ((act as any).status !== 'open') return json({ error: 'act-not-open' }, 409)
       const locationId = String((act as any).location_id)
       const openedAt = String((act as any).opened_at)
@@ -270,13 +319,13 @@ export async function POST(request: Request) {
 
       const [snap, counts] = await Promise.all([
         supabase.from('inventory_audit_snapshot').select('item_id, expected_qty').eq('act_id', actId),
-        supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_at').eq('act_id', actId),
+        supabase.from('inventory_audit_counts').select('item_id, counted_qty, counted_at, counted_by').eq('act_id', actId),
       ])
       const expectedBy = new Map(((snap.data || []) as any[]).map((r) => [String(r.item_id), num(r.expected_qty)]))
       const countRows = (counts.data || []) as any[]
       if (countRows.length === 0) return json({ error: 'nothing-counted' }, 400)
 
-      // движения локации с момента открытия — для учёта продаж после подсчёта позиции
+      // движения локации с момента открытия — для учёта продаж/приходов во время счёта
       const { data: moves } = await supabase
         .from('inventory_movements')
         .select('item_id, quantity, from_location_id, to_location_id, created_at')
@@ -297,16 +346,20 @@ export async function POST(request: Request) {
 
       const actMode = String((act as any).mode || 'single')
       // группируем счёты по товару (в double их несколько — от разных операторов)
-      const grouped = new Map<string, Array<{ qty: number; at: string }>>()
+      const grouped = new Map<string, Array<{ qty: number; at: string; by: string | null }>>()
       for (const r of countRows) {
         const id = String(r.item_id)
         const l = grouped.get(id) || []
-        l.push({ qty: num(r.counted_qty), at: String(r.counted_at) })
+        l.push({ qty: num(r.counted_qty), at: String(r.counted_at), by: r.counted_by ? String(r.counted_by) : null })
         grouped.set(id, l)
       }
       const conflicts: string[] = []
       const stocktakeItems: Array<{ item_id: string; actual_qty: number; comment: string | null }> = []
       const report: Array<{ item_id: string; counted: number; expected: number; variance: number; soldAfter: number; final: number }> = []
+      // Недостача товара для долга: реальная нехватка на момент подсчёта =
+      // (ожидалось при открытии + движения ДО подсчёта) − посчитано. Так продажи
+      // во время ревизии не превращаются в «недостачу» оператора.
+      const shortageByItem = new Map<string, { qty: number; op: string | null }>()
       for (const [itemId, list] of grouped) {
         const distinct = Array.from(new Set(list.map((x) => x.qty)))
         if (distinct.length > 1 && actMode === 'double') {
@@ -317,42 +370,65 @@ export async function POST(request: Request) {
         const counted = latest.qty
         const expected = expectedBy.get(itemId) ?? 0
         let deltaAfter = 0
-        for (const m of movesByItem.get(itemId) || []) if (m.at > latest.at) deltaAfter += m.delta
+        let deltaBefore = 0
+        for (const m of movesByItem.get(itemId) || []) {
+          if (m.at > latest.at) deltaAfter += m.delta
+          else deltaBefore += m.delta
+        }
         const final = Math.max(0, counted + deltaAfter)
         stocktakeItems.push({ item_id: itemId, actual_qty: final, comment: null })
         report.push({ item_id: itemId, counted, expected, variance: counted - expected, soldAfter: -Math.min(0, deltaAfter), final })
+        const shortageQty = Math.max(0, expected + deltaBefore - counted)
+        if (shortageQty > 0) shortageByItem.set(itemId, { qty: shortageQty, op: latest.by })
       }
       if (conflicts.length > 0) {
         return json({ error: 'unresolved-conflicts', message: `Расхождение между счётчиками: ${conflicts.length} поз. Нужен пересчёт или решение владельца.`, conflicts }, 409)
       }
 
-      const result = await postInventoryStocktake(supabase as any, {
-        location_id: locationId,
-        counted_at: new Date().toISOString().slice(0, 10),
-        comment: `Аудит-акт ${actId.slice(0, 8)}`,
-        created_by: actorUserId,
-        items: stocktakeItems,
-      })
+      // Атомарно «забираем» акт open → closed ДО записи стока. Если затронуто 0 строк —
+      // акт уже закрыт другим запросом → не применяем стоктейк повторно.
+      const closedAt = new Date().toISOString()
+      const { data: claimed, error: claimErr } = await supabase
+        .from('inventory_audit_acts')
+        .update({ status: 'closed', closed_at: closedAt, closed_by: actorUserId })
+        .eq('id', actId)
+        .eq('status', 'open')
+        .select('id')
+      if (claimErr) throw claimErr
+      if (!claimed || (claimed as any[]).length === 0) return json({ error: 'act-not-open' }, 409)
 
-      await supabase.from('inventory_audit_acts').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: actorUserId, stocktake_id: (result as any)?.stocktake_id || (result as any)?.id || null }).eq('id', actId)
+      let result: any
+      try {
+        result = await postInventoryStocktake(supabase as any, {
+          location_id: locationId,
+          counted_at: new Date().toISOString().slice(0, 10),
+          comment: `Аудит-акт ${actId.slice(0, 8)}`,
+          created_by: actorUserId,
+          items: stocktakeItems,
+        })
+      } catch (stocktakeError) {
+        // Откатываем статус, чтобы акт снова можно было закрыть.
+        await supabase.from('inventory_audit_acts').update({ status: 'open', closed_at: null, closed_by: null }).eq('id', actId)
+        throw stocktakeError
+      }
+
+      await supabase.from('inventory_audit_acts').update({ stocktake_id: (result as any)?.stocktake_id || (result as any)?.id || null }).eq('id', actId)
 
       // Опция: недостачу повесить долгом на ответственного оператора (удержится из ЗП).
       let debtsCreated = 0
-      if (body?.assignDebt === true) {
-        const itemIds = countRows.map((r: any) => String(r.item_id))
+      if (body?.assignDebt === true && shortageByItem.size > 0) {
+        const itemIds = Array.from(shortageByItem.keys())
         const { data: costItems } = itemIds.length ? await supabase.from('inventory_items').select('id, default_purchase_price').in('id', itemIds) : { data: [] as any[] }
         const costBy = new Map(((costItems as any[]) || []).map((i: any) => [String(i.id), num((i as any).default_purchase_price)]))
-        const { data: locRow } = await supabase.from('inventory_locations').select('company_id').eq('id', locationId).maybeSingle()
-        const companyId = (locRow as any)?.company_id || null
+        const companyId = (act as any)?.company_id || null
         const d = new Date()
         const dow = (d.getUTCDay() + 6) % 7
         const weekStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow)).toISOString().slice(0, 10)
         const today = new Date().toISOString().slice(0, 10)
         const shortByOp = new Map<string, number>()
-        for (const r of countRows as any[]) {
-          const variance = num(r.counted_qty) - (expectedBy.get(String(r.item_id)) ?? 0)
-          const op = String(r.counted_by || '')
-          if (variance < 0 && op) shortByOp.set(op, (shortByOp.get(op) || 0) + -variance * (costBy.get(String(r.item_id)) || 0))
+        for (const [itemId, { qty, op }] of shortageByItem) {
+          if (!op || qty <= 0) continue
+          shortByOp.set(op, (shortByOp.get(op) || 0) + qty * (costBy.get(itemId) || 0))
         }
         const debtRows = Array.from(shortByOp.entries())
           .filter(([, amt]) => amt > 0.5)
@@ -373,6 +449,8 @@ export async function POST(request: Request) {
     if (action === 'cancel') {
       const actId = String(body?.act_id || '').trim()
       if (!UUID_RE.test(actId)) return json({ error: 'act-required' }, 400)
+      const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
+      if ('response' in guarded) return guarded.response
       await supabase.from('inventory_audit_acts').update({ status: 'cancelled', closed_at: new Date().toISOString(), closed_by: actorUserId }).eq('id', actId).eq('status', 'open')
       return json({ ok: true })
     }
@@ -382,6 +460,9 @@ export async function POST(request: Request) {
       const actId = String(body?.act_id || '').trim()
       const itemId = String(body?.item_id || '').trim()
       if (!UUID_RE.test(actId) || !UUID_RE.test(itemId)) return json({ error: 'bad-params' }, 400)
+      const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
+      if ('response' in guarded) return guarded.response
+      if ((guarded.act as any).status !== 'open') return json({ error: 'act-not-open' }, 409)
       await supabase.from('inventory_audit_counts').delete().eq('act_id', actId).eq('item_id', itemId)
       return json({ ok: true })
     }
@@ -391,6 +472,9 @@ export async function POST(request: Request) {
       const actId = String(body?.act_id || '').trim()
       const itemId = String(body?.item_id || '').trim()
       if (!UUID_RE.test(actId) || !UUID_RE.test(itemId)) return json({ error: 'bad-params' }, 400)
+      const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
+      if ('response' in guarded) return guarded.response
+      if ((guarded.act as any).status !== 'open') return json({ error: 'act-not-open' }, 409)
       const qty = Math.max(0, num(body?.qty))
       await supabase.from('inventory_audit_counts').delete().eq('act_id', actId).eq('item_id', itemId)
       const { error } = await supabase.from('inventory_audit_counts').insert({ act_id: actId, item_id: itemId, counted_qty: qty, counted_by: null, counted_at: new Date().toISOString() })

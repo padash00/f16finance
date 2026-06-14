@@ -130,13 +130,25 @@ export async function POST(request: Request) {
     // акт открыт и оператор назначен
     const { data: act } = await supabase.from('inventory_audit_acts').select('id, status').eq('id', actId).maybeSingle()
     if (!act || (act as any).status !== 'open') return json({ error: 'act-not-open' }, 409)
-    const { data: assign } = await supabase.from('inventory_audit_assignments').select('id').eq('act_id', actId).eq('operator_id', operatorId).limit(1)
+    const { data: assign } = await supabase.from('inventory_audit_assignments').select('category_id').eq('act_id', actId).eq('operator_id', operatorId)
     if (!assign || (assign as any[]).length === 0) return json({ error: 'not-assigned' }, 403)
+    const section = operatorSection((assign as any[]).map((a) => ({ category_id: a.category_id ? String(a.category_id) : null })))
+
+    // Разрешённые товары: только из снимка акта и (если не «вся локация») из своих категорий.
+    const { data: snap } = await supabase.from('inventory_audit_snapshot').select('item_id').eq('act_id', actId)
+    const snapIds = new Set(((snap as any[]) || []).map((r: any) => String(r.item_id)))
+    let allowedItems: Set<string> = snapIds
+    if (!section.all) {
+      const { data: catItems } = snapIds.size
+        ? await supabase.from('inventory_items').select('id, category_id').in('id', Array.from(snapIds))
+        : { data: [] as any[] }
+      allowedItems = new Set(((catItems as any[]) || []).filter((it: any) => it.category_id && section.cats.has(String(it.category_id))).map((it: any) => String(it.id)))
+    }
 
     const now = new Date().toISOString()
     const rows = incoming
       .map((c: any) => ({ act_id: actId, item_id: String(c.item_id || '').trim(), counted_qty: Math.max(0, num(c.counted_qty)), counted_by: operatorId, counted_at: now }))
-      .filter((r: any) => UUID_RE.test(r.item_id))
+      .filter((r: any) => UUID_RE.test(r.item_id) && allowedItems.has(r.item_id))
     if (rows.length === 0) return json({ error: 'counts-invalid' }, 400)
 
     const { error } = await supabase.from('inventory_audit_counts').upsert(rows, { onConflict: 'act_id,item_id,counted_by' })
