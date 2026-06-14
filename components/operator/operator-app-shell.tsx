@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ComponentType, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
-import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, MonitorSmartphone, Wallet } from 'lucide-react'
+import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, MonitorSmartphone, ScanLine, Wallet } from 'lucide-react'
 
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { href: '/operator', label: 'Сегодня', shortLabel: 'Главная', icon: Home, description: 'Главный экран оператора' },
   { href: '/operator/shifts', label: 'Смены', shortLabel: 'Смены', icon: CalendarDays, description: 'График и подтверждение смен' },
   { href: '/operator/tasks', label: 'Задачи', shortLabel: 'Задачи', icon: Briefcase, description: 'Новые и активные задачи' },
+  { href: '/operator/audit', label: 'Ревизия', shortLabel: 'Ревизия', icon: ScanLine, description: 'Подсчёт товара по назначенному акту — скан камерой' },
   { href: '/operator/salary', label: 'Зарплата', shortLabel: 'Зарплата', icon: Wallet, description: 'Неделя, долги, авансы и выплаты' },
   { href: '/operator/profile', label: 'Профиль', shortLabel: 'Профиль', icon: CircleUserRound, description: 'Личные данные и настройки' },
   { href: '/operator/terminal-login', label: 'Терминал', shortLabel: 'Терминал', icon: MonitorSmartphone, description: 'Вход на Orda Point по QR с экрана кассы' },
@@ -30,6 +31,7 @@ const metaByPath: Array<{ match: (pathname: string) => boolean; title: string; s
   { match: (p) => p === '/operator', title: 'Личный кабинет', subtitle: 'Сегодняшняя смена, задачи, долг и зарплата в одном месте.' },
   { match: (p) => p.startsWith('/operator/shifts'), title: 'Мои смены', subtitle: 'Текущая неделя, подтверждение графика и история рабочих дней.' },
   { match: (p) => p.startsWith('/operator/tasks'), title: 'Мои задачи', subtitle: 'Новые поручения, статус выполнения и комментарии.' },
+  { match: (p) => p.startsWith('/operator/audit'), title: 'Ревизия', subtitle: 'Считайте товар по своей секции — наведите камеру на штрихкод. Системный остаток не показывается.' },
   { match: (p) => p.startsWith('/operator/salary'), title: 'Моя зарплата', subtitle: 'Начисление по неделе, долги, авансы и история выплат.' },
   { match: (p) => p.startsWith('/operator/profile'), title: 'Мой профиль', subtitle: 'Контакты, точки, Telegram и рабочие настройки.' },
   { match: (p) => p.startsWith('/operator/terminal-login'), title: 'Вход на терминале', subtitle: 'Подтвердите вход в Orda Point на кассе: QR или код из ссылки.' },

@@ -1,27 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
-import { ArrowLeft, Camera, ClipboardList, Flashlight, Loader2, Save } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, ClipboardList, Loader2, Save } from 'lucide-react'
 
+import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
 import { OperatorEmptyState, OperatorPanel, OperatorSectionHeading } from '@/components/operator/operator-mobile-ui'
-
-let audioCtx: AudioContext | null = null
-function beep(ok: boolean) {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)()
-    const o = audioCtx.createOscillator()
-    const g = audioCtx.createGain()
-    o.connect(g)
-    g.connect(audioCtx.destination)
-    o.frequency.value = ok ? 880 : 220
-    g.gain.value = 0.05
-    o.start()
-    o.stop(audioCtx.currentTime + (ok ? 0.08 : 0.18))
-  } catch {
-    /* звук необязателен */
-  }
-}
 
 type ActRow = { act_id: string; locationName: string; comment: string | null; opened_at: string; sectionLabel: string }
 type ItemRow = { item_id: string; name: string; barcode: string | null; unit: string | null; counted: number | null }
@@ -40,13 +23,7 @@ export default function OperatorAuditPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const [scanning, setScanning] = useState(false)
-  const [torchOn, setTorchOn] = useState(false)
   const [highlightId, setHighlightId] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const controlsRef = useRef<IScannerControls | null>(null)
-  const trackRef = useRef<MediaStreamTrack | null>(null)
-  const lastScan = useRef<{ code: string; t: number }>({ code: '', t: 0 })
 
   const itemByBarcode = useMemo(() => {
     const m = new Map<string, ItemRow>()
@@ -58,15 +35,12 @@ export default function OperatorAuditPage() {
     (raw: string) => {
       const code = String(raw || '').trim()
       if (!code) return
-      const now = Date.now()
-      if (lastScan.current.code === code && now - lastScan.current.t < 1500) return
-      lastScan.current = { code, t: now }
       const it = itemByBarcode.get(code)
       if (!it) {
-        beep(false)
+        scanFeedback(false)
         return
       }
-      beep(true)
+      scanFeedback(true)
       setHighlightId(it.item_id)
       const el = document.getElementById(`audit-input-${it.item_id}`) as HTMLInputElement | null
       if (el) {
@@ -76,48 +50,6 @@ export default function OperatorAuditPage() {
     },
     [itemByBarcode],
   )
-
-  useEffect(() => {
-    if (!scanning) return
-    let cancelled = false
-    const reader = new BrowserMultiFormatReader()
-    void (async () => {
-      try {
-        const controls = await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } } }, videoRef.current as HTMLVideoElement, (res) => {
-          if (res) handleScan(res.getText())
-        })
-        if (cancelled) controls.stop()
-        else {
-          controlsRef.current = controls
-          const stream = (videoRef.current?.srcObject as MediaStream | null) || null
-          trackRef.current = stream?.getVideoTracks?.()[0] || null
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setError('Камера недоступна: ' + (e?.message || ''))
-          setScanning(false)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-      controlsRef.current?.stop()
-      controlsRef.current = null
-      trackRef.current = null
-      setTorchOn(false)
-    }
-  }, [scanning, handleScan])
-
-  const toggleTorch = async () => {
-    const track = trackRef.current
-    if (!track) return
-    try {
-      await track.applyConstraints({ advanced: [{ torch: !torchOn } as any] })
-      setTorchOn((v) => !v)
-    } catch {
-      /* фонарик не поддерживается устройством */
-    }
-  }
 
   const loadActs = useCallback(async () => {
     setLoading(true)
@@ -236,20 +168,14 @@ export default function OperatorAuditPage() {
 
       {/* Камера: скан штрихкода → подсветит и сфокусирует нужный товар */}
       {!itemsLoading && items.length > 0 ? (
-        <div className="border border-[#23262b] bg-[#0e0f10]">
-          {scanning ? (
-            <div className="relative aspect-[5/3] w-full overflow-hidden bg-black">
-              <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="h-20 w-3/4 border-2 border-amber-400/80" /></div>
-              <div className="absolute right-2 top-2 flex gap-2">
-                <button type="button" onClick={() => void toggleTorch()} className={`border p-2 ${torchOn ? 'border-amber-400 text-amber-300' : 'border-white/20 text-white'}`} aria-label="Фонарик"><Flashlight className="h-4 w-4" /></button>
-                <button type="button" onClick={() => setScanning(false)} className="border border-white/20 px-2 py-2 font-mono text-xs text-white">Стоп</button>
-              </div>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setScanning(true)} className="flex w-full items-center justify-center gap-2 py-3 font-mono text-[12px] uppercase tracking-wide text-amber-300"><Camera className="h-4 w-4" /> Сканировать камерой</button>
-          )}
-        </div>
+        <CameraScanner
+          onDetect={handleScan}
+          onError={(m) => setError(m)}
+          accent="amber"
+          aspectClass="aspect-[5/3]"
+          debounceMs={1500}
+          startLabel="Сканировать камерой"
+        />
       ) : null}
 
       {itemsLoading ? (

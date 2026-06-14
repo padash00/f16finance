@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
-import { ArrowLeft, Camera, Check, Loader2, Package, ScanLine, Search, X } from 'lucide-react'
+import { Check, Loader2, Package, ScanLine, Search, X } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
 
 type Item = { id: string; name: string; barcode?: string | null; unit?: string }
 type Balance = { location_id: string; item_id: string; quantity: number; item?: Item | null }
@@ -20,23 +20,6 @@ function fmt(n: number) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2)
 }
 
-let audioCtx: AudioContext | null = null
-function beep(ok: boolean) {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)()
-    const o = audioCtx.createOscillator()
-    const g = audioCtx.createGain()
-    o.connect(g)
-    g.connect(audioCtx.destination)
-    o.frequency.value = ok ? 880 : 220
-    g.gain.value = 0.05
-    o.start()
-    o.stop(audioCtx.currentTime + (ok ? 0.08 : 0.18))
-  } catch {
-    // звук необязателен
-  }
-}
-
 const locLabel = (l: Loc) =>
   `${l.company?.name ? l.company.name + ' · ' : ''}${l.location_type === 'point_display' ? 'Витрина' : l.location_type === 'warehouse' ? 'Склад' : l.name}`
 
@@ -47,7 +30,6 @@ export default function ScanRevisionPage() {
 
   const [locationId, setLocationId] = useState('')
   const [counts, setCounts] = useState<Record<string, number>>({})
-  const [scanning, setScanning] = useState(false)
   const [pending, setPending] = useState<{ item: Item; expected: number } | null>(null)
   const [qtyInput, setQtyInput] = useState('')
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null)
@@ -55,10 +37,6 @@ export default function ScanRevisionPage() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ changed: number } | null>(null)
 
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const controlsRef = useRef<IScannerControls | null>(null)
-  const lastScan = useRef<{ code: string; t: number }>({ code: '', t: 0 })
-  const pausedRef = useRef(false)
   const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -122,52 +100,18 @@ export default function ScanRevisionPage() {
     (raw: string) => {
       const code = String(raw || '').trim()
       if (!code) return
-      const now = Date.now()
-      if (lastScan.current.code === code && now - lastScan.current.t < 2000) return
-      lastScan.current = { code, t: now }
       const item = itemByBarcode.get(code)
       if (!item) {
-        beep(false)
+        scanFeedback(false)
         flash(false, `Штрихкод не найден: ${code}`)
         return
       }
-      beep(true)
-      pausedRef.current = true
+      scanFeedback(true)
       setPending({ item, expected: expectedByItem.get(item.id) ?? 0 })
       setQtyInput(counts[item.id] != null ? fmt(counts[item.id]) : '')
     },
     [itemByBarcode, expectedByItem, counts, flash],
   )
-
-  // Камера: старт по кнопке (нужен жест пользователя для iOS).
-  useEffect(() => {
-    if (!scanning || !locationId) return
-    let cancelled = false
-    const reader = new BrowserMultiFormatReader()
-    void (async () => {
-      try {
-        const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: 'environment' } } },
-          videoRef.current as HTMLVideoElement,
-          (res) => {
-            if (res && !pausedRef.current) handleBarcode(res.getText())
-          },
-        )
-        if (cancelled) controls.stop()
-        else controlsRef.current = controls
-      } catch (e: any) {
-        if (!cancelled) {
-          setError('Камера недоступна: ' + (e?.message || 'нет доступа'))
-          setScanning(false)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-      controlsRef.current?.stop()
-      controlsRef.current = null
-    }
-  }, [scanning, locationId, handleBarcode])
 
   const confirmQty = () => {
     if (!pending) return
@@ -176,16 +120,13 @@ export default function ScanRevisionPage() {
     flash(true, `${pending.item.name}: ${fmt(qty)}`)
     setPending(null)
     setQtyInput('')
-    pausedRef.current = false
   }
   const cancelQty = () => {
     setPending(null)
     setQtyInput('')
-    pausedRef.current = false
   }
 
   const addManual = (item: Item) => {
-    pausedRef.current = true
     setPending({ item, expected: expectedByItem.get(item.id) ?? 0 })
     setQtyInput(counts[item.id] != null ? fmt(counts[item.id]) : '')
     setManual('')
@@ -229,8 +170,6 @@ export default function ScanRevisionPage() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка (${res.status})`)
       setResult({ changed: Number(json?.data?.changed_items ?? items.length) })
-      setScanning(false)
-      controlsRef.current?.stop()
     } catch (e: any) {
       setError(e?.message || 'Не удалось провести ревизию')
     } finally {
@@ -314,34 +253,15 @@ export default function ScanRevisionPage() {
           </div>
 
           {/* Камера */}
-          <div className="relative aspect-[4/3] w-full overflow-hidden border border-white/10 bg-black">
-            <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
-            {scanning ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="h-28 w-3/4 border-2 border-amber-400/80" />
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70">
-                <Camera className="h-8 w-8 text-zinc-500" />
-                <button
-                  type="button"
-                  onClick={() => setScanning(true)}
-                  className="border border-amber-400/50 bg-amber-400/10 px-5 py-2.5 font-mono text-[13px] uppercase tracking-wide text-amber-300"
-                >
-                  Включить камеру
-                </button>
-              </div>
-            )}
-            {feedback ? (
-              <div className={`absolute inset-x-0 bottom-0 px-3 py-2 font-mono text-[12px] ${feedback.ok ? 'bg-emerald-500/85 text-black' : 'bg-rose-500/85 text-white'}`}>{feedback.text}</div>
-            ) : null}
-          </div>
-
-          {scanning ? (
-            <button type="button" onClick={() => setScanning(false)} className="w-full border border-white/10 py-2 font-mono text-[12px] uppercase tracking-wide text-zinc-400 hover:text-zinc-100">
-              Выключить камеру
-            </button>
-          ) : null}
+          <CameraScanner
+            onDetect={handleBarcode}
+            onError={(m) => setError(m)}
+            paused={!!pending}
+            feedback={feedback}
+            accent="amber"
+            debounceMs={2000}
+            startLabel="Включить камеру"
+          />
 
           {/* Поиск вручную (если штрихкода нет) */}
           <div className="border border-white/10 bg-white/[0.04] p-2">
