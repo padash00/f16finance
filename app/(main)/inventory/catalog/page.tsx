@@ -253,6 +253,33 @@ function ItemForm({
   const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'
   const fieldLabel = 'text-xs text-muted-foreground mb-1 block'
 
+  // Распознавание товара по штрихкоду (открытые базы + AI), результат в кэш.
+  const [recog, setRecog] = useState<{ loading: boolean; data: any | null; error: string | null }>({ loading: false, data: null, error: null })
+  const runLookup = async () => {
+    const code = form.barcode.replace(/\D/g, '')
+    if (code.length < 8) { setRecog({ loading: false, data: null, error: 'Введите штрихкод (минимум 8 цифр)' }); return }
+    setRecog({ loading: true, data: null, error: null })
+    try {
+      const res = await fetch(`/api/admin/store/barcode-lookup?code=${encodeURIComponent(code)}`, { cache: 'no-store' })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.error || 'Не удалось распознать')
+      setRecog({ loading: false, data: j?.data || null, error: null })
+    } catch (e: any) {
+      setRecog({ loading: false, data: null, error: e?.message || 'Ошибка распознавания' })
+    }
+  }
+  const applySuggestion = () => {
+    const d = recog.data
+    if (!d) return
+    onChange({
+      ...form,
+      name: d.name || form.name,
+      category_id: d.category_id || form.category_id,
+      notes: d.description || form.notes,
+    })
+    setRecog((r) => ({ ...r, data: { ...r.data, found: 'applied' } }))
+  }
+
   const purchase = parseFloat(form.purchase_price) || 0
   const sale = parseFloat(form.sale_price) || 0
   const markup = purchase > 0 ? String(Math.round(((sale / purchase - 1) * 100 + Number.EPSILON) * 10) / 10) : ''
@@ -277,7 +304,10 @@ function ItemForm({
             <Label className={fieldLabel}>Штрихкод *</Label>
             <div className="flex gap-2">
               <Input value={form.barcode} onChange={(e) => f('barcode', e.target.value)} placeholder="Отсканируйте или введите" />
-              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => f('barcode', genBarcode())}>Сгенерировать</Button>
+              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void runLookup()} disabled={recog.loading} title="Найти товар по штрихкоду в открытых базах">
+                {recog.loading ? '…' : 'Распознать'}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => f('barcode', genBarcode())} title="Сгенерировать внутренний штрихкод">Сген.</Button>
             </div>
           </div>
           <div>
@@ -305,6 +335,39 @@ function ItemForm({
             </Select>
           </div>
         </div>
+
+        {/* Результат распознавания по штрихкоду */}
+        {recog.error ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{recog.error}</div>
+        ) : null}
+        {recog.data?.found === 'local' ? (
+          <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-300">
+            Такой штрихкод уже есть в каталоге: <span className="font-medium">{recog.data.name}</span>{recog.data.category_name ? ` · ${recog.data.category_name}` : ''}.
+          </div>
+        ) : recog.data?.found === 'none' ? (
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+            Не нашли в открытых базах{recog.data.country ? ` (код: ${recog.data.country})` : ''}. Заполните вручную — товар сохранится в каталоге.
+          </div>
+        ) : recog.data?.found === 'external' || recog.data?.found === 'applied' ? (
+          <div className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+            {recog.data.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={recog.data.image_url} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-emerald-200">{recog.data.name}</div>
+              <div className="mt-0.5 text-[11px] text-emerald-300/80">
+                {[recog.data.brand, recog.data.category_name, recog.data.country].filter(Boolean).join(' · ') || '—'}
+              </div>
+              {recog.data.description ? <div className="mt-1 text-[11px] text-muted-foreground">{recog.data.description}</div> : null}
+            </div>
+            {recog.data.found === 'applied' ? (
+              <span className="shrink-0 self-center text-[11px] text-emerald-300">подставлено ✓</span>
+            ) : (
+              <Button type="button" size="sm" variant="outline" className="shrink-0 self-center" onClick={applySuggestion}>Подставить</Button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Цена */}
