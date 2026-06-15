@@ -77,7 +77,8 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
   }, [line.is_bonus, line.last_unit_cost, line.unit_cost])
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
+    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
       <div className="space-y-1.5 min-w-0">
         <Label>Товар</Label>
         <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -232,6 +233,24 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
           Убрать
         </Button>
       </div>
+      </div>
+
+      {/* Срок годности (обязателен, кроме товаров без срока — бургеры/хотдоги) */}
+      {line.item_id ? (
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Изготовлен (от)</Label>
+            <Input type="date" value={line.production_date || ''} onChange={(event) => onPatch(line.uid, { production_date: event.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Годен до {lineItem?.requires_expiry === false ? '(необяз.)' : '*'}</Label>
+            <Input type="date" value={line.expiry_date || ''} onChange={(event) => onPatch(line.uid, { expiry_date: event.target.value })} />
+          </div>
+          {lineItem?.requires_expiry === false ? (
+            <div className="flex items-end sm:col-span-2"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

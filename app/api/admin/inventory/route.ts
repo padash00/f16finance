@@ -400,6 +400,7 @@ export async function POST(request: Request) {
         notes: body.payload?.notes || null,
         item_type: String(body.payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
         low_stock_threshold: lstCreate != null && Number.isFinite(Number(lstCreate)) ? Number(lstCreate) : null,
+        requires_expiry: (body.payload as any)?.requires_expiry !== false,
       }, inventoryScope)
 
       if ((item as any)?.item_type !== 'consumable') {

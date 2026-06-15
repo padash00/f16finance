@@ -19,6 +19,7 @@ type Item = {
   barcode: string
   unit?: string | null
   default_purchase_price?: number | null
+  requires_expiry?: boolean | null
 }
 
 type Location = {
@@ -35,6 +36,8 @@ type PostingLine = {
   quantity: string
   unit_cost: string
   comment: string
+  production_date: string
+  expiry_date: string
 }
 
 type RecentPosting = {
@@ -63,6 +66,8 @@ function newLine(): PostingLine {
     quantity: '',
     unit_cost: '',
     comment: '',
+    production_date: '',
+    expiry_date: '',
   }
 }
 
@@ -162,10 +167,12 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
   const validate = (): string | null => {
     if (!locationId) return 'Выберите склад или витрину'
-    const payloadItems = lines
-      .map((l) => ({ item_id: l.item_id, quantity: parseNum(l.quantity) }))
-      .filter((l) => l.item_id && l.quantity > 0)
-    if (payloadItems.length === 0) return 'Добавьте хотя бы одну строку с положительным количеством'
+    const payloadLines = lines.filter((l) => l.item_id && parseNum(l.quantity) > 0)
+    if (payloadLines.length === 0) return 'Добавьте хотя бы одну строку с положительным количеством'
+    const missing = payloadLines
+      .filter((l) => itemById.get(l.item_id)?.requires_expiry !== false && !l.expiry_date.trim())
+      .map((l) => itemById.get(l.item_id)?.name || 'Товар')
+    if (missing.length) return `Укажите «годен до» для: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}. Товары без срока (бургеры/хотдоги) — снимите галочку «требует срок годности» в каталоге.`
     return null
   }
 
@@ -189,6 +196,8 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         quantity: parseNum(l.quantity),
         unit_cost: parseNum(l.unit_cost),
         comment: l.comment.trim() || null,
+        production_date: l.production_date.trim() || null,
+        expiry_date: l.expiry_date.trim() || null,
       }))
       .filter((l) => l.item_id && l.quantity > 0)
 
@@ -424,6 +433,24 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                         </Button>
                       </div>
                     </div>
+                    {/* Срок годности (обязателен, кроме товаров без срока) */}
+                    {line.item_id ? (
+                      <div className="grid gap-2 sm:grid-cols-12">
+                        <div className="sm:col-span-3">
+                          <Label className="mb-1 block text-[10px] text-muted-foreground">Изготовлен (от)</Label>
+                          <Input type="date" value={line.production_date} onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, production_date: e.target.value } : l))} />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <Label className="mb-1 block text-[10px] text-muted-foreground">
+                            Годен до {it?.requires_expiry === false ? '(необяз.)' : '*'}
+                          </Label>
+                          <Input type="date" value={line.expiry_date} onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, expiry_date: e.target.value } : l))} />
+                        </div>
+                        {it?.requires_expiry === false ? (
+                          <div className="flex items-end sm:col-span-6"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 )
               })}

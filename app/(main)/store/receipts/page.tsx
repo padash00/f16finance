@@ -391,6 +391,8 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         is_bonus: Boolean(line.is_bonus),
         comment: line.comment.trim() || null,
         invoice_name: line.invoice_name?.trim() || null,
+        production_date: line.production_date?.trim() || null,
+        expiry_date: line.expiry_date?.trim() || null,
       }))
       .filter((line) => line.item_id && line.quantity > 0 && line.unit_cost >= 0 && line.sale_price >= 0)
 
@@ -401,6 +403,18 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     if (!payloadItems.length) {
       setError('Добавьте хотя бы одну товарную строку')
       return
+    }
+    // Срок годности обязателен, кроме товаров с requires_expiry=false (бургеры/хотдоги).
+    {
+      const reqById = new Map((data?.items || []).map((it) => [it.id, it.requires_expiry !== false]))
+      const nameById = new Map((data?.items || []).map((it) => [it.id, it.name]))
+      const missing = payloadItems
+        .filter((l) => reqById.get(l.item_id) !== false && !l.expiry_date)
+        .map((l) => nameById.get(l.item_id) || 'Товар')
+      if (missing.length) {
+        setError(`Укажите «годен до» для: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}. Товары без срока (бургеры/хотдоги) — снимите галочку «требует срок годности» в каталоге.`)
+        return
+      }
     }
     if (!invoiceFileUrl) {
       setError('Загрузите файл накладной. Без документа приемка запрещена.')

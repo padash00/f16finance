@@ -20,6 +20,33 @@ function canManageStore(access: {
   return access.isSuperAdmin || !!access.staffRole
 }
 
+// Срок годности обязателен на приёмке/оприходовании, кроме товаров с requires_expiry=false
+// (бургеры/хотдоги и пр.). Возвращает текст ошибки (имена товаров без «годен до») или null.
+async function validateExpiry(
+  supabase: any,
+  items: Array<{ item_id: string; expiry_date?: string | null }>,
+): Promise<string | null> {
+  const ids = Array.from(new Set(items.map((i) => String(i.item_id)).filter(Boolean)))
+  if (!ids.length) return null
+  const { data, error } = await supabase.from('inventory_items').select('id, name, requires_expiry').in('id', ids)
+  if (error) throw error
+  const byId = new Map(((data as any[]) || []).map((r: any) => [String(r.id), r]))
+  const missing: string[] = []
+  for (const line of items) {
+    const it = byId.get(String(line.item_id))
+    if (!it) continue
+    const requires = (it as any).requires_expiry !== false
+    const hasExpiry = !!String(line.expiry_date || '').trim()
+    if (requires && !hasExpiry) missing.push((it as any).name || 'Товар')
+  }
+  if (missing.length) {
+    const head = missing.slice(0, 5).join(', ')
+    const tail = missing.length > 5 ? ` и ещё ${missing.length - 5}` : ''
+    return `Укажите срок годности (годен до) для: ${head}${tail}. Если товар без срока (бургеры/хотдоги) — снимите галочку «требует срок годности» в каталоге.`
+  }
+  return null
+}
+
 type Body = {
   action: 'createReceipt' | 'saveDraft' | 'deleteDraft' | 'cancelReceipt' | 'createPosting'
   payload?: {
@@ -48,13 +75,15 @@ type Body = {
       is_bonus?: boolean
       comment?: string | null
       invoice_name?: string | null
+      production_date?: string | null
+      expiry_date?: string | null
     }>
   }
   posting?: {
     location_id: string
     received_at: string
     comment?: string | null
-    items: Array<{ item_id: string; quantity: number; unit_cost?: number; comment?: string | null }>
+    items: Array<{ item_id: string; quantity: number; unit_cost?: number; comment?: string | null; production_date?: string | null; expiry_date?: string | null }>
   }
   receipt_id?: string
   cancel_reason?: string
@@ -340,10 +369,15 @@ export async function POST(request: Request) {
           quantity: normalizeQty(i.quantity),
           unit_cost: normalizeUnitCost(i.unit_cost ?? 0),
           comment: i.comment || null,
+          production_date: String(i.production_date || '').trim() || null,
+          expiry_date: String(i.expiry_date || '').trim() || null,
         }))
         .filter((i) => i.item_id && i.quantity > 0)
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
+
+      const expiryError = await validateExpiry(supabase as any, items)
+      if (expiryError) return json({ error: expiryError }, 400)
 
       const receivedAt = String(posting.received_at || '').trim() || new Date().toISOString().slice(0, 10)
       const comment = String(posting.comment || '').trim() || 'Оприходование'
@@ -576,6 +610,22 @@ export async function POST(request: Request) {
       }
     }
 
+    const receiptItems = Array.isArray(body.payload.items)
+      ? body.payload.items.map((item) => ({
+          item_id: String(item.item_id || '').trim(),
+          quantity: normalizeQty(item.quantity),
+          // Бонус: себестоимость 0 (RPC всё равно обнулит, но и тут чистим).
+          unit_cost: item.is_bonus ? 0 : normalizeUnitCost(item.unit_cost),
+          is_bonus: Boolean(item.is_bonus),
+          comment: item.comment || null,
+          production_date: String(item.production_date || '').trim() || null,
+          expiry_date: String(item.expiry_date || '').trim() || null,
+        }))
+      : []
+
+    const expiryError = await validateExpiry(supabase as any, receiptItems)
+    if (expiryError) return json({ error: expiryError }, 400)
+
     const result = await postInventoryReceipt(supabase as any, {
       location_id: String(body.payload.location_id || '').trim(),
       supplier_id: supplierId,
@@ -584,16 +634,7 @@ export async function POST(request: Request) {
       invoice_file_url: invoiceFileUrl,
       comment: body.payload.comment || null,
       created_by: actorUserId,
-      items: Array.isArray(body.payload.items)
-        ? body.payload.items.map((item) => ({
-            item_id: String(item.item_id || '').trim(),
-            quantity: normalizeQty(item.quantity),
-            // Бонус: себестоимость 0 (RPC всё равно обнулит, но и тут чистим).
-            unit_cost: item.is_bonus ? 0 : normalizeUnitCost(item.unit_cost),
-            is_bonus: Boolean(item.is_bonus),
-            comment: item.comment || null,
-          }))
-        : [],
+      items: receiptItems,
     })
     const receiptId = String(result?.receipt_id || result?.id || '').trim()
     if (!receiptId) throw new Error('Не удалось получить id приемки')

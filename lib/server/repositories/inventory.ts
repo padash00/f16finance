@@ -333,7 +333,7 @@ export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: Invento
 export async function fetchStoreReceipts(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreReceiptsData> {
   let itemsQuery: any = supabase
     .from('inventory_items')
-    .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, category:category_id(id, name), organization_id')
+    .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, requires_expiry, category:category_id(id, name), organization_id')
     .eq('is_active', true)
     .order('name', { ascending: true })
   if (hasOrganizationScope(scope)) {
@@ -672,6 +672,7 @@ export async function createInventoryItem(
     notes?: string | null
     item_type?: string
     low_stock_threshold?: number | null
+    requires_expiry?: boolean
   },
   scope?: InventoryScope,
 ) {
@@ -689,6 +690,7 @@ export async function createInventoryItem(
         notes: payload.notes?.trim() || null,
         item_type: payload.item_type || 'product',
         low_stock_threshold: payload.low_stock_threshold ?? null,
+        requires_expiry: payload.requires_expiry !== false,
       },
     ])
     .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
@@ -936,7 +938,7 @@ export async function postInventoryReceipt(
     invoice_file_url?: string | null
     comment?: string | null
     created_by?: string | null
-    items: Array<{ item_id: string; quantity: number; unit_cost: number; is_bonus?: boolean; comment?: string | null }>
+    items: Array<{ item_id: string; quantity: number; unit_cost: number; is_bonus?: boolean; comment?: string | null; production_date?: string | null; expiry_date?: string | null }>
   },
 ) {
   const { data, error } = await supabase.rpc('inventory_post_receipt', {

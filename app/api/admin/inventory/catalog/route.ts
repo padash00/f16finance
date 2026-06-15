@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     // Fetch all inventory items with their category
     let itemsQuery = supabase
       .from('inventory_items')
-      .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, category:inventory_categories(id, name)')
+      .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, category:inventory_categories(id, name)')
       .order('name', { ascending: true })
     if (scopeOrg) itemsQuery = itemsQuery.eq('organization_id', scopeOrg)
     const { data: items, error: itemsError } = await itemsQuery

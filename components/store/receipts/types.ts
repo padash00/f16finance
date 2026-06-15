@@ -27,6 +27,7 @@ export type InventoryItem = {
   sale_price: number
   default_purchase_price: number
   item_type: string
+  requires_expiry?: boolean | null
   category?: { id: string; name: string } | null
 }
 
@@ -108,6 +109,8 @@ export type ReceiptLine = {
   is_bonus?: boolean
   invoice_name?: string
   last_unit_cost?: number | null
+  production_date?: string
+  expiry_date?: string
 }
 
 export type AiParseItem = {

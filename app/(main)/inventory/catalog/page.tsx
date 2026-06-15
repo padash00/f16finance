@@ -42,6 +42,7 @@ type CatalogItem = {
   showcase_qty: number
   total_balance: number
   low_stock_threshold: number | null
+  requires_expiry?: boolean
 }
 
 type ImportRow = {
@@ -91,11 +92,12 @@ type ItemFormData = {
   item_type: string
   notes: string
   low_stock_threshold: string
+  requires_expiry: boolean
 }
 
 const EMPTY_FORM: ItemFormData = {
   name: '', barcode: '', unit: 'шт', sale_price: '0', purchase_price: '0',
-  category_id: '', item_type: 'product', notes: '', low_stock_threshold: '',
+  category_id: '', item_type: 'product', notes: '', low_stock_threshold: '', requires_expiry: true,
 }
 
 const PAGE_SIZE = 50
@@ -293,6 +295,18 @@ function ItemForm({
           placeholder="Не задан"
         />
       </div>
+      <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-2">
+        <label className="flex cursor-pointer select-none items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.requires_expiry}
+            onChange={(e) => onChange({ ...form, requires_expiry: e.target.checked })}
+            className="h-4 w-4 accent-emerald-500"
+          />
+          <span className="text-muted-foreground">Требует срок годности при приёмке</span>
+          <span className="text-[11px] text-muted-foreground/70">(сними для бургеров/хотдогов)</span>
+        </label>
+      </div>
       <div className="col-span-2 sm:col-span-3 lg:col-span-4 flex gap-2 pt-1">
         <Button size="sm" onClick={onSave} disabled={loading || !form.name.trim() || !form.barcode.trim()}>
           <Check className="w-3.5 h-3.5 mr-1" />
@@ -431,6 +445,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       item_type: item.item_type || 'product',
       notes: item.notes || '',
       low_stock_threshold: item.low_stock_threshold != null ? String(item.low_stock_threshold) : '',
+      requires_expiry: item.requires_expiry !== false,
     })
   }
 
@@ -454,6 +469,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             item_type: editForm.item_type,
             notes: editForm.notes || null,
             low_stock_threshold: editForm.low_stock_threshold !== '' ? parseFloat(editForm.low_stock_threshold) || null : null,
+            requires_expiry: editForm.requires_expiry,
           },
         }),
       })
@@ -515,6 +531,7 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
             item_type: addForm.item_type,
             notes: addForm.notes || null,
             low_stock_threshold: addForm.low_stock_threshold !== '' ? parseFloat(addForm.low_stock_threshold) || null : null,
+            requires_expiry: addForm.requires_expiry,
           },
         }),
       })

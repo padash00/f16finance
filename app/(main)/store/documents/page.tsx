@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
-import { FileText, PackagePlus, Upload, ArchiveX, ScanSearch, Loader2 } from 'lucide-react'
+import { FileText, PackagePlus, Upload, ArchiveX, ScanSearch, CalendarClock, Loader2 } from 'lucide-react'
 
 const fallback = () => <div className="app-page-wide flex items-center justify-center gap-2 py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
 
@@ -11,13 +11,15 @@ const Receipts = dynamic(() => import('@/app/(main)/store/receipts/page'), { ssr
 const Postings = dynamic(() => import('@/app/(main)/store/postings/page'), { ssr: false, loading: fallback })
 const Writeoffs = dynamic(() => import('@/app/(main)/store/writeoffs/page'), { ssr: false, loading: fallback })
 const Revisions = dynamic(() => import('@/app/(main)/store/revisions/page'), { ssr: false, loading: fallback })
+const Expiry = dynamic(() => import('@/app/(main)/store/expiry/page'), { ssr: false, loading: fallback })
 
-type Tab = 'receipts' | 'postings' | 'writeoffs' | 'revisions'
+type Tab = 'receipts' | 'postings' | 'writeoffs' | 'revisions' | 'expiry'
 const TABS: { key: Tab; label: string; icon: any }[] = [
   { key: 'receipts', label: 'Приёмка', icon: PackagePlus },
   { key: 'postings', label: 'Оприходование', icon: Upload },
   { key: 'writeoffs', label: 'Списания', icon: ArchiveX },
   { key: 'revisions', label: 'Ревизия', icon: ScanSearch },
+  { key: 'expiry', label: 'Срок годности', icon: CalendarClock },
 ]
 
 export default function StoreDocumentsPage() {
@@ -51,6 +53,7 @@ export default function StoreDocumentsPage() {
       {tab === 'postings' && <Postings embedded />}
       {tab === 'writeoffs' && <Writeoffs embedded />}
       {tab === 'revisions' && <Revisions embedded />}
+      {tab === 'expiry' && <Expiry embedded />}
     </div>
   )
 }
