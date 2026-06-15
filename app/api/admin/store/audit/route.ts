@@ -355,7 +355,19 @@ export async function POST(request: Request) {
       }
       const conflicts: string[] = []
       const stocktakeItems: Array<{ item_id: string; actual_qty: number; comment: string | null }> = []
-      const report: Array<{ item_id: string; counted: number; expected: number; variance: number; soldAfter: number; final: number }> = []
+      type ReportRow = {
+        item_id: string
+        name: string
+        expected: number
+        counted: number
+        movedIn: number // приход/перевод-в во время акта
+        movedOut: number // продажи/перевод-из/списание во время акта (модуль)
+        final: number // записано в остаток
+        variance: number // итог − система (на сколько изменился остаток)
+        shrinkage: number // необъяснённая недостача (исключая движения)
+        surplus: number // необъяснённый излишек
+      }
+      const report: ReportRow[] = []
       // Недостача товара для долга: реальная нехватка на момент подсчёта =
       // (ожидалось при открытии + движения ДО подсчёта) − посчитано. Так продажи
       // во время ревизии не превращаются в «недостачу» оператора.
@@ -371,18 +383,34 @@ export async function POST(request: Request) {
         const expected = expectedBy.get(itemId) ?? 0
         let deltaAfter = 0
         let deltaBefore = 0
+        let movedIn = 0
+        let movedOut = 0
         for (const m of movesByItem.get(itemId) || []) {
           if (m.at > latest.at) deltaAfter += m.delta
           else deltaBefore += m.delta
+          if (m.delta > 0) movedIn += m.delta
+          else movedOut += -m.delta
         }
         const final = Math.max(0, counted + deltaAfter)
+        // Необъяснённое расхождение: факт оператора против «ожидалось на момент счёта»
+        // (= снимок + движения ДО счёта). Движения не считаются пропажей.
+        const expectedAtCount = expected + deltaBefore
+        const shrinkage = Math.max(0, expectedAtCount - counted)
+        const surplus = Math.max(0, counted - expectedAtCount)
         stocktakeItems.push({ item_id: itemId, actual_qty: final, comment: null })
-        report.push({ item_id: itemId, counted, expected, variance: counted - expected, soldAfter: -Math.min(0, deltaAfter), final })
-        const shortageQty = Math.max(0, expected + deltaBefore - counted)
-        if (shortageQty > 0) shortageByItem.set(itemId, { qty: shortageQty, op: latest.by })
+        report.push({ item_id: itemId, name: '', expected, counted, movedIn, movedOut, final, variance: final - expected, shrinkage, surplus })
+        if (shrinkage > 0) shortageByItem.set(itemId, { qty: shrinkage, op: latest.by })
       }
       if (conflicts.length > 0) {
         return json({ error: 'unresolved-conflicts', message: `Расхождение между счётчиками: ${conflicts.length} поз. Нужен пересчёт или решение владельца.`, conflicts }, 409)
+      }
+
+      // имена товаров для отчёта
+      const reportItemIds = report.map((r) => r.item_id)
+      if (reportItemIds.length) {
+        const { data: nameRows } = await supabase.from('inventory_items').select('id, name').in('id', reportItemIds)
+        const nameBy = new Map(((nameRows as any[]) || []).map((i: any) => [String(i.id), String(i.name || '')]))
+        for (const r of report) r.name = nameBy.get(r.item_id) || 'Товар'
       }
 
       // Атомарно «забираем» акт open → closed ДО записи стока. Если затронуто 0 строк —
@@ -442,7 +470,22 @@ export async function POST(request: Request) {
 
       await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: 'close', payload: { counted: countRows.length, debtsCreated } })
 
-      return json({ ok: true, data: { stocktake_id: (result as any)?.stocktake_id || null, report, debtsCreated } })
+      // Сводка: движения во время ревизии (учтены в факте) + необъяснённое расхождение.
+      const summary = report.reduce(
+        (acc, r) => {
+          if (r.movedIn > 0 || r.movedOut > 0) acc.movedItems += 1
+          acc.movedIn += r.movedIn
+          acc.movedOut += r.movedOut
+          acc.shrinkageQty += r.shrinkage
+          acc.surplusQty += r.surplus
+          if (r.shrinkage > 0) acc.shrinkageItems += 1
+          if (r.surplus > 0) acc.surplusItems += 1
+          return acc
+        },
+        { movedItems: 0, movedIn: 0, movedOut: 0, shrinkageItems: 0, shrinkageQty: 0, surplusItems: 0, surplusQty: 0 },
+      )
+
+      return json({ ok: true, data: { stocktake_id: (result as any)?.stocktake_id || null, report, summary, debtsCreated } })
     }
 
     // ── Отменить акт ──────────────────────────────────────────────────────────

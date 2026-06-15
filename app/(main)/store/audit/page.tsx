@@ -15,6 +15,8 @@ type ActListRow = { id: string; status: string; comment: string | null; opened_a
 type FormData = { operators: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
 type Assignment = { operator_id: string; category_id: string | null }
 type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
+type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number }
+type CloseSummary = { movedItems: number; movedIn: number; movedOut: number; shrinkageItems: number; shrinkageQty: number; surplusItems: number; surplusQty: number }
 type Detail = {
   act: { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null }
   location: Loc | null
@@ -48,7 +50,8 @@ export default function StoreAuditPage() {
   const [closing, setClosing] = useState(false)
   const [assignDebt, setAssignDebt] = useState(false)
   const [debtsCreated, setDebtsCreated] = useState<number | null>(null)
-  const [closeReport, setCloseReport] = useState<Array<{ name?: string; item_id: string; counted: number; expected: number; variance: number; final: number; soldAfter: number }> | null>(null)
+  const [closeReport, setCloseReport] = useState<CloseRow[] | null>(null)
+  const [closeSummary, setCloseSummary] = useState<CloseSummary | null>(null)
 
   const loadActs = useCallback(async () => {
     setLoading(true)
@@ -86,11 +89,15 @@ export default function StoreAuditPage() {
     })()
   }, [view, locationId])
 
-  const openDetail = useCallback(async (id: string) => {
+  const openDetail = useCallback(async (id: string, keepReport = false) => {
     setDetailId(id)
     setView('detail')
     setDetail(null)
-    setCloseReport(null)
+    if (!keepReport) {
+      setCloseReport(null)
+      setCloseSummary(null)
+      setDebtsCreated(null)
+    }
     const res = await fetch(`/api/admin/store/audit?act=${encodeURIComponent(id)}`, { cache: 'no-store' })
     const j = await res.json().catch(() => null)
     if (res.ok) setDetail(j?.data || null)
@@ -143,12 +150,11 @@ export default function StoreAuditPage() {
       const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка закрытия')
-      const rep = (j?.data?.report || []) as any[]
-      const named = rep.map((r) => ({ ...r, name: detail?.report.find((x) => x.item_id === r.item_id)?.name || r.item_id }))
-      setCloseReport(named)
+      setCloseReport((j?.data?.report || []) as CloseRow[])
+      setCloseSummary((j?.data?.summary || null) as CloseSummary | null)
       setDebtsCreated(Number(j?.data?.debtsCreated || 0))
       await loadActs()
-      await openDetail(detailId)
+      await openDetail(detailId, true)
     } catch (e: any) {
       setError(e?.message || 'Не удалось закрыть акт')
     } finally {
@@ -165,8 +171,9 @@ export default function StoreAuditPage() {
     await openDetail(detailId)
   }
 
+  // Для текущего/исторического вида (без closeReport) — грубая прикидка по detail.report.
   const totals = useMemo(() => {
-    const rows = closeReport || detail?.report || []
+    const rows = detail?.report || []
     let short = 0
     let surplus = 0
     for (const r of rows) {
@@ -174,7 +181,7 @@ export default function StoreAuditPage() {
       else if (r.variance > 0) surplus += r.variance
     }
     return { short, surplus }
-  }, [closeReport, detail?.report])
+  }, [detail?.report])
 
   // ── Список ───────────────────────────────────────────────────────────────
   if (view === 'list') {
@@ -312,9 +319,9 @@ export default function StoreAuditPage() {
   }
 
   // ── Детали / закрытие ────────────────────────────────────────────────────
-  const rows: any[] = (closeReport || detail?.report || []) as any[]
+  const detailRows: ReportRow[] = (detail?.report || []) as ReportRow[]
   const isOpen = detail?.act.status === 'open'
-  const hasConflicts = isOpen && !closeReport && rows.some((r) => r.conflict)
+  const hasConflicts = isOpen && !closeReport && detailRows.some((r) => r.conflict)
   return (
     <div className="app-page-tight space-y-4">
       <AdminPageHeader
@@ -383,52 +390,114 @@ export default function StoreAuditPage() {
             ) : null}
           </Card>
 
-          {/* Расхождение */}
-          <Card className="p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-medium text-foreground">{closeReport ? 'Результат ревизии' : isOpen ? 'Подсчитано (расхождение раскроется при закрытии)' : 'Расхождение'}</div>
-              <div className="flex gap-3 text-xs tabular-nums">
-                <span className="text-rose-400">недостача {fmt(totals.short)}</span>
-                <span className="text-emerald-400">излишек {fmt(totals.surplus)}</span>
+          {/* Результат ревизии (после закрытия) — расхождения по позициям */}
+          {closeReport ? (
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-medium text-foreground">Результат ревизии</div>
+                <div className="flex gap-3 text-xs tabular-nums">
+                  <span className="text-rose-400">недостача {fmt(closeSummary?.shrinkageQty || 0)}</span>
+                  <span className="text-emerald-400">излишек {fmt(closeSummary?.surplusQty || 0)}</span>
+                </div>
               </div>
-            </div>
-            {rows.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">Пока ничего не посчитано.</div>
-            ) : (
-              <div className="space-y-1">
-                {rows
-                  .slice()
-                  .sort((a, b) => (b.conflict ? 1 : 0) - (a.conflict ? 1 : 0) || Math.abs(b.variance) - Math.abs(a.variance))
-                  .map((r) =>
-                    r.conflict && isOpen && !closeReport ? (
-                      <div key={r.item_id} className="border-b border-white/5 py-2 last:border-0">
-                        <div className="flex items-center justify-between gap-2 text-sm">
+
+              {/* Сводка: движения во время ревизии учтены в факте, не считаются пропажей */}
+              {closeSummary && closeSummary.movedItems > 0 ? (
+                <div className="mb-3 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-300">
+                  Во время ревизии были движения по {closeSummary.movedItems} поз.
+                  {closeSummary.movedIn > 0 ? ` приход +${fmt(closeSummary.movedIn)}` : ''}
+                  {closeSummary.movedOut > 0 ? ` продажи −${fmt(closeSummary.movedOut)}` : ''}
+                  {' '}— учтены в итоге, не записаны как недостача.
+                </div>
+              ) : null}
+
+              {closeReport.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Нет данных.</div>
+              ) : (
+                <div className="space-y-1">
+                  {closeReport
+                    .slice()
+                    .sort((a, b) => (b.shrinkage + b.surplus) - (a.shrinkage + a.surplus) || Math.abs(b.variance) - Math.abs(a.variance))
+                    .map((r) => {
+                      const moved = r.movedIn > 0 || r.movedOut > 0
+                      return (
+                        <div key={r.item_id} className="border-b border-white/5 py-1.5 last:border-0">
+                          <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="min-w-0 truncate text-foreground">{r.name}</span>
+                            <div className="flex shrink-0 items-center gap-3 tabular-nums">
+                              <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span>
+                              <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
+                              <span className="text-xs text-foreground">итог {fmt(r.final)}</span>
+                              {r.shrinkage > 0 ? (
+                                <span className="w-20 text-right font-medium text-rose-400">−{fmt(r.shrinkage)}</span>
+                              ) : r.surplus > 0 ? (
+                                <span className="w-20 text-right font-medium text-emerald-400">+{fmt(r.surplus)}</span>
+                              ) : (
+                                <span className="w-20 text-right text-muted-foreground">сошлось</span>
+                              )}
+                            </div>
+                          </div>
+                          {moved ? (
+                            <div className="mt-0.5 text-[11px] text-sky-400/80 tabular-nums">
+                              во время ревизии:{r.movedIn > 0 ? ` приход +${fmt(r.movedIn)}` : ''}{r.movedOut > 0 ? ` продажи −${fmt(r.movedOut)}` : ''}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                </div>
+              )}
+            </Card>
+          ) : (
+            /* Подсчёт в процессе / исторический акт */
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-medium text-foreground">{isOpen ? 'Подсчитано (расхождение раскроется при закрытии)' : 'Расхождение'}</div>
+                {!isOpen ? (
+                  <div className="flex gap-3 text-xs tabular-nums">
+                    <span className="text-rose-400">недостача {fmt(totals.short)}</span>
+                    <span className="text-emerald-400">излишек {fmt(totals.surplus)}</span>
+                  </div>
+                ) : null}
+              </div>
+              {detailRows.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Пока ничего не посчитано.</div>
+              ) : (
+                <div className="space-y-1">
+                  {detailRows
+                    .slice()
+                    .sort((a, b) => (b.conflict ? 1 : 0) - (a.conflict ? 1 : 0) || Math.abs(b.variance) - Math.abs(a.variance))
+                    .map((r) =>
+                      r.conflict && isOpen ? (
+                        <div key={r.item_id} className="border-b border-white/5 py-2 last:border-0">
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="min-w-0 truncate text-foreground">{r.name}</span>
+                            <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">расхождение</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            {(r.counts || []).map((c: any, i: number) => (
+                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-white/10 px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-300">
+                                {c.by || 'счёт'}: {fmt(c.qty)}
+                              </button>
+                            ))}
+                            <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-sm last:border-0">
                           <span className="min-w-0 truncate text-foreground">{r.name}</span>
-                          <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">расхождение</span>
+                          <div className="flex items-center gap-4 tabular-nums">
+                            {!isOpen ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
+                            <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
+                            <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                          </div>
                         </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                          {(r.counts || []).map((c: any, i: number) => (
-                            <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-white/10 px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-300">
-                              {c.by || 'счёт'}: {fmt(c.qty)}
-                            </button>
-                          ))}
-                          <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-sm last:border-0">
-                        <span className="min-w-0 truncate text-foreground">{r.name}</span>
-                        <div className="flex items-center gap-4 tabular-nums">
-                          {!isOpen || closeReport ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
-                          <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
-                          <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
-                        </div>
-                      </div>
-                    ),
-                  )}
-              </div>
-            )}
-          </Card>
+                      ),
+                    )}
+                </div>
+              )}
+            </Card>
+          )}
         </>
       )}
     </div>
