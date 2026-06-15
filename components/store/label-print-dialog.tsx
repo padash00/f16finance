@@ -23,41 +23,63 @@ function formatPrice(v: number | null) {
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
 }
 
+function priceNumber(v: number | null) {
+  if (!v) return '—'
+  return Math.round(v).toLocaleString('ru-RU')
+}
+
 function escHtml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+const LABEL_CSS = `
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Helvetica Neue',Arial,sans-serif;background:#fff;color:#000}
+.grid{display:flex;flex-wrap:wrap;gap:3mm;padding:5mm}
+.label{
+  width:58mm;height:40mm;border:0.3mm solid #000;border-radius:1mm;
+  padding:2.5mm 3mm;display:flex;flex-direction:column;
+  justify-content:space-between;page-break-inside:avoid;overflow:hidden
+}
+/* Название — ровно 2 строки, обрезка многоточием → высота карточек одинаковая */
+.name{
+  font-size:7.5pt;font-weight:600;text-align:left;line-height:1.2;
+  height:18pt;overflow:hidden;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;letter-spacing:-0.1pt
+}
+/* Цена — герой композиции */
+.price-row{display:flex;align-items:baseline;justify-content:flex-start;gap:1mm}
+.price{font-size:22pt;font-weight:800;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums}
+.cur{font-size:11pt;font-weight:700}
+.unit{font-size:7.5pt;font-weight:400;color:#444;margin-left:auto}
+/* Штрихкод — под тонкой линией снизу */
+.bc{border-top:0.3mm solid #000;padding-top:1mm;display:flex;justify-content:center}
+.bc svg{max-width:100%;height:auto}
+.bc-text{font-size:8pt;letter-spacing:1px;font-family:monospace}
+`
+
+function labelHtml(item: LabelItem, svgs: Record<string, string>): string {
+  return `
+      <div class="label">
+        <div class="name">${escHtml(item.name)}</div>
+        <div class="price-row">
+          <span class="price">${escHtml(priceNumber(item.sale_price))}</span>
+          <span class="cur">₸</span>
+          <span class="unit">/ ${escHtml(item.unit)}</span>
+        </div>
+        <div class="bc">${svgs[item.item_id] ?? `<div class="bc-text">${escHtml(item.barcode)}</div>`}</div>
+      </div>`
 }
 
 function buildPrintHtml(items: LabelItem[], copies: number, svgs: Record<string, string>): string {
   const labels = items
     .flatMap((item) => Array<null>(copies).fill(null).map(() => item))
-    .map(
-      (item) => `
-      <div class="label">
-        <div class="name">${escHtml(item.name)}</div>
-        <div class="price">${escHtml(formatPrice(item.sale_price))}<span class="unit"> / ${escHtml(item.unit)}</span></div>
-        <div class="bc">${svgs[item.item_id] ?? `<div class="bc-text">${escHtml(item.barcode)}</div>`}</div>
-      </div>`,
-    )
+    .map((item) => labelHtml(item, svgs))
     .join('')
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ценники</title><style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#fff}
-.grid{display:flex;flex-wrap:wrap;gap:3mm;padding:5mm}
-.label{
-  width:58mm;border:0.3mm solid #555;border-radius:1mm;
-  padding:2.5mm 3mm;display:flex;flex-direction:column;
-  align-items:center;gap:1.5mm;page-break-inside:avoid
-}
-.name{font-size:7.5pt;font-weight:700;text-align:center;line-height:1.25;word-break:break-word}
-.price{font-size:16pt;font-weight:900;text-align:center;letter-spacing:-0.5px}
-.unit{font-size:8pt;font-weight:400}
-.bc svg{max-width:100%;height:auto}
-.bc-text{font-size:8pt;letter-spacing:1px;font-family:monospace}
-@media print{
-  @page{margin:4mm}
-  body{margin:0}
-}
+${LABEL_CSS}
+@media print{ @page{margin:4mm} body{margin:0} }
 </style></head><body onload="setTimeout(()=>{window.print()},300)">
 <div class="grid">${labels}</div>
 </body></html>`
@@ -67,6 +89,7 @@ export function LabelPrintDialog({ items, onClose }: Props) {
   const [copies, setCopies] = useState(1)
   const [printing, setPrinting] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [svgMap, setSvgMap] = useState<Record<string, string>>({})
   const barcodeRefs = useRef<Record<string, SVGSVGElement | null>>({})
 
   useEffect(() => { setMounted(true) }, [])
@@ -81,6 +104,7 @@ export function LabelPrintDialog({ items, onClose }: Props) {
   useEffect(() => {
     // Dynamically import jsbarcode and render barcodes
     import('jsbarcode').then(({ default: JsBarcode }) => {
+      const map: Record<string, string> = {}
       items.forEach((item) => {
         const el = barcodeRefs.current[item.item_id]
         if (el && item.barcode) {
@@ -95,11 +119,13 @@ export function LabelPrintDialog({ items, onClose }: Props) {
               lineColor: '#000',
               background: '#fff',
             })
+            map[item.item_id] = el.outerHTML
           } catch {
             // invalid barcode — leave empty
           }
         }
       })
+      setSvgMap(map)
     }).catch(() => null)
   }, [items])
 
@@ -141,6 +167,21 @@ export function LabelPrintDialog({ items, onClose }: Props) {
             <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.min(20, c + 1))} disabled={copies >= 20}><Plus className="h-3 w-3" /></Button>
           </div>
         </div>
+
+        {/* Предпросмотр ценника */}
+        {items[0] ? (
+          <div className="flex items-center justify-center border-b border-white/10 bg-slate-950/40 px-5 py-4">
+            <div className="w-[58mm] rounded-[1mm] border border-black/80 bg-white p-[2.5mm] text-black" style={{ minHeight: '40mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div className="overflow-hidden font-semibold leading-tight" style={{ fontSize: '7.5pt', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', height: '18pt' }}>{items[0].name}</div>
+              <div className="flex items-baseline gap-1">
+                <span className="font-extrabold tabular-nums" style={{ fontSize: '22pt', lineHeight: 1, letterSpacing: '-1px' }}>{priceNumber(items[0].sale_price)}</span>
+                <span className="font-bold" style={{ fontSize: '11pt' }}>₸</span>
+                <span className="ml-auto text-neutral-600" style={{ fontSize: '7.5pt' }}>/ {items[0].unit}</span>
+              </div>
+              <div className="flex justify-center border-t border-black pt-[1mm]" dangerouslySetInnerHTML={{ __html: svgMap[items[0].item_id] || `<div style="font-family:monospace;font-size:8pt;letter-spacing:1px">${items[0].barcode}</div>` }} />
+            </div>
+          </div>
+        ) : null}
 
         {/* Список товаров */}
         <div className="min-h-0 flex-1 divide-y divide-white/5 overflow-y-auto">
