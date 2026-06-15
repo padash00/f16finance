@@ -232,6 +232,13 @@ async function exportToExcel(items: CatalogItem[], filename = 'Katalog') {
 
 // ─── ItemForm ──────────────────────────────────────────────────────────────────
 
+function genBarcode() {
+  // 13-значный внутренний штрихкод (префикс 2 — для внутреннего использования)
+  let s = '2'
+  for (let i = 0; i < 12; i++) s += Math.floor(Math.random() * 10)
+  return s
+}
+
 function ItemForm({
   form, onChange, categories, onSave, onCancel, loading,
 }: {
@@ -243,71 +250,106 @@ function ItemForm({
   loading: boolean
 }) {
   const f = (key: keyof ItemFormData, val: string) => onChange({ ...form, [key]: val })
+  const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'
+  const fieldLabel = 'text-xs text-muted-foreground mb-1 block'
+
+  const purchase = parseFloat(form.purchase_price) || 0
+  const sale = parseFloat(form.sale_price) || 0
+  const markup = purchase > 0 ? String(Math.round(((sale / purchase - 1) * 100 + Number.EPSILON) * 10) / 10) : ''
+  const setMarkup = (val: string) => {
+    const m = parseFloat(val.replace(',', '.'))
+    if (purchase > 0 && Number.isFinite(m)) {
+      onChange({ ...form, sale_price: String(Math.round((purchase * (1 + m / 100) + Number.EPSILON) * 100) / 100) })
+    }
+  }
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      <div className="col-span-2 sm:col-span-2 lg:col-span-2">
-        <Label className="text-xs text-muted-foreground mb-1 block">Название *</Label>
-        <Input value={form.name} onChange={(e) => f('name', e.target.value)} placeholder="Название товара" />
+    <div className="space-y-4">
+      {/* Основное */}
+      <div className="space-y-2">
+        <div className={sectionLabel}>Основное</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label className={fieldLabel}>Наименование *</Label>
+            <Input value={form.name} onChange={(e) => f('name', e.target.value)} placeholder="Название товара" />
+          </div>
+          <div>
+            <Label className={fieldLabel}>Штрихкод *</Label>
+            <div className="flex gap-2">
+              <Input value={form.barcode} onChange={(e) => f('barcode', e.target.value)} placeholder="Отсканируйте или введите" />
+              <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => f('barcode', genBarcode())}>Сгенерировать</Button>
+            </div>
+          </div>
+          <div>
+            <Label className={fieldLabel}>Категория</Label>
+            <Select value={form.category_id || '__none__'} onValueChange={(v) => f('category_id', v === '__none__' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="Без категории" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Без категории</SelectItem>
+                {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className={fieldLabel}>Единица измерения</Label>
+            <Input value={form.unit} onChange={(e) => f('unit', e.target.value)} placeholder="шт" />
+          </div>
+          <div>
+            <Label className={fieldLabel}>Тип</Label>
+            <Select value={form.item_type} onValueChange={(v) => f('item_type', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="product">Товар</SelectItem>
+                <SelectItem value="consumable">Расходник</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Штрихкод *</Label>
-        <Input value={form.barcode} onChange={(e) => f('barcode', e.target.value)} placeholder="4870..." />
+
+      {/* Цена */}
+      <div className="space-y-2">
+        <div className={sectionLabel}>Цена</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label className={fieldLabel}>Цена закупки, ₸</Label>
+            <Input type="number" min={0} value={form.purchase_price} onChange={(e) => f('purchase_price', e.target.value)} placeholder="0" />
+          </div>
+          <div>
+            <Label className={fieldLabel}>Наценка %</Label>
+            <Input type="number" value={markup} onChange={(e) => setMarkup(e.target.value)} placeholder={purchase > 0 ? '0' : 'укажите закупку'} disabled={purchase <= 0} />
+          </div>
+          <div>
+            <Label className={fieldLabel}>Цена продажи, ₸</Label>
+            <Input type="number" min={0} value={form.sale_price} onChange={(e) => f('sale_price', e.target.value)} placeholder="0" />
+          </div>
+        </div>
       </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Единица</Label>
-        <Input value={form.unit} onChange={(e) => f('unit', e.target.value)} placeholder="шт" />
+
+      {/* Прочее */}
+      <div className="space-y-2">
+        <div className={sectionLabel}>Прочее</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className={fieldLabel}>Уведомлять при остатке (алерт)</Label>
+            <Input type="number" min={0} value={form.low_stock_threshold} onChange={(e) => f('low_stock_threshold', e.target.value)} placeholder="Не задан" />
+          </div>
+          <div className="flex items-end">
+            <label className="flex cursor-pointer select-none items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.requires_expiry}
+                onChange={(e) => onChange({ ...form, requires_expiry: e.target.checked })}
+                className="h-4 w-4 accent-emerald-500"
+              />
+              <span className="text-muted-foreground">Требует срок годности</span>
+              <span className="text-[11px] text-muted-foreground/70">(сними для бургеров/хотдогов)</span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Цена продажи</Label>
-        <Input type="number" value={form.sale_price} onChange={(e) => f('sale_price', e.target.value)} />
-      </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Цена закупки</Label>
-        <Input type="number" value={form.purchase_price} onChange={(e) => f('purchase_price', e.target.value)} />
-      </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Категория</Label>
-        <Select value={form.category_id || '__none__'} onValueChange={(v) => f('category_id', v === '__none__' ? '' : v)}>
-          <SelectTrigger><SelectValue placeholder="Без категории" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Без категории</SelectItem>
-            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Тип</Label>
-        <Select value={form.item_type} onValueChange={(v) => f('item_type', v)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="product">Товар</SelectItem>
-            <SelectItem value="consumable">Расходник</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Порог низкого остатка (алерт)</Label>
-        <Input
-          type="number"
-          min={0}
-          value={form.low_stock_threshold}
-          onChange={(e) => f('low_stock_threshold', e.target.value)}
-          placeholder="Не задан"
-        />
-      </div>
-      <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-2">
-        <label className="flex cursor-pointer select-none items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.requires_expiry}
-            onChange={(e) => onChange({ ...form, requires_expiry: e.target.checked })}
-            className="h-4 w-4 accent-emerald-500"
-          />
-          <span className="text-muted-foreground">Требует срок годности при приёмке</span>
-          <span className="text-[11px] text-muted-foreground/70">(сними для бургеров/хотдогов)</span>
-        </label>
-      </div>
-      <div className="col-span-2 sm:col-span-3 lg:col-span-4 flex gap-2 pt-1">
+
+      <div className="flex gap-2 pt-1">
         <Button size="sm" onClick={onSave} disabled={loading || !form.name.trim() || !form.barcode.trim()}>
           <Check className="w-3.5 h-3.5 mr-1" />
           {loading ? 'Сохранение...' : 'Сохранить'}
@@ -823,10 +865,13 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       {/* ── TAB: CATALOG ─────────────────────────────────────────────────────── */}
       {tab === 'catalog' && (
         <div className="space-y-4">
-          {/* Add form */}
-          {showAdd && (
-            <Card className="border-primary/30 p-4 bg-primary/5">
-              <p className="text-sm font-medium mb-3">Новый товар</p>
+          {/* Add form — модальное окно */}
+          <Dialog open={showAdd} onOpenChange={(open) => { if (!open) { setShowAdd(false); setAddForm(EMPTY_FORM) } }}>
+            <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Добавить товар</DialogTitle>
+                <DialogDescription>Новая карточка товара в каталоге. Остаток добавляется через приёмку/оприходование.</DialogDescription>
+              </DialogHeader>
               <ItemForm
                 form={addForm}
                 onChange={setAddForm}
@@ -835,8 +880,8 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                 onCancel={() => { setShowAdd(false); setAddForm(EMPTY_FORM) }}
                 loading={saving}
               />
-            </Card>
-          )}
+            </DialogContent>
+          </Dialog>
 
           {/* Filters */}
           <Card className="border-border/70 p-3">
