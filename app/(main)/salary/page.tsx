@@ -1620,8 +1620,11 @@ export default function SalaryPage() {
                   const hasSecondPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'second')
                   // Месячная картина: оклад с учётом корректировок месяца − выплачено за месяц.
                   const paidThisMonth = currentMonthPayments.reduce((sum, p) => sum + Math.round(Number(p.amount || 0)), 0)
+                  // ВАЖНО: включаем и active, и paid. Корректировка, закрытая выплатой
+                  // (статус paid), уже учтена в сумме той выплаты — если её выкинуть,
+                  // остаток задерётся на сумму закрытых авансов/долгов.
                   const monthAdjs = staffSalary.adjustments.filter(
-                    (a) => a.staff_id === s.id && String(a.date || '').startsWith(currentStaffSalaryMonthPrefix) && String(a.status || 'active') === 'active',
+                    (a) => a.staff_id === s.id && String(a.date || '').startsWith(currentStaffSalaryMonthPrefix) && ['active', 'paid'].includes(String(a.status || 'active')),
                   )
                   const sumMonthKind = (k: StaffAdjustment['kind']) => monthAdjs.filter((a) => a.kind === k).reduce((x, a) => x + Math.round(Number(a.amount || 0)), 0)
                   const mBonus = sumMonthKind('bonus')
