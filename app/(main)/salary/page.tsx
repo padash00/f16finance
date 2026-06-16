@@ -87,20 +87,18 @@ type StaffSalaryData = {
   }
 }
 
-function getSalarySlotRange(payDate: string, slot: 'first' | 'second' | 'extra') {
+function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
   const [yearRaw, monthRaw] = String(payDate || '').split('-')
   const year = Number(yearRaw)
   const month = Number(monthRaw)
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null
   const mm = String(month).padStart(2, '0')
-  const endDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
   if (slot === 'first') return { from: `${year}-${mm}-01`, to: `${year}-${mm}-15` }
-  // extra (доплата остатка) — учитываем корректировки за весь месяц.
-  if (slot === 'extra') return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
+  const endDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
   return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
 }
 
-function getStaffPaymentAdjustmentPeriod(payDate: string, slot: 'first' | 'second' | 'extra') {
+function getStaffPaymentAdjustmentPeriod(payDate: string, slot: 'first' | 'second') {
   const slotRange = getSalarySlotRange(payDate, slot)
   if (!slotRange) return null
   const payDateValue = String(payDate || '')
@@ -119,7 +117,6 @@ function monthPrefixFromPaymentDate(paymentDate: string | null | undefined) {
 function staffPaymentSlotLabel(slot: string | null | undefined) {
   if (slot === 'first') return 'выплата 1-го числа'
   if (slot === 'second') return 'выплата 15-го числа'
-  if (slot === 'extra') return 'доплата остатка'
   return 'разово'
 }
 
@@ -684,10 +681,7 @@ export default function SalaryPage() {
   const [staffAdjComment, setStaffAdjComment] = useState('')
   const [staffAdjSaving, setStaffAdjSaving] = useState(false)
   const [staffPayDate, setStaffPayDate] = useState(todayISO())
-  const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second' | 'extra'>('first')
-  // Ожидаемая сумма (месячный остаток на момент открытия) — чтобы оплата остатка
-  // не считалась «переплатой-авансом» из-за недоплаты по прошлому слоту.
-  const [staffPayExpected, setStaffPayExpected] = useState(0)
+  const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second'>('first')
   const [staffPayCompanyId, setStaffPayCompanyId] = useState('')
   const [staffPayCash, setStaffPayCash] = useState('')
   const [staffPayKaspi, setStaffPayKaspi] = useState('')
@@ -875,10 +869,12 @@ export default function SalaryPage() {
     if (cash + kaspi <= 0) return setError('Сумма выплаты должна быть > 0')
     setStaffPaySaving(true); setError(null)
     try {
-      // Ожидаемая сумма = месячный остаток на момент открытия (или доплата по факту).
-      // Так оплата остатка не флагается как «переплата», а реальная переплата
-      // (сверх остатка) корректно уходит авансом.
-      const expectedAmount = staffPaySlot === 'extra' ? Math.round(cash + kaspi) : Math.round(staffPayExpected)
+      const expectedAmount = calcStaffToPay(
+        staffPayModal,
+        staffSalary?.adjustments || [],
+        staffSalary?.payments || [],
+        getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot),
+      ).toPay
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, company_id: staffPayCompanyId, cash_amount: cash, kaspi_amount: kaspi, expected_amount: expectedAmount, comment: staffPayComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
@@ -1616,51 +1612,7 @@ export default function SalaryPage() {
                   )
                   const hasFirstPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'first')
                   const hasSecondPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'second')
-                  const paidThisMonth = currentMonthPayments.reduce((sum, p) => sum + Math.round(Number(p.amount || 0)), 0)
-                  const bothSlotsUsed = hasFirstPayoutThisMonth && hasSecondPayoutThisMonth
-
-                  // Остаток считаем ПО КАЖДОМУ СЛОТУ (1-е и 15-е) отдельно — тогда оплата
-                  // остатка реально закрывает его в 0, без скачков формулы:
-                  //  • оплаченный слот → недоплата = ожидание слота (½ оклада + корректировки,
-                  //    которые этот платёж закрыл) − фактически выплачено;
-                  //  • неоплаченный слот → ожидание слота (ближайший = calc.toPay с активными
-                  //    корректировками, второй пустой = ½ оклада).
-                  const slotKeys = ['first', 'second'] as const
-                  let remaining = 0
-                  let paidSlotCount = 0
-                  for (const slotKey of slotKeys) {
-                    const slotPmts = currentMonthPayments.filter((p) => p.slot === slotKey)
-                    if (slotPmts.length === 0) continue
-                    paidSlotCount += 1
-                    const slotPaid = slotPmts.reduce((sum, p) => sum + Math.round(Number(p.amount || 0)), 0)
-                    let cBonus = 0, cFine = 0, cDebt = 0, cAdvance = 0, genAdvance = 0
-                    for (const payment of slotPmts) {
-                      const cw = getStaffPaymentClosingWindow(s.id, staffSalary.payments, payment.pay_date, payment.id)
-                      const closed = getStaffPaymentClosedAdjustments({ staffId: s.id, adjustments: staffSalary.adjustments, payment, closingWindow: cw })
-                      for (const a of closed) {
-                        const amt = Math.round(Number(a.amount || 0))
-                        if (a.kind === 'bonus') cBonus += amt
-                        else if (a.kind === 'fine') cFine += amt
-                        else if (a.kind === 'debt') cDebt += amt
-                        else if (a.kind === 'advance') cAdvance += amt
-                      }
-                      const generated = getStaffPaymentGeneratedAdjustments({ staffId: s.id, adjustments: staffSalary.adjustments, payment })
-                      for (const a of generated) if (a.kind === 'advance') genAdvance += Math.round(Number(a.amount || 0))
-                    }
-                    // Если платёж создал аванс (переплата) — ожидание было ниже факта:
-                    // ожидание = выплачено − аванс (значит слот закрыт, недоплаты нет).
-                    // Иначе ожидание = ½ оклада ± корректировки, закрытые этим платежом.
-                    const slotExpected = genAdvance > 0
-                      ? slotPaid - genAdvance
-                      : calc.half + cBonus - cFine - cDebt - cAdvance
-                    remaining += Math.max(0, slotExpected - slotPaid)
-                  }
-                  const unpaidSlots = slotKeys.length - paidSlotCount
-                  if (unpaidSlots >= 1) {
-                    remaining += Math.max(0, Math.round(calc.toPay)) + Math.max(0, unpaidSlots - 1) * calc.half
-                  }
-                  remaining = Math.round(remaining)
-                  const isMonthClosed = remaining <= 0
+                  const isMonthClosed = hasFirstPayoutThisMonth && hasSecondPayoutThisMonth
                   const recentPayments = staffSalary.payments
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
                     .slice(0, 3)
@@ -1724,22 +1676,19 @@ export default function SalaryPage() {
                             </Button>
                           )}
                           {!isDismissed && canStaffCreatePayment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || remaining <= 0} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(bothSlotsUsed ? 'extra' : (hasFirstPayoutThisMonth ? 'second' : 'first')); setStaffPayExpected(remaining); setStaffPayCash(remaining > 0 ? String(remaining) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить{remaining > 0 ? ` (${money(remaining)})` : ''}</Button>
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                           )}
                         </div>
                       </div>
                       {isMonthClosed ? (
-                        <div className="mt-2 text-xs text-emerald-300">Оклад за месяц закрыт: выплачено полностью.</div>
-                      ) : bothSlotsUsed && remaining > 0 ? (
-                        <div className="mt-2 text-xs text-amber-300">Оба плановых слота проведены, недоплата {money(remaining)}. Нажми «Выплатить» — проведём доплату.</div>
+                        <div className="mt-2 text-xs text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
                       ) : null}
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-white">{money(calc.half)}</div></div>
                         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-300">+{money(calc.bonuses)}</div></div>
                         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
                         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-amber-400/70">Авансы</div><div className="mt-1 text-sm font-semibold text-amber-300">−{money(calc.advances)}</div></div>
-                        <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-sky-400/70">Выплачено / мес</div><div className="mt-1 text-sm font-semibold text-sky-300">{money(paidThisMonth)}</div></div>
-                        <div className={'rounded-2xl border p-3 text-center ' + (remaining > 0 ? 'border-white/15 bg-white/[0.06]' : 'border-emerald-500/30 bg-emerald-500/[0.08]')}><div className="text-[11px] uppercase tracking-wide text-slate-400">К выплате</div><div className={'mt-1 text-base font-bold ' + (remaining > 0 ? 'text-white' : 'text-emerald-300')}>{money(remaining)}</div></div>
+                        <div className="rounded-2xl border border-white/15 bg-white/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-400">К выплате</div><div className="mt-1 text-base font-bold text-white">{money(calc.toPay)}</div></div>
                       </div>
                       {activeAdjs.length > 0 ? (
                         <div className="mt-3 space-y-1.5">
@@ -2173,19 +2122,15 @@ export default function SalaryPage() {
       ) : null}
 
       {staffPayModal ? (
-        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · ${staffPaySlot === 'extra' ? 'доплата остатка' : `остаток ${money(staffPayExpected)}`}`} onClose={() => setStaffPayModal(null)}>
+        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], staffSalary?.payments || [], getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot)).toPay)}`} onClose={() => setStaffPayModal(null)}>
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Слот</label>
-                {staffPaySlot === 'extra' ? (
-                  <input className={input} value="Доплата остатка" readOnly />
-                ) : (
-                  <select className={selectCls} value={staffPaySlot} onChange={e => setStaffPaySlot(e.target.value as 'first' | 'second' | 'extra')}>
-                    <option value="first">Выплата 1-го числа</option>
-                    <option value="second">Выплата 15-го числа</option>
-                  </select>
-                )}
+                <select className={selectCls} value={staffPaySlot} onChange={e => setStaffPaySlot(e.target.value as 'first' | 'second')}>
+                  <option value="first">Выплата 1-го числа</option>
+                  <option value="second">Выплата 15-го числа</option>
+                </select>
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>

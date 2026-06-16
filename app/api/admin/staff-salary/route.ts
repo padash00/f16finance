@@ -118,45 +118,25 @@ export async function GET(req: Request) {
       .limit(200)
     if (allowedStaffIds) paymentsQuery.in('staff_id', allowedStaffIds)
 
-    // Долги/позиции — скоуп по ТОЧКАМ орг (company_id тегирован надёжно), а не по
-    // тегированию операторов: раньше owner-оператор без organization_id выпадал из
-    // allowedOperatorIds → долги владельца показывались «−0».
-    // У debts есть organization_id. Скоупим по нему + organization_id IS NULL
-    // (ручные долги без оператора/точки/тега — напр. долг владельца — мапятся к
-    // сотруднику по имени; isolation держит staff-скоуп при атрибуции).
-    const debtsOrgId = access.activeOrganization?.id || null
-    const adminOpDebtsQuery = supabase
-      .from('debts')
-      .select('id, operator_id, amount, client_name, week_start, comment')
-      .eq('status', 'active')
-    if (scope.allowedCompanyIds && debtsOrgId) {
-      adminOpDebtsQuery.or(`organization_id.eq.${debtsOrgId},organization_id.is.null`)
-    }
-
-    const adminOpDebtItemsQuery = supabase
-      .from('point_debt_items')
-      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
-      .eq('status', 'active')
-    if (scope.allowedCompanyIds) adminOpDebtItemsQuery.in('company_id', scope.allowedCompanyIds)
-
-    const [adminOpDebtsRes, adminOpDebtItemsRes] = await Promise.all([adminOpDebtsQuery, adminOpDebtItemsQuery])
-    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
-    if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
-
-    // Операторы для маппинга долг→staff: org-операторы ∪ операторы из этих долгов
-    // (owner-оператор попадёт в маппинг; не утечка — долг уже в точке орг, плюс
-    // фильтр is_admin_staff). Виртуальным staff он не станет, т.к. маппится в baseStaff.
-    const debtOperatorIds = Array.from(new Set([
-      ...((adminOpDebtsRes.data ?? []) as any[]).map((r) => String(r.operator_id || '')).filter(Boolean),
-      ...((adminOpDebtItemsRes.data ?? []) as any[]).map((r) => String(r.operator_id || '')).filter(Boolean),
-    ]))
     const adminOpsQuery = supabase
       .from('operators')
       .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff')
       .eq('is_active', true)
       .eq('is_admin_staff', true)
       .order('name')
-    if (allowedOperatorIds) adminOpsQuery.in('id', Array.from(new Set([...allowedOperatorIds, ...debtOperatorIds])))
+    if (allowedOperatorIds) adminOpsQuery.in('id', allowedOperatorIds)
+
+    const adminOpDebtsQuery = supabase
+      .from('debts')
+      .select('id, operator_id, amount, client_name, week_start, comment')
+      .eq('status', 'active')
+    if (allowedOperatorIds) adminOpDebtsQuery.in('operator_id', allowedOperatorIds)
+
+    const adminOpDebtItemsQuery = supabase
+      .from('point_debt_items')
+      .select('id, operator_id, total_amount, client_name, week_start, created_at, comment')
+      .eq('status', 'active')
+    if (allowedOperatorIds) adminOpDebtItemsQuery.in('operator_id', allowedOperatorIds)
 
     const expensesQuery = supabase
       .from('expenses')
@@ -164,7 +144,7 @@ export async function GET(req: Request) {
       .in('source_type', ['salary_payment', 'salary_advance'])
     if (scope.allowedCompanyIds) expensesQuery.in('company_id', scope.allowedCompanyIds)
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, expensesRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, adminOpDebtItemsRes, expensesRes] = await Promise.all([
       staffQuery,
       adjQuery,
       paymentsQuery,
@@ -173,6 +153,8 @@ export async function GET(req: Request) {
         .select('company_code, shift_type, base_per_shift')
         .eq('is_active', true),
       adminOpsQuery,
+      adminOpDebtsQuery,
+      adminOpDebtItemsQuery,
       expensesQuery,
     ])
 
@@ -181,6 +163,8 @@ export async function GET(req: Request) {
     if (paymentsRes.error) throw paymentsRes.error
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
+    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
+    if (adminOpDebtItemsRes.error) throw adminOpDebtItemsRes.error
     if (expensesRes.error) throw expensesRes.error
 
     // Все staff (вкл. архивных) — для матчинга operator↔staff, чтобы уволенный
@@ -656,12 +640,10 @@ export async function POST(req: Request) {
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
-      // 'extra' — доплата остатка (после двух плановых слотов): без лимита и дублей.
-      if (slot !== 'first' && slot !== 'second' && slot !== 'extra') {
-        return json({ error: 'Слот выплаты должен быть first, second или extra' }, 400)
+      if (slot !== 'first' && slot !== 'second') {
+        return json({ error: 'Слот выплаты должен быть first или second' }, 400)
       }
       const normalizedSlot = slot
-      const isExtra = normalizedSlot === 'extra'
       const monthRange = monthRangeFromDate(pay_date)
       if (!monthRange) return json({ error: 'Некорректная дата выплаты' }, 400)
 
@@ -673,35 +655,28 @@ export async function POST(req: Request) {
         .lte('pay_date', monthRange.to)
       if (monthPaymentsError) throw monthPaymentsError
 
-      // Порядковый номер доплаты в месяце (для уникального source_id расхода).
-      const extraSeq = (monthPayments || []).filter((row: any) => String(row.slot || '') === 'extra').length + 1
-
-      if (!isExtra) {
-        const monthPaidSlots = new Set(
-          (monthPayments || [])
-            .map((row: any) => String(row.slot || ''))
-            .filter((value) => value === 'first' || value === 'second'),
+      const monthPaidSlots = new Set(
+        (monthPayments || [])
+          .map((row: any) => String(row.slot || ''))
+          .filter((value) => value === 'first' || value === 'second'),
+      )
+      if (monthPaidSlots.has('first') && monthPaidSlots.has('second')) {
+        return json(
+          { error: `Месяц ${monthRange.monthKey} уже закрыт по выплатам. Следующая выплата доступна в следующем месяце.` },
+          409,
         )
-        if (monthPaidSlots.has('first') && monthPaidSlots.has('second')) {
-          return json(
-            { error: `Месяц ${monthRange.monthKey} уже закрыт по плановым слотам. Используйте доплату остатка (slot=extra).` },
-            409,
-          )
-        }
       }
 
-      // Prevent duplicate payout for the same employee/slot/month (кроме доплат).
-      const { data: duplicatePayment, error: duplicatePaymentError } = isExtra
-        ? { data: null, error: null }
-        : await supabase
-            .from('staff_salary_payments')
-            .select('id, pay_date')
-            .eq('staff_id', staff_id)
-            .eq('slot', normalizedSlot)
-            .gte('pay_date', monthRange.from)
-            .lte('pay_date', monthRange.to)
-            .limit(1)
-            .maybeSingle()
+      // Prevent duplicate payout for the same employee/slot/month.
+      const { data: duplicatePayment, error: duplicatePaymentError } = await supabase
+        .from('staff_salary_payments')
+        .select('id, pay_date')
+        .eq('staff_id', staff_id)
+        .eq('slot', normalizedSlot)
+        .gte('pay_date', monthRange.from)
+        .lte('pay_date', monthRange.to)
+        .limit(1)
+        .maybeSingle()
       if (duplicatePaymentError) throw duplicatePaymentError
       if (duplicatePayment?.id) {
         return json(
@@ -742,9 +717,7 @@ export async function POST(req: Request) {
           kaspi_amount: Math.round(kaspi_amount || 0),
           comment: expenseComment,
           source_type: 'salary_payment',
-          source_id: isExtra
-            ? `staff:${staff_id}:month:${monthRange.monthKey}:slot:extra:${extraSeq}`
-            : `staff:${staff_id}:month:${monthRange.monthKey}:slot:${normalizedSlot}`,
+          source_id: `staff:${staff_id}:month:${monthRange.monthKey}:slot:${normalizedSlot}`,
         })
         .select('id')
         .single()
