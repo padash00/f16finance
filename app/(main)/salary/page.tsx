@@ -685,6 +685,9 @@ export default function SalaryPage() {
   const [staffAdjSaving, setStaffAdjSaving] = useState(false)
   const [staffPayDate, setStaffPayDate] = useState(todayISO())
   const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second' | 'extra'>('first')
+  // Ожидаемая сумма (месячный остаток на момент открытия) — чтобы оплата остатка
+  // не считалась «переплатой-авансом» из-за недоплаты по прошлому слоту.
+  const [staffPayExpected, setStaffPayExpected] = useState(0)
   const [staffPayCompanyId, setStaffPayCompanyId] = useState('')
   const [staffPayCash, setStaffPayCash] = useState('')
   const [staffPayKaspi, setStaffPayKaspi] = useState('')
@@ -872,15 +875,10 @@ export default function SalaryPage() {
     if (cash + kaspi <= 0) return setError('Сумма выплаты должна быть > 0')
     setStaffPaySaving(true); setError(null)
     try {
-      // Доплата остатка считается ожидаемой суммой ровно по факту (без «переплаты»).
-      const expectedAmount = staffPaySlot === 'extra'
-        ? Math.round(cash + kaspi)
-        : calcStaffToPay(
-            staffPayModal,
-            staffSalary?.adjustments || [],
-            staffSalary?.payments || [],
-            getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot),
-          ).toPay
+      // Ожидаемая сумма = месячный остаток на момент открытия (или доплата по факту).
+      // Так оплата остатка не флагается как «переплата», а реальная переплата
+      // (сверх остатка) корректно уходит авансом.
+      const expectedAmount = staffPaySlot === 'extra' ? Math.round(cash + kaspi) : Math.round(staffPayExpected)
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, company_id: staffPayCompanyId, cash_amount: cash, kaspi_amount: kaspi, expected_amount: expectedAmount, comment: staffPayComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
@@ -1700,7 +1698,7 @@ export default function SalaryPage() {
                             </Button>
                           )}
                           {!isDismissed && canStaffCreatePayment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || remainingMonth <= 0} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(bothSlotsUsed ? 'extra' : (hasFirstPayoutThisMonth ? 'second' : 'first')); setStaffPayCash(remainingMonth > 0 ? String(remainingMonth) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить{remainingMonth > 0 ? ` (${money(remainingMonth)})` : ''}</Button>
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || remainingMonth <= 0} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(bothSlotsUsed ? 'extra' : (hasFirstPayoutThisMonth ? 'second' : 'first')); setStaffPayExpected(remainingMonth); setStaffPayCash(remainingMonth > 0 ? String(remainingMonth) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить{remainingMonth > 0 ? ` (${money(remainingMonth)})` : ''}</Button>
                           )}
                         </div>
                       </div>
@@ -2149,7 +2147,7 @@ export default function SalaryPage() {
       ) : null}
 
       {staffPayModal ? (
-        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · ${staffPaySlot === 'extra' ? 'доплата остатка' : `к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], staffSalary?.payments || [], getStaffPaymentAdjustmentPeriod(staffPayDate, staffPaySlot)).toPay)}`}`} onClose={() => setStaffPayModal(null)}>
+        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · ${staffPaySlot === 'extra' ? 'доплата остатка' : `остаток ${money(staffPayExpected)}`}`} onClose={() => setStaffPayModal(null)}>
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
