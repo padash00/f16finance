@@ -1616,29 +1616,43 @@ export default function SalaryPage() {
                   )
                   const hasFirstPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'first')
                   const hasSecondPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'second')
-                  // Месячная картина: оклад с учётом корректировок месяца − выплачено за месяц.
                   const paidThisMonth = currentMonthPayments.reduce((sum, p) => sum + Math.round(Number(p.amount || 0)), 0)
-                  // ВАЖНО: включаем и active, и paid. Корректировка, закрытая выплатой
-                  // (статус paid), уже учтена в сумме той выплаты — если её выкинуть,
-                  // остаток задерётся на сумму закрытых авансов/долгов.
-                  const monthAdjs = staffSalary.adjustments.filter(
-                    (a) => a.staff_id === s.id && String(a.date || '').startsWith(currentStaffSalaryMonthPrefix) && ['active', 'paid'].includes(String(a.status || 'active')),
-                  )
-                  const sumMonthKind = (k: StaffAdjustment['kind']) => monthAdjs.filter((a) => a.kind === k).reduce((x, a) => x + Math.round(Number(a.amount || 0)), 0)
-                  const mBonus = sumMonthKind('bonus')
-                  const mFine = sumMonthKind('fine')
-                  const mDebt = sumMonthKind('debt')
-                  const mAdvance = sumMonthKind('advance')
-                  const monthlyDue = Math.round(s.monthly_salary + mBonus - mFine - mDebt - mAdvance)
                   const bothSlotsUsed = hasFirstPayoutThisMonth && hasSecondPayoutThisMonth
-                  // Остаток (гибрид):
-                  //  • есть непогашенный слот → расчёт этого слота (calc.toPay: ½ оклада ±
-                  //    корректировки, с учётом старых долгов/авансов закрытого слота);
-                  //  • оба слота проведены → недоплата по месяцу (оклад − выплачено),
-                  //    чтобы не потерять недоданное.
-                  const remaining = bothSlotsUsed
-                    ? Math.max(0, monthlyDue - paidThisMonth)
-                    : Math.max(0, Math.round(calc.toPay))
+
+                  // Остаток считаем ПО КАЖДОМУ СЛОТУ (1-е и 15-е) отдельно — тогда оплата
+                  // остатка реально закрывает его в 0, без скачков формулы:
+                  //  • оплаченный слот → недоплата = ожидание слота (½ оклада + корректировки,
+                  //    которые этот платёж закрыл) − фактически выплачено;
+                  //  • неоплаченный слот → ожидание слота (ближайший = calc.toPay с активными
+                  //    корректировками, второй пустой = ½ оклада).
+                  const slotKeys = ['first', 'second'] as const
+                  let remaining = 0
+                  let paidSlotCount = 0
+                  for (const slotKey of slotKeys) {
+                    const slotPmts = currentMonthPayments.filter((p) => p.slot === slotKey)
+                    if (slotPmts.length === 0) continue
+                    paidSlotCount += 1
+                    const slotPaid = slotPmts.reduce((sum, p) => sum + Math.round(Number(p.amount || 0)), 0)
+                    let cBonus = 0, cFine = 0, cDebt = 0, cAdvance = 0
+                    for (const payment of slotPmts) {
+                      const cw = getStaffPaymentClosingWindow(s.id, staffSalary.payments, payment.pay_date, payment.id)
+                      const closed = getStaffPaymentClosedAdjustments({ staffId: s.id, adjustments: staffSalary.adjustments, payment, closingWindow: cw })
+                      for (const a of closed) {
+                        const amt = Math.round(Number(a.amount || 0))
+                        if (a.kind === 'bonus') cBonus += amt
+                        else if (a.kind === 'fine') cFine += amt
+                        else if (a.kind === 'debt') cDebt += amt
+                        else if (a.kind === 'advance') cAdvance += amt
+                      }
+                    }
+                    const slotExpected = calc.half + cBonus - cFine - cDebt - cAdvance
+                    remaining += Math.max(0, slotExpected - slotPaid)
+                  }
+                  const unpaidSlots = slotKeys.length - paidSlotCount
+                  if (unpaidSlots >= 1) {
+                    remaining += Math.max(0, Math.round(calc.toPay)) + Math.max(0, unpaidSlots - 1) * calc.half
+                  }
+                  remaining = Math.round(remaining)
                   const isMonthClosed = remaining <= 0
                   const recentPayments = staffSalary.payments
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
