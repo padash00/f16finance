@@ -1633,7 +1633,7 @@ export default function SalaryPage() {
                     if (slotPmts.length === 0) continue
                     paidSlotCount += 1
                     const slotPaid = slotPmts.reduce((sum, p) => sum + Math.round(Number(p.amount || 0)), 0)
-                    let cBonus = 0, cFine = 0, cDebt = 0, cAdvance = 0
+                    let cBonus = 0, cFine = 0, cDebt = 0, cAdvance = 0, genAdvance = 0
                     for (const payment of slotPmts) {
                       const cw = getStaffPaymentClosingWindow(s.id, staffSalary.payments, payment.pay_date, payment.id)
                       const closed = getStaffPaymentClosedAdjustments({ staffId: s.id, adjustments: staffSalary.adjustments, payment, closingWindow: cw })
@@ -1644,8 +1644,15 @@ export default function SalaryPage() {
                         else if (a.kind === 'debt') cDebt += amt
                         else if (a.kind === 'advance') cAdvance += amt
                       }
+                      const generated = getStaffPaymentGeneratedAdjustments({ staffId: s.id, adjustments: staffSalary.adjustments, payment })
+                      for (const a of generated) if (a.kind === 'advance') genAdvance += Math.round(Number(a.amount || 0))
                     }
-                    const slotExpected = calc.half + cBonus - cFine - cDebt - cAdvance
+                    // Если платёж создал аванс (переплата) — ожидание было ниже факта:
+                    // ожидание = выплачено − аванс (значит слот закрыт, недоплаты нет).
+                    // Иначе ожидание = ½ оклада ± корректировки, закрытые этим платежом.
+                    const slotExpected = genAdvance > 0
+                      ? slotPaid - genAdvance
+                      : calc.half + cBonus - cFine - cDebt - cAdvance
                     remaining += Math.max(0, slotExpected - slotPaid)
                   }
                   const unpaidSlots = slotKeys.length - paidSlotCount
