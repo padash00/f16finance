@@ -5,7 +5,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import {
   Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Settings, Loader2, CheckCircle2, ChevronDown, ChevronRight,
-  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers,
+  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers, LayoutGrid,
 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
@@ -506,6 +506,40 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   const stationsOnMap = localStations.filter(s => s.grid_x != null && s.grid_y != null)
   const stationsOff = localStations.filter(s => s.grid_x == null || s.grid_y == null)
 
+  // Авто-расстановка: пакуем станции аккуратной сеткой ВНУТРИ их зон (как в программе),
+  // чтобы не таскать каждую вручную. Station по zone_id → плотный грид под заголовком зоны.
+  const autoArrange = () => {
+    const placed: Record<string, { x: number; y: number }> = {}
+    let placedCount = 0
+    let overflow = 0
+    for (const z of localZones) {
+      if (z.grid_x == null || z.grid_y == null) continue
+      const zx = z.grid_x
+      const zy = z.grid_y
+      const cols = Math.max(1, z.grid_w ?? 4)
+      const maxRows = Math.max(1, (z.grid_h ?? 4) - 1) // первая строка зоны — под заголовок
+      const zoneStations = localStations
+        .filter(s => s.zone_id === z.id)
+        .sort((a, b) => (a.order_index - b.order_index) || a.name.localeCompare(b.name, undefined, { numeric: true }))
+      let col = 0
+      let row = 0
+      for (const s of zoneStations) {
+        if (row >= maxRows) { overflow++; continue }
+        placed[s.id] = { x: zx + col, y: zy + 1 + row }
+        placedCount++
+        col++
+        if (col >= cols) { col = 0; row++ }
+      }
+    }
+    if (placedCount === 0) {
+      showFlash('err', 'Нет зон с координатами или станций с привязкой к зоне.')
+      return
+    }
+    setLocalStations(prev => prev.map(s => (placed[s.id] ? { ...s, grid_x: placed[s.id].x, grid_y: placed[s.id].y } : s)))
+    setDirty(true)
+    showFlash('ok', `Расставлено станций: ${placedCount}${overflow ? `. Не влезло ${overflow} — увеличьте зону.` : ''}`)
+  }
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       {/* Left: grid */}
@@ -527,6 +561,16 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             Сохранить карту
+          </button>
+          <button
+            type="button"
+            onClick={autoArrange}
+            disabled={saving}
+            title="Расставить станции аккуратной сеткой внутри их зон"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-white/10 disabled:pointer-events-none disabled:opacity-40"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Авто-расстановка
           </button>
           {!dirty && !saving && (
             <span className="flex items-center gap-1 text-emerald-400">
