@@ -656,10 +656,12 @@ export async function POST(req: Request) {
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
-      if (slot !== 'first' && slot !== 'second') {
-        return json({ error: 'Слот выплаты должен быть first или second' }, 400)
+      // 'extra' — доплата остатка (после двух плановых слотов): без лимита и дублей.
+      if (slot !== 'first' && slot !== 'second' && slot !== 'extra') {
+        return json({ error: 'Слот выплаты должен быть first, second или extra' }, 400)
       }
       const normalizedSlot = slot
+      const isExtra = normalizedSlot === 'extra'
       const monthRange = monthRangeFromDate(pay_date)
       if (!monthRange) return json({ error: 'Некорректная дата выплаты' }, 400)
 
@@ -671,28 +673,35 @@ export async function POST(req: Request) {
         .lte('pay_date', monthRange.to)
       if (monthPaymentsError) throw monthPaymentsError
 
-      const monthPaidSlots = new Set(
-        (monthPayments || [])
-          .map((row: any) => String(row.slot || ''))
-          .filter((value) => value === 'first' || value === 'second'),
-      )
-      if (monthPaidSlots.has('first') && monthPaidSlots.has('second')) {
-        return json(
-          { error: `Месяц ${monthRange.monthKey} уже закрыт по выплатам. Следующая выплата доступна в следующем месяце.` },
-          409,
+      // Порядковый номер доплаты в месяце (для уникального source_id расхода).
+      const extraSeq = (monthPayments || []).filter((row: any) => String(row.slot || '') === 'extra').length + 1
+
+      if (!isExtra) {
+        const monthPaidSlots = new Set(
+          (monthPayments || [])
+            .map((row: any) => String(row.slot || ''))
+            .filter((value) => value === 'first' || value === 'second'),
         )
+        if (monthPaidSlots.has('first') && monthPaidSlots.has('second')) {
+          return json(
+            { error: `Месяц ${monthRange.monthKey} уже закрыт по плановым слотам. Используйте доплату остатка (slot=extra).` },
+            409,
+          )
+        }
       }
 
-      // Prevent duplicate payout for the same employee/slot/month.
-      const { data: duplicatePayment, error: duplicatePaymentError } = await supabase
-        .from('staff_salary_payments')
-        .select('id, pay_date')
-        .eq('staff_id', staff_id)
-        .eq('slot', normalizedSlot)
-        .gte('pay_date', monthRange.from)
-        .lte('pay_date', monthRange.to)
-        .limit(1)
-        .maybeSingle()
+      // Prevent duplicate payout for the same employee/slot/month (кроме доплат).
+      const { data: duplicatePayment, error: duplicatePaymentError } = isExtra
+        ? { data: null, error: null }
+        : await supabase
+            .from('staff_salary_payments')
+            .select('id, pay_date')
+            .eq('staff_id', staff_id)
+            .eq('slot', normalizedSlot)
+            .gte('pay_date', monthRange.from)
+            .lte('pay_date', monthRange.to)
+            .limit(1)
+            .maybeSingle()
       if (duplicatePaymentError) throw duplicatePaymentError
       if (duplicatePayment?.id) {
         return json(
@@ -733,7 +742,9 @@ export async function POST(req: Request) {
           kaspi_amount: Math.round(kaspi_amount || 0),
           comment: expenseComment,
           source_type: 'salary_payment',
-          source_id: `staff:${staff_id}:month:${monthRange.monthKey}:slot:${normalizedSlot}`,
+          source_id: isExtra
+            ? `staff:${staff_id}:month:${monthRange.monthKey}:slot:extra:${extraSeq}`
+            : `staff:${staff_id}:month:${monthRange.monthKey}:slot:${normalizedSlot}`,
         })
         .select('id')
         .single()
