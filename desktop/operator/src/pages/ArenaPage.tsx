@@ -1089,10 +1089,10 @@ function ArenaMapView({
 
           const stColor = !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171'
           const stBg = !occupied
-            ? 'rgba(16,185,129,0.13)'
-            : isExpired ? 'rgba(239,68,68,0.22)' : isWarning ? 'rgba(245,158,11,0.18)' : 'rgba(239,68,68,0.16)'
+            ? 'rgba(16,185,129,0.15)'
+            : isExpired ? 'rgba(239,68,68,0.28)' : isWarning ? 'rgba(245,158,11,0.24)' : 'rgba(248,113,113,0.22)'
           const stBorder = !occupied
-            ? 'rgba(16,185,129,0.45)' : isExpired ? 'rgba(239,68,68,0.65)' : isWarning ? 'rgba(245,158,11,0.55)' : 'rgba(239,68,68,0.35)'
+            ? 'rgba(16,185,129,0.6)' : isExpired ? 'rgba(239,68,68,0.85)' : isWarning ? 'rgba(245,158,11,0.75)' : 'rgba(248,113,113,0.55)'
 
           return (
             <button
@@ -1112,38 +1112,35 @@ function ArenaMapView({
                 gap: 1,
               }}
             >
-              <Monitor style={{ width: 16, height: 16, color: stColor, flexShrink: 0 }} />
+              {/* Номер станции — крупно, без лишней иконки (она и так очевидна) */}
               <span
-                className="truncate text-center font-semibold leading-none"
-                style={{ fontSize: 10, maxWidth: MAP_CELL - 8, color: 'rgba(255,255,255,0.9)' }}
+                className="truncate text-center font-bold leading-none"
+                style={{ fontSize: 16, maxWidth: MAP_CELL - 8, color: 'rgba(255,255,255,0.97)' }}
               >
                 {station.name}
               </span>
               {!occupied && (
-                <span style={{ fontSize: 9, color: '#10b981', opacity: 0.7 }}>свободно</span>
+                <span className="font-semibold leading-none" style={{ fontSize: 8.5, letterSpacing: 0.5, color: '#34d399' }}>СВОБОДНО</span>
               )}
               {occupied && !isExpired && (
                 <span
-                  className="tabular-nums font-bold leading-none"
-                  style={{ fontSize: 13, color: isWarning ? '#f59e0b' : '#34d399' }}
+                  className="tabular-nums font-extrabold leading-none"
+                  style={{ fontSize: 16, color: isWarning ? '#fbbf24' : '#fca5a5' }}
                 >
                   {formatRemaining(remainingMs)}
                 </span>
               )}
               {isExpired && (
-                <span className="font-semibold leading-none" style={{ fontSize: 9, color: '#ef4444' }}>Истекло</span>
+                <span className="font-bold leading-none" style={{ fontSize: 9, color: '#fff', background: '#ef4444', padding: '1px 5px', borderRadius: 4 }}>ИСТЕКЛО</span>
               )}
-              {occupied && activeSession && (() => {
-                const op = activeSession.operator_id ? operators.find(o => o.id === activeSession.operator_id) : null
-                return (
-                  <span
-                    className="truncate text-center leading-none"
-                    style={{ fontSize: 9, maxWidth: MAP_CELL - 8, color: 'rgba(255,255,255,0.4)' }}
-                  >
-                    {op ? (op.short_name || op.name) : ''}{op ? ' · ' : ''}{formatMoney(activeSession.amount)}
-                  </span>
-                )
-              })()}
+              {occupied && activeSession && (
+                <span
+                  className="truncate text-center leading-none tabular-nums"
+                  style={{ fontSize: 9, maxWidth: MAP_CELL - 8, color: 'rgba(255,255,255,0.5)' }}
+                >
+                  {formatMoney(activeSession.amount)}
+                </span>
+              )}
             </button>
           )
         })}
