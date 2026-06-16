@@ -156,6 +156,107 @@ async function identifyBotUser(telegramUserId: string): Promise<BotUser> {
   return { role: 'unknown', name: 'Неизвестный', entityId: telegramUserId }
 }
 
+// ─── Распорядок дня: постановка задач из бота ──────────────────────────────────
+function escTaskHtml(s: string) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+function kzTodayStr() {
+  const d = new Date(Date.now() + 5 * 3600_000)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+// "в 18:30" / "в 9" / "18:30" → { time:'HH:MM', rest }
+function parseTaskTime(text: string): { time: string | null; rest: string } {
+  let m = text.match(/(?:^|\s)в\s*([01]?\d|2[0-3])(?::([0-5]\d))?(?=\s|$)/i)
+  if (m && m.index !== undefined) {
+    const hh = String(Number(m[1])).padStart(2, '0')
+    const mm = m[2] || '00'
+    const rest = (text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim()
+    return { time: `${hh}:${mm}`, rest }
+  }
+  m = text.match(/(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)(?=\s|$)/)
+  if (m && m.index !== undefined) {
+    const hh = String(Number(m[1])).padStart(2, '0')
+    const rest = (text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim()
+    return { time: `${hh}:${m[2]}`, rest }
+  }
+  return { time: null, rest: text }
+}
+
+type PlannerUser = { userId: string; chatId: string | null; label: string }
+
+async function staffAuthUserId(supabase: ReturnType<typeof createAdminSupabaseClient>, st: any): Promise<string | null> {
+  if (st?.email) {
+    const { data } = await supabase.rpc('auth_user_id_by_email', { p_email: st.email })
+    if (data) return String(data)
+  }
+  const { data: link } = await supabase.from('operator_staff_links').select('operator_id').eq('staff_id', st.id).maybeSingle()
+  if (link?.operator_id) {
+    const { data: oa } = await supabase.from('operator_auth').select('user_id').eq('operator_id', link.operator_id).maybeSingle()
+    if (oa?.user_id) return String(oa.user_id)
+  }
+  return null
+}
+
+// Telegram-отправитель → его auth.users.id (для personal_tasks /planner).
+async function resolveTelegramAuthUser(supabase: ReturnType<typeof createAdminSupabaseClient>, telegramUserId: string): Promise<PlannerUser | null> {
+  const { data: op } = await supabase
+    .from('operators')
+    .select('id, name, short_name, telegram_chat_id')
+    .eq('telegram_chat_id', telegramUserId)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (op?.id) {
+    const { data: oa } = await supabase.from('operator_auth').select('user_id').eq('operator_id', op.id).maybeSingle()
+    if (oa?.user_id) return { userId: String(oa.user_id), chatId: String(op.telegram_chat_id || telegramUserId), label: op.short_name || op.name || 'Оператор' }
+  }
+  const { data: st } = await supabase
+    .from('staff')
+    .select('id, full_name, short_name, email, telegram_chat_id')
+    .eq('telegram_chat_id', telegramUserId)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (st?.id) {
+    const uid = await staffAuthUserId(supabase, st)
+    if (uid) return { userId: uid, chatId: String(st.telegram_chat_id || telegramUserId), label: st.short_name || st.full_name || 'Сотрудник' }
+  }
+  return null
+}
+
+// Получатель по имени (оператор или staff). 'one' | 'none' | 'many' | 'no_account'.
+async function resolveRecipientByName(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  name: string,
+): Promise<{ found: 'one' | 'none' | 'many' | 'no_account'; user?: PlannerUser; label?: string; options?: string[] }> {
+  const q = name.trim().toLowerCase().replace(/^@/, '')
+  if (!q) return { found: 'none' }
+  const [{ data: ops }, { data: sts }] = await Promise.all([
+    supabase.from('operators').select('id, name, short_name, telegram_chat_id').eq('is_active', true).limit(300),
+    supabase.from('staff').select('id, full_name, short_name, email, telegram_chat_id').eq('is_active', true).limit(300),
+  ])
+  const matches: Array<{ kind: 'operator' | 'staff'; row: any; label: string }> = []
+  for (const o of (ops || []) as any[]) {
+    if (`${o.short_name || ''} ${o.name || ''}`.toLowerCase().includes(q)) matches.push({ kind: 'operator', row: o, label: o.short_name || o.name || 'Оператор' })
+  }
+  for (const s of (sts || []) as any[]) {
+    if (`${s.short_name || ''} ${s.full_name || ''}`.toLowerCase().includes(q)) matches.push({ kind: 'staff', row: s, label: s.short_name || s.full_name || 'Сотрудник' })
+  }
+  if (matches.length === 0) return { found: 'none' }
+  if (matches.length > 1) return { found: 'many', options: matches.map((m) => m.label).slice(0, 8) }
+  const m = matches[0]
+  let userId: string | null = null
+  let chatId: string | null = null
+  if (m.kind === 'operator') {
+    const { data: oa } = await supabase.from('operator_auth').select('user_id').eq('operator_id', m.row.id).maybeSingle()
+    userId = oa?.user_id ? String(oa.user_id) : null
+    chatId = m.row.telegram_chat_id ? String(m.row.telegram_chat_id) : null
+  } else {
+    userId = await staffAuthUserId(supabase, m.row)
+    chatId = m.row.telegram_chat_id ? String(m.row.telegram_chat_id) : null
+  }
+  if (!userId) return { found: 'no_account', label: m.label }
+  return { found: 'one', user: { userId, chatId, label: m.label } }
+}
+
 function canUseFinance(role: BotUserRole) {
   return ['super_admin', 'owner', 'manager'].includes(role)
 }
@@ -3339,6 +3440,10 @@ export async function POST(req: Request) {
             '📊 <b>Аналитика</b> — выручка, KPI, топы',
             '⚙ <b>Система</b> — точки, цели, напоминания',
             '',
+            '📋 <b>Задача в Распорядок дня:</b>',
+            '<code>/задача Проверить кассу в 18:00</code>',
+            '<code>/задача @Айгерим Принять товар в 14:30</code>',
+            '',
             '<i>Можно голосом 🎤, фотом чека 📸, или просто текстом.</i>',
           ].join('\n')
           await callTelegram('sendMessage', {
@@ -3386,6 +3491,67 @@ export async function POST(req: Request) {
 
       if (cmd === '/whoami') {
         await sendTelegramText(chatId, await buildWhoAmIText(botUser, telegramUserId))
+        return json({ ok: true })
+      }
+
+      // ─── Задача в Распорядок дня ───
+      if (['/задача', '/task', '/задачу', '/дело'].includes((cmd || '').split('@')[0])) {
+        if (!canUseFinance(botUser.role)) {
+          await sendTelegramText(chatId, '⛔ Постановка задач доступна владельцу или руководителю.')
+          return json({ ok: true })
+        }
+        const supabaseT = createAdminSupabaseClient()
+        let arg = text.split(' ').slice(1).join(' ').trim()
+        if (!arg) {
+          await sendTelegramText(chatId, '📋 <b>Задача в Распорядок дня</b>\n\nКак ставить:\n<code>/задача Проверить кассу в 18:00</code>\n<code>/задача @Айгерим Принять товар в 14:30</code>\n\nВремя необязательно. Если указать — придёт напоминание в Telegram, и задача появится в «Распорядке дня» на сайте.')
+          return json({ ok: true })
+        }
+        let recipientName: string | null = null
+        const at = arg.match(/^@(\S+)\s+([\s\S]+)$/)
+        if (at) { recipientName = at[1]; arg = at[2].trim() }
+        const { time, rest } = parseTaskTime(arg)
+        const title = rest.trim()
+        if (!title) {
+          await sendTelegramText(chatId, '✏️ Укажи текст задачи после команды.')
+          return json({ ok: true })
+        }
+
+        const sender = await resolveTelegramAuthUser(supabaseT, telegramUserId)
+        if (!sender) {
+          await sendTelegramText(chatId, '⚠️ Твой Telegram не привязан к аккаунту сайта — задача не попадёт в Распорядок дня. Проверь, что в твоём профиле сотрудника указан этот Telegram.')
+          return json({ ok: true })
+        }
+
+        let recipient: PlannerUser = sender
+        if (recipientName) {
+          const r = await resolveRecipientByName(supabaseT, recipientName)
+          if (r.found === 'none') { await sendTelegramText(chatId, `🤷 Не нашёл сотрудника «${escTaskHtml(recipientName)}».`); return json({ ok: true }) }
+          if (r.found === 'many') { await sendTelegramText(chatId, `Уточни, кому именно:\n${(r.options || []).map((o) => '• ' + escTaskHtml(o)).join('\n')}`); return json({ ok: true }) }
+          if (r.found === 'no_account' || !r.user) { await sendTelegramText(chatId, `У «${escTaskHtml(r.label || recipientName)}» нет привязанного аккаунта — задача в Распорядок не ляжет.`); return json({ ok: true }) }
+          recipient = r.user
+        }
+
+        const { error: taskErr } = await supabaseT.from('personal_tasks').insert({
+          user_id: recipient.userId,
+          title,
+          recurrence: 'once',
+          task_date: kzTodayStr(),
+          task_time: time,
+          remind: !!time,
+          remind_minutes_before: 0,
+        })
+        if (taskErr) {
+          await sendTelegramText(chatId, `❌ Не удалось сохранить задачу: ${escTaskHtml(taskErr.message)}`)
+          return json({ ok: true })
+        }
+
+        const timeLine = time ? `\n🕐 ${time} — напомню` : ''
+        const forLine = recipient.userId !== sender.userId ? ` для <b>${escTaskHtml(recipient.label)}</b>` : ''
+        await sendTelegramText(chatId, `✅ Задача добавлена в Распорядок дня${forLine}:\n\n📋 ${escTaskHtml(title)}${timeLine}`)
+
+        if (recipient.userId !== sender.userId && recipient.chatId) {
+          await sendTelegramText(recipient.chatId, `📋 <b>Новая задача</b> от ${escTaskHtml(sender.label)}:\n\n${escTaskHtml(title)}${time ? `\n🕐 ${time}` : ''}\n\nОткрой «Распорядок дня» на сайте.`).catch(() => null)
+        }
         return json({ ok: true })
       }
 
