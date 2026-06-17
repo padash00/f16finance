@@ -526,8 +526,11 @@ export async function POST(request: Request) {
         .select('id')
         .eq('bin_iin', binIin)
         .limit(1)
-      if (!access.isSuperAdmin && access.activeOrganization?.id) {
-        existingQuery = existingQuery.eq('organization_id', access.activeOrganization.id)
+      // Дедуп ТОЛЬКО в пределах орг точки приёмки (даже для суперадмина): иначе
+      // поставщик с тем же БИН из ДРУГОЙ точки/тенанта переиспользуется, и новый
+      // не создаётся («ушёл на другого поставщика»).
+      if (locationOrganizationId) {
+        existingQuery = existingQuery.eq('organization_id', locationOrganizationId)
       }
       const { data: existingSupplier, error: existingSupplierError } = await existingQuery.maybeSingle()
       if (existingSupplierError) throw existingSupplierError
@@ -540,7 +543,7 @@ export async function POST(request: Request) {
           .select('id, organization_id')
           .ilike('name', supplierName)
           .limit(1)
-        if (!access.isSuperAdmin && locationOrganizationId) {
+        if (locationOrganizationId) {
           existingByNameQuery = existingByNameQuery.eq('organization_id', locationOrganizationId)
         }
         const { data: existingByName, error: existingByNameError } = await existingByNameQuery.maybeSingle()
@@ -572,7 +575,7 @@ export async function POST(request: Request) {
               .select('id, organization_id')
               .ilike('name', supplierName)
               .limit(1)
-            if (!access.isSuperAdmin && locationOrganizationId) {
+            if (locationOrganizationId) {
               conflictedByNameQuery = conflictedByNameQuery.eq('organization_id', locationOrganizationId)
             }
             const { data: conflictedByName, error: conflictedByNameError } = await conflictedByNameQuery.maybeSingle()
