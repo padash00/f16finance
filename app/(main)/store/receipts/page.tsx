@@ -517,6 +517,8 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         sale_price: parseMoney(line.sale_price),
         is_bonus: Boolean(line.is_bonus),
         comment: line.comment.trim() || null,
+        production_date: line.production_date?.trim() || null,
+        expiry_date: line.expiry_date?.trim() || null,
       }))
       .filter((line) => line.item_id)
 
@@ -603,6 +605,8 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             markup_percent: isBonus ? '' : calcMarkupPercent(String(item.unit_cost ?? ''), String(item.sale_price ?? '')),
             comment: String(item.comment || ''),
             is_bonus: isBonus,
+            production_date: String((item as any).production_date || ''),
+            expiry_date: String((item as any).expiry_date || ''),
           }
         })
       : [emptyLine()]
