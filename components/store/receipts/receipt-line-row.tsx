@@ -246,8 +246,12 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
             <Label className="text-[11px]">Годен до {lineItem?.requires_expiry === false ? '(необяз.)' : '*'}</Label>
             <Input type="date" value={line.expiry_date || ''} onChange={(event) => onPatch(line.uid, { expiry_date: event.target.value })} />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Возврат / недопоставка (кол-во)</Label>
+            <Input inputMode="decimal" value={line.return_qty || ''} onChange={(event) => onPatch(line.uid, { return_qty: event.target.value })} placeholder="0" />
+          </div>
           {lineItem?.requires_expiry === false ? (
-            <div className="flex items-end sm:col-span-2"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>
+            <div className="flex items-end"><span className="text-[11px] text-muted-foreground">Без срока годности</span></div>
           ) : null}
         </div>
       ) : null}

@@ -111,6 +111,8 @@ export type ReceiptLine = {
   last_unit_cost?: number | null
   production_date?: string
   expiry_date?: string
+  /** Возврат/недопоставка по этой строке (кол-во) — для сверки с накладной. */
+  return_qty?: string
 }
 
 export type AiParseItem = {

@@ -245,6 +245,11 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
     return lines.reduce((sum, line) => sum + (line.is_bonus ? 0 : parseQty(line.quantity) * parseUnitCost(line.unit_cost)), 0)
   }, [lines])
 
+  // Возврат/недопоставка по строкам (для сверки с накладной): не идёт на склад и в долг.
+  const returnTotal = useMemo(() => {
+    return lines.reduce((sum, line) => sum + (line.is_bonus ? 0 : parseQty(line.return_qty || '') * parseUnitCost(line.unit_cost)), 0)
+  }, [lines])
+
   const catalogItems = useMemo(() => data?.items || [], [data?.items])
 
   const itemsById = useMemo(() => {
@@ -389,7 +394,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         unit_cost: line.is_bonus ? 0 : parseUnitCost(line.unit_cost),
         sale_price: parseMoney(line.sale_price),
         is_bonus: Boolean(line.is_bonus),
-        comment: line.comment.trim() || null,
+        comment: [line.comment.trim(), parseQty(line.return_qty || '') > 0 ? `возврат/недопоставка ${parseQty(line.return_qty || '')}` : '']
+          .filter(Boolean)
+          .join(' · ') || null,
         invoice_name: line.invoice_name?.trim() || null,
         production_date: line.production_date?.trim() || null,
         expiry_date: line.expiry_date?.trim() || null,
@@ -519,6 +526,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         comment: line.comment.trim() || null,
         production_date: line.production_date?.trim() || null,
         expiry_date: line.expiry_date?.trim() || null,
+        return_qty: line.return_qty?.trim() || null,
       }))
       .filter((line) => line.item_id)
 
@@ -607,6 +615,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             is_bonus: isBonus,
             production_date: String((item as any).production_date || ''),
             expiry_date: String((item as any).expiry_date || ''),
+            return_qty: String((item as any).return_qty || ''),
           }
         })
       : [emptyLine()]
@@ -1642,8 +1651,18 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                 Добавить строку
               </Button>
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
-                <p className="text-xs text-muted-foreground">Сумма приемки</p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{formatMoney(receiptTotal)}</p>
+                {returnTotal > 0 ? (
+                  <>
+                    <div className="flex justify-end gap-4 text-xs text-muted-foreground">
+                      <span>По накладной: <span className="text-foreground tabular-nums">{formatMoney(receiptTotal + returnTotal)}</span></span>
+                      <span>Возврат: <span className="text-rose-300 tabular-nums">−{formatMoney(returnTotal)}</span></span>
+                    </div>
+                    <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">К приёмке (на склад и долг)</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Сумма приемки</p>
+                )}
+                <p className="mt-0.5 text-2xl font-semibold text-foreground tabular-nums">{formatMoney(receiptTotal)}</p>
               </div>
             </div>
 
