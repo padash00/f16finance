@@ -140,6 +140,57 @@ export default function SupplierCardPage() {
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   useModalEscape(addAliasOpen, () => { if (!savingAlias) setAddAliasOpen(false) })
 
+  // Перенос к другому поставщику (товары / накладная)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferMode, setTransferMode] = useState<'items' | 'receipt'>('items')
+  const [transferReceiptId, setTransferReceiptId] = useState<string | null>(null)
+  const [transferReceiptLabel, setTransferReceiptLabel] = useState('')
+  const [transferTarget, setTransferTarget] = useState('')
+  const [supplierOptions, setSupplierOptions] = useState<{ id: string; name: string }[]>([])
+  const [transferring, setTransferring] = useState(false)
+  useModalEscape(transferOpen, () => { if (!transferring) setTransferOpen(false) })
+
+  useEffect(() => {
+    if (!transferOpen || supplierOptions.length > 0) return
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/store/receipts', { cache: 'no-store' })
+        const j = await res.json().catch(() => null)
+        if (res.ok && j?.ok) {
+          setSupplierOptions(((j.data?.suppliers || []) as any[]).map((s: any) => ({ id: String(s.id), name: s.name })).filter((s) => s.id !== supplierId))
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [transferOpen, supplierOptions.length, supplierId])
+
+  const openTransferItems = () => { setTransferMode('items'); setTransferReceiptId(null); setTransferTarget(''); setTransferOpen(true) }
+  const openTransferReceipt = (rid: string, label: string) => { setTransferMode('receipt'); setTransferReceiptId(rid); setTransferReceiptLabel(label); setTransferTarget(''); setTransferOpen(true) }
+
+  const doTransfer = async () => {
+    if (!transferTarget) { setError('Выберите поставщика-получателя'); return }
+    setTransferring(true); setError(null)
+    try {
+      const res = await fetch(`/api/admin/store/suppliers/${supplierId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          transferMode === 'receipt'
+            ? { action: 'transferReceipt', receipt_id: transferReceiptId, target_supplier_id: transferTarget }
+            : { action: 'transferItems', target_supplier_id: transferTarget },
+        ),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось перенести')
+      setTransferOpen(false); setTransferTarget(''); setTransferReceiptId(null)
+      setSuccess(transferMode === 'receipt' ? `Накладная перенесена · товаров: ${j.data?.movedItems ?? 0}` : `Перенесено товаров: ${j.data?.movedItems ?? 0}`)
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка переноса')
+    } finally {
+      setTransferring(false)
+    }
+  }
+
   const load = async () => {
     setError(null)
     try {
@@ -440,13 +491,19 @@ export default function SupplierCardPage() {
           </Card>
         ) : (
           <Card className="bg-gray-900/60 border-gray-800 overflow-hidden">
-            <div className="p-3 border-b border-white/10 text-xs text-muted-foreground">
-              Умный порог = расход/день × срок поставки ({supplier.lead_time_days ?? 3} дн) × 1.5.
-              {stats && stats.reorderCount > 0 ? (
-                <span className="ml-1 text-amber-300 font-medium">Пора заказывать: {stats.reorderCount}.</span>
-              ) : (
-                <span className="ml-1 text-emerald-300">Всё в норме.</span>
-              )}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-white/10 text-xs text-muted-foreground">
+              <span>
+                Умный порог = расход/день × срок поставки ({supplier.lead_time_days ?? 3} дн) × 1.5.
+                {stats && stats.reorderCount > 0 ? (
+                  <span className="ml-1 text-amber-300 font-medium">Пора заказывать: {stats.reorderCount}.</span>
+                ) : (
+                  <span className="ml-1 text-emerald-300">Всё в норме.</span>
+                )}
+              </span>
+              <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={openTransferItems}>
+                <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
+                Перенести все товары к поставщику
+              </Button>
             </div>
             <div className="overflow-auto">
               <table className="w-full text-sm">
@@ -523,9 +580,15 @@ export default function SupplierCardPage() {
                       </a>
                     ) : null}
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">{formatMoney(r.total_amount)} ₸</div>
-                    <div className="text-xs text-muted-foreground">{r.items?.length || 0} позиций</div>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="text-right">
+                      <div className="text-sm font-semibold">{formatMoney(r.total_amount)} ₸</div>
+                      <div className="text-xs text-muted-foreground">{r.items?.length || 0} позиций</div>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => openTransferReceipt(r.id, r.invoice_number || `#${r.id.slice(0, 8)}`)}>
+                      <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
+                      Перенести
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -677,6 +740,36 @@ export default function SupplierCardPage() {
               </Button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {transferOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !transferring) setTransferOpen(false) }}>
+          <Card className="w-full max-w-md border-white/10 bg-gray-900 p-5">
+            <div className="mb-1 text-base font-semibold text-white">Перенести к другому поставщику</div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              {transferMode === 'receipt'
+                ? <>Накладная <span className="text-foreground">{transferReceiptLabel}</span> и её товары перейдут выбранному поставщику.</>
+                : <>Все товары поставщика <span className="text-foreground">{supplier?.name}</span> ({products.length}) перейдут выбранному поставщику.</>}
+            </p>
+            <Label className="mb-1.5 block text-xs">Поставщик-получатель</Label>
+            <Select value={transferTarget} onValueChange={setTransferTarget}>
+              <SelectTrigger><SelectValue placeholder="Выберите поставщика" /></SelectTrigger>
+              <SelectContent>
+                {supplierOptions.length === 0 ? (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">Загрузка…</div>
+                ) : supplierOptions.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setTransferOpen(false)} disabled={transferring}>Отмена</Button>
+              <Button onClick={() => void doTransfer()} disabled={transferring || !transferTarget}>
+                {transferring ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Переношу…</> : 'Перенести'}
+              </Button>
+            </div>
+          </Card>
         </div>
       ) : null}
     </div>

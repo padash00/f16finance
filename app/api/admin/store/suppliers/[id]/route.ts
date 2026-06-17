@@ -44,6 +44,7 @@ export async function GET(
         .from('inventory_receipts')
         .select('id, received_at, invoice_number, invoice_file_url, total_amount, comment, location:location_id(id, name, code, location_type), items:inventory_receipt_items(id)')
         .eq('supplier_id', id)
+        .is('cancelled_at', null) // отменённые приёмки не показываем у поставщика
         .order('received_at', { ascending: false })
         .limit(200),
       supabase
@@ -178,5 +179,76 @@ export async function GET(
     })
   } catch (error: any) {
     return json({ error: error?.message || 'Не удалось загрузить поставщика' }, 500)
+  }
+}
+
+// Перенос к другому поставщику: товары (primary_supplier_id) и/или накладные
+// (supplier_id + строки прихода + долг). Нужно, когда приёмка/товары ушли не на того.
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const body = (await request.json().catch(() => null)) as any
+    const action = String(body?.action || '')
+    const targetSupplierId = String(body?.target_supplier_id || '').trim()
+    if (!targetSupplierId) return json({ error: 'Выберите поставщика-получателя' }, 400)
+    if (targetSupplierId === id) return json({ error: 'Это тот же поставщик' }, 400)
+
+    // Получатель должен существовать (и быть в той же орг, если орг известна).
+    let targetQ: any = supabase.from('inventory_suppliers').select('id, organization_id, name').eq('id', targetSupplierId).maybeSingle()
+    const { data: target, error: targetErr } = await targetQ
+    if (targetErr) throw targetErr
+    if (!target) return json({ error: 'Поставщик-получатель не найден' }, 404)
+
+    if (action === 'transferItems') {
+      // Все товары этого поставщика → получателю
+      const { data: moved, error } = await supabase
+        .from('inventory_items')
+        .update({ primary_supplier_id: targetSupplierId, updated_at: new Date().toISOString() })
+        .eq('primary_supplier_id', id)
+        .select('id')
+      if (error) throw error
+      return json({ ok: true, data: { movedItems: (moved as any[])?.length || 0 } })
+    }
+
+    if (action === 'transferReceipt') {
+      const receiptId = String(body?.receipt_id || '').trim()
+      if (!receiptId) return json({ error: 'receipt_id обязателен' }, 400)
+      // Накладная принадлежит этому поставщику?
+      const { data: rec, error: recErr } = await supabase.from('inventory_receipts').select('id, supplier_id').eq('id', receiptId).maybeSingle()
+      if (recErr) throw recErr
+      if (!rec || String((rec as any).supplier_id) !== String(id)) return json({ error: 'Накладная не принадлежит этому поставщику' }, 400)
+
+      // 1) сама накладная
+      const { error: e1 } = await supabase.from('inventory_receipts').update({ supplier_id: targetSupplierId }).eq('id', receiptId)
+      if (e1) throw e1
+      // 2) долг по этой накладной
+      await supabase.from('supplier_debts').update({ supplier_id: targetSupplierId }).eq('receipt_id', receiptId).then(() => {}, () => {})
+      // 3) товары из этой накладной → получателю
+      const { data: lineItems } = await supabase.from('inventory_receipt_items').select('item_id').eq('receipt_id', receiptId)
+      const itemIds = Array.from(new Set(((lineItems as any[]) || []).map((r) => String(r.item_id)).filter(Boolean)))
+      let movedItems = 0
+      if (itemIds.length) {
+        const { data: mv } = await supabase
+          .from('inventory_items')
+          .update({ primary_supplier_id: targetSupplierId, updated_at: new Date().toISOString() })
+          .in('id', itemIds)
+          .eq('primary_supplier_id', id)
+          .select('id')
+        movedItems = (mv as any[])?.length || 0
+      }
+      return json({ ok: true, data: { movedItems } })
+    }
+
+    return json({ error: 'Неизвестное действие' }, 400)
+  } catch (error: any) {
+    return json({ error: error?.message || 'Не удалось перенести' }, 500)
   }
 }
