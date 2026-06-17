@@ -1,12 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Building2, Loader2, Search } from 'lucide-react'
+import { ArrowRight, Building2, Loader2, Plus, Search } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { useModalEscape } from '@/lib/client/use-modal-escape'
 import { formatMoney } from '@/lib/core/format'
 
 type Supplier = {
@@ -40,26 +43,56 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const response = await fetch('/api/admin/store/suppliers', { cache: 'no-store' })
-        const json = await response.json().catch(() => null)
-        if (cancelled) return
-        if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить поставщиков')
-        setSuppliers(json.data?.suppliers || [])
-      } catch (err: any) {
-        if (!cancelled) setError(err?.message || 'Ошибка загрузки')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => {
-      cancelled = true
+  const [addOpen, setAddOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ name: '', organization_name: '', bin_iin: '', contact_name: '', phone: '', lead_time_days: '3' })
+  useModalEscape(addOpen, () => { if (!saving) setAddOpen(false) })
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/store/suppliers', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось загрузить поставщиков')
+      setSuppliers(json.data?.suppliers || [])
+      setError(null)
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка загрузки')
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  const submitSupplier = async () => {
+    if (!form.name.trim()) { setError('Введите название поставщика'); return }
+    const digits = form.bin_iin.replace(/\D/g, '')
+    if (digits && !/^\d{12}$/.test(digits)) { setError('ИИН/БИН — 12 цифр'); return }
+    setSaving(true); setError(null)
+    try {
+      const res = await fetch('/api/admin/store/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          organization_name: form.organization_name.trim() || form.name.trim(),
+          bin_iin: digits || null,
+          contact_name: form.contact_name.trim() || null,
+          phone: form.phone.trim() || null,
+          lead_time_days: form.lead_time_days,
+        }),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'Не удалось создать поставщика')
+      setAddOpen(false)
+      setForm({ name: '', organization_name: '', bin_iin: '', contact_name: '', phone: '', lead_time_days: '3' })
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка создания')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -77,14 +110,19 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
     <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {(() => {
         const hdrToolbar = (
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск по названию или БИН/ИИН..."
-              className="pl-9"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative max-w-md flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Поиск по названию или БИН/ИИН..."
+                className="pl-9"
+              />
+            </div>
+            <Button type="button" size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setError(null); setAddOpen(true) }}>
+              <Plus className="h-3.5 w-3.5" /> Добавить поставщика
+            </Button>
           </div>
         )
         return embedded ? (
@@ -162,6 +200,50 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
           </table>
         </div>
       )}
+
+      {addOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !saving) setAddOpen(false) }}>
+          <Card className="w-full max-w-md border-white/10 bg-gray-900 p-5">
+            <div className="mb-4 text-base font-semibold text-white">Новый поставщик</div>
+            <div className="space-y-3">
+              <div>
+                <Label className="mb-1 block text-xs">Название *</Label>
+                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Напр. Артур ИП" autoFocus />
+              </div>
+              <div>
+                <Label className="mb-1 block text-xs">Организация (для накладных)</Label>
+                <Input value={form.organization_name} onChange={(e) => setForm((f) => ({ ...f, organization_name: e.target.value }))} placeholder="Если пусто — возьмём название" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1 block text-xs">БИН/ИИН</Label>
+                  <Input value={form.bin_iin} onChange={(e) => setForm((f) => ({ ...f, bin_iin: e.target.value }))} placeholder="12 цифр" inputMode="numeric" />
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Срок поставки, дн</Label>
+                  <Input type="number" min={0} value={form.lead_time_days} onChange={(e) => setForm((f) => ({ ...f, lead_time_days: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1 block text-xs">Контакт</Label>
+                  <Input value={form.contact_name} onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))} placeholder="Имя" />
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Телефон</Label>
+                  <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+7…" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>Отмена</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void submitSupplier()} disabled={saving || !form.name.trim()}>
+                {saving ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Создаю…</> : 'Создать'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 }

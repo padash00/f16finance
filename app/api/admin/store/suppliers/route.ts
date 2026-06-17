@@ -97,3 +97,49 @@ export async function GET(request: Request) {
     return json({ error: error?.message || 'Не удалось загрузить поставщиков' }, 500)
   }
 }
+
+// Создание поставщика вручную (со страницы «Поставщики»).
+export async function POST(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const body = (await request.json().catch(() => null)) as any
+
+    const name = String(body?.name || '').trim()
+    const organizationName = String(body?.organization_name || '').trim() || name
+    const binIin = String(body?.bin_iin || '').replace(/\D/g, '')
+    if (!name) return json({ error: 'Введите название поставщика' }, 400)
+    if (binIin && !/^\d{12}$/.test(binIin)) return json({ error: 'ИИН/БИН должен состоять из 12 цифр' }, 400)
+
+    const organizationId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !organizationId) return json({ error: 'Нет активной организации' }, 400)
+
+    // Дедуп в пределах своей орг (по БИН или названию) — не плодим дубли.
+    if (binIin) {
+      let dupQ: any = supabase.from('inventory_suppliers').select('id, name').eq('bin_iin', binIin).limit(1)
+      if (organizationId) dupQ = dupQ.eq('organization_id', organizationId)
+      const { data: dup } = await dupQ.maybeSingle()
+      if (dup?.id) return json({ error: `Поставщик с таким БИН/ИИН уже есть: ${dup.name}` }, 409)
+    }
+
+    const leadTime = Number(body?.lead_time_days)
+    const insertRow: Record<string, unknown> = {
+      name,
+      organization_name: organizationName,
+      bin_iin: binIin || null,
+      contact_name: String(body?.contact_name || '').trim() || null,
+      phone: String(body?.phone || '').trim() || null,
+      lead_time_days: Number.isFinite(leadTime) && leadTime >= 0 ? Math.round(leadTime) : 3,
+      preferred_expense_category_id: String(body?.preferred_expense_category_id || '').trim() || null,
+      organization_id: organizationId,
+    }
+    const { data: created, error } = await supabase.from('inventory_suppliers').insert([insertRow]).select('id').single()
+    if (error) throw error
+    return json({ ok: true, data: { id: created?.id } })
+  } catch (error: any) {
+    return json({ error: error?.message || 'Не удалось создать поставщика' }, 500)
+  }
+}
