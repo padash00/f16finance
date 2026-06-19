@@ -1,6 +1,4 @@
-import { ClipboardList, Monitor, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2 } from 'lucide-react'
-
-import { Button } from '@/components/ui/button'
+import { ClipboardList, Gamepad2, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2, type LucideIcon } from 'lucide-react'
 
 type WorkMode = 'shift' | 'sale' | 'return' | 'scanner' | 'request' | 'cabinet' | 'arena'
 
@@ -20,10 +18,36 @@ interface Props {
   onArena?: () => void
 }
 
-function itemClass(active: boolean) {
-  return active
-    ? 'bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-foreground shadow-sm border border-emerald-500/30'
-    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+function ModeButton({
+  active,
+  label,
+  icon: Icon,
+  onClick,
+  disabled,
+}: {
+  active: boolean
+  label: string
+  icon: LucideIcon
+  onClick?: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      aria-current={active ? 'page' : undefined}
+      className={`flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition disabled:cursor-default ${
+        active
+          ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+          : 'text-muted-foreground hover:bg-white/5 hover:text-foreground disabled:opacity-40'
+      }`}
+    >
+      <Icon className="h-[18px] w-[18px] shrink-0" />
+      <span className="hidden whitespace-nowrap sm:inline">{label}</span>
+    </button>
+  )
 }
 
 export default function WorkModeSwitch({
@@ -42,100 +66,72 @@ export default function WorkModeSwitch({
   onArena,
 }: Props) {
   return (
-    <div className="inline-flex items-center rounded-xl border border-white/10 bg-muted/40 p-1 no-drag">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        title="Смена"
+    <div className="inline-flex items-center gap-0.5 rounded-xl border border-white/10 bg-muted/40 p-1 no-drag">
+      <ModeButton
+        active={active === 'shift'}
+        label="Смена"
+        icon={ReceiptText}
         onClick={onShift}
         disabled={!onShift || active === 'shift'}
-        className={`rounded-lg px-2.5 ${itemClass(active === 'shift')}`}
-      >
-        <ReceiptText className="h-4 w-4" />
-      </Button>
+      />
 
       {showSale ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title="Продажа"
+        <ModeButton
+          active={active === 'sale'}
+          label="Продажа"
+          icon={ShoppingBasket}
           onClick={onSale}
           disabled={!onSale || active === 'sale'}
-          className={`rounded-lg px-2.5 ${itemClass(active === 'sale')}`}
-        >
-          <ShoppingBasket className="h-4 w-4" />
-        </Button>
+        />
       ) : null}
 
       {showReturn ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title="Возврат"
+        <ModeButton
+          active={active === 'return'}
+          label="Возврат"
+          icon={RotateCcw}
           onClick={onReturn}
           disabled={!onReturn || active === 'return'}
-          className={`rounded-lg px-2.5 ${itemClass(active === 'return')}`}
-        >
-          <RotateCcw className="h-4 w-4" />
-        </Button>
+        />
       ) : null}
 
       {showScanner ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title="Сканер / Долги"
+        <ModeButton
+          active={active === 'scanner'}
+          label="Долги"
+          icon={ScanBarcode}
           onClick={onScanner}
           disabled={!onScanner || active === 'scanner'}
-          className={`rounded-lg px-2.5 ${itemClass(active === 'scanner')}`}
-        >
-          <ScanBarcode className="h-4 w-4" />
-        </Button>
+        />
       ) : null}
 
       {showRequest ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title="Заявка на склад"
+        <ModeButton
+          active={active === 'request'}
+          label="Заявка"
+          icon={ClipboardList}
           onClick={onRequest}
           disabled={!onRequest || active === 'request'}
-          className={`rounded-lg px-2.5 ${itemClass(active === 'request')}`}
-        >
-          <ClipboardList className="h-4 w-4" />
-        </Button>
+        />
       ) : null}
 
       {showArena ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          title="Зал"
+        <ModeButton
+          active={active === 'arena'}
+          label="Зал"
+          icon={Gamepad2}
           onClick={onArena}
           disabled={!onArena || active === 'arena'}
-          className={`rounded-lg px-2.5 ${itemClass(active === 'arena')}`}
-        >
-          <Monitor className="h-4 w-4" />
-        </Button>
+        />
       ) : null}
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        title="Мой профиль"
+      <ModeButton
+        active={active === 'cabinet'}
+        label="Профиль"
+        icon={UserCircle2}
         onClick={onCabinet}
         disabled={!onCabinet || active === 'cabinet'}
-        className={`rounded-lg px-2.5 ${itemClass(active === 'cabinet')}`}
-      >
-        <UserCircle2 className="h-4 w-4" />
-      </Button>
+      />
     </div>
   )
 }
