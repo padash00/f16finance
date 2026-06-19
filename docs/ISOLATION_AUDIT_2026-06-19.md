@@ -19,7 +19,10 @@
 ## 🟠 HIGH (кросс-тенант мутация или чтение метаданных/агрегатов)
 
 > Прогресс: ✅ 3A мутация-по-id (`9018b2c9`), ✅ 3B чтение-по-id (`131c8308`),
-> ✅ 3C customer/арена-резолв (`ce230e4e`). Осталось: point/debts, cron (D), telegram (E).
+> ✅ 3C customer/арена/debts (`ce230e4e`,`8373cfd1`), киоск NULL-толерантность (`9940436d`),
+> ✅ salary-snapshot (`137a00a2`). Осталось: telegram/webhook finance + cron-рассылки (D/E)
+> — это «будущие» утечки (проявятся со 2-м арендатором), требуют маппинга org→telegram-chat.
+> cron inventory-integrity/shortage → нужен company-параметр в RPC (SQL-батч).
 
 - [ ] **admin/expense-categories** PATCH(`:172`)/DELETE(`:212`) по id без org. Фикс: проверять organization_id.
 - [ ] **admin/expense-templates** DELETE(`:82-90`) existing.company_id не сверяется. Фикс: resolveCompanyScope(existing.company_id).
