@@ -201,19 +201,40 @@ export async function PATCH(
     if (!targetSupplierId) return json({ error: 'Выберите поставщика-получателя' }, 400)
     if (targetSupplierId === id) return json({ error: 'Это тот же поставщик' }, 400)
 
+    // Изоляция: источник (id из URL) обязан принадлежать орг вызывающего.
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
+    const { data: source, error: sourceErr } = await supabase
+      .from('inventory_suppliers')
+      .select('id, organization_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (sourceErr) throw sourceErr
+    if (!source) return json({ error: 'Поставщик не найден' }, 404)
+    if (!access.isSuperAdmin && String((source as any).organization_id) !== String(orgId)) {
+      return json({ error: 'forbidden' }, 403)
+    }
+
     // Получатель должен существовать (и быть в той же орг, если орг известна).
     let targetQ: any = supabase.from('inventory_suppliers').select('id, organization_id, name').eq('id', targetSupplierId).maybeSingle()
     const { data: target, error: targetErr } = await targetQ
     if (targetErr) throw targetErr
     if (!target) return json({ error: 'Поставщик-получатель не найден' }, 404)
 
+    // Перенос между разными организациями запрещён (смешение данных арендаторов).
+    if (String((target as any).organization_id || '') !== String((source as any).organization_id || '')) {
+      return json({ error: 'Поставщики из разных организаций', code: 'cross-org-transfer' }, 400)
+    }
+    const sourceOrgId = (source as any).organization_id || null
+
     if (action === 'transferItems') {
       // Все товары этого поставщика → получателю
-      const { data: moved, error } = await supabase
+      let itemsUpd: any = supabase
         .from('inventory_items')
         .update({ primary_supplier_id: targetSupplierId, updated_at: new Date().toISOString() })
         .eq('primary_supplier_id', id)
-        .select('id')
+      if (sourceOrgId) itemsUpd = itemsUpd.eq('organization_id', sourceOrgId)
+      const { data: moved, error } = await itemsUpd.select('id')
       if (error) throw error
       return json({ ok: true, data: { movedItems: (moved as any[])?.length || 0 } })
     }
@@ -236,12 +257,13 @@ export async function PATCH(
       const itemIds = Array.from(new Set(((lineItems as any[]) || []).map((r) => String(r.item_id)).filter(Boolean)))
       let movedItems = 0
       if (itemIds.length) {
-        const { data: mv } = await supabase
+        let mvUpd: any = supabase
           .from('inventory_items')
           .update({ primary_supplier_id: targetSupplierId, updated_at: new Date().toISOString() })
           .in('id', itemIds)
           .eq('primary_supplier_id', id)
-          .select('id')
+        if (sourceOrgId) mvUpd = mvUpd.eq('organization_id', sourceOrgId)
+        const { data: mv } = await mvUpd.select('id')
         movedItems = (mv as any[])?.length || 0
       }
       return json({ ok: true, data: { movedItems } })

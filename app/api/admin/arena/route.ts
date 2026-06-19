@@ -264,6 +264,7 @@ export async function POST(request: Request) {
       deleteStationGame: 'stations.delete_station_game',
       bulkUpsertZoneGames: 'stations.bulk_upsert_games',
       topUpClientBalance: 'stations.top_up_balance',
+      searchClient: 'stations.top_up_balance',
       adminStartSession: 'stations.admin_start_session',
       adminEndSession: 'stations.admin_end_session',
       rotateProjectProvisioningKey: 'stations.rotate_provisioning_key',
@@ -666,11 +667,13 @@ export async function POST(request: Request) {
       if (!Number.isFinite(amt) || amt <= 0) return json({ error: 'amount must be positive' }, 400)
 
       const q = phone.trim()
-      const { data: customer, error: findErr } = await supabase
+      // Изоляция: ищем/пополняем баланс только клиентов своих компаний.
+      let findQuery = supabase
         .from('customers')
         .select('id, name, phone, card_number, kiosk_balance')
         .or(`phone.eq.${sanitizeOrFilterValue(q)},card_number.eq.${sanitizeOrFilterValue(q)}`)
-        .maybeSingle()
+      if (companyScope.allowedCompanyIds) findQuery = findQuery.in('company_id', companyScope.allowedCompanyIds)
+      const { data: customer, error: findErr } = await findQuery.maybeSingle()
 
       if (findErr) throw findErr
       if (!customer) return json({ error: 'client-not-found' }, 404)
@@ -689,11 +692,13 @@ export async function POST(request: Request) {
     if (body.action === 'searchClient') {
       const { query: q } = body
       if (!q?.trim()) return json({ error: 'query required' }, 400)
-      const { data, error } = await supabase
+      // Изоляция: поиск клиентов только в своих компаниях.
+      let searchQuery = supabase
         .from('customers')
         .select('id, name, phone, card_number, kiosk_balance')
         .or(`phone.ilike.%${sanitizeOrFilterValue(q)}%,card_number.ilike.%${sanitizeOrFilterValue(q)}%,name.ilike.%${sanitizeOrFilterValue(q)}%`)
-        .limit(10)
+      if (companyScope.allowedCompanyIds) searchQuery = searchQuery.in('company_id', companyScope.allowedCompanyIds)
+      const { data, error } = await searchQuery.limit(10)
       if (error) throw error
       return json({ ok: true, data: data || [] })
     }

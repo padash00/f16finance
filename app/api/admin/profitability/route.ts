@@ -165,7 +165,11 @@ export async function GET(req: Request) {
       url.searchParams.get('includeKaspiDaily') === '1' || url.searchParams.get('include_kaspi_daily') === '1'
 
     const supabase = createAdminSupabaseClient()
+    // Изоляция: входные данные рентабельности (ФОТ, налоги, обороты) — только своей орг.
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ items: [] })
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
+    if (orgId) query = query.eq('organization_id', orgId)
 
     if (from) query = query.gte('month', from)
     if (to) query = query.lte('month', to)
@@ -296,17 +300,23 @@ export async function POST(req: Request) {
     const supabase = createAdminSupabaseClient()
     const payload = normalizePayload(body?.payload || {})
 
+    // Изоляция: запись привязывается к своей орг, конфликт — по (organization_id, month),
+    // иначе onConflict:'month' перезаписывал бы строку другой организации за тот же месяц.
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'Нет активной организации' }, 400)
+
     const { data, error } = await supabase
       .from('monthly_profitability_inputs')
       .upsert(
         [
           {
+            organization_id: orgId,
             month,
             ...payload,
             updated_at: new Date().toISOString(),
           },
         ],
-        { onConflict: 'month' },
+        { onConflict: 'organization_id,month' },
       )
       .select('*')
       .single()

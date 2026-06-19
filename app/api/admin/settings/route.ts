@@ -154,6 +154,12 @@ export async function POST(req: Request) {
     const supabase = getSupabase(req)
     const actorUserId = access.user?.id || null
 
+    // Изоляция: update/delete по присланному id обязаны ограничиваться своей орг,
+    // иначе менеджер орг A может изменить/удалить компанию/сотрудника/категорию орг B.
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return badRequest('Нет активной организации')
+    const scopeOrg = <T,>(q: T): T => (access.isSuperAdmin ? q : ((q as any).eq('organization_id', orgId) as T))
+
     if (body.entity === 'company') {
       // Капабилити-проверка зависит от действия
       const capForCompany =
@@ -192,14 +198,16 @@ export async function POST(req: Request) {
 
       if (body.action === 'update') {
         if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')
-        const { data, error } = await supabase
-          .from('companies')
-          .update({
-            name: body.payload.name.trim(),
-            code: body.payload.code?.trim() || null,
-            show_in_structure: body.payload.show_in_structure !== false,
-          })
-          .eq('id', body.id)
+        const { data, error } = await scopeOrg(
+          supabase
+            .from('companies')
+            .update({
+              name: body.payload.name.trim(),
+              code: body.payload.code?.trim() || null,
+              show_in_structure: body.payload.show_in_structure !== false,
+            })
+            .eq('id', body.id),
+        )
           .select('id,name,code,show_in_structure')
           .single()
         if (error) throw error
@@ -213,7 +221,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('companies').delete().eq('id', body.id)
+      const { error } = await scopeOrg(supabase.from('companies').delete().eq('id', body.id))
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
@@ -254,15 +262,17 @@ export async function POST(req: Request) {
 
       if (body.action === 'update') {
         if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
-        const { data, error } = await supabase
-          .from('staff')
-          .update({
-            full_name: body.payload.name.trim(),
-            phone: body.payload.phone?.trim() || null,
-            email: body.payload.email?.trim() || null,
-            role: body.payload.role?.trim() || 'operator',
-          })
-          .eq('id', body.id)
+        const { data, error } = await scopeOrg(
+          supabase
+            .from('staff')
+            .update({
+              full_name: body.payload.name.trim(),
+              phone: body.payload.phone?.trim() || null,
+              email: body.payload.email?.trim() || null,
+              role: body.payload.role?.trim() || 'operator',
+            })
+            .eq('id', body.id),
+        )
           .select('id,full_name,email,role')
           .single()
         if (error) throw error
@@ -276,7 +286,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('staff').delete().eq('id', body.id)
+      const { error } = await scopeOrg(supabase.from('staff').delete().eq('id', body.id))
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
@@ -316,14 +326,16 @@ export async function POST(req: Request) {
 
       if (body.action === 'update') {
         if (!body.payload.name?.trim()) return badRequest('Название категории обязательно')
-        const { data, error } = await supabase
-          .from('expense_categories')
-          .update({
-            name: body.payload.name.trim(),
-            monthly_budget: body.payload.monthly_budget ?? null,
-            accounting_group: body.payload.accounting_group || null,
-          })
-          .eq('id', body.id)
+        const { data, error } = await scopeOrg(
+          supabase
+            .from('expense_categories')
+            .update({
+              name: body.payload.name.trim(),
+              monthly_budget: body.payload.monthly_budget ?? null,
+              accounting_group: body.payload.accounting_group || null,
+            })
+            .eq('id', body.id),
+        )
           .select('id,name,monthly_budget,accounting_group')
           .single()
         if (error) throw error
@@ -337,10 +349,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase
-        .from('expense_categories')
-        .delete()
-        .eq('id', body.id)
+      const { error } = await scopeOrg(
+        supabase.from('expense_categories').delete().eq('id', body.id),
+      )
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,

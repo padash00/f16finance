@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { resolveCompanyScope, ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -40,6 +40,26 @@ export async function GET(req: Request) {
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Изоляция: id (operator/staff) обязан принадлежать организации вызывающего,
+    // иначе передав чужой id читаются долги/зарплаты/события сотрудника другой орг.
+    try {
+      if (kind === 'operator') {
+        await ensureOrganizationOperatorAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          operatorId: id,
+        })
+      } else {
+        await ensureOrganizationStaffAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          staffId: id,
+        })
+      }
+    } catch {
+      return json({ error: 'forbidden', code: 'entity-not-in-organization' }, 403)
+    }
 
     // Audit log по сущности
     const auditRes = await supabase

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireStaffCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 export async function POST(request: Request) {
@@ -34,6 +35,29 @@ export async function POST(request: Request) {
     const { data: existingUser, error: lookupError } = await supabaseAdmin.auth.admin.getUserById(userId)
     if (lookupError || !existingUser?.user) {
       return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 })
+    }
+
+    // Изоляция: целевой пользователь обязан быть оператором ЭТОЙ организации, иначе
+    // staff орг A мог бы сбросить пароль (захватить аккаунт) оператора орг B по userId.
+    if (!access.isSuperAdmin) {
+      const { data: targetAuth } = await supabaseAdmin
+        .from('operator_auth')
+        .select('operator_id')
+        .eq('user_id', userId)
+        .maybeSingle()
+      const targetOperatorId = (targetAuth as any)?.operator_id
+      if (!targetOperatorId) {
+        return NextResponse.json({ error: 'forbidden', code: 'target-not-operator' }, { status: 403 })
+      }
+      try {
+        await ensureOrganizationOperatorAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          operatorId: targetOperatorId,
+        })
+      } catch {
+        return NextResponse.json({ error: 'forbidden', code: 'operator-not-in-organization' }, { status: 403 })
+      }
     }
 
     // Обновляем пароль через admin API
