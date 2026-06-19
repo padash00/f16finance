@@ -81,14 +81,17 @@ function normalizeMoney(value: unknown) {
 async function resolveOperator(params: {
   supabase: any
   operatorId: string
+  orgId?: string | null
 }) {
-  const { data, error } = await params.supabase
+  // Изоляция: оператор-должник обязан быть в орг устройства (NULL допускаем — legacy).
+  let q = params.supabase
     .from('operators')
     .select('id, name, short_name, telegram_chat_id, is_active')
     .eq('id', params.operatorId)
     .eq('is_active', true)
     .limit(1)
-    .maybeSingle()
+  if (params.orgId) q = q.or(`organization_id.eq.${params.orgId},organization_id.is.null`)
+  const { data, error } = await q.maybeSingle()
 
   if (error) throw error
   return data
@@ -105,6 +108,7 @@ async function normalizePointDebtDebtor(params: {
   supabase: any
   rawOperatorId: string | null
   payloadClientName: string | null
+  orgId?: string | null
 }): Promise<{
   operatorId: string | null
   clientName: string | null
@@ -123,29 +127,18 @@ async function normalizePointDebtDebtor(params: {
     if (!DEBTOR_UUID_RE.test(staffId)) {
       return { operatorId: null, clientName, staffChatId: null, staffName: null }
     }
-    let staffChatId: string | null = null
-    let staffName: string | null = null
-    if (!clientName) {
-      const { data: st, error } = await params.supabase
-        .from('staff')
-        .select('full_name, short_name, telegram_chat_id')
-        .eq('id', staffId)
-        .maybeSingle()
-      if (error) throw error
-      clientName = (st?.short_name || st?.full_name || '').trim() || null
-      staffChatId = st?.telegram_chat_id ? String(st.telegram_chat_id).trim() : null
-      staffName = (st?.short_name || st?.full_name || '').trim() || null
-    } else {
-      const { data: st, error } = await params.supabase
-        .from('staff')
-        .select('full_name, short_name, telegram_chat_id')
-        .eq('id', staffId)
-        .maybeSingle()
-      if (error) throw error
-      staffChatId = st?.telegram_chat_id ? String(st.telegram_chat_id).trim() : null
-      staffName = (st?.short_name || st?.full_name || '').trim() || null
-    }
-    return { operatorId: null, clientName, staffChatId, staffName }
+    // Изоляция: сотрудник-должник обязан быть в орг устройства (NULL допускаем — legacy),
+    // иначе по присланному staff:<uuid> утекут ФИО/telegram_chat_id чужой орг + уйдёт ему Telegram.
+    let stQ = params.supabase
+      .from('staff')
+      .select('full_name, short_name, telegram_chat_id')
+      .eq('id', staffId)
+    if (params.orgId) stQ = stQ.or(`organization_id.eq.${params.orgId},organization_id.is.null`)
+    const { data: st, error } = await stQ.maybeSingle()
+    if (error) throw error
+    const resolvedName = (st?.short_name || st?.full_name || '').trim() || null
+    const staffChatId = st?.telegram_chat_id ? String(st.telegram_chat_id).trim() : null
+    return { operatorId: null, clientName: clientName || resolvedName, staffChatId, staffName: resolvedName }
   }
 
   if (raw.startsWith('orgmember:')) {
@@ -154,11 +147,10 @@ async function normalizePointDebtDebtor(params: {
       return { operatorId: null, clientName, staffChatId: null, staffName: null }
     }
     if (!clientName) {
-      const { data: om, error } = await params.supabase
-        .from('organization_members')
-        .select('email')
-        .eq('id', omId)
-        .maybeSingle()
+      // Изоляция: участник орг должен быть из орг устройства.
+      let omQ = params.supabase.from('organization_members').select('email').eq('id', omId)
+      if (params.orgId) omQ = omQ.eq('organization_id', params.orgId)
+      const { data: om, error } = await omQ.maybeSingle()
       if (error) throw error
       clientName = om?.email?.trim() || null
     }
@@ -368,10 +360,19 @@ export async function POST(request: Request) {
       if (!itemName) return json({ error: 'item-name-required' }, 400)
       if (totalAmount <= 0) return json({ error: 'amount-required' }, 400)
 
+      // Орг устройства — для изоляции резолва должника (через company.organization_id).
+      const { data: devCompany } = await supabase
+        .from('companies')
+        .select('organization_id')
+        .eq('id', device.company_id)
+        .maybeSingle()
+      const deviceOrgId = (devCompany as any)?.organization_id || null
+
       let { operatorId, clientName, staffChatId, staffName } = await normalizePointDebtDebtor({
         supabase,
         rawOperatorId: payload.operator_id?.trim() || null,
         payloadClientName: payload.client_name?.trim() || null,
+        orgId: deviceOrgId,
       })
 
       let operator: any = null
@@ -380,6 +381,7 @@ export async function POST(request: Request) {
         operator = await resolveOperator({
           supabase,
           operatorId,
+          orgId: deviceOrgId,
         })
         if (!operator) return json({ error: 'operator-not-found' }, 404)
         clientName = operator?.name || clientName
