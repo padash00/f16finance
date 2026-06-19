@@ -1,5 +1,14 @@
 # Аудит мультитенантной изоляции — 2026-06-19
 
+> ## ✅ ИТОГ: все 53 app-layer утечки закрыты (critical + high + medium)
+> Батчи 1→3 (штамп при создании, мутация/чтение по id, customer/арена/debts-резолв),
+> per-org Telegram (миграция + listReportTargets), 8 cron на per-org, telegram-бот finance
+> по орг, inventory-cron owner-путь, 3 пачки medium. Всё на проде, типы зелёные, F16 не сломан.
+> **Осталось (defense-in-depth, не app-layer):** RLS на realtime-таблицы (team_chat/
+> direct_messages/supplier_debts/news_posts) — SQL; **Kiosk RCE** — требует релиза киоска.
+> Бэкфилл-долги: `customers.company_id` (1 NULL → привязать к клубу) для строгого киоск-фильтра.
+
+
 Мультиагентный аудит всех 300 API-роутов (37 агентов, audit→verify). **53 подтверждённых утечки** между организациями. LEGACY_SINGLE_TENANT_MODE=false (скоуп активен), но многие роуты ходят service-role клиентом (обходит RLS) → app-скоуп единственная стена, и в этих местах её нет.
 
 Статус: `[ ]` не исправлено, `[x]` исправлено.
