@@ -298,6 +298,7 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             monthly_budget: body.payload.monthly_budget ?? null,
             accounting_group: body.payload.accounting_group || null,
+            organization_id: access.activeOrganization?.id || null,
           },
         ]).select('id,name,monthly_budget,accounting_group').single()
         if (error) throw error

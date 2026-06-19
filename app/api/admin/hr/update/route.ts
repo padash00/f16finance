@@ -163,6 +163,7 @@ export async function POST(request: Request) {
           email: profile.email || null,
           telegram_chat_id: tg,
           is_active: true,
+          organization_id: access.activeOrganization?.id || null,
         })
       }
 

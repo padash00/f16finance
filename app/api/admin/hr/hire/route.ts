@@ -32,6 +32,7 @@ import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { writeAuditLog } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -119,6 +120,32 @@ export async function POST(request: Request) {
 
     const supabase = createAdminSupabaseClient()
 
+    // Изоляция: новый сотрудник/оператор обязан принадлежать организации вызывающего.
+    // Без этого запись «теряется» (organization_id=null → невидима в скоупе орг).
+    const organizationId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !organizationId) {
+      return json({ error: 'Нет активной организации — некуда привязать сотрудника' }, 400)
+    }
+
+    // Компании назначения (для оператора) обязаны принадлежать этой же организации.
+    let assignmentCompanyIds: string[] = []
+    if (Array.isArray(body.company_ids) && body.company_ids.length > 0) {
+      const requested = body.company_ids.map((c: any) => String(c))
+      if (access.isSuperAdmin && !organizationId) {
+        assignmentCompanyIds = requested
+      } else {
+        const allowedCompanyIds = await listOrganizationCompanyIds({
+          activeOrganizationId: organizationId,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+        const foreign = requested.filter((id) => !allowedCompanyIds.includes(id))
+        if (foreign.length > 0) {
+          return json({ error: 'forbidden', code: 'company-not-in-organization' }, 403)
+        }
+        assignmentCompanyIds = requested
+      }
+    }
+
     // Проверяем что роль существует в positions
     const { data: position } = await supabase
       .from('positions')
@@ -147,6 +174,7 @@ export async function POST(request: Request) {
           email: body.email?.trim() || null,
           telegram_chat_id: body.telegram_chat_id?.trim() || null,
           is_active: true,
+          organization_id: organizationId,
         })
         .select('id')
         .single()
@@ -176,6 +204,7 @@ export async function POST(request: Request) {
         role,
         telegram_chat_id: body.telegram_chat_id?.trim() || null,
         is_active: true,
+        organization_id: organizationId,
       })
       .select('id')
       .single()
@@ -221,9 +250,9 @@ export async function POST(request: Request) {
       is_active: true,
     })
 
-    // 4. Назначения на компании/точки
-    if (Array.isArray(body.company_ids) && body.company_ids.length > 0) {
-      const assignments = body.company_ids.map((companyId, idx) => ({
+    // 4. Назначения на компании/точки (company_ids уже проверены на принадлежность орг)
+    if (assignmentCompanyIds.length > 0) {
+      const assignments = assignmentCompanyIds.map((companyId, idx) => ({
         operator_id: operatorId,
         company_id: companyId,
         role_in_company: 'operator',

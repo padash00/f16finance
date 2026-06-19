@@ -118,6 +118,7 @@ export async function POST(req: Request) {
       phone: profile?.phone?.trim() || null,
       email: profile?.email?.trim() || null,
       is_active: operator.is_active ?? true,
+      organization_id: access.activeOrganization?.id || null,
     }
 
     let staffRow: any = null

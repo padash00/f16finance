@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { requireCapability } from '@/lib/server/capabilities'
 
@@ -47,6 +48,19 @@ export async function POST(request: Request) {
 
     if (!operatorId || !username || !email) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Изоляция: оператор обязан принадлежать организации вызывающего (иначе можно
+    // завести логин чужому оператору, зная его UUID). Для суперадмина без активной
+    // орг — пропускаем (диагностика).
+    try {
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId,
+      })
+    } catch {
+      return NextResponse.json({ error: 'forbidden', code: 'operator-not-in-organization' }, { status: 403 })
     }
 
     if (username.length < 3) {
