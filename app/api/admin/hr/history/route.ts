@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireCapability } from '@/lib/server/capabilities'
+import { ensureOrganizationOperatorAccess, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -30,6 +31,26 @@ export async function GET(req: Request) {
       return json({ error: 'kind должен быть staff или operator' }, 400)
     }
     if (!id) return json({ error: 'id обязателен' }, 400)
+
+    // Изоляция: id обязан принадлежать орг — иначе передав чужой operator/staff id
+    // читаются HR-события (увольнения/смены ролей) сотрудника другой орг.
+    try {
+      if (kind === 'operator') {
+        await ensureOrganizationOperatorAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          operatorId: id,
+        })
+      } else {
+        await ensureOrganizationStaffAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          staffId: id,
+        })
+      }
+    } catch {
+      return json({ error: 'forbidden', code: 'entity-not-in-organization' }, 403)
+    }
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()

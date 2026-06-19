@@ -94,6 +94,19 @@ export async function GET(request: Request) {
   const poll = pollList?.[0]
   if (!poll) return json({ error: 'Не найдено' }, 404)
 
+  // Изоляция: опрос привязан к сообщению чата — оно обязано быть из орг вызывающего,
+  // иначе по присланному pollId/messageId утекают имена проголосовавших чужой орг.
+  if (!access.isSuperAdmin) {
+    const { data: msg } = await supabase
+      .from('team_chat_messages')
+      .select('organization_id')
+      .eq('id', (poll as any).message_id)
+      .maybeSingle()
+    if (msg && (msg as any).organization_id && (msg as any).organization_id !== (access.activeOrganization?.id || null)) {
+      return json({ error: 'Не найдено' }, 404)
+    }
+  }
+
   const { data: votes } = await supabase
     .from('team_chat_poll_votes')
     .select('option_id, voter_user_id, voter_name')

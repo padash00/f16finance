@@ -13,7 +13,7 @@
  */
 import { NextResponse } from 'next/server'
 
-import { listOrganizationOperatorIds } from '@/lib/server/organizations'
+import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -90,6 +90,22 @@ export async function GET(req: Request) {
 
     if (!from || !to) return json({ error: 'from and to are required' }, 400)
 
+    // Изоляция: company_id из URL обязан быть в скоупе вызывающего; при отсутствии
+    // company_id выборки incomes ограничиваются компаниями орг (иначе baseline-медиана
+    // и счётчики смен считались бы по выручке чужих организаций).
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (companyId && companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(companyId)) {
+      return json({ error: 'forbidden', code: 'company-out-of-scope' }, 403)
+    }
+    const scopeIncomes = <T,>(q: T): T => {
+      if (companyId) return (q as any).eq('company_id', companyId) as T
+      if (companyScope.allowedCompanyIds) return (q as any).in('company_id', companyScope.allowedCompanyIds) as T
+      return q
+    }
+
     // Baseline period — вся доступная история.
     // Верхняя граница: день перед началом target.
     // Нижняя граница: дата самого первого дохода в системе (с учётом фильтра по точке).
@@ -99,12 +115,13 @@ export async function GET(req: Request) {
 
     let earliestIncomeDate: string | null = null
     {
-      let earliestQuery = supabase
-        .from('incomes')
-        .select('date')
-        .order('date', { ascending: true })
-        .limit(1)
-      if (companyId) earliestQuery = earliestQuery.eq('company_id', companyId)
+      let earliestQuery = scopeIncomes(
+        supabase
+          .from('incomes')
+          .select('date')
+          .order('date', { ascending: true })
+          .limit(1),
+      )
       const { data: earliestRows, error: earliestErr } = await earliestQuery
       if (earliestErr) throw earliestErr
       earliestIncomeDate = earliestRows?.[0]?.date ?? null
@@ -134,13 +151,14 @@ export async function GET(req: Request) {
     const operatorMap = new Map(operators.map((o) => [o.id, o]))
 
     // ── 2. Загружаем incomes за объединённый период (baseline + period) ───
-    let incomesQuery = supabase
-      .from('incomes')
-      .select('date, operator_id, company_id, shift, cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', baselineFrom)
-      .lte('date', to)
-      .range(0, 49999)
-    if (companyId) incomesQuery = incomesQuery.eq('company_id', companyId)
+    let incomesQuery = scopeIncomes(
+      supabase
+        .from('incomes')
+        .select('date, operator_id, company_id, shift, cash_amount, kaspi_amount, card_amount, online_amount')
+        .gte('date', baselineFrom)
+        .lte('date', to)
+        .range(0, 49999),
+    )
 
     const { data: incomesData, error: incomesErr } = await incomesQuery
     if (incomesErr) throw incomesErr

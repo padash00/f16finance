@@ -29,12 +29,21 @@ export async function POST(request: Request) {
 
     const { data: attempt, error: loadError } = await supabase
       .from('knowledge_quiz_attempts')
-      .select('id, staff_id, status, questions, total_questions')
+      .select('id, staff_id, status, questions, total_questions, organization_id')
       .eq('id', body.attempt_id)
       .maybeSingle()
 
     if (loadError) throw loadError
     if (!attempt) return json({ error: 'attempt-not-found' }, 404)
+    // Изоляция: попытка обязана принадлежать орг — иначе по присланному attempt_id
+    // можно прочитать правильные ответы и перезаписать чужую попытку.
+    if (
+      !access.isSuperAdmin &&
+      (attempt as any).organization_id &&
+      (attempt as any).organization_id !== (access.activeOrganization?.id || null)
+    ) {
+      return json({ error: 'attempt-not-found' }, 404)
+    }
     if ((attempt as any).status !== 'in_progress') {
       return json({ error: 'attempt-not-in-progress' }, 409)
     }

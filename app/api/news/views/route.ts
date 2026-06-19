@@ -25,10 +25,20 @@ export async function GET(request: Request) {
 
   const { data: post } = await supabase
     .from('news_posts')
-    .select('author_user_id')
+    .select('author_user_id, organization_id')
     .eq('id', postId)
     .maybeSingle()
   if (!post) return json({ error: 'Не найден' }, 404)
+
+  // Изоляция: пост обязан принадлежать орг — иначе owner орг A по присланному postId
+  // читает PII зрителей (ФИО) поста орг B.
+  if (
+    !access.isSuperAdmin &&
+    (post as any).organization_id &&
+    (post as any).organization_id !== (access.activeOrganization?.id || null)
+  ) {
+    return json({ error: 'Не найден' }, 404)
+  }
 
   const isAuthor = (post as any).author_user_id === access.user?.id
   const isOwner = access.isSuperAdmin || (access.staffMember?.role || '').toLowerCase() === 'owner'
