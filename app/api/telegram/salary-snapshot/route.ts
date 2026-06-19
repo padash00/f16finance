@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { requireAdminRequest } from '@/lib/server/request-auth'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { findOperatorByKey } from '@/lib/server/repositories/salary'
 import { buildSalaryTelegramMessage, getOperatorSalarySnapshot } from '@/lib/server/services/salary'
@@ -33,8 +34,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const guard = await requireAdminRequest(req)
-    if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const body = (await req.json().catch(() => null)) as ReqBody | null
     if (!body?.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
@@ -49,6 +50,17 @@ export async function POST(req: Request) {
 
     if (!operator) {
       return json({ error: `Оператор не найден (${body.operatorId.trim()})` }, 404)
+    }
+
+    // Изоляция: можно считать/слать зарплату только оператора своей орг.
+    try {
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: operator.id,
+      })
+    } catch {
+      return json({ error: 'forbidden', code: 'operator-not-in-organization' }, 403)
     }
 
     if (!operator.telegram_chat_id) {
