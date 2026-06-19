@@ -39,6 +39,14 @@ if (typeof setInterval !== 'undefined') {
   }, 60 * 60_000)
 }
 
+// Компании «Extra» по умолчанию агрегируют доход в один при закрытии смены
+// (а не на каждую сессию) — даже без флага, чтобы не настраивать руками.
+function isExtraCompany(company: { code?: string | null; name?: string | null } | null | undefined) {
+  const code = String(company?.code || '').toLowerCase().trim()
+  const name = String(company?.name || '').toLowerCase().trim()
+  return code === 'extra' || name.includes('extra')
+}
+
 async function resolvePointProject(supabase: any, companyId: string) {
   const { data } = await supabase
     .from('point_projects')
@@ -48,7 +56,9 @@ async function resolvePointProject(supabase: any, companyId: string) {
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-  return data || null
+  if (!data) return null
+  const { data: co } = await supabase.from('companies').select('code, name').eq('id', companyId).maybeSingle()
+  return { ...data, isExtra: isExtraCompany(co) }
 }
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
@@ -66,7 +76,7 @@ export async function GET(request: Request) {
     }
 
     const projectId = pointProject.id
-    const deferIncomes = deferArenaSessionIncomes(pointProject.feature_flags as Record<string, unknown>)
+    const deferIncomes = deferArenaSessionIncomes(pointProject.feature_flags as Record<string, unknown>) || (pointProject as any).isExtra === true
 
     function withCo<T>(q: T): T {
       return (q as any).or(`company_id.eq.${companyId},company_id.is.null`) as T
@@ -220,7 +230,7 @@ export async function POST(request: Request) {
     }
 
     const projectId = pointProject.id
-    const deferIncomes = deferArenaSessionIncomes(pointProject.feature_flags as Record<string, unknown>)
+    const deferIncomes = deferArenaSessionIncomes(pointProject.feature_flags as Record<string, unknown>) || (pointProject as any).isExtra === true
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)

@@ -22,6 +22,14 @@ function deferArenaSessionIncomes(flags: Record<string, unknown> | null | undefi
   return flags?.arena_defer_income_to_shift === true
 }
 
+// Компании «Extra» по умолчанию НЕ плодят доход на каждую сессию (итог при закрытии
+// смены), даже без флага — чтобы новые точки Extra не настраивать руками.
+function isExtraCompany(company: { code?: string | null; name?: string | null } | null | undefined) {
+  const code = String(company?.code || '').toLowerCase().trim()
+  const name = String(company?.name || '').toLowerCase().trim()
+  return code === 'extra' || name.includes('extra')
+}
+
 function nextCalendarDateIso(isoDate: string): string {
   const d = new Date(`${isoDate}T12:00:00.000Z`)
   d.setUTCDate(d.getUTCDate() + 1)
@@ -81,7 +89,7 @@ export async function GET(request: Request) {
 
     const todayDate = new Date().toISOString().slice(0, 10)
     const todayEndExclusive = `${nextCalendarDateIso(todayDate)}T00:00:00.000Z`
-    const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>)
+    const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>) || isExtraCompany((device as any).company)
 
     const [
       { data: zones, error: zonesError },
@@ -201,7 +209,7 @@ export async function POST(request: Request) {
     const { supabase, device } = point
     const projectId = device.id
     const companyId = device.company_id || null
-    const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>)
+    const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>) || isExtraCompany((device as any).company)
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
