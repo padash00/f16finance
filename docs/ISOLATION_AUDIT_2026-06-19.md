@@ -6,6 +6,8 @@
 
 ## 🔴 CRITICAL (кросс-тенант чтение финансов/PII или захват аккаунта/мутация)
 
+> ✅ Все 7 закрыты — коммит `143e1179` (батч 2).
+
 - [ ] **admin/arena** `searchClient` (`:689-698`) и `topUpClientBalance` (`:662-686`) — customers по phone/card БЕЗ company-скоупа: PII+баланс любой орг, мутация баланса. + `searchClient` не в ACTION_TO_CAPABILITY (без права). Фикс: `.in('company_id', allowedCompanyIds)` + проверка company_id customer + добавить в ACTION_TO_CAPABILITY.
 - [ ] **admin/hr/activity** (`:78,102,114,45`) — operators/debts/staff_salary_payments/audit_log по присланному id без org-проверки → долги+зарплаты чужого сотрудника. Фикс: ensureOrganizationOperatorAccess/StaffAccess до выборок.
 - [ ] **admin/profitability** GET (`:168-173`) monthly_profitability_inputs без organization_id; POST (`:299-310`) onConflict:'month'. Фикс: `.eq('organization_id', orgId)` + onConflict:'organization_id,month'.
@@ -15,6 +17,9 @@
 - [ ] **telegram/staff-ids** GET (`:11-14`) весь staff всех орг; PATCH (`:28-31`) по id. Фикс: скоуп по org + canManage + ensureOrganizationStaffAccess.
 
 ## 🟠 HIGH (кросс-тенант мутация или чтение метаданных/агрегатов)
+
+> Прогресс: ✅ 3A мутация-по-id (`9018b2c9`), ✅ 3B чтение-по-id (`131c8308`),
+> ✅ 3C customer/арена-резолв (`ce230e4e`). Осталось: point/debts, cron (D), telegram (E).
 
 - [ ] **admin/expense-categories** PATCH(`:172`)/DELETE(`:212`) по id без org. Фикс: проверять organization_id.
 - [ ] **admin/expense-templates** DELETE(`:82-90`) existing.company_id не сверяется. Фикс: resolveCompanyScope(existing.company_id).
