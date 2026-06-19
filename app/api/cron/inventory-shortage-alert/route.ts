@@ -41,11 +41,17 @@ export async function GET(req: Request) {
     const cronSecret = process.env.CRON_SECRET || ''
     const isCron = cronSecret && auth === `Bearer ${cronSecret}`
 
+    let ownerScope = false
+    let ownerOrgId: string | null = null
     if (!isCron) {
       const access = await getRequestAccessContext(req)
       if ('response' in access) return access.response
       if (!access.isSuperAdmin && access.staffRole !== 'owner') {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+      if (!access.isSuperAdmin) {
+        ownerScope = true
+        ownerOrgId = access.activeOrganization?.id || null
       }
     }
 
@@ -56,7 +62,27 @@ export async function GET(req: Request) {
     })
     if (error) throw error
 
-    const rows = (data || []) as ShortageRow[]
+    let rows = (data || []) as ShortageRow[]
+    // Изоляция: owner видит недостачи только по товарам своей орг (RPC агрегирует по
+    // всем; фильтруем по inventory_items.organization_id). Без активной орг — пусто.
+    if (ownerScope) {
+      if (!ownerOrgId) {
+        rows = []
+      } else {
+        const itemIds = Array.from(new Set(rows.map((r) => r.item_id).filter(Boolean)))
+        if (itemIds.length === 0) {
+          rows = []
+        } else {
+          const { data: items } = await supabase
+            .from('inventory_items')
+            .select('id')
+            .in('id', itemIds)
+            .eq('organization_id', ownerOrgId)
+          const allowed = new Set((items || []).map((i: any) => String(i.id)))
+          rows = rows.filter((r) => allowed.has(String(r.item_id)))
+        }
+      }
+    }
     const totalCost = rows.reduce((sum, r) => sum + Number(r.total_shortage_cost || 0), 0)
 
     if (isCron && !dry && rows.length > 0) {

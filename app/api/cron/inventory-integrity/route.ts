@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -60,11 +61,19 @@ export async function GET(req: Request) {
 
     // Авторизация: либо валидный Bearer (для Vercel cron), либо аутентифицированный админ
     const isCron = cronSecret && auth === `Bearer ${cronSecret}`
+    let ownerScopeCompanyIds: string[] | null = null // null = не фильтровать (cron/суперадмин)
     if (!isCron) {
       const access = await getRequestAccessContext(req)
       if ('response' in access) return access.response
       if (!access.isSuperAdmin && access.staffRole !== 'owner') {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+      if (!access.isSuperAdmin) {
+        const scope = await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+        ownerScopeCompanyIds = scope.allowedCompanyIds // [] или [...]; null только у суперадмина
       }
     }
 
@@ -72,7 +81,17 @@ export async function GET(req: Request) {
     const { data, error } = await supabase.rpc('inventory_integrity_check')
     if (error) throw error
 
-    const rows = (data || []) as IntegrityRow[]
+    let rows = (data || []) as IntegrityRow[]
+    // Изоляция: owner видит расхождения только по локациям своих компаний (RPC
+    // агрегирует по всем, поэтому фильтруем строки по location_id своих компаний).
+    if (ownerScopeCompanyIds) {
+      const { data: locs } = await supabase
+        .from('inventory_locations')
+        .select('id')
+        .in('company_id', ownerScopeCompanyIds)
+      const allowedLocs = new Set((locs || []).map((l: any) => String(l.id)))
+      rows = rows.filter((r) => r.location_id && allowedLocs.has(String(r.location_id)))
+    }
     const counts = {
       total: rows.length,
       critical: rows.filter((r) => r.severity === 'critical').length,
