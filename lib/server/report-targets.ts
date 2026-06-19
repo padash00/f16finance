@@ -12,6 +12,14 @@ export type ReportTarget = {
    * null = не скоупить (env-фолбэк single-tenant без указанной орг) → все данные.
    */
   companyIds: string[] | null
+  /** 'org' — настроено в БД (per-org); 'env' — фолбэк из переменных окружения. */
+  source: 'org' | 'env'
+}
+
+/** Только per-org цели из БД (с заданным telegram_owner_chat_id). Пусто → cron должен
+ *  использовать своё прежнее env-поведение (чтобы у F16 отчёты не переехали в другой чат). */
+export async function listOrgReportTargets(): Promise<ReportTarget[]> {
+  return (await listReportTargets()).filter((t) => t.source === 'org')
 }
 
 /**
@@ -48,6 +56,7 @@ export async function listReportTargets(): Promise<ReportTarget[]> {
       organizationId: String(o.id),
       chatId,
       companyIds: (comps || []).map((c: any) => String(c.id)),
+      source: 'org',
     })
     coveredOrgs.add(String(o.id))
   }
@@ -61,7 +70,7 @@ export async function listReportTargets(): Promise<ReportTarget[]> {
       const { data: comps } = await supabase.from('companies').select('id').eq('organization_id', envOrg)
       companyIds = (comps || []).map((c: any) => String(c.id))
     }
-    targets.push({ organizationId: envOrg || null, chatId: envChat, companyIds })
+    targets.push({ organizationId: envOrg || null, chatId: envChat, companyIds, source: 'env' })
   }
 
   return targets

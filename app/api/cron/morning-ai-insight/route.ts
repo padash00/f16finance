@@ -14,6 +14,7 @@
 
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { generateAiText } from '@/lib/ai/provider'
@@ -44,7 +45,10 @@ interface InsightData {
   pendingTasks: number
 }
 
-async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseClient>): Promise<InsightData> {
+async function collectInsights(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  companyIds: string[] | null,
+): Promise<InsightData> {
   const today = todayISO()
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
@@ -64,11 +68,13 @@ async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseCl
 
   try {
     // Выручка за неделю по дням
-    const { data: incomes } = await supabase
+    let incomesQ = supabase
       .from('incomes')
       .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', weekAgo)
       .lte('date', today)
+    if (companyIds) incomesQ = incomesQ.in('company_id', companyIds)
+    const { data: incomes } = await incomesQ
     if (incomes) {
       const byDate = new Map<string, number>()
       for (const i of incomes as any[]) {
@@ -82,10 +88,12 @@ async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseCl
     }
 
     // Кто работал вчера и сколько чеков сделал
-    const { data: shifts } = await supabase
+    let shiftsQ = supabase
       .from('shifts')
       .select('id, operator_id, operator:operator_id(name, short_name)')
       .eq('date', yesterday)
+    if (companyIds) shiftsQ = shiftsQ.in('company_id', companyIds)
+    const { data: shifts } = await shiftsQ
     if (shifts && shifts.length > 0) {
       const shiftIds = (shifts as any[]).map((s) => s.id)
       const { data: sales } = await supabase
@@ -114,11 +122,13 @@ async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseCl
     }
 
     // Топ продуктов за вчера
-    const { data: saleItems } = await supabase
+    let saleItemsQ = supabase
       .from('point_sale_items')
-      .select('quantity, item:item_id(name), sale:sale_id!inner(sale_date)')
+      .select('quantity, item:item_id(name), sale:sale_id!inner(sale_date, company_id)')
       .eq('sale.sale_date', yesterday)
       .limit(500)
+    if (companyIds) saleItemsQ = saleItemsQ.in('sale.company_id', companyIds)
+    const { data: saleItems } = await saleItemsQ
     if (saleItems) {
       const byProduct = new Map<string, number>()
       for (const it of saleItems as any[]) {
@@ -149,11 +159,13 @@ async function collectInsights(supabase: ReturnType<typeof createAdminSupabaseCl
     }
 
     // Просроченные долги клиентов
-    const { count: overdueDebtsCount } = await supabase
+    let debtsQ = supabase
       .from('debts')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'open')
       .lt('due_date', today)
+    if (companyIds) debtsQ = debtsQ.in('company_id', companyIds)
+    const { count: overdueDebtsCount } = await debtsQ
     data.overdueDebts = overdueDebtsCount || 0
 
     // Открытые задачи
@@ -201,49 +213,55 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
-  if (!ownerChatId) {
-    return NextResponse.json({ ok: true, skipped: 'no TELEGRAM_OWNER_CHAT_ID' })
-  }
-
   const supabase = createAdminSupabaseClient()
-  const insights = await collectInsights(supabase)
 
-  // Если совсем нет данных — пропускаем
-  if (insights.yesterdayIncome === 0 && insights.weekAvgIncome === 0 && insights.yesterdayOperators.length === 0) {
-    return NextResponse.json({ ok: true, sent: false, reason: 'no data yesterday' })
+  // Изоляция: каждой организации — свой обзор (по её companyIds) в её чат.
+  // Нет per-org настройки → прежнее поведение: общий env-чат, без скоупа.
+  const orgTargets = await listOrgReportTargets()
+  const envChat = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+  const targets =
+    orgTargets.length > 0
+      ? orgTargets.map((t) => ({ chatId: t.chatId, companyIds: t.companyIds }))
+      : envChat
+        ? [{ chatId: envChat, companyIds: null as string[] | null }]
+        : []
+
+  if (targets.length === 0) {
+    return NextResponse.json({ ok: true, skipped: 'no report target' })
   }
 
-  const prompt = buildPrompt(insights)
-
-  try {
-    const result = await generateAiText({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      maxTokens: 300,
-      messages: [
-        { role: 'system', content: 'Ты — AI-ассистент владельца компьютерного клуба. Пиши кратко, по делу, на русском.' },
-        { role: 'user', content: prompt },
-      ],
-    })
-
-    const text = `🌅 <b>Утренний обзор</b>\n\n${result.text}\n\n<i>Спроси что-нибудь у бота, если хочешь подробнее.</i>`
-    await sendTelegramMessage(ownerChatId, text, { parseMode: 'HTML' })
-
-    return NextResponse.json({
-      ok: true,
-      sent: true,
-      tokens: result.usage?.total_tokens || null,
-      yesterdayIncome: insights.yesterdayIncome,
-    })
-  } catch (e: any) {
-    console.error('[morning-ai-insight] error:', e?.message)
-    // Fallback на минимальный текст без AI, если OpenAI лежит
+  async function sendForTarget(chatId: string, companyIds: string[] | null) {
+    const insights = await collectInsights(supabase, companyIds)
+    if (insights.yesterdayIncome === 0 && insights.weekAvgIncome === 0 && insights.yesterdayOperators.length === 0) {
+      return { sent: false, reason: 'no data' }
+    }
+    const prompt = buildPrompt(insights)
     try {
+      const result = await generateAiText({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        maxTokens: 300,
+        messages: [
+          { role: 'system', content: 'Ты — AI-ассистент владельца компьютерного клуба. Пиши кратко, по делу, на русском.' },
+          { role: 'user', content: prompt },
+        ],
+      })
+      const text = `🌅 <b>Утренний обзор</b>\n\n${result.text}\n\n<i>Спроси что-нибудь у бота, если хочешь подробнее.</i>`
+      await sendTelegramMessage(chatId, text, { parseMode: 'HTML' })
+      return { sent: true, tokens: result.usage?.total_tokens || null, yesterdayIncome: insights.yesterdayIncome }
+    } catch (e: any) {
       const fallback = `🌅 <b>Утренний обзор</b>\n\nВчера выручка: <b>${fmtMoney(insights.yesterdayIncome)}</b> (среднее за неделю: ${fmtMoney(insights.weekAvgIncome)})\n${insights.yesterdayOperators.length ? `Лучший: ${insights.yesterdayOperators[0].name} — ${fmtMoney(insights.yesterdayOperators[0].income)}\n` : ''}${insights.lowStock.length ? `\n⚠️ На исходе: ${insights.lowStock.slice(0, 3).map((l) => l.name).join(', ')}\n` : ''}${insights.overdueDebts > 0 ? `\n💰 Просроченных долгов: ${insights.overdueDebts}` : ''}`
-      await sendTelegramMessage(ownerChatId, fallback, { parseMode: 'HTML' })
-      return NextResponse.json({ ok: true, sent: true, fallback: true, error: e?.message })
-    } catch (fallbackErr: any) {
-      return NextResponse.json({ ok: false, error: e?.message, fallbackError: fallbackErr?.message }, { status: 500 })
+      await sendTelegramMessage(chatId, fallback, { parseMode: 'HTML' })
+      return { sent: true, fallback: true, error: e?.message }
     }
   }
+
+  const results = []
+  for (const t of targets) {
+    try {
+      results.push(await sendForTarget(t.chatId, t.companyIds))
+    } catch (e: any) {
+      results.push({ sent: false, error: e?.message })
+    }
+  }
+  return NextResponse.json({ ok: true, perOrg: orgTargets.length > 0, results })
 }
