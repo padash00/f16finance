@@ -711,30 +711,128 @@ export default function ExpensesPage() {
     }, initial)
   }, [rows])
 
-  // Export
+  // Export — премиум PDF-дашборд (см. lib/reports/orda-premium-pdf.js)
   const downloadCSV = async () => {
     const period = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : DateUtils.todayISO()
-    const expRows = rows.map(r => ({
-      date: r.date,
-      company: companyName(r.company_id),
-      category: r.category ?? '',
-      cash: r.cash_amount ?? 0,
-      kaspi: r.kaspi_amount ?? 0,
-      total: rowTotal(r),
-      comment: r.comment ?? '',
-    }))
-    await downloadReportPdf('table', {
-      meta: { title: 'Расходы', period, generated: new Date().toLocaleString('ru-RU') },
-      columns: [
-        { key: 'date', label: 'Дата' },
-        { key: 'company', label: 'Компания' },
-        { key: 'category', label: 'Категория' },
-        { key: 'cash', label: 'Cash', align: 'right' },
-        { key: 'kaspi', label: cashLabels.providerName, align: 'right' },
-        { key: 'total', label: 'Итого', align: 'right' },
-        { key: 'comment', label: 'Комментарий' },
+    const generated = new Date().toLocaleString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Расходы', subtitle: undefined, period, generated, brandNote: 'дашборд расходов' }
+
+    // Пустой период → красивый empty-state
+    if (rows.length === 0) {
+      await downloadReportPdf('premium', {
+        meta,
+        kpis: [
+          { label: 'Всего расходов', value: '—' },
+          { label: 'Наличные', value: '—' },
+          { label: 'Безналичный', value: '—' },
+          { label: 'Средний день', value: '—' },
+        ],
+        empty: {
+          columns: [
+            { label: 'Дата' }, { label: 'Компания' }, { label: 'Категория' },
+            { label: 'Cash', align: 'right' }, { label: 'Безнал', align: 'right' },
+            { label: 'Итого', align: 'right' }, { label: 'Комментарий' },
+          ],
+          message: 'Нет данных за выбранный период',
+          hint: 'Выберите период или добавьте расходы, чтобы сформировать отчёт.',
+        },
+      }, `Rashody_${DateUtils.todayISO()}`)
+      return
+    }
+
+    // Агрегации
+    const total = rows.reduce((s, r) => s + rowTotal(r), 0)
+    const cashTotal = rows.reduce((s, r) => s + (r.cash_amount || 0), 0)
+    const kaspiTotal = rows.reduce((s, r) => s + (r.kaspi_amount || 0), 0)
+    const cashPct = total > 0 ? Math.round((cashTotal / total) * 100) : 0
+    const kaspiPct = total > 0 ? 100 - cashPct : 0
+
+    // По категориям
+    const catMap = new Map<string, number>()
+    for (const r of rows) catMap.set(r.category || 'Без категории', (catMap.get(r.category || 'Без категории') || 0) + rowTotal(r))
+    const cats = Array.from(catMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+    const maxCat = cats[0]?.value || 1
+    const topCatName = cats[0]?.name || '—'
+
+    // По дням (desc)
+    const dayMap = new Map<string, { date: string; count: number; cash: number; kaspi: number; total: number; rows: ExpenseRow[] }>()
+    for (const r of rows) {
+      const d = String(r.date || '').slice(0, 10)
+      let g = dayMap.get(d)
+      if (!g) { g = { date: d, count: 0, cash: 0, kaspi: 0, total: 0, rows: [] }; dayMap.set(d, g) }
+      g.count += 1; g.cash += r.cash_amount || 0; g.kaspi += r.kaspi_amount || 0; g.total += rowTotal(r); g.rows.push(r)
+    }
+    const days = Array.from(dayMap.values()).sort((a, b) => b.date.localeCompare(a.date))
+    const activeDays = days.length
+    const avgDay = activeDays > 0 ? Math.round(total / activeDays) : 0
+    const maxDay = days.reduce((m, d) => (d.total > m.total ? d : m), days[0])
+    const top3 = [...days].sort((a, b) => b.total - a.total).slice(0, 3)
+    // мини-чарт: по хронологии (asc), пик подсвечен
+    const daysAsc = [...days].sort((a, b) => a.date.localeCompare(b.date))
+    const maxDayTotal = Math.max(1, ...days.map((d) => d.total))
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Всего расходов', value: `${nf(total)} тг`, sub: `${rows.length} строк · ${activeDays} активных дней`, badge: 'итог' },
+        { label: 'Наличные', value: `${nf(cashTotal)} тг`, sub: `${cashPct}% от суммы` },
+        { label: 'Безналичный', value: `${nf(kaspiTotal)} тг`, sub: `${kaspiPct}% от суммы` },
+        { label: 'Средний день', value: `${nf(avgDay)} тг`, sub: `Топ категория: ${topCatName}` },
       ],
-      rows: expRows,
+      sections: [
+        {
+          type: 'bars', title: 'Расходы по категориям', hint: 'топ по сумме',
+          items: cats.slice(0, 6).map((c) => ({ label: c.name, amount: c.value, ratio: c.value / maxCat })),
+        },
+        {
+          type: 'split', title: 'Оплата: cash / безнал',
+          parts: [
+            { label: 'Cash', pct: cashPct, amount: cashTotal, color: '#84cc16' },
+            { label: 'Безнал', pct: kaspiPct, amount: kaspiTotal, color: '#3b82f6' },
+          ],
+          accent: { title: 'Акцент для руководителя', text: maxDay ? `Пиковый день: ${maxDay.date} — ${nf(maxDay.total)} тг` : '' },
+        },
+        {
+          type: 'minichart', title: 'Динамика по дням', hint: 'активные даты периода',
+          bars: daysAsc.map((d) => ({ ratio: d.total / maxDayTotal, peak: maxDay && d.date === maxDay.date })),
+          footer: `Топ-3 дня: ${top3.map((d) => `${d.date}: ${nf(d.total)}`).join('   ')}`,
+        },
+        {
+          type: 'previewTable', title: 'Сводка по дням', hint: 'preview · полная ниже',
+          columns: [
+            { key: 'date', label: 'Дата' }, { key: 'count', label: 'Строк', align: 'right' },
+            { key: 'cash', label: 'Cash', align: 'right' }, { key: 'kaspi', label: 'Безнал', align: 'right' },
+            { key: 'total', label: 'Итого', align: 'right' },
+          ],
+          rows: days.slice(0, 3).map((d) => ({ date: d.date, count: d.count, cash: d.cash, kaspi: d.kaspi, total: d.total })),
+          moreNote: days.length > 3 ? `+ ещё ${days.length - 3} дней в детализации` : '',
+        },
+      ],
+      detail: {
+        title: 'Детализация по дням',
+        subtitle: 'группы по дате, потом строки расходов',
+        columns: [
+          { key: 'date', label: 'Дата', w: '11%' }, { key: 'company', label: 'Компания', w: '13%' },
+          { key: 'category', label: 'Категория', w: '16%' }, { key: 'cash', label: 'Cash', align: 'right', w: '9%' },
+          { key: 'kaspi', label: 'Безнал', align: 'right', w: '9%' }, { key: 'total', label: 'Итого', align: 'right', w: '9%' },
+          { key: 'comment', label: 'Комментарий', w: '24%' },
+        ],
+        groups: days.map((d) => ({
+          label: d.date,
+          meta: `${d.count} строк · cash ${nf(d.cash)} · безнал ${nf(d.kaspi)}`,
+          total: d.total,
+          rows: d.rows.map((r) => ({
+            date: String(r.date || '').slice(0, 10),
+            company: companyName(r.company_id),
+            category: r.category || '—',
+            cash: r.cash_amount || 0,
+            kaspi: r.kaspi_amount || 0,
+            total: rowTotal(r),
+            comment: r.comment || '',
+          })),
+        })),
+      },
     }, `Rashody_${DateUtils.todayISO()}`)
     logExpenseEvent({
       entityType: 'expense-export',

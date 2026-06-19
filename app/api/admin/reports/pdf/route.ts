@@ -4,6 +4,7 @@ import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { renderFinReportHTML, PDF_OPTIONS as FIN_OPTIONS } from '@/lib/reports/orda-finreport-pdf'
 import { renderTableHTML, PDF_OPTIONS as TABLE_OPTIONS } from '@/lib/reports/orda-table-pdf'
+import { renderPremiumHTML, PDF_OPTIONS as PREMIUM_OPTIONS } from '@/lib/reports/orda-premium-pdf'
 
 // Единый рендер PDF из переданных клиентом данных: финансовый отчёт или таблица.
 export const maxDuration = 60
@@ -28,12 +29,17 @@ export async function POST(req: Request) {
     if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
 
     const body = (await req.json().catch(() => null)) as { kind?: string; data?: any } | null
-    const kind = body?.kind === 'table' ? 'table' : 'finreport'
+    const kind = body?.kind === 'table' ? 'table' : body?.kind === 'premium' ? 'premium' : 'finreport'
     const data = body?.data
     if (!data || typeof data !== 'object') return json({ error: 'data обязателен' }, 400)
 
-    const html = kind === 'table' ? renderTableHTML(data, { fontCss: FONT_CSS }) : renderFinReportHTML(data, { fontCss: FONT_CSS })
-    const options = kind === 'table' ? TABLE_OPTIONS : FIN_OPTIONS
+    const html =
+      kind === 'table'
+        ? renderTableHTML(data, { fontCss: FONT_CSS })
+        : kind === 'premium'
+          ? renderPremiumHTML(data, { fontCss: FONT_CSS })
+          : renderFinReportHTML(data, { fontCss: FONT_CSS })
+    const options = kind === 'table' ? TABLE_OPTIONS : kind === 'premium' ? PREMIUM_OPTIONS : FIN_OPTIONS
 
     const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
       import('puppeteer-core'),
