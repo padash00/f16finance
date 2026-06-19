@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sanitizeOrFilterValue } from '@/lib/server/postgrest-filter'
 import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+// Изоляция: диагностика киоска больше не открыта анонимно — только staff/суперадмин,
+// иначе кто угодно перечислял бы станции (ip/mac/статус) любой орг и слал broadcast.
+async function requireStaff(request: Request) {
+  const access = await getRequestAccessContext(request)
+  if ('response' in access) return access.response
+  if (!access.isSuperAdmin && !access.staffMember) return json({ error: 'forbidden' }, 403)
+  return null
 }
 
 /**
@@ -17,6 +27,8 @@ function json(data: unknown, status = 200) {
  */
 export async function GET(request: Request) {
   if (!hasAdminSupabaseCredentials()) return json({ error: 'no-admin-credentials' }, 503)
+  const denied = await requireStaff(request)
+  if (denied) return denied
 
   const url = new URL(request.url)
   const code = url.searchParams.get('code') || ''
@@ -78,6 +90,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!hasAdminSupabaseCredentials()) return json({ error: 'no-admin-credentials' }, 503)
+  const denied = await requireStaff(request)
+  if (denied) return denied
 
   const url = new URL(request.url)
   const code = url.searchParams.get('code') || ''

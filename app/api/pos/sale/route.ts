@@ -252,6 +252,7 @@ export async function POST(request: Request) {
         .from('discounts')
         .select('id, name, type, value, min_order_amount')
         .eq('id', discountId)
+        .eq('company_id', companyId) // изоляция: только скидка этой компании
         .eq('is_active', true)
         .maybeSingle()
       if (error) throw error
@@ -279,7 +280,7 @@ export async function POST(request: Request) {
       const [{ data: config, error: configError }, { data: customer, error: customerError }] = await Promise.all([
         supabase.from('loyalty_config').select('*').eq('company_id', companyId).maybeSingle(),
         customerId
-          ? supabase.from('customers').select('id, loyalty_points, name').eq('id', customerId).maybeSingle()
+          ? supabase.from('customers').select('id, loyalty_points, name').eq('id', customerId).or(`company_id.eq.${companyId},company_id.is.null`).maybeSingle()
           : Promise.resolve({ data: null, error: null } as any),
       ])
       if (configError) throw configError

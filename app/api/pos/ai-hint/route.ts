@@ -81,13 +81,21 @@ export async function GET(request: Request) {
       }
     }
 
+    // Изоляция: location_id из URL обязан принадлежать этой компании, иначе утекут
+    // остатки чужой точки (company_id уже проверен через resolveCompanyScope).
+    let validLocationId: string | null = null
+    if (locationId) {
+      const { data: loc } = await supabase.from('inventory_locations').select('company_id').eq('id', locationId).maybeSingle()
+      if (loc && String((loc as any).company_id) === String(companyId)) validLocationId = locationId
+    }
+
     // Fetch low stock items for this location
     let lowStockText = 'нет'
-    if (locationId) {
+    if (validLocationId) {
       const { data: lowItems } = await supabase
         .from('inventory_balances')
         .select('item_id, quantity, item:inventory_items(name, low_stock_threshold, unit)')
-        .eq('location_id', locationId)
+        .eq('location_id', validLocationId)
 
       if (lowItems?.length) {
         const low = lowItems.filter((row) => {
