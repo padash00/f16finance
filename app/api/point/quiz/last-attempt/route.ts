@@ -13,10 +13,23 @@ function json(data: unknown, status = 200) {
 export async function GET(request: Request) {
   const point = await requirePointDevice(request)
   if ('response' in point) return point.response
-  const { supabase } = point
+  const { supabase, device } = point
 
   const operatorId = request.headers.get('x-point-operator-id')
   if (!operatorId) return json({ error: 'operator-id-required' }, 400)
+
+  // Изоляция: оператор обязан быть привязан к компании устройства, иначе по присланному
+  // operator_id читались бы результаты квиза оператора чужой орг.
+  const { data: assignment } = await supabase
+    .from('operator_company_assignments')
+    .select('id')
+    .eq('operator_id', operatorId)
+    .eq('company_id', device.company_id)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (!assignment) {
+    return json({ ok: true, data: { lastPassedAt: null, daysAgo: null, needsQuiz: true } })
+  }
 
   // Берём последнюю успешно пройденную попытку
   const { data, error } = await supabase

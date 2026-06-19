@@ -23,6 +23,12 @@ export async function GET(request: Request) {
   if (!messageId) return json({ error: 'messageId required' }, 400)
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+  // Изоляция: реакции читаем только у сообщения своей орг.
+  const { data: msg } = await supabase.from('team_chat_messages').select('organization_id').eq('id', messageId).maybeSingle()
+  if (!msg) return json({ reactions: [] })
+  if (!access.isSuperAdmin && (msg as any).organization_id && (msg as any).organization_id !== (access.activeOrganization?.id || null)) {
+    return json({ reactions: [] })
+  }
   const { data, error } = await supabase
     .from('team_chat_reactions')
     .select('id, user_id, user_name, emoji, created_at')
@@ -43,6 +49,13 @@ export async function POST(request: Request) {
   if (!body?.messageId || !body?.emoji) return json({ error: 'messageId and emoji required' }, 400)
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+  // Изоляция: реагировать можно только на сообщение своей орг.
+  const { data: msg } = await supabase.from('team_chat_messages').select('organization_id').eq('id', body.messageId).maybeSingle()
+  if (!msg) return json({ error: 'not-found' }, 404)
+  if (!access.isSuperAdmin && (msg as any).organization_id && (msg as any).organization_id !== (access.activeOrganization?.id || null)) {
+    return json({ error: 'forbidden' }, 403)
+  }
 
   let userId: string | null = null
   let userName = 'Аноним'

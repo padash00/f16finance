@@ -31,10 +31,17 @@ export async function POST(
   // Проверяем что опрос есть и не истёк
   const { data: poll } = await supabase
     .from('team_chat_polls')
-    .select('id, options, multiple_choice, expires_at')
+    .select('id, options, multiple_choice, expires_at, message_id')
     .eq('id', pollId)
     .maybeSingle()
   if (!poll) return json({ error: 'Опрос не найден' }, 404)
+  // Изоляция: голосовать можно только в опросе своей орг (по сообщению-родителю).
+  if (!access.isSuperAdmin) {
+    const { data: msg } = await supabase.from('team_chat_messages').select('organization_id').eq('id', (poll as any).message_id).maybeSingle()
+    if (msg && (msg as any).organization_id && (msg as any).organization_id !== (access.activeOrganization?.id || null)) {
+      return json({ error: 'Опрос не найден' }, 404)
+    }
+  }
   if ((poll as any).expires_at && new Date((poll as any).expires_at).getTime() < Date.now()) {
     return json({ error: 'Опрос завершён' }, 400)
   }

@@ -22,6 +22,12 @@ export async function POST(request: Request) {
   if (!body?.postId) return json({ error: 'postId обязателен' }, 400)
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+  // Изоляция: отмечать прочитанным можно только пост своей орг (или глобальный).
+  const { data: post } = await supabase.from('news_posts').select('organization_id').eq('id', body.postId).maybeSingle()
+  if (!post) return json({ error: 'not-found' }, 404)
+  if (!access.isSuperAdmin && (post as any).organization_id && (post as any).organization_id !== (access.activeOrganization?.id || null)) {
+    return json({ error: 'not-found' }, 404)
+  }
   await supabase.from('news_views').upsert(
     { post_id: body.postId, user_id: access.user.id, viewed_at: new Date().toISOString() },
     { onConflict: 'post_id,user_id' },

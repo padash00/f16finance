@@ -52,6 +52,7 @@ export async function GET(request: Request) {
         'id, title, description, role_scope, shift_scope, schedule_type, recurrence_minutes, blocks_shift, is_active, sort_order',
       )
       .eq('is_active', true)
+      .or(`company_id.is.null,company_id.eq.${device.company_id}`)
       .order('sort_order'),
     supabase
       .from('checklist_runs')

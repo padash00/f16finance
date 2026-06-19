@@ -32,6 +32,16 @@ export async function POST(request: Request) {
   const operatorId = request.headers.get('x-point-operator-id')
   if (!operatorId) return json({ error: 'operator-id-required' }, 400)
 
+  // Изоляция: оператор обязан быть привязан к компании устройства.
+  const { data: assignment } = await supabase
+    .from('operator_company_assignments')
+    .select('id')
+    .eq('operator_id', operatorId)
+    .eq('company_id', device.company_id)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (!assignment) return json({ error: 'operator-not-in-company' }, 403)
+
   // Резолвим staff_id из operator_id
   const { data: link } = await supabase
     .from('operator_staff_links')

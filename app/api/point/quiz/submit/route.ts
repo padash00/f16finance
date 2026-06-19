@@ -19,7 +19,7 @@ const PASS_THRESHOLD = 80  // 80% — порог сдачи
 export async function POST(request: Request) {
   const point = await requirePointDevice(request)
   if ('response' in point) return point.response
-  const { supabase } = point
+  const { supabase, device } = point
 
   const body = (await request.json().catch(() => ({}))) as Body
   if (!body.attempt_id) return json({ error: 'attempt-id-required' }, 400)
@@ -35,6 +35,18 @@ export async function POST(request: Request) {
 
   if (loadError) return json({ error: 'load-failed', detail: loadError.message }, 500)
   if (!attempt) return json({ error: 'attempt-not-found' }, 404)
+  // Изоляция: завершать можно только попытку оператора компании устройства.
+  const attemptOpId = (attempt as any).operator_id
+  if (attemptOpId) {
+    const { data: assignment } = await supabase
+      .from('operator_company_assignments')
+      .select('id')
+      .eq('operator_id', attemptOpId)
+      .eq('company_id', device.company_id)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (!assignment) return json({ error: 'attempt-not-found' }, 404)
+  }
   if ((attempt as any).status !== 'in_progress') {
     return json({ error: 'attempt-not-in-progress' }, 409)
   }
