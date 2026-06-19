@@ -213,6 +213,19 @@ export async function PATCH(request: Request) {
     if (!name) return json({ error: 'Название обязательно' }, 400)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+    // Изоляция: рецепт обязан принадлежать орг — иначе ниже мы стёрли бы/подменили
+    // состав (recipe_components) чужой техкарты, даже если сам update затронул 0 строк.
+    if (!access.isSuperAdmin && orgId) {
+      const { data: ownRecipe } = await supabase
+        .from('recipes')
+        .select('id')
+        .eq('id', id)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (!ownRecipe) return json({ error: 'forbidden' }, 403)
+    }
+
     let upd = supabase
       .from('recipes')
       .update({

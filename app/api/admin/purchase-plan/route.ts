@@ -167,13 +167,12 @@ export async function PATCH(req: Request) {
       patch.status = s
     }
 
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
     const supabase = getSupabase(access)
-    const { data, error } = await supabase
-      .from('purchase_plan_items')
-      .update(patch)
-      .eq('id', id)
-      .select(SELECT_COLS)
-      .single()
+    let upd: any = supabase.from('purchase_plan_items').update(patch).eq('id', id)
+    if (!access.isSuperAdmin) upd = upd.eq('organization_id', orgId)
+    const { data, error } = await upd.select(SELECT_COLS).single()
     if (error) throw error
 
     return json({ ok: true, data })
@@ -192,8 +191,12 @@ export async function DELETE(req: Request) {
     const id = String(new URL(req.url).searchParams.get('id') || '').trim()
     if (!id) return json({ error: 'id обязателен' }, 400)
 
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
     const supabase = getSupabase(access)
-    const { error } = await supabase.from('purchase_plan_items').delete().eq('id', id)
+    let del: any = supabase.from('purchase_plan_items').delete().eq('id', id)
+    if (!access.isSuperAdmin) del = del.eq('organization_id', orgId)
+    const { error } = await del
     if (error) throw error
     return json({ ok: true })
   } catch (error: any) {

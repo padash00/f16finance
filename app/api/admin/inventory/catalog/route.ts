@@ -902,6 +902,16 @@ export async function POST(request: Request) {
       const itemId = String(body.item_id || '').trim()
       if (!itemId) return json({ error: 'item-id-required' }, 400)
 
+      // Изоляция: товар обязан принадлежать орг вызывающего.
+      {
+        const callerOrgId = access.activeOrganization?.id || null
+        const { data: itemRow } = await supabase.from('inventory_items').select('organization_id').eq('id', itemId).maybeSingle()
+        if (!itemRow) return json({ error: 'item-not-found' }, 404)
+        if (!access.isSuperAdmin && callerOrgId && String((itemRow as any).organization_id) !== String(callerOrgId)) {
+          return json({ error: 'forbidden' }, 403)
+        }
+      }
+
       // Check if item has non-zero balance
       const { data: balances, error: balanceError } = await supabase
         .from('inventory_balances')
@@ -950,6 +960,16 @@ export async function POST(request: Request) {
 
       const fields = body.fields || {}
       if (Object.keys(fields).length === 0) return json({ error: 'fields-required' }, 400)
+
+      // Изоляция: редактировать можно только товар своей орг.
+      {
+        const callerOrgId = access.activeOrganization?.id || null
+        const { data: itemRow } = await supabase.from('inventory_items').select('organization_id').eq('id', itemId).maybeSingle()
+        if (!itemRow) return json({ error: 'item-not-found' }, 404)
+        if (!access.isSuperAdmin && callerOrgId && String((itemRow as any).organization_id) !== String(callerOrgId)) {
+          return json({ error: 'forbidden' }, 403)
+        }
+      }
 
       const { error: updateError } = await supabase.from('inventory_items').update(fields).eq('id', itemId)
       if (updateError) throw updateError

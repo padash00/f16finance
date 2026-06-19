@@ -560,6 +560,8 @@ export async function DELETE(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const denied = await requireStaffCapability(access, 'kpi.view')
+    if (denied) return denied
 
     const url = new URL(req.url)
     const id = String(url.searchParams.get('id') || '').trim()
@@ -567,6 +569,21 @@ export async function DELETE(req: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
     if (!supabase) return json({ error: 'no admin supabase' }, 500)
+
+    // Изоляция: удалять можно только план своей компании. Общие (company_id=null)
+    // планы в этой модели глобальны и не атрибутируются орг → только суперадмин.
+    if (!access.isSuperAdmin) {
+      const { data: plan } = await supabase.from('kpi_plans').select('id, company_id').eq('id', id).maybeSingle()
+      if (!plan) return json({ error: 'not-found' }, 404)
+      const scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      const cId = (plan as any).company_id
+      if (!cId || (scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(String(cId)))) {
+        return json({ error: 'forbidden' }, 403)
+      }
+    }
 
     const { error } = await supabase.from('kpi_plans').delete().eq('id', id)
     if (error) throw error

@@ -119,20 +119,30 @@ export async function DELETE(request: Request) {
 
   const { data: post } = await supabase
     .from('news_posts')
-    .select('author_user_id')
+    .select('author_user_id, organization_id')
     .eq('id', body.id)
     .maybeSingle()
   if (!post) return json({ error: 'Не найден' }, 404)
+
+  // Изоляция: пост обязан принадлежать орг вызывающего (или быть глобальным),
+  // иначе owner орг A мог бы удалить пост орг B по присланному id.
+  const orgId = access.activeOrganization?.id || null
+  const postOrg = (post as any).organization_id
+  if (!access.isSuperAdmin && postOrg && postOrg !== orgId) {
+    return json({ error: 'Не найден' }, 404)
+  }
 
   const isAuthor = (post as any).author_user_id === access.user?.id
   if (!isAuthor && !canPublish(access)) {
     return json({ error: 'Можно удалять только свои' }, 403)
   }
 
-  const { error } = await supabase
+  let delQ: any = supabase
     .from('news_posts')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', body.id)
+  if (!access.isSuperAdmin && orgId) delQ = delQ.eq('organization_id', orgId)
+  const { error } = await delQ
   if (error) return json({ error: error.message }, 500)
   return json({ ok: true })
 }

@@ -181,6 +181,17 @@ export async function POST(req: Request) {
       const { data: current, error: currentError } = await supabase.from('point_rules').select('*').eq('id', body.ruleId).maybeSingle()
       if (currentError) throw currentError
       if (!current) return json({ error: 'Правило не найдено' }, 404)
+      // Изоляция: существующее правило обязано быть в скоупе вызывающего (а не только
+      // новое значение company_id). Глобальные (company_id=null) правила — суперадмин.
+      if (current.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: current.company_id,
+        })
+      } else if (!access.isSuperAdmin) {
+        return json({ error: 'forbidden' }, 403)
+      }
       if (payload.company_id) {
         await resolveCompanyScope({
           activeOrganizationId: access.activeOrganization?.id || null,
@@ -211,12 +222,15 @@ export async function POST(req: Request) {
       const { data: current, error: currentError } = await supabase.from('point_rules').select('*').eq('id', body.ruleId).maybeSingle()
       if (currentError) throw currentError
       if (!current) return json({ error: 'Правило не найдено' }, 404)
+      // Изоляция: глобальные (company_id=null) правила удаляет только суперадмин.
       if (current.company_id) {
         await resolveCompanyScope({
           activeOrganizationId: access.activeOrganization?.id || null,
           isSuperAdmin: access.isSuperAdmin,
           requestedCompanyId: current.company_id,
         })
+      } else if (!access.isSuperAdmin) {
+        return json({ error: 'forbidden' }, 403)
       }
       const { error } = await supabase.from('point_rules').delete().eq('id', body.ruleId)
       if (error) throw error

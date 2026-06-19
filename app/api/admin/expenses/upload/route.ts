@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { requireStaffCapability } from '@/lib/server/capabilities'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // NOTE: Before using this route, run this SQL in Supabase:
@@ -87,10 +88,23 @@ export async function POST(request: Request) {
     // Keep legacy attachment_url as the first uploaded file, while all files live in expense_attachments.
     const { data: existingExpense, error: existingExpenseError } = await adminClient
       .from('expenses')
-      .select('attachment_url')
+      .select('attachment_url, company_id')
       .eq('id', expenseId)
       .maybeSingle()
     if (existingExpenseError) throw existingExpenseError
+    if (!existingExpense) return NextResponse.json({ error: 'expense-not-found' }, { status: 404 })
+    // Изоляция: расход обязан принадлежать компании в скоупе вызывающего, иначе можно
+    // прикрепить файл к расходу чужой орг и перезаписать его attachment_url.
+    if (!access.isSuperAdmin) {
+      const scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      const cId = (existingExpense as any).company_id
+      if (scope.allowedCompanyIds && (!cId || !scope.allowedCompanyIds.includes(String(cId)))) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+    }
     if (!existingExpense?.attachment_url) {
       const { error: updateError } = await adminClient
         .from('expenses')

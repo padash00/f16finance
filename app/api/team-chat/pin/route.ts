@@ -39,10 +39,14 @@ export async function POST(request: Request) {
 
   const { data: msg } = await supabase
     .from('team_chat_messages')
-    .select('id, sender_user_id, sender_operator_id')
+    .select('id, sender_user_id, sender_operator_id, organization_id')
     .eq('id', body.id)
     .maybeSingle()
   if (!msg) return json({ error: 'Сообщение не найдено' }, 404)
+  // Изоляция: нельзя трогать сообщение чужой орг по присланному id.
+  if (!access.isSuperAdmin && (msg as any).organization_id && (msg as any).organization_id !== (access.activeOrganization?.id || null)) {
+    return json({ error: 'Сообщение не найдено' }, 404)
+  }
   if (!canManagePin(access, msg)) return json({ error: 'Нет прав закреплять это' }, 403)
 
   const { data, error } = await supabase
@@ -65,10 +69,13 @@ export async function DELETE(request: Request) {
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
   const { data: msg } = await supabase
     .from('team_chat_messages')
-    .select('id, sender_user_id, sender_operator_id')
+    .select('id, sender_user_id, sender_operator_id, organization_id')
     .eq('id', body.id)
     .maybeSingle()
   if (!msg) return json({ error: 'Сообщение не найдено' }, 404)
+  if (!access.isSuperAdmin && (msg as any).organization_id && (msg as any).organization_id !== (access.activeOrganization?.id || null)) {
+    return json({ error: 'Сообщение не найдено' }, 404)
+  }
   if (!canManagePin(access, msg)) return json({ error: 'Нет прав' }, 403)
 
   await supabase.from('team_chat_messages').update({ pinned_until: null }).eq('id', body.id)

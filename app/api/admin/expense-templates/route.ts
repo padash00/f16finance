@@ -86,6 +86,20 @@ export async function DELETE(req: Request) {
       .maybeSingle()
     if (existingError) throw existingError
     if (!existing) return json({ error: 'not-found' }, 404)
+    // Изоляция: удалять можно только шаблон своей компании (глобальные null — суперадмин).
+    if (!access.isSuperAdmin) {
+      const scope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      const existingCompanyId = (existing as any).company_id
+      if (
+        !existingCompanyId ||
+        (scope.allowedCompanyIds && !scope.allowedCompanyIds.includes(String(existingCompanyId)))
+      ) {
+        return json({ error: 'forbidden' }, 403)
+      }
+    }
     const { error } = await supabase.from('expense_templates').delete().eq('id', id)
     if (error) throw error
     return json({ ok: true })

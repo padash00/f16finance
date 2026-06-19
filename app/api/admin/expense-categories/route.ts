@@ -168,8 +168,11 @@ export async function PATCH(req: Request) {
     if (!id) return json({ error: 'id обязателен' }, 400)
     if (!name) return json({ error: 'Название категории обязательно' }, 400)
 
+    // Изоляция: правка только категории своей орг.
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
     const supabase = getSupabase(req)
-    const { data, error } = await supabase
+    let upd: any = supabase
       .from('expense_categories')
       .update({
         name,
@@ -177,8 +180,8 @@ export async function PATCH(req: Request) {
         monthly_budget: Number(body?.monthly_budget || 0) || 0,
       })
       .eq('id', id)
-      .select('id, name, accounting_group, monthly_budget')
-      .single()
+    if (!access.isSuperAdmin) upd = upd.eq('organization_id', orgId)
+    const { data, error } = await upd.select('id, name, accounting_group, monthly_budget').single()
     if (error) throw error
 
     return json({ ok: true, data })
@@ -209,8 +212,13 @@ export async function DELETE(req: Request) {
     const id = String(new URL(req.url).searchParams.get('id') || '').trim()
     if (!id) return json({ error: 'id обязателен' }, 400)
 
+    // Изоляция: удаление только категории своей орг.
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
     const supabase = getSupabase(req)
-    const { error } = await supabase.from('expense_categories').delete().eq('id', id)
+    let del: any = supabase.from('expense_categories').delete().eq('id', id)
+    if (!access.isSuperAdmin) del = del.eq('organization_id', orgId)
+    const { error } = await del
     if (error) throw error
     return json({ ok: true })
   } catch (error: any) {

@@ -174,12 +174,12 @@ export async function PATCH(req: Request) {
     if (body?.default_category_id !== undefined) update.default_category_id = body.default_category_id || null
     if (body?.notes !== undefined) update.notes = body.notes?.trim() || null
 
-    const { data, error } = await supabase
-      .from('expense_vendor_whitelist')
-      .update(update)
-      .eq('id', id)
-      .select('*')
-      .single()
+    // Изоляция: правка только записи своей орг (а не только нового company_id).
+    const patchOrgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !patchOrgId) return json({ error: 'forbidden' }, 403)
+    let patchQ: any = supabase.from('expense_vendor_whitelist').update(update).eq('id', id)
+    if (!access.isSuperAdmin) patchQ = patchQ.eq('organization_id', patchOrgId)
+    const { data, error } = await patchQ.select('*').single()
 
     if (error) throw error
 
@@ -218,11 +218,15 @@ export async function DELETE(req: Request) {
     const id = String(new URL(req.url).searchParams.get('id') || '').trim()
     if (!id) return json({ error: 'id обязателен' }, 400)
 
+    const delOrgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !delOrgId) return json({ error: 'forbidden' }, 403)
     const supabase = getSupabase(req)
-    const { error } = await supabase
+    let delQ: any = supabase
       .from('expense_vendor_whitelist')
       .update({ archived_at: new Date().toISOString() })
       .eq('id', id)
+    if (!access.isSuperAdmin) delQ = delQ.eq('organization_id', delOrgId)
+    const { error } = await delQ
 
     if (error) throw error
 

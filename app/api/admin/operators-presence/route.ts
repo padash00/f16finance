@@ -99,6 +99,24 @@ export async function POST(request: Request) {
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+  // Изоляция: можно слать команды (push/lock_sales) только устройствам своих компаний,
+  // иначе менеджер орг A заблокировал бы продажи на терминале орг B.
+  const scope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+  if (scope.allowedCompanyIds) {
+    const { data: validProjects } = await supabase
+      .from('point_projects')
+      .select('id')
+      .in('id', targets)
+      .overlaps('company_ids', scope.allowedCompanyIds)
+    const validIds = new Set(((validProjects as any[]) || []).map((p) => String(p.id)))
+    if (targets.some((t) => !validIds.has(String(t)))) {
+      return json({ error: 'forbidden', code: 'device-not-in-organization' }, 403)
+    }
+  }
+
   const rows = targets.map((deviceId) => ({
     device_id: deviceId,
     kind,
