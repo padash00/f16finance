@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Orda",
+    "slug": "orda-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "orda",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "kz.ordaops.mobile"
+    },
+    "android": {
+      "package": "kz.ordaops.mobile"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
