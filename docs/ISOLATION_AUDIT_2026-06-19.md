@@ -23,11 +23,13 @@
 > ✅ Фундамент per-org Telegram: `organizations.telegram_owner_chat_id` + listReportTargets (`65150e16`).
 > ✅ cron overdue-debts, morning-ai-insight (`392158a1`), birthday-greetings, smart-insights (`cf1f9722`).
 >
-> ОСТАЛОСЬ HIGH: **telegram/webhook** finance-команды (прокинуть botUser.organizationId
-> в getFinanceSummary/handleCashFlow/handleTopOperators/handleForecast/handleDetailedReport)
-> — большой файл, для F16 не утечка (1 арендатор), делать аккуратно отдельно.
-> cron inventory-integrity/shortage → нужен company-параметр в RPC (SQL-батч).
-> MEDIUM cron: recurring-expenses, hr-daily-digest (per-org рассылка поверх listReportTargets).
+> ✅ telegram/webhook finance-команды (`3a041006`) — botCompanyScope в getFinanceSummary/
+> cashflow/top/forecast/compare/detailed-report + AI on_shift/today_shifts.
+> ✅ cron recurring-expenses, hr-daily-digest (`70d70a71`).
+>
+> ВСЕ HIGH ЗАКРЫТЫ, кроме 2 (нужен SQL): cron inventory-integrity / inventory-shortage-alert —
+> RPC inventory_integrity_check() / inventory_recurring_shortages() агрегируют по всем
+> компаниям без company-параметра. Нужна правка RPC (добавить p_company_ids).
 
 - [ ] **admin/expense-categories** PATCH(`:172`)/DELETE(`:212`) по id без org. Фикс: проверять organization_id.
 - [ ] **admin/expense-templates** DELETE(`:82-90`) existing.company_id не сверяется. Фикс: resolveCompanyScope(existing.company_id).
