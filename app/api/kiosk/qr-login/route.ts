@@ -19,17 +19,17 @@ function isUuid(value: string) {
 async function findCustomerByLogin(admin: any, username: string, companyId: string | null) {
   const select = 'id, name, phone, kiosk_balance, auth_user_id, card_number'
 
-  // Изоляция: ищем клиента только в компании станции, иначе клиент компании A
-  // мог бы войти по QR на станции компании B (PII + баланс).
+  // Изоляция: ищем клиента в компании станции (NULL company_id допускаем — legacy;
+  // после бэкфилла customers.company_id станет строгим).
   let byPhoneQ = admin.from('customers').select(select).eq('phone', username).eq('is_active', true).limit(1)
-  if (companyId) byPhoneQ = byPhoneQ.eq('company_id', companyId)
+  if (companyId) byPhoneQ = byPhoneQ.or(`company_id.eq.${companyId},company_id.is.null`)
   const { data: byPhone, error: phoneErr } = await byPhoneQ.maybeSingle()
 
   if (phoneErr) throw phoneErr
   if (byPhone) return byPhone
 
   let byCardQ = admin.from('customers').select(select).eq('card_number', username).eq('is_active', true).limit(1)
-  if (companyId) byCardQ = byCardQ.eq('company_id', companyId)
+  if (companyId) byCardQ = byCardQ.or(`company_id.eq.${companyId},company_id.is.null`)
   const { data: byCard, error: cardErr } = await byCardQ.maybeSingle()
 
   if (cardErr) throw cardErr
