@@ -36,9 +36,11 @@ export async function GET(request: Request) {
 
     if (staffId) query = query.eq('staff_id', staffId)
     if (status && status !== 'all') query = query.eq('status', status)
-    // Изоляция по организации
+    // Изоляция по организации: строго своей орг (legacy-строки без org больше не
+    // показываем всем — иначе утекали бы ФИО/результаты сотрудников чужой орг).
     const orgId = access.activeOrganization?.id || null
-    if (orgId) query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`)
+    if (!access.isSuperAdmin && !orgId) return json({ ok: true, data: { attempts: [] } })
+    if (orgId) query = query.eq('organization_id', orgId)
 
     const { data, error } = await query
     if (error) throw error

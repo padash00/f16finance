@@ -230,13 +230,18 @@ export async function POST(req: Request) {
     const orgId = access.activeOrganization?.id || null
     const matchScope = { organizationId: orgId, supplierId }
 
+    // Изоляция: поставщик читается только в своей орг (раньше — по присланному id без орг).
+    let supplierQuery: any = Promise.resolve({ data: null })
+    if (supplierId) {
+      let sq = supabase.from('inventory_suppliers').select('id, name, organization_name').eq('id', supplierId)
+      if (orgId) sq = sq.eq('organization_id', orgId)
+      supplierQuery = sq.maybeSingle()
+    }
     const [inventoryItems, nameMappings, fileData, supplierRow] = await Promise.all([
       fetchInventoryItemsForMatching(supabase as any, { organizationId: orgId }),
       fetchInvoiceNameMappings(supabase as any, matchScope),
       urlToDataUrl(invoiceFileUrl),
-      supplierId
-        ? supabase.from('inventory_suppliers').select('id, name, organization_name').eq('id', supplierId).maybeSingle()
-        : Promise.resolve({ data: null }),
+      supplierQuery,
     ])
     const apiKey = process.env.OPENAI_API_KEY
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'

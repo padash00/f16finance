@@ -245,12 +245,16 @@ export async function POST(request: Request) {
       const barcode = String(body.barcode || '').trim()
       if (!barcode) return json({ error: 'barcode-required' }, 400)
 
-      const { data: item } = await supabase
+      // Изоляция: ищем товар по штрихкоду только в своей орг (иначе по общему barcode
+      // утекают имя/цены товара чужой орг).
+      let lookupQ = supabase
         .from('inventory_items')
         .select('id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name)')
         .eq('barcode', barcode)
         .eq('is_active', true)
-        .maybeSingle()
+      const lookupOrgId = access.activeOrganization?.id || null
+      if (!access.isSuperAdmin && lookupOrgId) lookupQ = lookupQ.eq('organization_id', lookupOrgId)
+      const { data: item } = await lookupQ.maybeSingle()
 
       return json({ ok: true, data: { item: item || null } })
     }

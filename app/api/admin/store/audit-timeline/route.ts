@@ -57,10 +57,11 @@ export async function GET(request: Request) {
     const actorIds = Array.from(new Set((rows || []).map((r: any) => String(r.actor_user_id || '').trim()).filter(Boolean)))
     const staffMap: Record<string, { full_name: string | null; role: string | null }> = {}
     if (actorIds.length > 0) {
-      const { data: staffRows } = await supabase
-        .from('staff')
-        .select('id, full_name, role')
-        .in('id', actorIds)
+      // Изоляция: имена актёров — только из staff своей орг (иначе через legacy-NULL
+      // строки audit_log утекали бы ФИО/роли сотрудников чужой орг).
+      let staffQuery: any = supabase.from('staff').select('id, full_name, role').in('id', actorIds)
+      if (orgId) staffQuery = staffQuery.eq('organization_id', orgId)
+      const { data: staffRows } = await staffQuery
       for (const s of staffRows || []) {
         staffMap[String((s as any).id)] = {
           full_name: ((s as any).full_name as string) || null,

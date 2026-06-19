@@ -92,6 +92,9 @@ export async function GET(req: Request) {
       .in('entity_type', ['operator-company-assignment', 'operator-career'])
       .order('created_at', { ascending: false })
       .limit(100)
+    // Изоляция: история — только своей орг (старые строки без org видны своей орг).
+    const histOrgId = access.activeOrganization?.id || null
+    if (histOrgId) historyQuery = historyQuery.or(`organization_id.is.null,organization_id.eq.${histOrgId}`)
 
     let careerLinksQuery = supabase
       .from('operator_staff_links')
