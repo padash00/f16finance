@@ -211,6 +211,41 @@ export async function POST(request: Request) {
 
     const meta = payload.meta || null
 
+    // Defer-режим: доход за сессии зала не создавался на лету — сворачиваем его сюда,
+    // в один доход смены. Суммируем нал/каспи незакрытых (income_id null) сессий за
+    // этот день/оператора (минус возвраты) — теми же фильтрами, что и привязка ниже.
+    // Компании «Extra» сворачивают доход зала в смену по умолчанию (как и флаг) —
+    // согласовано с point/arena, чтобы доход не терялся без ручной настройки флага.
+    const companyCodeLc = String(device.company?.code || '').toLowerCase().trim()
+    const companyNameLc = String(device.company?.name || '').toLowerCase().trim()
+    const isExtraCompany = companyCodeLc === 'extra' || companyNameLc.includes('extra')
+    const deferArena = device.feature_flags?.arena_defer_income_to_shift === true || isExtraCompany
+    let arenaCashAdd = 0
+    let arenaKaspiAdd = 0
+    let arenaSessionCount = 0
+    if (deferArena) {
+      const dayAfterForSum = nextCalendarDateIso(payload.date)
+      const { data: deferredSessions } = await supabase
+        .from('arena_sessions')
+        .select('cash_amount, kaspi_amount, refund_cash_amount, refund_kaspi_amount')
+        .eq('point_project_id', device.id)
+        .is('income_id', null)
+        .eq('operator_id', payload.operator_id)
+        .gte('started_at', `${payload.date}T00:00:00.000Z`)
+        .lt('started_at', `${dayAfterForSum}T00:00:00.000Z`)
+      for (const s of (deferredSessions || []) as any[]) {
+        arenaCashAdd += Math.max(0, Number(s.cash_amount || 0) - Number(s.refund_cash_amount || 0))
+        arenaKaspiAdd += Math.max(0, Number(s.kaspi_amount || 0) - Number(s.refund_kaspi_amount || 0))
+        arenaSessionCount += 1
+      }
+      if (arenaCashAdd > 0 || arenaKaspiAdd > 0) {
+        normalized.cash_amount = Number(normalized.cash_amount || 0) + arenaCashAdd
+        normalized.kaspi_amount = Number(normalized.kaspi_amount || 0) + arenaKaspiAdd
+        const arenaNote = `Зал: ${arenaSessionCount} сес. (${arenaCashAdd + arenaKaspiAdd} ₸)`
+        normalized.comment = normalized.comment ? `${normalized.comment} · ${arenaNote}` : arenaNote
+      }
+    }
+
     const totalAmount =
       Number(normalized.cash_amount || 0) +
       Number(normalized.kaspi_amount || 0) +
@@ -230,7 +265,7 @@ export async function POST(request: Request) {
       .single()
     if (insertError) throw insertError
 
-    if (device.feature_flags?.arena_defer_income_to_shift === true) {
+    if (deferArena) {
       const dayAfter = nextCalendarDateIso(payload.date)
       const { error: arenaLinkError } = await supabase
         .from('arena_sessions')
