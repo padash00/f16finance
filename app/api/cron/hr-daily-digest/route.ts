@@ -69,8 +69,8 @@ export async function GET(request: Request) {
   // Соберём данные
   const [profilesRes, opsRes, staffRes, authRes] = await Promise.all([
     supabase.from('operator_profiles').select('operator_id, full_name, birth_date, hire_date'),
-    supabase.from('operators').select('id, name, is_active, dismissed_at'),
-    supabase.from('staff').select('id, full_name, role, is_active, dismissed_at, telegram_chat_id'),
+    supabase.from('operators').select('id, name, is_active, dismissed_at, organization_id'),
+    supabase.from('staff').select('id, full_name, role, is_active, dismissed_at, telegram_chat_id, organization_id'),
     supabase.from('operator_auth').select('operator_id, is_active'),
   ])
 
@@ -85,91 +85,94 @@ export async function GET(request: Request) {
   const activeStaff = staff.filter((s) => s.is_active && !s.dismissed_at)
   const opIdsWithAuth = new Set(auth.filter((a) => a.is_active).map((a) => a.operator_id))
 
-  // ДР сегодня (только операторы — staff пока без birth_date)
-  const birthdaysToday: Array<{ name: string; age?: number }> = []
-  for (const o of activeOps) {
-    const profile = profileById.get(o.id)
-    if (profile?.birth_date && isToday(profile.birth_date, today)) {
-      const age = yearsSince(profile.birth_date, today)
-      birthdaysToday.push({ name: profile.full_name || o.name || '—', age })
-    }
-  }
+  // Изоляция: считаем и рассылаем сводку ОТДЕЛЬНО по каждой организации —
+  // операторы/staff/новости одной орг не должны попадать к другой.
+  const orgIds = Array.from(
+    new Set([
+      ...activeOps.map((o) => (o.organization_id || null) as string | null),
+      ...activeStaff.map((s) => (s.organization_id || null) as string | null),
+    ]),
+  )
 
-  // Годовщины сегодня
-  const anniversariesToday: Array<{ name: string; years: number }> = []
-  for (const o of activeOps) {
-    const profile = profileById.get(o.id)
-    if (profile?.hire_date && isToday(profile.hire_date, today)) {
-      const years = yearsSince(profile.hire_date, today)
-      if (years > 0) anniversariesToday.push({ name: profile.full_name || o.name || '—', years })
-    }
-  }
-
-  // Операторы без логина
-  const noLogin = activeOps.filter((o) => !opIdsWithAuth.has(o.id))
-
-  // Куда пушить — staff с telegram_chat_id (владелец/менеджер увидят сводку)
-  const recipients = activeStaff
-    .filter((s) => s.telegram_chat_id && (s.role === 'owner' || s.role === 'manager'))
-    .map((s) => s.telegram_chat_id as string)
-
-  // Формируем посты в news_feed
-  const newsRows: Array<{ title: string; body: string; pinned_until?: string }> = []
-  if (birthdaysToday.length > 0) {
-    const list = birthdaysToday.map((b) => `🎂 ${b.name}${b.age ? ` (${b.age} лет)` : ''}`).join('\n')
-    newsRows.push({
-      title: `🎂 День рождения сегодня`,
-      body: `${list}\n\nНе забудьте поздравить!`,
-    })
-  }
-  if (anniversariesToday.length > 0) {
-    const list = anniversariesToday.map((a) => `🎉 ${a.name} — ${a.years} ${a.years === 1 ? 'год' : a.years < 5 ? 'года' : 'лет'} в команде`).join('\n')
-    newsRows.push({
-      title: `🎉 Годовщина в команде`,
-      body: list,
-    })
-  }
-  if (noLogin.length > 0 && noLogin.length <= 10) {
-    newsRows.push({
-      title: `⚠️ ${noLogin.length} оператор${noLogin.length === 1 ? '' : 'ов'} без логина`,
-      body: noLogin.map((o) => `• ${profileById.get(o.id)?.full_name || o.name}`).join('\n') + '\n\nСоздай аккаунты на /hr или /operators.',
-    })
-  }
-
-  // Постим в news_feed
   let postedCount = 0
-  for (const row of newsRows) {
-    try {
-      await supabase.from('news_posts').insert({
-        title: row.title,
-        body: row.body,
-        author_name: 'HR-бот',
-        pinned_until: null,
-      })
-      postedCount++
-    } catch {
-      // если таблица news_posts иначе называется — не падаем
-    }
-  }
-
-  // Шлём Telegram
   let telegramSent = 0
-  for (const chatId of recipients) {
-    const lines: string[] = ['<b>HR-сводка</b>']
+  let totalBirthdays = 0
+  let totalAnniversaries = 0
+  let totalNoLogin = 0
+
+  for (const orgId of orgIds) {
+    const orgOps = activeOps.filter((o) => (o.organization_id || null) === orgId)
+    const orgStaff = activeStaff.filter((s) => (s.organization_id || null) === orgId)
+
+    const birthdaysToday: Array<{ name: string; age?: number }> = []
+    const anniversariesToday: Array<{ name: string; years: number }> = []
+    for (const o of orgOps) {
+      const profile = profileById.get(o.id)
+      if (profile?.birth_date && isToday(profile.birth_date, today)) {
+        birthdaysToday.push({ name: profile.full_name || o.name || '—', age: yearsSince(profile.birth_date, today) })
+      }
+      if (profile?.hire_date && isToday(profile.hire_date, today)) {
+        const years = yearsSince(profile.hire_date, today)
+        if (years > 0) anniversariesToday.push({ name: profile.full_name || o.name || '—', years })
+      }
+    }
+    const noLogin = orgOps.filter((o) => !opIdsWithAuth.has(o.id))
+
+    totalBirthdays += birthdaysToday.length
+    totalAnniversaries += anniversariesToday.length
+    totalNoLogin += noLogin.length
+
+    const newsRows: Array<{ title: string; body: string }> = []
     if (birthdaysToday.length > 0) {
-      lines.push('', '🎂 <b>Сегодня ДР:</b>')
-      for (const b of birthdaysToday) lines.push(`• ${b.name}${b.age ? ` (${b.age} лет)` : ''}`)
+      const list = birthdaysToday.map((b) => `🎂 ${b.name}${b.age ? ` (${b.age} лет)` : ''}`).join('\n')
+      newsRows.push({ title: `🎂 День рождения сегодня`, body: `${list}\n\nНе забудьте поздравить!` })
     }
     if (anniversariesToday.length > 0) {
-      lines.push('', '🎉 <b>Годовщина в команде:</b>')
-      for (const a of anniversariesToday) lines.push(`• ${a.name} — ${a.years} ${a.years === 1 ? 'год' : a.years < 5 ? 'года' : 'лет'}`)
+      const list = anniversariesToday.map((a) => `🎉 ${a.name} — ${a.years} ${a.years === 1 ? 'год' : a.years < 5 ? 'года' : 'лет'} в команде`).join('\n')
+      newsRows.push({ title: `🎉 Годовщина в команде`, body: list })
     }
-    if (noLogin.length > 0) {
-      lines.push('', `⚠️ <b>Без логина:</b> ${noLogin.length} оператор${noLogin.length === 1 ? '' : 'ов'}`)
+    if (noLogin.length > 0 && noLogin.length <= 10) {
+      newsRows.push({
+        title: `⚠️ ${noLogin.length} оператор${noLogin.length === 1 ? '' : 'ов'} без логина`,
+        body: noLogin.map((o) => `• ${profileById.get(o.id)?.full_name || o.name}`).join('\n') + '\n\nСоздай аккаунты на /hr или /operators.',
+      })
     }
-    if (lines.length > 1) {
-      await sendTelegram(chatId, lines.join('\n'))
-      telegramSent++
+
+    for (const row of newsRows) {
+      try {
+        await supabase.from('news_posts').insert({
+          title: row.title,
+          body: row.body,
+          author_name: 'HR-бот',
+          pinned_until: null,
+          organization_id: orgId,
+        })
+        postedCount++
+      } catch {
+        // если таблица news_posts иначе называется — не падаем
+      }
+    }
+
+    const recipients = orgStaff
+      .filter((s) => s.telegram_chat_id && (s.role === 'owner' || s.role === 'manager'))
+      .map((s) => s.telegram_chat_id as string)
+    for (const chatId of recipients) {
+      const lines: string[] = ['<b>HR-сводка</b>']
+      if (birthdaysToday.length > 0) {
+        lines.push('', '🎂 <b>Сегодня ДР:</b>')
+        for (const b of birthdaysToday) lines.push(`• ${b.name}${b.age ? ` (${b.age} лет)` : ''}`)
+      }
+      if (anniversariesToday.length > 0) {
+        lines.push('', '🎉 <b>Годовщина в команде:</b>')
+        for (const a of anniversariesToday) lines.push(`• ${a.name} — ${a.years} ${a.years === 1 ? 'год' : a.years < 5 ? 'года' : 'лет'}`)
+      }
+      if (noLogin.length > 0) {
+        lines.push('', `⚠️ <b>Без логина:</b> ${noLogin.length} оператор${noLogin.length === 1 ? '' : 'ов'}`)
+      }
+      if (lines.length > 1) {
+        await sendTelegram(chatId, lines.join('\n'))
+        telegramSent++
+      }
     }
   }
 
@@ -177,8 +180,8 @@ export async function GET(request: Request) {
     ok: true,
     posted: postedCount,
     telegram_sent: telegramSent,
-    birthdays: birthdaysToday.length,
-    anniversaries: anniversariesToday.length,
-    no_login: noLogin.length,
+    birthdays: totalBirthdays,
+    anniversaries: totalAnniversaries,
+    no_login: totalNoLogin,
   })
 }

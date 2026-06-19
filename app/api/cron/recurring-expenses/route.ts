@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requiredEnv } from '@/lib/server/env'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, created: 0 })
   }
 
-  const created: Array<{ template_id: string; expense_id: string; amount: number; name: string }> = []
+  const created: Array<{ template_id: string; expense_id: string; amount: number; name: string; company_id: string }> = []
   for (const t of due as any[]) {
     if (!t.company_id) continue
     const amount = Number(t.amount || 0)
@@ -78,23 +79,35 @@ export async function GET(req: Request) {
       .update({ recurring_last_run_at: today })
       .eq('id', t.id)
 
-    created.push({ template_id: t.id, expense_id: String(inserted.id), amount, name: t.name })
+    created.push({ template_id: t.id, expense_id: String(inserted.id), amount, name: t.name, company_id: String(t.company_id) })
   }
 
-  const chatId = process.env.TELEGRAM_CHAT_ID
-  if (created.length > 0 && chatId) {
-    const totalSum = created.reduce((s, c) => s + c.amount, 0)
+  // Изоляция Telegram-свода: каждой орг — только её созданные расходы в её чат.
+  function buildSummary(items: typeof created): string {
+    const totalSum = items.reduce((s, c) => s + c.amount, 0)
     const lines: string[] = []
     lines.push('<b>🔁 Повторяющиеся расходы созданы</b>')
     lines.push('')
-    lines.push(`Всего: <b>${created.length}</b> · Сумма: <b>${escapeTelegramHtml(fmtMoney(totalSum))}</b>`)
+    lines.push(`Всего: <b>${items.length}</b> · Сумма: <b>${escapeTelegramHtml(fmtMoney(totalSum))}</b>`)
     lines.push('')
-    for (const c of created) {
-      lines.push(`• ${escapeTelegramHtml(c.name)} · <b>${escapeTelegramHtml(fmtMoney(c.amount))}</b>`)
-    }
+    for (const c of items) lines.push(`• ${escapeTelegramHtml(c.name)} · <b>${escapeTelegramHtml(fmtMoney(c.amount))}</b>`)
     lines.push('')
     lines.push('<i>Расходы в статусе pending_approval — подтверди в /expenses/pending</i>')
-    await sendTelegramMessage(chatId, lines.join('\n'), { parseMode: 'HTML' })
+    return lines.join('\n')
+  }
+
+  if (created.length > 0) {
+    const orgTargets = await listOrgReportTargets()
+    if (orgTargets.length > 0) {
+      for (const t of orgTargets) {
+        const allow = new Set(t.companyIds || [])
+        const mine = created.filter((c) => allow.has(c.company_id))
+        if (mine.length > 0) await sendTelegramMessage(t.chatId, buildSummary(mine), { parseMode: 'HTML' })
+      }
+    } else {
+      const chatId = process.env.TELEGRAM_CHAT_ID
+      if (chatId) await sendTelegramMessage(chatId, buildSummary(created), { parseMode: 'HTML' })
+    }
   }
 
   return NextResponse.json({ ok: true, created: created.length, items: created })
