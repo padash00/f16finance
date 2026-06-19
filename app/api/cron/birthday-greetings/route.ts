@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
+import { listOrgReportTargets } from '@/lib/server/report-targets'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   // Все активные операторы с их профилями и telegram chat_id
   const { data: operators, error } = await supabase
     .from('operators')
-    .select('id, name, short_name, telegram_chat_id, is_active, operator_profiles(full_name, birth_date)')
+    .select('id, name, short_name, telegram_chat_id, is_active, organization_id, operator_profiles(full_name, birth_date)')
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
 
@@ -49,10 +50,14 @@ export async function GET(request: Request) {
   const opsList = (operators as any[]) || []
   const sent: { name: string; chat: string }[] = []
   const teamReminders: { birthdayPerson: string; notified: number }[] = []
-  const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+  const envOwnerChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+
+  // Изоляция: владельцу-получателю по орг (per-org chat), иначе общий env-чат.
+  const orgTargets = await listOrgReportTargets()
+  const orgChatMap = new Map(orgTargets.map((t) => [t.organizationId, t.chatId]))
 
   // 1) Находим всех именинников сегодня
-  const birthdayOps: { id: string; chat: string; displayName: string }[] = []
+  const birthdayOps: { id: string; chat: string; displayName: string; orgId: string | null }[] = []
   for (const op of opsList) {
     const profile = Array.isArray(op.operator_profiles) ? op.operator_profiles[0] : op.operator_profiles
     if (!profile?.birth_date) continue
@@ -61,7 +66,7 @@ export async function GET(request: Request) {
     const displayName = profile.full_name || op.short_name || op.name
     const chat = String(op.telegram_chat_id || '')
     if (!chat) continue
-    birthdayOps.push({ id: op.id, chat, displayName })
+    birthdayOps.push({ id: op.id, chat, displayName, orgId: op.organization_id || null })
   }
 
   // 2) Для каждого именинника — отправляем 3 типа сообщений
@@ -74,7 +79,8 @@ export async function GET(request: Request) {
       console.error(`[birthday] personal failed for ${bd.displayName}:`, e?.message)
     }
 
-    // 2.2) Уведомление владельцу
+    // 2.2) Уведомление владельцу той же организации (per-org chat, иначе общий env).
+    const ownerChatId = (bd.orgId && orgChatMap.get(bd.orgId)) || envOwnerChatId
     if (ownerChatId) {
       try {
         await sendTelegramMessage(
@@ -85,10 +91,11 @@ export async function GET(request: Request) {
       } catch {}
     }
 
-    // 2.3) Напоминание всем остальным сотрудникам
+    // 2.3) Напоминание остальным сотрудникам ТОЙ ЖЕ организации (изоляция).
     let notified = 0
     for (const op of opsList) {
       if (op.id === bd.id) continue // не самому имениннику
+      if ((op.organization_id || null) !== bd.orgId) continue // только своя орг
       const teammateChat = String(op.telegram_chat_id || '')
       if (!teammateChat) continue
       try {

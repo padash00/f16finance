@@ -104,11 +104,13 @@ export async function GET(req: Request) {
       }
     }
 
-    // 3. Низкие остатки
-    const { data: balances } = await supabase
+    // 3. Низкие остатки (скоуп по орг через товар — inventory_items.organization_id NOT NULL)
+    let balQ = supabase
       .from('inventory_balances')
-      .select('quantity, item:item_id(name, low_stock_threshold)')
+      .select('quantity, item:item_id!inner(name, low_stock_threshold, organization_id)')
       .order('quantity')
+    if (ownerOrgId) balQ = balQ.eq('item.organization_id', ownerOrgId)
+    const { data: balances } = await balQ
     if (balances) {
       let lowCount = 0
       const examples: string[] = []
