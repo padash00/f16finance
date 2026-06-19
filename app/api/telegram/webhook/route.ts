@@ -271,12 +271,25 @@ function canUseTop(role: BotUserRole) {
 
 // ─── Finance data helpers ─────────────────────────────────────────────────────
 
-async function getFinanceSummary(dateFrom: string, dateTo: string) {
+// Изоляция: companyIds организации бот-юзера. super_admin / неизвестная орг → null (все).
+async function botCompanyScope(botUser: BotUser): Promise<string[] | null> {
+  if (botUser.role === 'super_admin') return null
+  const orgId = botUser.organizationId
+  if (!orgId) return null
   const supabase = createAdminSupabaseClient()
-  const [incomesRes, expensesRes] = await Promise.all([
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount').gte('date', dateFrom).lte('date', dateTo),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category').gte('date', dateFrom).lte('date', dateTo),
-  ])
+  const { data } = await supabase.from('companies').select('id').eq('organization_id', orgId)
+  return (data || []).map((c: any) => String(c.id))
+}
+
+async function getFinanceSummary(dateFrom: string, dateTo: string, companyIds: string[] | null = null) {
+  const supabase = createAdminSupabaseClient()
+  let incQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', dateFrom).lte('date', dateTo)
+  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', dateFrom).lte('date', dateTo)
+  if (companyIds) {
+    incQ = incQ.in('company_id', companyIds)
+    expQ = expQ.in('company_id', companyIds)
+  }
+  const [incomesRes, expensesRes] = await Promise.all([incQ, expQ])
 
   let totalIncome = 0
   let totalExpense = 0
@@ -387,23 +400,24 @@ function buildHelpText(user: BotUser): string {
   return lines.join('\n')
 }
 
-async function handleTopOperators(chatId: number) {
+async function handleTopOperators(chatId: number, companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const dateFrom = addDaysISO(today, -6)
 
-  const [incomesRes, operatorsRes] = await Promise.all([
-    supabase
-      .from('incomes')
-      .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
-      .gte('date', dateFrom)
-      .lte('date', today)
-      .not('operator_id', 'is', null),
-    supabase
-      .from('operators')
-      .select('id, name, short_name, operator_profiles(full_name)')
-      .eq('is_active', true),
-  ])
+  let incQ = supabase
+    .from('incomes')
+    .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount, company_id')
+    .gte('date', dateFrom)
+    .lte('date', today)
+    .not('operator_id', 'is', null)
+  if (companyIds) incQ = incQ.in('company_id', companyIds)
+  let opsQ = supabase
+    .from('operators')
+    .select('id, name, short_name, organization_id, operator_profiles(full_name)')
+    .eq('is_active', true)
+  // operators скоупим по орг (через company → org недоступен, но operators.organization_id есть)
+  const [incomesRes, operatorsRes] = await Promise.all([incQ, opsQ])
 
   const operatorMap = new Map<string, string>()
   for (const op of operatorsRes.data ?? []) {
@@ -444,15 +458,18 @@ async function handleTopOperators(chatId: number) {
   await sendTelegramMessage(chatId, lines.join('\n'))
 }
 
-async function handleForecast(chatId: number) {
+async function handleForecast(chatId: number, companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const dateFrom = addDaysISO(today, -89)
 
-  const [incomesRes, expensesRes] = await Promise.all([
-    supabase.from('incomes').select('date, cash_amount, kaspi_amount, online_amount, card_amount').gte('date', dateFrom).lte('date', today),
-    supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', dateFrom).lte('date', today),
-  ])
+  let incQ = supabase.from('incomes').select('date, cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', dateFrom).lte('date', today)
+  let expQ = supabase.from('expenses').select('date, cash_amount, kaspi_amount, company_id').gte('date', dateFrom).lte('date', today)
+  if (companyIds) {
+    incQ = incQ.in('company_id', companyIds)
+    expQ = expQ.in('company_id', companyIds)
+  }
+  const [incomesRes, expensesRes] = await Promise.all([incQ, expQ])
 
   const weeklyIncome: number[] = Array(13).fill(0)
   const weeklyExpense: number[] = Array(13).fill(0)
@@ -506,17 +523,20 @@ async function handleForecast(chatId: number) {
   await sendTelegramMessage(chatId, lines.join('\n'))
 }
 
-async function handleCompare(chatId: number) {
+async function handleCompare(chatId: number, companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const thisWeekFrom = addDaysISO(today, -6)
   const lastWeekFrom = addDaysISO(today, -13)
   const lastWeekTo = addDaysISO(today, -7)
 
-  const [thisRes, lastRes] = await Promise.all([
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount').gte('date', thisWeekFrom).lte('date', today),
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount').gte('date', lastWeekFrom).lte('date', lastWeekTo),
-  ])
+  let thisQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', thisWeekFrom).lte('date', today)
+  let lastQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', lastWeekFrom).lte('date', lastWeekTo)
+  if (companyIds) {
+    thisQ = thisQ.in('company_id', companyIds)
+    lastQ = lastQ.in('company_id', companyIds)
+  }
+  const [thisRes, lastRes] = await Promise.all([thisQ, lastQ])
 
   const sum = (rows: any[]) => rows.reduce((s: number, r: any) => s + safeNum(r.cash_amount) + safeNum(r.kaspi_amount) + safeNum(r.online_amount) + safeNum(r.card_amount), 0)
 
@@ -643,7 +663,7 @@ async function handleMyShifts(chatId: number, operatorId: string, operatorName: 
   await sendTelegramMessage(chatId, lines.join('\n'))
 }
 
-async function buildOnShiftText() {
+async function buildOnShiftText(companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const now = nowKZ()
   const hour = now.getUTCHours()
@@ -652,12 +672,14 @@ async function buildOnShiftText() {
   const baseDate = todayISO()
   const scheduleDate = !isDayShift && hour < 8 ? addDaysISO(baseDate, -1) : baseDate
 
-  const { data: plannedShifts, error } = await supabase
+  let shiftQ = supabase
     .from('shifts')
-    .select('id, date, shift_type, operator_name, company:company_id(name)')
+    .select('id, date, shift_type, operator_name, company_id, company:company_id(name)')
     .eq('date', scheduleDate)
     .eq('shift_type', currentShiftType)
     .order('company_id', { ascending: true })
+  if (companyIds) shiftQ = shiftQ.in('company_id', companyIds)
+  const { data: plannedShifts, error } = await shiftQ
 
   if (error) {
     return 'Не удалось получить текущие смены. Попробуйте чуть позже.'
@@ -688,16 +710,18 @@ async function buildOnShiftText() {
   return lines.join('\n')
 }
 
-async function buildTodayShiftsText() {
+async function buildTodayShiftsText(companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const date = todayISO()
-  const { data: shifts, error } = await supabase
+  let shiftQ = supabase
     .from('shifts')
-    .select('id, date, shift_type, operator_name, company:company_id(name)')
+    .select('id, date, shift_type, operator_name, company_id, company:company_id(name)')
     .eq('date', date)
     .in('shift_type', ['day', 'night'])
     .order('shift_type', { ascending: true })
     .order('company_id', { ascending: true })
+  if (companyIds) shiftQ = shiftQ.in('company_id', companyIds)
+  const { data: shifts, error } = await shiftQ
 
   if (error) {
     return 'Не удалось получить расписание смен на сегодня.'
@@ -772,15 +796,18 @@ async function buildWhoAmIText(botUser: BotUser, telegramUserId: string) {
   return lines.join('\n')
 }
 
-async function handleCashFlow(chatId: number) {
+async function handleCashFlow(chatId: number, companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const dateFrom = addDaysISO(today, -29)
 
-  const [incomesRes, expensesRes] = await Promise.all([
-    supabase.from('incomes').select('date, cash_amount, kaspi_amount, online_amount, card_amount').gte('date', dateFrom).lte('date', today),
-    supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', dateFrom).lte('date', today),
-  ])
+  let incQ = supabase.from('incomes').select('date, cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', dateFrom).lte('date', today)
+  let expQ = supabase.from('expenses').select('date, cash_amount, kaspi_amount, company_id').gte('date', dateFrom).lte('date', today)
+  if (companyIds) {
+    incQ = incQ.in('company_id', companyIds)
+    expQ = expQ.in('company_id', companyIds)
+  }
+  const [incomesRes, expensesRes] = await Promise.all([incQ, expQ])
 
   const dailyIncome = new Map<string, number>()
   const dailyExpense = new Map<string, number>()
@@ -2347,11 +2374,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     }
 
     if (name === 'get_current_on_shift') {
-      return buildOnShiftText()
+      return buildOnShiftText(botUser ? await botCompanyScope(botUser) : null)
     }
 
     if (name === 'get_today_shifts') {
-      return buildTodayShiftsText()
+      return buildTodayShiftsText(botUser ? await botCompanyScope(botUser) : null)
     }
 
     if (name === 'get_leader_activity') {
@@ -2742,16 +2769,20 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   }
 }
 
-async function handleDetailedReport(chatId: number) {
+async function handleDetailedReport(chatId: number, companyIds: string[] | null = null) {
   const supabase = createAdminSupabaseClient()
   const today = todayISO()
   const weekFrom = addDaysISO(today, -6)
 
-  const [incomesRes, expensesRes, companiesRes] = await Promise.all([
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', weekFrom).lte('date', today),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today),
-    supabase.from('companies').select('id, name').eq('is_active', true),
-  ])
+  let incQ = supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', weekFrom).lte('date', today)
+  let expQ = supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today)
+  let coQ = supabase.from('companies').select('id, name').eq('is_active', true)
+  if (companyIds) {
+    incQ = incQ.in('company_id', companyIds)
+    expQ = expQ.in('company_id', companyIds)
+    coQ = coQ.in('id', companyIds)
+  }
+  const [incomesRes, expensesRes, companiesRes] = await Promise.all([incQ, expQ, coQ])
 
   const safeN = (v: any) => Number(v || 0)
   const companies = (companiesRes.data || []) as Array<{ id: string; name: string }>
@@ -3569,7 +3600,7 @@ export async function POST(req: Request) {
           '/month': [addDaysISO(today, -29), today, 'Последние 30 дней'],
         }
         const [from, to, title] = ranges[cmd ?? ''] ?? [today, today, 'Сегодня']
-        const data = await getFinanceSummary(from, to)
+        const data = await getFinanceSummary(from, to, await botCompanyScope(botUser))
         await sendTelegramText(chatId, formatSummary(data, title))
         return json({ ok: true })
       }
@@ -3579,7 +3610,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа к финансовым командам.')
           return json({ ok: true })
         }
-        await handleCashFlow(Number(chatId))
+        await handleCashFlow(Number(chatId), await botCompanyScope(botUser))
         return json({ ok: true })
       }
 
@@ -3588,7 +3619,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа к рейтингу операторов.')
           return json({ ok: true })
         }
-        await handleTopOperators(Number(chatId))
+        await handleTopOperators(Number(chatId), await botCompanyScope(botUser))
         return json({ ok: true })
       }
 
@@ -3597,7 +3628,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Прогноз доступен только владельцу и администратору.')
           return json({ ok: true })
         }
-        await handleForecast(Number(chatId))
+        await handleForecast(Number(chatId), await botCompanyScope(botUser))
         return json({ ok: true })
       }
 
@@ -3606,7 +3637,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа к финансовым командам.')
           return json({ ok: true })
         }
-        await handleCompare(Number(chatId))
+        await handleCompare(Number(chatId), await botCompanyScope(botUser))
         return json({ ok: true })
       }
 
@@ -3615,7 +3646,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа к этой команде.')
           return json({ ok: true })
         }
-        await sendTelegramText(chatId, await buildOnShiftText())
+        await sendTelegramText(chatId, await buildOnShiftText(await botCompanyScope(botUser)))
         return json({ ok: true })
       }
 
@@ -3624,7 +3655,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа к этой команде.')
           return json({ ok: true })
         }
-        await sendTelegramText(chatId, await buildTodayShiftsText())
+        await sendTelegramText(chatId, await buildTodayShiftsText(await botCompanyScope(botUser)))
         return json({ ok: true })
       }
 
@@ -3836,7 +3867,7 @@ export async function POST(req: Request) {
           await sendTelegramText(chatId, '⛔ Нет доступа.')
           return json({ ok: true })
         }
-        await handleDetailedReport(Number(chatId))
+        await handleDetailedReport(Number(chatId), await botCompanyScope(botUser))
         return json({ ok: true })
       }
 
