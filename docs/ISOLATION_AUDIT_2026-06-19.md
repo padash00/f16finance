@@ -18,11 +18,16 @@
 
 ## 🟠 HIGH (кросс-тенант мутация или чтение метаданных/агрегатов)
 
-> Прогресс: ✅ 3A мутация-по-id (`9018b2c9`), ✅ 3B чтение-по-id (`131c8308`),
-> ✅ 3C customer/арена/debts (`ce230e4e`,`8373cfd1`), киоск NULL-толерантность (`9940436d`),
-> ✅ salary-snapshot (`137a00a2`). Осталось: telegram/webhook finance + cron-рассылки (D/E)
-> — это «будущие» утечки (проявятся со 2-м арендатором), требуют маппинга org→telegram-chat.
+> Прогресс: ✅ 3A (`9018b2c9`), ✅ 3B (`131c8308`), ✅ 3C (`ce230e4e`,`8373cfd1`),
+> киоск NULL-толерантность (`9940436d`), salary-snapshot (`137a00a2`).
+> ✅ Фундамент per-org Telegram: `organizations.telegram_owner_chat_id` + listReportTargets (`65150e16`).
+> ✅ cron overdue-debts, morning-ai-insight (`392158a1`), birthday-greetings, smart-insights (`cf1f9722`).
+>
+> ОСТАЛОСЬ HIGH: **telegram/webhook** finance-команды (прокинуть botUser.organizationId
+> в getFinanceSummary/handleCashFlow/handleTopOperators/handleForecast/handleDetailedReport)
+> — большой файл, для F16 не утечка (1 арендатор), делать аккуратно отдельно.
 > cron inventory-integrity/shortage → нужен company-параметр в RPC (SQL-батч).
+> MEDIUM cron: recurring-expenses, hr-daily-digest (per-org рассылка поверх listReportTargets).
 
 - [ ] **admin/expense-categories** PATCH(`:172`)/DELETE(`:212`) по id без org. Фикс: проверять organization_id.
 - [ ] **admin/expense-templates** DELETE(`:82-90`) existing.company_id не сверяется. Фикс: resolveCompanyScope(existing.company_id).
