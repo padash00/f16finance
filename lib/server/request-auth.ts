@@ -168,7 +168,12 @@ export async function getRequestAccessContext(
     customerCompanyIds: customerCompanyIds.length ? customerCompanyIds : null,
   })
   const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
-  const requestedOrganizationId = hostOrganization?.id || cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
+  // Мобильное приложение (нет поддомена-тенанта) выбирает активную орг заголовком
+  // x-organization-id. Безопасно: selectActiveOrganization берёт орг только из тех,
+  // к которым у пользователя есть доступ (чужой id просто игнорируется).
+  const headerOrganizationId = request.headers.get('x-organization-id')?.trim() || null
+  const requestedOrganizationId =
+    hostOrganization?.id || headerOrganizationId || cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
   const activeOrganization = selectActiveOrganization({
     organizations: organizationAccess.organizations,
     requestedOrganizationId,
