@@ -38,12 +38,16 @@ export async function POST(req: NextRequest) {
 
   // Ищем пользователя в Supabase Auth по email (username = email или phone)
   // Сначала пробуем найти customer по phone или card_number совпадающим с username
-  const { data: customers, error: searchErr } = await admin
+  // Изоляция: резолвим клиента ТОЛЬКО в компании этой станции, иначе клиент компании A,
+  // чей телефон/карта совпадает, залогинился бы на киоске компании B (PII + баланс).
+  let customersQuery = admin
     .from('customers')
     .select('id, name, phone, kiosk_balance, auth_user_id')
     .eq('is_active', true)
     .or(`phone.eq.${sanitizeOrFilterValue(username)},card_number.eq.${sanitizeOrFilterValue(username)}`)
     .limit(1)
+  if ((station as any).company_id) customersQuery = customersQuery.eq('company_id', (station as any).company_id)
+  const { data: customers, error: searchErr } = await customersQuery
 
   if (searchErr) {
     return NextResponse.json({ error: searchErr.message }, { status: 500 })

@@ -244,21 +244,23 @@ export async function POST(request: Request) {
       } = body
       if (!stationId || !tariffId) return json({ error: 'stationId and tariffId required' }, 400)
 
-      // Ensure station is not already occupied
+      // Ensure station is not already occupied (в пределах своего проекта)
       const { data: existing } = await supabase
         .from('arena_sessions')
         .select('id')
         .eq('station_id', stationId)
+        .eq('point_project_id', projectId)
         .eq('status', 'active')
         .maybeSingle()
 
       if (existing) return json({ error: 'station-already-occupied' }, 409)
 
-      // Fetch tariff for duration and price
+      // Fetch tariff for duration and price (только тариф своего проекта — изоляция).
       const { data: tariff, error: tariffError } = await supabase
         .from('arena_tariffs')
         .select('*')
         .eq('id', tariffId)
+        .eq('point_project_id', projectId)
         .single()
       if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
 
@@ -309,11 +311,12 @@ export async function POST(request: Request) {
         finalKaspi = Number(rawKaspiAmt) || 0
       }
 
-      // Fetch station name for income comment
+      // Fetch station name for income comment (только станция своего проекта)
       const { data: stationRow } = await supabase
         .from('arena_stations')
         .select('name')
         .eq('id', stationId)
+        .eq('point_project_id', projectId)
         .maybeSingle()
       const stationName = (stationRow as any)?.name || stationId
 
@@ -604,6 +607,7 @@ export async function POST(request: Request) {
           .from('arena_tariffs')
           .select('*')
           .eq('id', tariffId)
+          .eq('point_project_id', projectId)
           .single()
         if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
 

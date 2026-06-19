@@ -16,27 +16,21 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 }
 
-async function findCustomerByLogin(admin: any, username: string) {
+async function findCustomerByLogin(admin: any, username: string, companyId: string | null) {
   const select = 'id, name, phone, kiosk_balance, auth_user_id, card_number'
 
-  const { data: byPhone, error: phoneErr } = await admin
-    .from('customers')
-    .select(select)
-    .eq('phone', username)
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
+  // Изоляция: ищем клиента только в компании станции, иначе клиент компании A
+  // мог бы войти по QR на станции компании B (PII + баланс).
+  let byPhoneQ = admin.from('customers').select(select).eq('phone', username).eq('is_active', true).limit(1)
+  if (companyId) byPhoneQ = byPhoneQ.eq('company_id', companyId)
+  const { data: byPhone, error: phoneErr } = await byPhoneQ.maybeSingle()
 
   if (phoneErr) throw phoneErr
   if (byPhone) return byPhone
 
-  const { data: byCard, error: cardErr } = await admin
-    .from('customers')
-    .select(select)
-    .eq('card_number', username)
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
+  let byCardQ = admin.from('customers').select(select).eq('card_number', username).eq('is_active', true).limit(1)
+  if (companyId) byCardQ = byCardQ.eq('company_id', companyId)
+  const { data: byCard, error: cardErr } = await byCardQ.maybeSingle()
 
   if (cardErr) throw cardErr
   return byCard
@@ -74,14 +68,14 @@ export async function POST(request: Request) {
 
     const { data: station, error: stationErr } = await admin
       .from('arena_stations')
-      .select('id')
+      .select('id, company_id')
       .eq('id', stationId)
       .maybeSingle()
 
     if (stationErr) throw stationErr
     if (!station) return json({ error: 'station-not-found' }, 404)
 
-    const customer = await findCustomerByLogin(admin, username)
+    const customer = await findCustomerByLogin(admin, username, (station as any).company_id || null)
     if (!customer?.auth_user_id) return json({ error: 'Клиент не найден' }, 404)
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

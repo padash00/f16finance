@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { listOrganizationOperatorIds } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const runtime = 'nodejs'
@@ -38,6 +39,13 @@ export async function GET(request: Request) {
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
+  // Изоляция: календарь показывает PII/расписания/объявления ТОЛЬКО своей орг.
+  const orgId = access.activeOrganization?.id || null
+  const allowedOperatorIds = await listOrganizationOperatorIds({
+    activeOrganizationId: orgId,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+
   const events: CalendarEvent[] = []
 
   // 1. Праздники РК
@@ -58,10 +66,12 @@ export async function GET(request: Request) {
 
   // 2. Дни рождения операторов
   // Берём всех активных операторов, фильтруем по месяцу/дню в диапазоне
-  const { data: profiles } = await supabase
+  let profilesQuery = supabase
     .from('operator_profiles')
     .select('operator_id, full_name, birth_date')
     .not('birth_date', 'is', null)
+  if (allowedOperatorIds) profilesQuery = profilesQuery.in('operator_id', allowedOperatorIds)
+  const { data: profiles } = await profilesQuery
   const fromDate = new Date(from + 'T00:00:00Z')
   const toDate = new Date(to + 'T23:59:59Z')
   for (const p of profiles || []) {
@@ -97,6 +107,7 @@ export async function GET(request: Request) {
     .gte('shift_date', from)
     .lte('shift_date', to)
   if (operatorId) shiftsQuery = shiftsQuery.eq('operator_id', operatorId)
+  if (allowedOperatorIds) shiftsQuery = shiftsQuery.in('operator_id', allowedOperatorIds)
   const { data: shifts } = await shiftsQuery
   for (const s of shifts || []) {
     const isNight = (s as any).shift_type === 'night'
@@ -111,7 +122,7 @@ export async function GET(request: Request) {
   }
 
   // 4. Объявления — последние 10
-  const { data: announcements } = await supabase
+  let annQuery = supabase
     .from('team_chat_messages')
     .select('id, sender_name, message, created_at')
     .eq('is_announcement', true)
@@ -120,6 +131,8 @@ export async function GET(request: Request) {
     .lte('created_at', to + 'T23:59:59Z')
     .order('created_at', { ascending: false })
     .limit(10)
+  if (!access.isSuperAdmin && orgId) annQuery = annQuery.eq('organization_id', orgId)
+  const { data: announcements } = await annQuery
   for (const a of announcements || []) {
     events.push({
       date: String((a as any).created_at).slice(0, 10),
