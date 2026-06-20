@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import {
   ensureInventoryLocationAccess,
   fetchOpenTransferRequestsForLocation,
@@ -97,11 +97,38 @@ export async function GET(request: Request) {
       const { data: ops } = opIds.length
         ? await supabase.from('operators').select('id, name, short_name').in('id', opIds).eq('is_active', true).order('name')
         : { data: [] as any[] }
+
+      // Операторы с ДРУГИХ точек организации — можно подключить в помощь. Подпись
+      // содержит название их точки. Тенант-изоляция: только операторы своей орг.
+      const allowedOpIds = await listOrganizationOperatorIds({ activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin })
+      const thisSet = new Set(opIds)
+      const otherIds = allowedOpIds.filter((id) => !thisSet.has(id))
+      let otherOperators: Array<{ id: string; name: string }> = []
+      if (otherIds.length) {
+        const [otherOpsRes, otherAssignRes] = await Promise.all([
+          supabase.from('operators').select('id, name, short_name').in('id', otherIds).eq('is_active', true).order('name'),
+          supabase.from('operator_company_assignments').select('operator_id, company:company_id(name)').in('operator_id', otherIds).eq('is_active', true),
+        ])
+        const pointByOp = new Map<string, string>()
+        for (const r of ((otherAssignRes as any).data || []) as any[]) {
+          const cmp = Array.isArray(r.company) ? r.company[0] : r.company
+          const nm = cmp?.name ? String(cmp.name) : ''
+          const opId = String(r.operator_id)
+          if (nm && !pointByOp.has(opId)) pointByOp.set(opId, nm)
+        }
+        otherOperators = ((otherOpsRes as any).data || []).map((o: any) => {
+          const base = o.name || o.short_name || 'Оператор'
+          const pt = pointByOp.get(String(o.id))
+          return { id: String(o.id), name: pt ? `${base} · ${pt}` : base }
+        })
+      }
+
       return json({
         ok: true,
         data: {
           location: loc || null,
           operators: ((ops as any[]) || []).map((o) => ({ id: String(o.id), name: o.name || o.short_name || 'Оператор' })),
+          otherOperators,
           categories: ((catRes as any).data || []).map((c: any) => ({ id: String(c.id), name: c.name })),
         },
       })
@@ -277,6 +304,16 @@ export async function POST(request: Request) {
       const assignments = Array.isArray(body?.assignments) ? body.assignments : []
       if (assignments.length === 0) return json({ error: 'assignments-required' }, 400)
 
+      // Тенант-изоляция: каждый назначаемый оператор должен принадлежать организации
+      // (оператор с ДРУГОЙ точки своей орг — допустим; чужой орг — нет). Проверяем ДО
+      // создания акта, чтобы не плодить висячие акты при отказе.
+      const requestedOpIds: string[] = Array.from(new Set(assignments.map((a: any) => String(a.operator_id || '').trim()).filter((id: string) => UUID_RE.test(id))))
+      if (requestedOpIds.length === 0) return json({ error: 'assignments-required' }, 400)
+      const allowedOpSet = new Set(await listOrganizationOperatorIds({ activeOrganizationId: access.activeOrganization?.id || null, isSuperAdmin: access.isSuperAdmin }))
+      if (requestedOpIds.some((id) => !allowedOpSet.has(id))) {
+        return json({ error: 'forbidden-operator', message: 'Можно назначать только операторов своей организации.' }, 403)
+      }
+
       const { data: act, error: actErr } = await supabase
         .from('inventory_audit_acts')
         .insert({ company_id: companyId, location_id: locationId, status: 'open', mode: body?.mode === 'double' ? 'double' : 'single', comment: String(body?.comment || '').trim() || null, opened_by: actorUserId })
@@ -323,8 +360,16 @@ export async function POST(request: Request) {
       const locationId = String((act as any).location_id)
       const openedAt = String((act as any).opened_at)
 
+      // Принудительное закрытие: обходит блокировки (заявки в пути, ничего не
+      // посчитано, расхождения двойного счёта). Опасно — только owner/суперадмин.
+      const force = body?.force === true
+      if (force) {
+        const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
+        if (!access.isSuperAdmin && role !== 'owner') return json({ error: 'forbidden', message: 'Принудительно закрыть акт может только владелец.' }, 403)
+      }
+
       const openTransfers = await fetchOpenTransferRequestsForLocation(supabase as any, locationId, inventoryScope)
-      if (openTransfers.length > 0) {
+      if (!force && openTransfers.length > 0) {
         return json({ error: 'inventory-stocktake-open-transfers', message: 'Есть заявки склад ↔ витрина в пути. Сначала завершите их.' }, 409)
       }
 
@@ -334,7 +379,7 @@ export async function POST(request: Request) {
       ])
       const expectedBy = new Map(((snap.data || []) as any[]).map((r) => [String(r.item_id), num(r.expected_qty)]))
       const countRows = (counts.data || []) as any[]
-      if (countRows.length === 0) return json({ error: 'nothing-counted' }, 400)
+      if (!force && countRows.length === 0) return json({ error: 'nothing-counted' }, 400)
 
       // движения локации с момента открытия — для учёта продаж/приходов во время счёта
       const { data: moves } = await supabase
@@ -385,7 +430,7 @@ export async function POST(request: Request) {
       const shortageByItem = new Map<string, { qty: number; op: string | null }>()
       for (const [itemId, list] of grouped) {
         const distinct = Array.from(new Set(list.map((x) => x.qty)))
-        if (distinct.length > 1 && actMode === 'double') {
+        if (distinct.length > 1 && actMode === 'double' && !force) {
           conflicts.push(itemId)
           continue
         }
@@ -436,19 +481,23 @@ export async function POST(request: Request) {
       if (claimErr) throw claimErr
       if (!claimed || (claimed as any[]).length === 0) return json({ error: 'act-not-open' }, 409)
 
-      let result: any
-      try {
-        result = await postInventoryStocktake(supabase as any, {
-          location_id: locationId,
-          counted_at: new Date().toISOString().slice(0, 10),
-          comment: `Аудит-акт ${actId.slice(0, 8)}`,
-          created_by: actorUserId,
-          items: stocktakeItems,
-        })
-      } catch (stocktakeError) {
-        // Откатываем статус, чтобы акт снова можно было закрыть.
-        await supabase.from('inventory_audit_acts').update({ status: 'open', closed_at: null, closed_by: null }).eq('id', actId)
-        throw stocktakeError
+      let result: any = null
+      // При force без единой посчитанной позиции стоктейка нет — просто закрываем акт
+      // (RPC падает на пустом списке, и трогать остатки незачем).
+      if (stocktakeItems.length > 0) {
+        try {
+          result = await postInventoryStocktake(supabase as any, {
+            location_id: locationId,
+            counted_at: new Date().toISOString().slice(0, 10),
+            comment: `Аудит-акт ${actId.slice(0, 8)}${force ? ' (принудительно)' : ''}`,
+            created_by: actorUserId,
+            items: stocktakeItems,
+          })
+        } catch (stocktakeError) {
+          // Откатываем статус, чтобы акт снова можно было закрыть.
+          await supabase.from('inventory_audit_acts').update({ status: 'open', closed_at: null, closed_by: null }).eq('id', actId)
+          throw stocktakeError
+        }
       }
 
       await supabase.from('inventory_audit_acts').update({ stocktake_id: (result as any)?.stocktake_id || (result as any)?.id || null }).eq('id', actId)
@@ -479,7 +528,7 @@ export async function POST(request: Request) {
         }
       }
 
-      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: 'close', payload: { counted: countRows.length, debtsCreated } })
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: force ? 'force-close' : 'close', payload: { counted: countRows.length, debtsCreated, force } })
 
       // Сводка: движения во время ревизии (учтены в факте) + необъяснённое расхождение.
       const summary = report.reduce(

@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 
 type Loc = { id: string; name: string; location_type: string; company?: { name?: string | null } | null }
 type ActListRow = { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null; locationName: string; totalItems: number; countedItems: number }
-type FormData = { operators: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
+type FormData = { operators: Array<{ id: string; name: string }>; otherOperators?: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
 type Assignment = { operator_id: string; category_id: string | null }
 type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
 type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number }
@@ -85,7 +85,7 @@ export default function StoreAuditPage() {
     void (async () => {
       const res = await fetch(`/api/admin/store/audit?form=${encodeURIComponent(locationId)}`, { cache: 'no-store' })
       const j = await res.json().catch(() => null)
-      if (res.ok) setFormData({ operators: j?.data?.operators || [], categories: j?.data?.categories || [] })
+      if (res.ok) setFormData({ operators: j?.data?.operators || [], otherOperators: j?.data?.otherOperators || [], categories: j?.data?.categories || [] })
     })()
   }, [view, locationId])
 
@@ -141,13 +141,16 @@ export default function StoreAuditPage() {
     }
   }
 
-  const closeAct = async () => {
+  const closeAct = async (force = false) => {
     if (!detailId) return
-    if (!confirm('Закрыть акт и провести ревизию? Остатки будут обновлены.')) return
+    const ok = force
+      ? confirm('Принудительно закрыть акт?\n\nБлокировки игнорируются: заявки склад ↔ витрина в пути, расхождения двойного счёта, отсутствие подсчёта. Посчитанные позиции проведутся (расхождение двойного счёта берётся по последнему счёту), непосчитанные останутся без изменений.')
+      : confirm('Закрыть акт и провести ревизию? Остатки будут обновлены.')
+    if (!ok) return
     setClosing(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt }) })
+      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'close', act_id: detailId, assignDebt, force }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка закрытия')
       setCloseReport((j?.data?.report || []) as CloseRow[])
@@ -282,13 +285,21 @@ export default function StoreAuditPage() {
                 <Button type="button" variant="outline" size="sm" onClick={() => setAssignments((p) => [...p, { operator_id: '', category_id: null }])} className="h-8 gap-1"><Plus className="h-3.5 w-3.5" /> Добавить</Button>
               </div>
               {formData.operators.length === 0 ? (
-                <div className="text-xs text-muted-foreground">У этой точки нет назначенных операторов.</div>
+                <div className="text-xs text-muted-foreground">У этой точки нет назначенных операторов — можно добавить с других точек ниже.</div>
               ) : null}
               {assignments.map((a, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <Select value={a.operator_id} onValueChange={(v) => setAssignments((p) => p.map((x, i) => (i === idx ? { ...x, operator_id: v } : x)))}>
                     <SelectTrigger className="flex-1"><SelectValue placeholder="Оператор" /></SelectTrigger>
-                    <SelectContent>{formData.operators.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {formData.operators.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                      {formData.otherOperators && formData.otherOperators.length > 0 ? (
+                        <>
+                          <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">С других точек (в помощь)</div>
+                          {formData.otherOperators.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                        </>
+                      ) : null}
+                    </SelectContent>
                   </Select>
                   <Select value={a.category_id || 'all'} onValueChange={(v) => setAssignments((p) => p.map((x, i) => (i === idx ? { ...x, category_id: v === 'all' ? null : v } : x)))}>
                     <SelectTrigger className="flex-1"><SelectValue placeholder="Секция" /></SelectTrigger>
@@ -379,10 +390,19 @@ export default function StoreAuditPage() {
                   Повесить недостачу долгом на ответственных (удержится из зарплаты)
                 </label>
                 {hasConflicts ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">Есть расхождения между счётчиками — решите их (примите значение или на пересчёт), затем закрывайте.</div> : null}
-                <Button onClick={closeAct} disabled={closing || detail.countedItems === 0 || hasConflicts} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
+                <Button onClick={() => void closeAct(false)} disabled={closing || detail.countedItems === 0 || hasConflicts} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
                   {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   Закрыть акт и провести
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => void closeAct(true)}
+                  disabled={closing}
+                  className="w-full rounded-md border border-rose-500/30 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
+                >
+                  Принудительно закрыть (обойти блокировки)
+                </button>
+                <p className="text-[11px] text-muted-foreground">Принудительно — когда акт «завис»: есть заявки в пути, расхождения или операторы не досчитали. Проведёт что посчитано, остальное не тронет. Только для владельца.</p>
               </div>
             ) : null}
             {debtsCreated && debtsCreated > 0 ? (
