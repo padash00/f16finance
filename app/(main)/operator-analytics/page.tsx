@@ -1629,45 +1629,73 @@ function OperatorAnalyticsContent() {
 
   const handleDownloadCSV = useCallback(async () => {
     const period = `${dateFrom} — ${dateTo}`
-    const opRows = analytics.rows.map(op => ({
-      name: op.operatorName,
-      shifts: op.shifts,
-      days: op.days,
-      turnover: Math.round(op.totalTurnover),
-      avgShift: Math.round(op.avgPerShift),
-      share: op.share * 100,
-      cash: Math.round(op.cashAmount),
-      kaspi: Math.round(op.kaspiAmount),
-      online: Math.round(op.onlineAmount),
-      card: Math.round(op.cardAmount),
-      debts: Math.round(op.autoDebts),
-      fines: Math.round(op.manualMinus),
-      bonuses: Math.round(op.manualPlus),
-      advances: Math.round(op.advances),
-      net: Math.round(op.netEffect),
+    const generated = new Date().toLocaleString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Аналитика операторов', period, generated, brandNote: 'дашборд операторов' }
+    const ops = analytics.rows.map(op => ({
+      name: op.operatorName, shifts: op.shifts, days: op.days, turnover: Math.round(op.totalTurnover),
+      avgShift: Math.round(op.avgPerShift), share: Math.round(op.share * 100), cash: Math.round(op.cashAmount),
+      kaspi: Math.round(op.kaspiAmount), online: Math.round(op.onlineAmount), card: Math.round(op.cardAmount),
+      debts: Math.round(op.autoDebts), fines: Math.round(op.manualMinus), bonuses: Math.round(op.manualPlus),
+      advances: Math.round(op.advances), net: Math.round(op.netEffect),
     }))
-    const tot = opRows.reduce((a, r) => ({ turnover: a.turnover + r.turnover, cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, debts: a.debts + r.debts, fines: a.fines + r.fines, bonuses: a.bonuses + r.bonuses, advances: a.advances + r.advances, net: a.net + r.net }), { turnover: 0, cash: 0, kaspi: 0, online: 0, card: 0, debts: 0, fines: 0, bonuses: 0, advances: 0, net: 0 })
-    await downloadReportPdf('table', {
-      meta: { title: 'Аналитика операторов', period, generated: new Date().toLocaleString('ru-RU') },
-      columns: [
-        { key: 'name', label: 'Оператор' },
-        { key: 'shifts', label: 'Смен', align: 'right' },
-        { key: 'days', label: 'Дней', align: 'right' },
-        { key: 'turnover', label: 'Выручка', align: 'right' },
-        { key: 'avgShift', label: 'Ср. смена', align: 'right' },
-        { key: 'share', label: 'Доля %', align: 'right' },
-        { key: 'cash', label: 'Нал', align: 'right' },
-        { key: 'kaspi', label: 'Безнал', align: 'right' },
-        { key: 'online', label: 'Online', align: 'right' },
-        { key: 'card', label: 'Карта', align: 'right' },
-        { key: 'debts', label: 'Долги', align: 'right' },
-        { key: 'fines', label: 'Штрафы', align: 'right' },
-        { key: 'bonuses', label: 'Премии', align: 'right' },
-        { key: 'advances', label: 'Авансы', align: 'right' },
-        { key: 'net', label: 'Чистый эффект', align: 'right' },
+    const cols = [
+      { key: 'name', label: 'Оператор', w: '13%' }, { key: 'shifts', label: 'Смен', align: 'right' as const, w: '5%' },
+      { key: 'turnover', label: 'Выручка', align: 'right' as const, w: '9%' }, { key: 'avgShift', label: 'Ср. смена', align: 'right' as const, w: '8%' },
+      { key: 'share', label: 'Доля %', align: 'right' as const, w: '6%' }, { key: 'cash', label: 'Нал', align: 'right' as const, w: '8%' },
+      { key: 'kaspi', label: 'Безнал', align: 'right' as const, w: '8%' }, { key: 'online', label: 'Online', align: 'right' as const, w: '6%' },
+      { key: 'card', label: 'Карта', align: 'right' as const, w: '6%' }, { key: 'debts', label: 'Долги', align: 'right' as const, w: '6%' },
+      { key: 'fines', label: 'Штрафы', align: 'right' as const, w: '6%' }, { key: 'bonuses', label: 'Премии', align: 'right' as const, w: '6%' },
+      { key: 'net', label: 'Чистый итог', align: 'right' as const, signed: true, w: '7%' },
+    ]
+
+    if (ops.length === 0) {
+      await downloadReportPdf('premium', {
+        meta, kpis: [{ label: 'Выручка', value: '—' }, { label: 'Смен', value: '—' }, { label: 'Ср. смена', value: '—' }, { label: 'Чистый итог', value: '—' }],
+        empty: { columns: cols, message: 'Нет данных за период', hint: 'Выберите период с работой операторов.' },
+      }, `Operatory_analitika_${dateFrom}_${dateTo}`)
+      showToast('PDF отчёт скачан', 'success'); return
+    }
+
+    const turnoverT = ops.reduce((a, r) => a + r.turnover, 0)
+    const shiftsT = ops.reduce((a, r) => a + r.shifts, 0)
+    const cashT = ops.reduce((a, r) => a + r.cash, 0)
+    const cashlessT = ops.reduce((a, r) => a + r.kaspi + r.online + r.card, 0)
+    const netT = ops.reduce((a, r) => a + r.net, 0)
+    const finesT = ops.reduce((a, r) => a + r.fines, 0), debtsT = ops.reduce((a, r) => a + r.debts, 0)
+    const avgShiftAll = shiftsT > 0 ? Math.round(turnoverT / shiftsT) : 0
+    const cashPct = turnoverT > 0 ? Math.round((cashT / turnoverT) * 100) : 0
+    const byTurnover = [...ops].sort((a, b) => b.turnover - a.turnover)
+    const maxTurn = byTurnover[0]?.turnover || 1
+    const leader = byTurnover[0]?.name
+    const negNet = ops.filter((o) => o.net < 0).sort((a, b) => a.net - b.net)
+    const byAvg = [...ops].sort((a, b) => b.avgShift - a.avgShift)
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Общая выручка', value: `${nf(turnoverT)} тг`, sub: `${ops.length} операторов`, badge: 'итог' },
+        { label: 'Количество смен', value: String(shiftsT), sub: `${ops.reduce((a, r) => a + r.days, 0)} дней` },
+        { label: 'Ср. выручка/смена', value: `${nf(avgShiftAll)} тг`, sub: `нал ${cashPct}%` },
+        { label: 'Чистый итог', value: `${nf(netT)} тг`, sub: `штрафы ${nf(finesT)} · долги ${nf(debtsT)}`, tone: netT < 0 ? 'bad' : undefined },
       ],
-      rows: opRows,
-      total: tot,
+      sections: [
+        { type: 'bars', title: 'Топ операторов по выручке', hint: 'топ по сумме', items: byTurnover.slice(0, 6).map((o) => ({ label: o.name, amount: o.turnover, ratio: o.turnover / maxTurn })) },
+        { type: 'split', title: 'Структура оплат', parts: [{ label: 'Нал', pct: cashPct, amount: cashT, color: '#16a34a' }, { label: 'Безнал', pct: 100 - cashPct, amount: cashlessT, color: '#3b82f6' }], accent: { title: 'Лидер периода', text: leader ? `${leader} — ${nf(maxTurn)} тг` : '' } },
+        { type: 'previewTable', title: 'Минусовой чистый итог', hint: 'требуют внимания', columns: [{ key: 'name', label: 'Оператор' }, { key: 'net', label: 'Чистый итог', align: 'right' }], rows: negNet.slice(0, 7).map((o) => ({ name: o.name, net: o.net })), moreNote: negNet.length === 0 ? 'нет операторов в минусе' : (negNet.length > 7 ? `+ ещё ${negNet.length - 7}` : '') },
+        { type: 'previewTable', title: 'Топ по средней смене', hint: 'эффективность', columns: [{ key: 'name', label: 'Оператор' }, { key: 'avgShift', label: 'Ср. смена', align: 'right' }], rows: byAvg.slice(0, 7).map((o) => ({ name: o.name, avgShift: o.avgShift })) },
+      ],
+      detail: {
+        title: 'Аналитика операторов',
+        subtitle: 'эффективность за период',
+        columns: cols,
+        rows: byTurnover.map((o) => ({
+          name: o.name === leader ? { text: `🏆 ${o.name}`, tone: 'good' } : o.name,
+          shifts: o.shifts, turnover: o.turnover, avgShift: o.avgShift, share: o.share, cash: o.cash, kaspi: o.kaspi,
+          online: o.online, card: o.card, debts: o.debts, fines: o.fines, bonuses: o.bonuses, net: o.net,
+        })),
+        total: { name: null, turnover: turnoverT, cash: cashT, net: netT },
+      },
     }, `Operatory_analitika_${dateFrom}_${dateTo}`)
     showToast('PDF отчёт скачан', 'success')
   }, [analytics, dateFrom, dateTo, avgPerShiftOverall, totalPenalties, showToast])

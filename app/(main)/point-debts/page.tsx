@@ -196,38 +196,81 @@ export default function PointDebtsPage() {
 
   const downloadExcel = async () => {
     if (!data) return
-    const rows = items.map((r) => ({
-      debtor: r.debtor_name,
-      company: r.company_name,
-      point: r.point_device_name || '—',
-      item: r.item_name,
-      barcode: r.barcode || '—',
-      qty: r.quantity,
-      unit: Math.round(r.unit_price * 100) / 100,
-      total: Math.round(r.total_amount * 100) / 100,
-      comment: r.comment || '—',
-      cashier: r.created_by_name,
-      created: r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—',
-      source: r.source || '—',
-    }))
-    await downloadReportPdf('table', {
-      meta: { title: 'Долги с точки', period: `Неделя ${data.weekStart} — ${data.weekEnd}`, generated: new Date().toLocaleString('ru-RU') },
-      columns: [
-        { key: 'debtor', label: 'Должник' },
-        { key: 'company', label: 'Компания' },
-        { key: 'point', label: 'Точка' },
-        { key: 'item', label: 'Товар' },
-        { key: 'barcode', label: 'Штрихкод' },
-        { key: 'qty', label: 'Кол-во', align: 'right' },
-        { key: 'unit', label: 'Цена', align: 'right' },
-        { key: 'total', label: 'Сумма', align: 'right' },
-        { key: 'comment', label: 'Комментарий' },
-        { key: 'cashier', label: 'Оформил' },
-        { key: 'created', label: 'Создано' },
-        { key: 'source', label: 'Источник' },
+    const generated = new Date().toLocaleString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Долги с точки', period: `Неделя ${data.weekStart} — ${data.weekEnd}`, generated, brandNote: 'дашборд долгов' }
+    const cols = [
+      { key: 'created', label: 'Создано', w: '13%' }, { key: 'company', label: 'Компания', w: '11%' },
+      { key: 'item', label: 'Товар', w: '17%' }, { key: 'barcode', label: 'Штрихкод', w: '11%' },
+      { key: 'qty', label: 'Кол-во', align: 'right' as const, w: '6%' }, { key: 'unit', label: 'Цена', align: 'right' as const, w: '8%' },
+      { key: 'total', label: 'Сумма', align: 'right' as const, w: '9%' }, { key: 'cashier', label: 'Оформил', w: '11%' },
+      { key: 'comment', label: 'Комментарий', w: '14%' },
+    ]
+
+    if (items.length === 0) {
+      await downloadReportPdf('premium', {
+        meta, kpis: [{ label: 'Сумма долгов', value: '—' }, { label: 'Позиций', value: '—' }, { label: 'Должников', value: '—' }, { label: 'Средний долг', value: '—' }],
+        empty: { columns: [{ label: 'Должник' }, ...cols], message: 'Нет долгов за неделю', hint: 'Долги с точки появятся здесь.' },
+      }, `Dolgi_tochki_${data.weekStart}`)
+      return
+    }
+
+    const grand = items.reduce((s, r) => s + Number(r.total_amount || 0), 0)
+    // по должникам
+    const dMap = new Map<string, { name: string; company: string; total: number; count: number; rows: typeof items }>()
+    for (const r of items) {
+      const key = r.debtor_name || '—'
+      let g = dMap.get(key)
+      if (!g) { g = { name: key, company: r.company_name, total: 0, count: 0, rows: [] }; dMap.set(key, g) }
+      g.total += Number(r.total_amount || 0); g.count += 1; g.rows.push(r)
+    }
+    const debtors = Array.from(dMap.values()).sort((a, b) => b.total - a.total)
+    const maxDebtor = debtors[0]?.total || 1
+    const avgDebt = debtors.length > 0 ? Math.round(grand / debtors.length) : 0
+    // по товарам
+    const itMap = new Map<string, { item: string; qty: number; total: number }>()
+    for (const r of items) { const k = r.item_name || '—'; let g = itMap.get(k); if (!g) { g = { item: k, qty: 0, total: 0 }; itMap.set(k, g) } g.qty += Number(r.quantity || 0); g.total += Number(r.total_amount || 0) }
+    const topItems = Array.from(itMap.values()).sort((a, b) => b.total - a.total)
+    // по компаниям
+    const coMap = new Map<string, number>()
+    for (const r of items) coMap.set(r.company_name, (coMap.get(r.company_name) || 0) + Number(r.total_amount || 0))
+    const byCompany = Array.from(coMap.entries()).map(([company, total]) => ({ company, total })).sort((a, b) => b.total - a.total)
+    // динамика по дням
+    const dayMap = new Map<string, number>()
+    for (const r of items) { const d = r.created_at ? String(r.created_at).slice(0, 10) : '—'; dayMap.set(d, (dayMap.get(d) || 0) + Number(r.total_amount || 0)) }
+    const daysAsc = Array.from(dayMap.entries()).map(([date, total]) => ({ date, total })).sort((a, b) => a.date.localeCompare(b.date))
+    const maxDayT = Math.max(1, ...daysAsc.map((d) => d.total))
+    const peakDay = daysAsc.reduce((m, d) => (d.total > m.total ? d : m), daysAsc[0])
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Общая сумма долгов', value: `${nf(grand)} тг`, sub: `${items.length} позиций`, badge: 'итог', tone: 'bad' },
+        { label: 'Позиций', value: String(items.length), sub: `${debtors.length} должников` },
+        { label: 'Должников', value: String(debtors.length), sub: debtors[0] ? `топ: ${debtors[0].name}` : '' },
+        { label: 'Средний долг', value: `${nf(avgDebt)} тг`, sub: debtors[0] ? `макс ${nf(debtors[0].total)} тг` : '' },
       ],
-      rows,
-      total: { total: data.totals.amount },
+      sections: [
+        { type: 'bars', title: 'Топ должников', hint: 'по сумме', items: debtors.slice(0, 6).map((d) => ({ label: d.name, amount: d.total, ratio: d.total / maxDebtor, color: '#f97316' })) },
+        { type: 'previewTable', title: 'Топ товаров в долг', hint: 'по сумме', columns: [{ key: 'item', label: 'Товар' }, { key: 'qty', label: 'Кол-во', align: 'right' }, { key: 'total', label: 'Сумма', align: 'right' }], rows: topItems.slice(0, 7).map((i) => ({ item: i.item, qty: i.qty, total: i.total })), moreNote: topItems.length > 7 ? `+ ещё ${topItems.length - 7}` : '' },
+        { type: 'previewTable', title: 'Долги по компаниям', hint: 'распределение', columns: [{ key: 'company', label: 'Компания' }, { key: 'total', label: 'Сумма', align: 'right' }], rows: byCompany.slice(0, 7).map((c) => ({ company: c.company, total: c.total })) },
+        { type: 'minichart', title: 'Динамика по дням', hint: 'когда брали в долг', bars: daysAsc.map((d) => ({ ratio: d.total / maxDayT, peak: peakDay && d.date === peakDay.date })), footer: peakDay ? `Пик: ${peakDay.date} — ${nf(peakDay.total)} тг` : '' },
+      ],
+      detail: {
+        title: 'Долги по должникам',
+        subtitle: 'группы по должнику, потом позиции',
+        columns: cols,
+        groups: debtors.map((d) => ({
+          label: d.name,
+          meta: `${d.count} позиций · ${d.company}`,
+          total: d.total,
+          rows: d.rows.map((r) => ({
+            created: r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—',
+            company: r.company_name, item: r.item_name, barcode: r.barcode || '—', qty: r.quantity,
+            unit: Math.round(r.unit_price || 0), total: Math.round(r.total_amount || 0), cashier: r.created_by_name, comment: r.comment || '',
+          })),
+        })),
+      },
     }, `Dolgi_tochki_${data.weekStart}`)
   }
 
