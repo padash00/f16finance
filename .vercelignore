@@ -1,0 +1,5 @@
+# Не загружать на Vercel то, что не нужно для веб-сборки.
+mobile/
+desktop/
+orda_electron/
+_ordaios_scan/
