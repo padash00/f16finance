@@ -27,7 +27,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://ordaops.kz'
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.ordaops.kz'
 
 async function fetchRole(token: string): Promise<SessionRole | null> {
   try {

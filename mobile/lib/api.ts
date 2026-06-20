@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://ordaops.kz'
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.ordaops.kz'
 
 /** Активная организация (для мультиорг-владельцев). Прокидывается как x-organization-id. */
 let activeOrganizationId: string | null = null

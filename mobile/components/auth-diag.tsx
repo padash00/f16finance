@@ -7,7 +7,7 @@ import { supabaseHost } from '@/lib/supabase'
 import { T } from '@/lib/theme'
 
 const configRef = (supabaseHost.split('.')[0] || '').toLowerCase()
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://ordaops.kz'
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.ordaops.kz'
 
 type Claims = { ref: string | null; exp: number | null }
 

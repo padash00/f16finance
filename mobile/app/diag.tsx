@@ -8,7 +8,7 @@ import { supabase, supabaseHost } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
 import { T } from '@/lib/theme'
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://ordaops.kz'
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.ordaops.kz'
 const configRef = (supabaseHost.split('.')[0] || '').toLowerCase()
 
 function decode(token?: string | null): any {
