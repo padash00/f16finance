@@ -787,38 +787,93 @@ export default function IncomePage() {
     setHideExtraRows(false)
   }
 
-  // Экспорт Excel
+  // Экспорт — премиум PDF-дашборд
   const downloadCSV = async () => {
     const period = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : DateUtils.todayISO()
-    const incRows = displayRows.map(r => ({
-      date: r.date,
-      company: companyName(r.company_id),
-      operator: operatorName(r.operator_id),
-      shift: r.shift || '',
-      zone: r.zone || '',
-      cash: r.cash_amount || 0,
-      kaspi: r.kaspi_amount || 0,
-      online: r.online_amount || 0,
-      card: r.card_amount || 0,
-      total: (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0),
-      comment: r.comment || '',
-    }))
-    await downloadReportPdf('table', {
-      meta: { title: 'Доходы', period, generated: new Date().toLocaleString('ru-RU') },
-      columns: [
-        { key: 'date', label: 'Дата' },
-        { key: 'company', label: 'Компания' },
-        { key: 'operator', label: 'Оператор' },
-        { key: 'shift', label: 'Смена' },
-        { key: 'zone', label: 'Зона' },
-        { key: 'cash', label: 'Cash', align: 'right' },
-        { key: 'kaspi', label: cashLabels.pos, align: 'right' },
-        { key: 'online', label: cashLabels.online, align: 'right' },
-        { key: 'card', label: 'Card', align: 'right' },
-        { key: 'total', label: 'Итого', align: 'right' },
-        { key: 'comment', label: 'Комментарий' },
+    const generated = new Date().toLocaleString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Доходы', period, generated, brandNote: 'дашборд доходов' }
+    const rowAll = (r: IncomeRow) => (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0)
+
+    if (displayRows.length === 0) {
+      await downloadReportPdf('premium', {
+        meta,
+        kpis: [{ label: 'Общий доход', value: '—' }, { label: 'Наличные', value: '—' }, { label: 'Безналичный', value: '—' }, { label: 'Средний день', value: '—' }],
+        empty: {
+          columns: [
+            { label: 'Дата' }, { label: 'Компания' }, { label: 'Оператор' }, { label: 'Смена' }, { label: 'Зона' },
+            { label: 'Cash', align: 'right' }, { label: 'Безнал', align: 'right' }, { label: 'Online', align: 'right' },
+            { label: 'Card', align: 'right' }, { label: 'Итого', align: 'right' }, { label: 'Комментарий' },
+          ],
+          message: 'Нет данных за выбранный период',
+          hint: 'Выберите период или добавьте доходы, чтобы сформировать отчёт.',
+        },
+      }, `Dohody_${DateUtils.todayISO()}`)
+      return
+    }
+
+    const total = displayRows.reduce((s, r) => s + rowAll(r), 0)
+    const cashTotal = displayRows.reduce((s, r) => s + (r.cash_amount || 0), 0)
+    const cashless = total - cashTotal
+    const cashPct = total > 0 ? Math.round((cashTotal / total) * 100) : 0
+    const cashlessPct = total > 0 ? 100 - cashPct : 0
+
+    const compMap = new Map<string, number>()
+    for (const r of displayRows) compMap.set(companyName(r.company_id), (compMap.get(companyName(r.company_id)) || 0) + rowAll(r))
+    const comps = Array.from(compMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+    const maxComp = comps[0]?.value || 1
+
+    const dayMap = new Map<string, { date: string; count: number; cash: number; cashless: number; total: number; rows: IncomeRow[] }>()
+    for (const r of displayRows) {
+      const d = String(r.date || '').slice(0, 10)
+      let g = dayMap.get(d)
+      if (!g) { g = { date: d, count: 0, cash: 0, cashless: 0, total: 0, rows: [] }; dayMap.set(d, g) }
+      g.count += 1; g.cash += r.cash_amount || 0; g.cashless += rowAll(r) - (r.cash_amount || 0); g.total += rowAll(r); g.rows.push(r)
+    }
+    const days = Array.from(dayMap.values()).sort((a, b) => b.date.localeCompare(a.date))
+    const activeDays = days.length
+    const avgDay = activeDays > 0 ? Math.round(total / activeDays) : 0
+    const maxDay = days.reduce((m, d) => (d.total > m.total ? d : m), days[0])
+    const top3 = [...days].sort((a, b) => b.total - a.total).slice(0, 3)
+    const daysAsc = [...days].sort((a, b) => a.date.localeCompare(b.date))
+    const maxDT = Math.max(1, ...days.map((d) => d.total))
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Общий доход', value: `${nf(total)} тг`, sub: `${displayRows.length} строк · ${activeDays} дней`, badge: 'итог' },
+        { label: 'Наличные', value: `${nf(cashTotal)} тг`, sub: `${cashPct}% от суммы` },
+        { label: 'Безналичный', value: `${nf(cashless)} тг`, sub: `${cashlessPct}% от суммы` },
+        { label: 'Средний день', value: `${nf(avgDay)} тг`, sub: maxDay ? `Пик: ${maxDay.date}` : '' },
       ],
-      rows: incRows,
+      sections: [
+        { type: 'bars', title: 'Доходы по компаниям', hint: 'топ по сумме', items: comps.slice(0, 6).map((c) => ({ label: c.name, amount: c.value, ratio: c.value / maxComp })) },
+        { type: 'split', title: 'Оплата: cash / безнал', parts: [{ label: 'Cash', pct: cashPct, amount: cashTotal, color: '#16a34a' }, { label: 'Безнал', pct: cashlessPct, amount: cashless, color: '#3b82f6' }], accent: { title: 'Акцент для руководителя', text: maxDay ? `Пиковый день: ${maxDay.date} — ${nf(maxDay.total)} тг` : '' } },
+        { type: 'minichart', title: 'Динамика по дням', hint: 'активные даты периода', bars: daysAsc.map((d) => ({ ratio: d.total / maxDT, peak: maxDay && d.date === maxDay.date })), footer: `Топ-3 дня: ${top3.map((d) => `${d.date}: ${nf(d.total)}`).join('   ')}` },
+        { type: 'previewTable', title: 'Сводка по дням', hint: 'preview · полная ниже', columns: [{ key: 'date', label: 'Дата' }, { key: 'count', label: 'Строк', align: 'right' }, { key: 'cash', label: 'Cash', align: 'right' }, { key: 'cashless', label: 'Безнал', align: 'right' }, { key: 'total', label: 'Итого', align: 'right' }], rows: days.slice(0, 3).map((d) => ({ date: d.date, count: d.count, cash: d.cash, cashless: d.cashless, total: d.total })), moreNote: days.length > 3 ? `+ ещё ${days.length - 3} дней в детализации` : '' },
+      ],
+      detail: {
+        title: 'Детализация по дням',
+        subtitle: 'группы по дате, потом строки доходов',
+        columns: [
+          { key: 'date', label: 'Дата', w: '8%' }, { key: 'company', label: 'Компания', w: '11%' }, { key: 'operator', label: 'Оператор', w: '11%' },
+          { key: 'shift', label: 'Смена', w: '6%' }, { key: 'zone', label: 'Зона', w: '7%' },
+          { key: 'cash', label: 'Cash', align: 'right', w: '8%' }, { key: 'kaspi', label: 'Безнал', align: 'right', w: '8%' },
+          { key: 'online', label: 'Online', align: 'right', w: '7%' }, { key: 'card', label: 'Card', align: 'right', w: '7%' },
+          { key: 'total', label: 'Итого', align: 'right', w: '8%' }, { key: 'comment', label: 'Комментарий', w: '11%' },
+        ],
+        groups: days.map((d) => ({
+          label: d.date,
+          meta: `${d.count} строк · cash ${nf(d.cash)} · безнал ${nf(d.cashless)}`,
+          total: d.total,
+          rows: d.rows.map((r) => ({
+            date: String(r.date || '').slice(0, 10), company: companyName(r.company_id), operator: operatorName(r.operator_id),
+            shift: r.shift === 'night' ? 'Ночь' : r.shift === 'day' ? 'День' : (r.shift || '—'), zone: r.zone || '—',
+            cash: r.cash_amount || 0, kaspi: r.kaspi_amount || 0, online: r.online_amount || 0, card: r.card_amount || 0,
+            total: rowAll(r), comment: r.comment || '',
+          })),
+        })),
+      },
     }, `Dohody_${DateUtils.todayISO()}`)
     logIncomeEvent({
       entityType: 'income-export',

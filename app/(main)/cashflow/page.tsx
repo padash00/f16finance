@@ -151,18 +151,58 @@ export default function CashFlowPage() {
 
   const downloadCSV = async () => {
     const period = `${dateFrom} — ${dateTo}`
-    const cfRows = dailyData.map(r => ({ date: r.date, income: r.income, expenses: r.expenses, profit: r.profit, balance: r.cumBalance }))
-    await downloadReportPdf('table', {
-      meta: { title: 'Движение денег (Cash Flow)', period, generated: new Date().toLocaleString('ru-RU') },
-      columns: [
-        { key: 'date', label: 'Дата' },
-        { key: 'income', label: 'Доходы', align: 'right' },
-        { key: 'expenses', label: 'Расходы', align: 'right' },
-        { key: 'profit', label: 'Прибыль за день', align: 'right' },
-        { key: 'balance', label: 'Баланс накоп.', align: 'right' },
+    const generated = new Date().toLocaleString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Движение денег', period, generated, brandNote: 'дашборд cash flow' }
+    const cols = [
+      { key: 'date', label: 'Дата', w: '18%' },
+      { key: 'income', label: 'Доходы', align: 'right' as const, signed: true, w: '20%' },
+      { key: 'expenses', label: 'Расходы', align: 'right' as const, w: '20%' },
+      { key: 'profit', label: 'Прибыль за день', align: 'right' as const, signed: true, w: '21%' },
+      { key: 'balance', label: 'Баланс накоп.', align: 'right' as const, signed: true, w: '21%' },
+    ]
+
+    if (dailyData.length === 0) {
+      await downloadReportPdf('premium', {
+        meta,
+        kpis: [{ label: 'Доходы', value: '—' }, { label: 'Расходы', value: '—' }, { label: 'Чистый cashflow', value: '—' }, { label: 'Баланс', value: '—' }],
+        empty: { columns: cols, message: 'Нет данных за выбранный период', hint: 'Выберите период с движениями денег.' },
+      }, `Cashflow_${dateFrom}_${dateTo}`)
+      return
+    }
+
+    const daysAsc = [...dailyData]
+    const balances = daysAsc.map((d) => d.cumBalance)
+    const minB = Math.min(...balances), maxB = Math.max(...balances)
+    const spanB = Math.max(1, maxB - minB)
+    const bestDay = daysAsc.reduce((m, d) => (d.profit > m.profit ? d : m), daysAsc[0])
+    const worstDay = daysAsc.reduce((m, d) => (d.profit < m.profit ? d : m), daysAsc[0])
+    const topProfit = [...daysAsc].filter((d) => d.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, 6)
+    const maxProfit = topProfit[0]?.profit || 1
+    const incPct = stats.totalIncome + stats.totalExpenses > 0 ? Math.round((stats.totalIncome / (stats.totalIncome + stats.totalExpenses)) * 100) : 0
+    const daysDesc = [...dailyData].sort((a, b) => b.date.localeCompare(a.date))
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Доходы', value: `${nf(stats.totalIncome)} тг`, sub: `${dailyData.length} дней`, badge: 'итог' },
+        { label: 'Расходы', value: `${nf(stats.totalExpenses)} тг`, sub: `${stats.negativeDays} дней в минусе` },
+        { label: 'Чистый cashflow', value: `${nf(stats.profit)} тг`, sub: `маржа ${Math.round(stats.margin)}%`, tone: stats.profit < 0 ? 'bad' : undefined },
+        { label: 'Баланс накоп.', value: `${nf(stats.finalBalance)} тг`, sub: bestDay ? `Лучший: ${bestDay.date}` : '', tone: stats.finalBalance < 0 ? 'bad' : undefined },
       ],
-      rows: cfRows,
-      total: { date: 'ИТОГО', income: stats.totalIncome, expenses: stats.totalExpenses, profit: stats.profit, balance: stats.finalBalance },
+      sections: [
+        { type: 'split', title: 'Доходы / Расходы', parts: [{ label: 'Доходы', pct: incPct, amount: stats.totalIncome, color: '#16a34a' }, { label: 'Расходы', pct: 100 - incPct, amount: stats.totalExpenses, color: '#f97316' }], accent: { title: 'Лучший / худший день', text: `${bestDay?.date}: +${nf(bestDay?.profit || 0)} · ${worstDay?.date}: ${nf(worstDay?.profit || 0)}` } },
+        { type: 'minichart', title: 'Накопительный баланс по дням', hint: 'динамика баланса', bars: daysAsc.map((d) => ({ ratio: (d.cumBalance - minB) / spanB, peak: d.date === bestDay?.date })), footer: `Баланс на конец: ${nf(stats.finalBalance)} тг` },
+        { type: 'bars', title: 'Топ дней по прибыли', hint: 'прибыльные дни', items: topProfit.map((d) => ({ label: d.label || d.date, amount: d.profit, ratio: d.profit / maxProfit, color: '#16a34a' })) },
+        { type: 'previewTable', title: 'Сводка по дням', hint: 'preview · полная ниже', columns: [{ key: 'date', label: 'Дата' }, { key: 'income', label: 'Доходы', align: 'right' }, { key: 'expenses', label: 'Расходы', align: 'right' }, { key: 'profit', label: 'Прибыль', align: 'right' }, { key: 'balance', label: 'Баланс', align: 'right' }], rows: daysDesc.slice(0, 3).map((d) => ({ date: d.date, income: d.income, expenses: d.expenses, profit: d.profit, balance: d.cumBalance })), moreNote: dailyData.length > 3 ? `+ ещё ${dailyData.length - 3} дней в детализации` : '' },
+      ],
+      detail: {
+        title: 'Детализация по дням',
+        subtitle: 'доходы, расходы, прибыль и накопительный баланс',
+        columns: cols,
+        rows: daysAsc.map((d) => ({ date: d.date, income: d.income, expenses: d.expenses, profit: d.profit, balance: d.cumBalance })),
+        total: { date: null, income: stats.totalIncome, expenses: stats.totalExpenses, profit: stats.profit, balance: stats.finalBalance },
+      },
     }, `Cashflow_${dateFrom}_${dateTo}`)
   }
 
