@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ClipboardList, Loader2, Save } from 'lucide-react'
 
 import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
@@ -23,8 +23,17 @@ export default function OperatorAuditPage() {
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  // Автосохранение: каждое введённое число само улетает на сервер (дебаунс), чтобы
+  // ничего не терялось при перезагрузке и другие кассиры видели его сразу.
+  const [autoStatus, setAutoStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const editsRef = useRef<Record<string, string>>({})
+  const dirtyRef = useRef<Set<string>>(new Set())
+  const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  useEffect(() => { editsRef.current = edits }, [edits])
+  useEffect(() => () => { if (autoTimer.current) clearTimeout(autoTimer.current) }, [])
 
   const itemByBarcode = useMemo(() => {
     const m = new Map<string, ItemRow>()
@@ -106,6 +115,9 @@ export default function OperatorAuditPage() {
     setItemsLoading(true)
     setEdits({})
     setSaved(false)
+    setAutoStatus('idle')
+    dirtyRef.current = new Set()
+    if (autoTimer.current) { clearTimeout(autoTimer.current); autoTimer.current = null }
     try {
       const res = await fetch(`/api/operator/audit?act=${encodeURIComponent(id)}`, { cache: 'no-store' })
       const j = await res.json().catch(() => null)
@@ -122,9 +134,46 @@ export default function OperatorAuditPage() {
     }
   }, [])
 
+  // Автосохранение «грязных» позиций (изменённых с последнего сохранения).
+  const flushAutosave = useCallback(async () => {
+    if (!activeAct) return
+    const ids = Array.from(dirtyRef.current)
+    dirtyRef.current = new Set()
+    const counts = ids
+      .map((item_id) => ({ item_id, v: editsRef.current[item_id] }))
+      .filter((x) => x.v != null && String(x.v).trim() !== '')
+      .map((x) => ({ item_id: x.item_id, counted_qty: Number(String(x.v).replace(',', '.')) || 0 }))
+    if (counts.length === 0) { setAutoStatus('idle'); return }
+    setAutoStatus('saving')
+    try {
+      const res = await fetch('/api/operator/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ act_id: activeAct, counts }) })
+      if (!res.ok) throw new Error()
+      setItems((prev) => prev.map((it) => {
+        const c = counts.find((x) => x.item_id === it.item_id)
+        return c ? { ...it, counted: c.counted_qty } : it
+      }))
+      setAutoStatus('saved')
+    } catch {
+      // не удалось — вернём в очередь и попробуем при следующем вводе/сохранении
+      for (const c of counts) dirtyRef.current.add(c.item_id)
+      setAutoStatus('error')
+    }
+  }, [activeAct])
+
+  // Ввод количества: обновляем поле, помечаем «грязным» и планируем автосейв через 700мс.
+  const onCount = useCallback((id: string, val: string) => {
+    setEdits((p) => ({ ...p, [id]: val }))
+    dirtyRef.current.add(id)
+    setAutoStatus('saving')
+    if (autoTimer.current) clearTimeout(autoTimer.current)
+    autoTimer.current = setTimeout(() => void flushAutosave(), 700)
+  }, [flushAutosave])
+
+  // Ручное «Сохранить всё» — резерв (например, если автосейв упал): шлёт все непустые.
   const save = async () => {
     if (!activeAct) return
-    const counts = Object.entries(edits)
+    if (autoTimer.current) { clearTimeout(autoTimer.current); autoTimer.current = null }
+    const counts = Object.entries(editsRef.current)
       .filter(([, v]) => String(v).trim() !== '')
       .map(([item_id, v]) => ({ item_id, counted_qty: Number(String(v).replace(',', '.')) || 0 }))
     if (counts.length === 0) {
@@ -137,9 +186,11 @@ export default function OperatorAuditPage() {
       const res = await fetch('/api/operator/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ act_id: activeAct, counts }) })
       const j = await res.json().catch(() => null)
       if (!res.ok) throw new Error(j?.error || 'Ошибка сохранения')
+      dirtyRef.current = new Set()
       setSaved(true)
+      setAutoStatus('saved')
       // обновим counted в списке
-      setItems((prev) => prev.map((it) => (edits[it.item_id] != null && String(edits[it.item_id]).trim() !== '' ? { ...it, counted: Number(String(edits[it.item_id]).replace(',', '.')) || 0 } : it)))
+      setItems((prev) => prev.map((it) => (editsRef.current[it.item_id] != null && String(editsRef.current[it.item_id]).trim() !== '' ? { ...it, counted: Number(String(editsRef.current[it.item_id]).replace(',', '.')) || 0 } : it)))
       setTimeout(() => setSaved(false), 1800)
     } catch (e: any) {
       setError(e?.message || 'Не удалось сохранить')
@@ -189,9 +240,20 @@ export default function OperatorAuditPage() {
     <div className="space-y-3 pb-24">
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => { setActiveAct(null); void loadActs() }} className="border border-[#23262b] p-2 text-zinc-400 hover:text-zinc-100"><ArrowLeft className="h-4 w-4" /></button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="font-mono text-[14px] font-semibold uppercase tracking-tight text-zinc-100">Подсчёт</div>
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-500 tabular-nums">введено {countedNum} из {items.length}</div>
+        </div>
+        <div className="shrink-0 font-mono text-[10px] uppercase tracking-wide">
+          {autoStatus === 'saving' ? (
+            <span className="flex items-center gap-1 text-amber-300/90"><Loader2 className="h-3 w-3 animate-spin" /> сохраняю…</span>
+          ) : autoStatus === 'saved' ? (
+            <span className="text-emerald-400/90">сохранено ✓</span>
+          ) : autoStatus === 'error' ? (
+            <span className="text-rose-300">не сохранилось</span>
+          ) : (
+            <span className="text-zinc-600">автосохранение</span>
+          )}
         </div>
       </div>
 
@@ -229,7 +291,8 @@ export default function OperatorAuditPage() {
               <input
                 id={`audit-input-${it.item_id}`}
                 value={edits[it.item_id] ?? ''}
-                onChange={(e) => setEdits((p) => ({ ...p, [it.item_id]: e.target.value }))}
+                onChange={(e) => onCount(it.item_id, e.target.value)}
+                onBlur={() => { if (autoTimer.current) { clearTimeout(autoTimer.current); autoTimer.current = null } void flushAutosave() }}
                 onFocus={() => setHighlightId(it.item_id)}
                 inputMode="decimal"
                 placeholder="0"
@@ -244,7 +307,7 @@ export default function OperatorAuditPage() {
         <div className="fixed inset-x-0 bottom-0 border-t border-[#23262b] bg-[#0a0b0c]/95 p-3 backdrop-blur lg:hidden" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom,0px))' }}>
           <button type="button" onClick={save} disabled={saving} className="flex w-full items-center justify-center gap-2 border border-amber-400/60 bg-amber-400/15 py-3 font-mono text-[14px] font-semibold uppercase tracking-wide text-amber-300 disabled:opacity-50">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saved ? 'Сохранено ✓' : 'Сохранить подсчёт'}
+            {saved ? 'Сохранено ✓' : 'Сохранить всё'}
           </button>
         </div>
       ) : null}
