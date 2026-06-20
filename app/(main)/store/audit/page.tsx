@@ -49,6 +49,7 @@ export default function StoreAuditPage() {
   const [detailId, setDetailId] = useState('')
   const [closing, setClosing] = useState(false)
   const [reverting, setReverting] = useState(false)
+  const [canceling, setCanceling] = useState(false)
   const [assignDebt, setAssignDebt] = useState(false)
   const [debtsCreated, setDebtsCreated] = useState<number | null>(null)
   const [closeReport, setCloseReport] = useState<CloseRow[] | null>(null)
@@ -163,6 +164,24 @@ export default function StoreAuditPage() {
       setError(e?.message || 'Не удалось закрыть акт')
     } finally {
       setClosing(false)
+    }
+  }
+
+  const cancelAct = async () => {
+    if (!detailId) return
+    if (!confirm('Отменить акт? Снимок и введённые подсчёты будут отброшены. Остатки НЕ изменятся (акт ещё не проведён). Акт станет «Отменён».')) return
+    setCanceling(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel', act_id: detailId }) })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка отмены')
+      await loadActs()
+      setView('list')
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось отменить акт')
+    } finally {
+      setCanceling(false)
     }
   }
 
@@ -425,6 +444,16 @@ export default function StoreAuditPage() {
                   Принудительно закрыть (обойти блокировки)
                 </button>
                 <p className="text-[11px] text-muted-foreground">Принудительно — когда акт «завис»: есть заявки в пути, расхождения или операторы не досчитали. Проведёт что посчитано, остальное не тронет. Только для владельца.</p>
+                <button
+                  type="button"
+                  onClick={() => void cancelAct()}
+                  disabled={canceling}
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
+                >
+                  {canceling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                  Отменить акт (вернуть как было)
+                </button>
+                <p className="text-[11px] text-muted-foreground">Отмена — акт ещё не проведён: снимок и подсчёты отбрасываются, остатки не меняются. Используйте, если ревизию открыли по ошибке.</p>
               </div>
             ) : null}
             {debtsCreated && debtsCreated > 0 ? (
