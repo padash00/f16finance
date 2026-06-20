@@ -1,0 +1,37 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://www.ordaops.kz",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://tmudsqgagblmdctaosgw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtdWRzcWdhZ2JsbWRjdGFvc2d3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTM4MjcsImV4cCI6MjA3ODk4OTgyN30.XcIy_NBVFoIjvQ0TynpwV-Ehe12Zq17jaO3bdCgVsgU"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://www.ordaops.kz",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://tmudsqgagblmdctaosgw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtdWRzcWdhZ2JsbWRjdGFvc2d3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTM4MjcsImV4cCI6MjA3ODk4OTgyN30.XcIy_NBVFoIjvQ0TynpwV-Ehe12Zq17jaO3bdCgVsgU"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://www.ordaops.kz",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://tmudsqgagblmdctaosgw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtdWRzcWdhZ2JsbWRjdGFvc2d3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTM4MjcsImV4cCI6MjA3ODk4OTgyN30.XcIy_NBVFoIjvQ0TynpwV-Ehe12Zq17jaO3bdCgVsgU"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

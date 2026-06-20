@@ -16,14 +16,12 @@ type Sub = { data?: { organization?: { name?: string }; subscription?: { status?
 const SECTIONS: { icon: any; label: string; route?: string; path: string; page?: string }[] = [
   { icon: 'cash', label: 'Доходы', route: '/income', path: '/income', page: 'income' },
   { icon: 'card', label: 'Расходы', route: '/expenses', path: '/expenses', page: 'expenses' },
-  { icon: 'swap-horizontal', label: 'Движение денег', path: '/cashflow', page: 'cashflow' },
   { icon: 'alert-circle', label: 'Долги с точки', route: '/debts', path: '/point-debts', page: 'point-debts' },
-  { icon: 'calendar', label: 'Смены', path: '/shifts', page: 'shifts' },
+  { icon: 'calendar', label: 'Смены', route: '/shifts', path: '/shifts', page: 'shifts' },
   { icon: 'wallet', label: 'Зарплата', path: '/salary', page: 'salary' },
   { icon: 'checkmark-done', label: 'Согласования', route: '/approvals', path: '/expenses', page: 'expenses-pending' },
   { icon: 'cube', label: 'Склад', route: '/warehouse', path: '/store', page: 'store' },
-  { icon: 'game-controller', label: 'Арена', path: '/arena' },
-  { icon: 'document-text', label: 'Отчёты', path: '/reports', page: 'reports' },
+  { icon: 'game-controller', label: 'Арена', route: '/arena', path: '/arena' },
 ]
 
 export default function MoreScreen() {
