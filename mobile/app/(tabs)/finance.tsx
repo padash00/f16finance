@@ -40,7 +40,8 @@ export default function FinanceScreen() {
       const agg = res.data?.aggregate
       setB(agg?.totalsCur || null)
       setCats(Object.entries(agg?.expenseByCategory || {}).map(([name, value]) => ({ name, value: Number(value) })).sort((a, b) => b.value - a.value).slice(0, 6))
-      setComps(Object.entries(agg?.incomeByCompany || {}).map(([name, v]) => ({ name, value: Number(typeof v === 'object' && v ? (v.revenue ?? v.total ?? v.income ?? 0) : v) })).sort((a, b) => b.value - a.value).slice(0, 6))
+      // incomeByCompany: ключ = company_id, значение = { name, value, cash, kaspi, ... }
+      setComps(Object.values(agg?.incomeByCompany || {}).map((v: any) => ({ name: (v && v.name) || 'Компания', value: Number(v?.value ?? v?.revenue ?? 0) })).filter((c) => c.value > 0).sort((a, b) => b.value - a.value).slice(0, 6))
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {

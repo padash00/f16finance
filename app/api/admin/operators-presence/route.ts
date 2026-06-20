@@ -34,25 +34,26 @@ export async function GET(request: Request) {
     isSuperAdmin: access.isSuperAdmin,
   })
 
-  let query = supabase
+  const query = supabase
     .from('point_projects')
     .select(
-      'id, name, project_token, last_seen_at, last_app_version, is_active, last_operator_id, company_ids, last_operator:last_operator_id(id, name, short_name)',
+      'id, name, project_token, last_seen_at, last_app_version, is_active, last_operator_id, point_project_companies(company_id), last_operator:last_operator_id(id, name, short_name)',
     )
     .eq('is_active', true)
     .order('last_seen_at', { ascending: false })
 
-  // Фильтрация по компаниям (если не суперадмин)
-  if (scope.allowedCompanyIds) {
-    // company_ids — массив, проверяем пересечение
-    query = query.overlaps('company_ids', scope.allowedCompanyIds)
-  }
-
   const { data, error } = await query
   if (error) return json({ error: error.message }, 500)
 
+  // Фильтрация по компаниям (если не суперадмин) — связь через point_project_companies.
+  let rows = (data as any[]) || []
+  if (scope.allowedCompanyIds) {
+    const allowed = new Set(scope.allowedCompanyIds)
+    rows = rows.filter((d) => ((d.point_project_companies as any[]) || []).some((c) => allowed.has(String(c.company_id))))
+  }
+
   const now = Date.now()
-  const devices = ((data as any[]) || []).map((d) => {
+  const devices = rows.map((d) => {
     const lastSeen = d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0
     const ageMs = now - lastSeen
     const isOnline = ageMs < ONLINE_THRESHOLD_MS && lastSeen > 0
@@ -108,10 +109,14 @@ export async function POST(request: Request) {
   if (scope.allowedCompanyIds) {
     const { data: validProjects } = await supabase
       .from('point_projects')
-      .select('id')
+      .select('id, point_project_companies(company_id)')
       .in('id', targets)
-      .overlaps('company_ids', scope.allowedCompanyIds)
-    const validIds = new Set(((validProjects as any[]) || []).map((p) => String(p.id)))
+    const allowed = new Set(scope.allowedCompanyIds)
+    const validIds = new Set(
+      ((validProjects as any[]) || [])
+        .filter((p) => ((p.point_project_companies as any[]) || []).some((c) => allowed.has(String(c.company_id))))
+        .map((p) => String(p.id)),
+    )
     if (targets.some((t) => !validIds.has(String(t)))) {
       return json({ error: 'forbidden', code: 'device-not-in-organization' }, 403)
     }
