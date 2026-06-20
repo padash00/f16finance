@@ -585,6 +585,106 @@ export async function POST(request: Request) {
       return json({ ok: true })
     }
 
+    // ── Откатить проведённый акт: вернуть остатки и убрать созданные долги ──────
+    if (action === 'revert') {
+      const actId = String(body?.act_id || '').trim()
+      if (!UUID_RE.test(actId)) return json({ error: 'act-required' }, 400)
+      // Откат меняет остатки и удаляет долги — только владелец/суперадмин.
+      const role = String(access.staffMember?.role || access.staffRole || '').toLowerCase()
+      if (!access.isSuperAdmin && role !== 'owner') return json({ error: 'forbidden', message: 'Откатить ревизию может только владелец.' }, 403)
+
+      const guarded = await loadActWithGuard(supabase, actId, inventoryScope)
+      if ('response' in guarded) return guarded.response
+      const act = guarded.act
+      if ((act as any).status !== 'closed') return json({ error: 'act-not-closed', message: 'Откатить можно только проведённый (закрытый) акт.' }, 409)
+      const locationId = String((act as any).location_id)
+      const stocktakeId = (act as any).stocktake_id ? String((act as any).stocktake_id) : null
+
+      // Атомарно «забираем» акт closed → cancelled, чтобы исключить двойной откат.
+      const { data: claimed, error: claimErr } = await supabase
+        .from('inventory_audit_acts')
+        .update({ status: 'cancelled' })
+        .eq('id', actId)
+        .eq('status', 'closed')
+        .select('id')
+      if (claimErr) throw claimErr
+      if (!claimed || (claimed as any[]).length === 0) return json({ error: 'act-not-closed' }, 409)
+
+      let reversedItems = 0
+      try {
+        if (stocktakeId) {
+          const { data: stItems } = await supabase
+            .from('inventory_stocktake_items')
+            .select('item_id, delta_qty')
+            .eq('stocktake_id', stocktakeId)
+          const changed = ((stItems as any[]) || []).filter((r) => num(r.delta_qty) !== 0)
+          if (changed.length) {
+            // Текущие остатки локации — для клампа ≥ 0 (нельзя уйти в минус).
+            const itemIds = changed.map((r) => String(r.item_id))
+            const balById = new Map<string, number>()
+            for (let i = 0; i < itemIds.length; i += 200) {
+              const { data: bals } = await supabase
+                .from('inventory_balances')
+                .select('item_id, quantity')
+                .eq('location_id', locationId)
+                .in('item_id', itemIds.slice(i, i + 200))
+              for (const b of ((bals as any[]) || [])) balById.set(String(b.item_id), num(b.quantity))
+            }
+            const moves: any[] = []
+            for (const r of changed) {
+              const itemId = String(r.item_id)
+              const current = balById.get(itemId) ?? 0
+              // Разворачиваем дельту, которую наложила ревизия; не уходим ниже 0.
+              let eff = -num(r.delta_qty)
+              if (current + eff < 0) eff = -current
+              if (eff === 0) continue
+              const { error: rpcErr } = await supabase.rpc('inventory_apply_balance_delta', { p_location_id: locationId, p_item_id: itemId, p_delta: eff })
+              if (rpcErr) throw rpcErr
+              reversedItems += 1
+              moves.push({
+                item_id: itemId,
+                movement_type: 'inventory_adjustment',
+                from_location_id: eff < 0 ? locationId : null,
+                to_location_id: eff > 0 ? locationId : null,
+                quantity: Math.abs(eff),
+                reference_type: 'inventory_stocktake_reversal',
+                reference_id: stocktakeId,
+                comment: `Откат аудит-акта ${actId.slice(0, 8)}`,
+                actor_user_id: actorUserId,
+              })
+            }
+            for (let i = 0; i < moves.length; i += 500) {
+              const { error: mErr } = await supabase.from('inventory_movements').insert(moves.slice(i, i + 500))
+              if (mErr) throw mErr
+            }
+          }
+        }
+      } catch (revertError) {
+        // Не удалось вернуть остатки — возвращаем акт в closed, чтобы повторить позже.
+        await supabase.from('inventory_audit_acts').update({ status: 'closed' }).eq('id', actId)
+        throw revertError
+      }
+
+      // Удаляем созданные ревизией АКТИВНЫЕ долги (по маркеру client_name + № акта).
+      // Уже учтённые/погашенные (не active) не трогаем. Скоуп — свои компании.
+      let debtsRemoved = 0
+      {
+        let delQ = supabase
+          .from('debts')
+          .delete()
+          .eq('client_name', 'Недостача (ревизия)')
+          .eq('status', 'active')
+          .ilike('comment', `%${actId.slice(0, 8)}%`)
+        if (companyScope.allowedCompanyIds) delQ = delQ.in('company_id', companyScope.allowedCompanyIds)
+        const { data: delRows, error: delErr } = await delQ.select('id')
+        if (!delErr) debtsRemoved = ((delRows as any[]) || []).length
+        else await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/audit.revert:debts', message: delErr.message })
+      }
+
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-audit-act', entityId: actId, action: 'revert', payload: { reversedItems, debtsRemoved, stocktake_id: stocktakeId } })
+      return json({ ok: true, data: { reversedItems, debtsRemoved } })
+    }
+
     return json({ error: 'invalid-action' }, 400)
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/audit.POST', message: error?.message || 'audit POST error' })

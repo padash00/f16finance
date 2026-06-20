@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2, Users } from 'lucide-react'
+import { ArrowLeft, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2, Undo2, Users } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -48,6 +48,7 @@ export default function StoreAuditPage() {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [detailId, setDetailId] = useState('')
   const [closing, setClosing] = useState(false)
+  const [reverting, setReverting] = useState(false)
   const [assignDebt, setAssignDebt] = useState(false)
   const [debtsCreated, setDebtsCreated] = useState<number | null>(null)
   const [closeReport, setCloseReport] = useState<CloseRow[] | null>(null)
@@ -162,6 +163,27 @@ export default function StoreAuditPage() {
       setError(e?.message || 'Не удалось закрыть акт')
     } finally {
       setClosing(false)
+    }
+  }
+
+  const revertAct = async () => {
+    if (!detailId) return
+    if (!confirm('Откатить ревизию?\n\nОстатки вернутся к состоянию до проведения акта (изменения ревизии развернутся; продажи/движения после ревизии сохранятся). Созданные этим актом активные долги будут удалены. Акт станет «Отменён». Действие необратимо.')) return
+    setReverting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/store/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revert', act_id: detailId }) })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.message || j?.error || 'Ошибка отката')
+      alert(`Откат выполнен. Возвращено позиций: ${j?.data?.reversedItems ?? 0}. Удалено долгов: ${j?.data?.debtsRemoved ?? 0}.`)
+      setCloseReport(null)
+      setCloseSummary(null)
+      await loadActs()
+      await openDetail(detailId)
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось откатить акт')
+    } finally {
+      setReverting(false)
     }
   }
 
@@ -407,6 +429,20 @@ export default function StoreAuditPage() {
             ) : null}
             {debtsCreated && debtsCreated > 0 ? (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Создано долгов: {debtsCreated} — удержатся из зарплаты ответственных.</div>
+            ) : null}
+            {detail.act.status === 'closed' ? (
+              <div className="space-y-2 border-t border-white/5 pt-3">
+                <button
+                  type="button"
+                  onClick={() => void revertAct()}
+                  disabled={reverting}
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-rose-500/40 px-3 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
+                >
+                  {reverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                  Откатить ревизию
+                </button>
+                <p className="text-[11px] text-muted-foreground">Вернёт остатки к состоянию до проведения (изменения ревизии развернутся, продажи после — сохранятся) и удалит созданные акты долги. Акт станет «Отменён». Только для владельца.</p>
+              </div>
             ) : null}
           </Card>
 
