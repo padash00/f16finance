@@ -422,37 +422,60 @@ export default function AIAnalysisPage() {
   const handleExport = async () => {
     if (!analysis) return
     const period = `${analysis.dataRangeStart} — ${analysis.dataRangeEnd}`
-    const dataRows = analysis.chartData.map((d) => ({
-      date: d.date,
-      type: d.type ?? "fact",
-      income: Math.round(d.income),
-      expense: Math.round(d.expense),
-      profit: Math.round(d.profit ?? d.income - d.expense),
-      income_cash: Math.round(d.incomeCash),
-      income_kaspi: Math.round(d.incomeKaspi),
-      income_card: Math.round(d.incomeCard),
-      income_online: Math.round(d.incomeOnline),
-      planned_income: Math.round(d.planned_income || 0),
-      planned_expense: Math.round(d.planned_expense || 0),
-      margin_pct: Number((d.margin ?? safeMargin(d.profit ?? d.income - d.expense, d.income)).toFixed(2)),
-    }))
-    await downloadReportPdf("table", {
-      meta: { title: "AI-разбор", period, generated: new Date().toLocaleString("ru-RU") },
-      columns: [
-        { key: "date", label: "Дата" },
-        { key: "type", label: "Тип" },
-        { key: "income", label: "Доход", align: "right" },
-        { key: "expense", label: "Расход", align: "right" },
-        { key: "profit", label: "Прибыль", align: "right" },
-        { key: "income_cash", label: "Нал", align: "right" },
-        { key: "income_kaspi", label: "Безнал", align: "right" },
-        { key: "income_card", label: "Card", align: "right" },
-        { key: "income_online", label: "Online", align: "right" },
-        { key: "planned_income", label: "План доход", align: "right" },
-        { key: "planned_expense", label: "План расход", align: "right" },
-        { key: "margin_pct", label: "Маржа %", align: "right" },
+    const generated = new Date().toLocaleString("ru-RU")
+    const nf = (v: number) => Math.round(v || 0).toLocaleString("ru-RU")
+    const meta = { title: "AI-разбор", period, generated, brandNote: "управленческий AI-отчёт" }
+    const income = Math.round(analysis.totalIncome || 0)
+    const expense = Math.round(analysis.totalExpense || 0)
+    const profit = income - expense
+    const margin = Number((analysis.avgMargin ?? safeMargin(profit, income)).toFixed(1))
+    const growth = Number((analysis.growthRate || 0).toFixed(1))
+    const anomalies: string[] = (analysis.anomalies || []).map((a: any) => `${a.date}: ${a.type}`)
+    const actions: string[] = (analysis.recommendedActions || []).map((a: any) => (typeof a === "object" ? (a.text || a.title || JSON.stringify(a)) : String(a)))
+    const fact = analysis.chartData.filter((d: any) => (d.type ?? "fact") === "fact")
+    const maxInc = Math.max(1, ...fact.map((d: any) => Math.round(d.income)))
+    const cols = [
+      { key: "date", label: "Дата", w: "9%" }, { key: "type", label: "Тип", w: "7%" },
+      { key: "income", label: "Доход", align: "right" as const, w: "9%" }, { key: "expense", label: "Расход", align: "right" as const, w: "9%" },
+      { key: "profit", label: "Прибыль", align: "right" as const, signed: true, w: "9%" }, { key: "income_cash", label: "Нал", align: "right" as const, w: "8%" },
+      { key: "income_kaspi", label: "Безнал", align: "right" as const, w: "8%" }, { key: "income_card", label: "Card", align: "right" as const, w: "7%" },
+      { key: "income_online", label: "Online", align: "right" as const, w: "7%" }, { key: "planned_income", label: "План дох.", align: "right" as const, w: "8%" },
+      { key: "planned_expense", label: "План расх.", align: "right" as const, w: "8%" }, { key: "margin_pct", label: "Маржа %", align: "right" as const, w: "7%" },
+    ]
+
+    await downloadReportPdf("premium", {
+      meta,
+      kpis: [
+        { label: "Доход", value: `${nf(income)} тг`, sub: `${fact.length} дней факта`, badge: "итог" },
+        { label: "Расход", value: `${nf(expense)} тг`, sub: `безнал ${Math.round((analysis.cashlessShare || 0) * 100)}%` },
+        { label: "Прибыль", value: `${nf(profit)} тг`, sub: growth ? `тренд ${growth > 0 ? "+" : ""}${growth}%` : "", tone: profit < 0 ? "bad" : undefined },
+        { label: "Маржа", value: `${margin}%`, sub: analysis.riskLevel ? `риск: ${analysis.riskLevel}` : "" },
       ],
-      rows: dataRows,
+      sections: [
+        { type: "notes", title: "Главный вывод", hint: "по цифрам", lead: profit >= 0
+            ? `За период доход ${nf(income)} тг, расход ${nf(expense)} тг — прибыль ${nf(profit)} тг при марже ${margin}%.`
+            : `За период доход ${nf(income)} тг не покрыл расход ${nf(expense)} тг — убыток ${nf(Math.abs(profit))} тг (маржа ${margin}%).`,
+          items: [
+            `Тренд дохода: ${growth > 0 ? "рост" : growth < 0 ? "спад" : "стабильно"} ${growth ? `${growth > 0 ? "+" : ""}${growth}%` : ""}`.trim(),
+            `Безналичная доля: ${Math.round((analysis.cashlessShare || 0) * 100)}% · online ${Math.round((analysis.onlineShare || 0) * 100)}%`,
+            analysis.planIncomeAchievementPct != null ? `Выполнение плана дохода: ${Math.round(analysis.planIncomeAchievementPct)}%` : "",
+          ].filter(Boolean) },
+        { type: "notes", title: "Риски и аномалии", hint: "дни с отклонениями", tone: "bad", items: anomalies, empty: "Аномалий не выявлено" },
+        { type: "notes", title: "Рекомендации", hint: "что сделать", tone: "good", items: actions, empty: "Недостаточно данных для рекомендаций" },
+        { type: "minichart", title: "Динамика дохода", hint: "факт по дням", bars: fact.map((d: any) => ({ ratio: Math.round(d.income) / maxInc, peak: Math.round(d.income) === maxInc })), footer: `Средний день: ${nf(analysis.avgIncome || 0)} тг` },
+      ],
+      detail: {
+        title: "Детализация (факт / план / прогноз)",
+        subtitle: "по дням периода",
+        columns: cols,
+        rows: analysis.chartData.map((d: any) => ({
+          date: d.date, type: d.type === "forecast" ? "прогноз" : d.type === "plan" ? "план" : "факт",
+          income: Math.round(d.income), expense: Math.round(d.expense), profit: Math.round(d.profit ?? d.income - d.expense),
+          income_cash: Math.round(d.incomeCash), income_kaspi: Math.round(d.incomeKaspi), income_card: Math.round(d.incomeCard),
+          income_online: Math.round(d.incomeOnline), planned_income: Math.round(d.planned_income || 0), planned_expense: Math.round(d.planned_expense || 0),
+          margin_pct: Number((d.margin ?? safeMargin(d.profit ?? d.income - d.expense, d.income)).toFixed(1)),
+        })),
+      },
     }, `AI_analiz_${analysis.dataRangeStart}_to_${analysis.dataRangeEnd}`)
   }
 

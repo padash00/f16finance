@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/ui/app-modal'
@@ -430,6 +431,76 @@ export default function OperatorsPage() {
     return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(amount) + ' ₸'
   }, [])
 
+  // Экспорт — премиум PDF (доступы операторов). Пароли НЕ выводим (только ••• / Не задан).
+  const handleExportPdf = async () => {
+    const generated = new Date().toLocaleString('ru-RU')
+    const meta = { title: 'Операторы — доступы', generated, brandNote: 'дашборд доступов' }
+    const list = (showInactive ? operators : operators.filter((o) => o.is_active)).map((op) => {
+      const p = profiles.get(op.id)
+      const hasLogin = !!op.role
+      const phone = p?.phone || null, email = p?.email || null, tg = op.telegram_chat_id || null
+      const complete = hasLogin && !!phone && !!email && !!tg
+      return { name: p?.full_name || op.name, hasLogin, phone, email, tg, complete, active: op.is_active }
+    })
+    const cols = [
+      { key: 'name', label: 'Имя', w: '18%' }, { key: 'login', label: 'Логин', w: '9%' }, { key: 'password', label: 'Пароль', w: '10%' },
+      { key: 'phone', label: 'Телефон', w: '13%' }, { key: 'email', label: 'Email', w: '17%' }, { key: 'tg', label: 'Telegram ID', w: '12%' },
+      { key: 'link', label: 'Ссылка', w: '11%' }, { key: 'status', label: 'Статус данных', w: '10%' },
+    ]
+
+    if (list.length === 0) {
+      await downloadReportPdf('premium', {
+        meta, kpis: [{ label: 'Всего', value: '—' }, { label: 'Активные', value: '—' }, { label: 'С Telegram', value: '—' }, { label: 'Неполные', value: '—' }],
+        empty: { columns: cols, message: 'Нет операторов', hint: 'Добавьте операторов, чтобы сформировать отчёт.' },
+      }, `Operatory_dostupy`)
+      return
+    }
+
+    const total = list.length
+    const active = list.filter((o) => o.active).length
+    const withTg = list.filter((o) => o.tg).length
+    const withLogin = list.filter((o) => o.hasLogin).length
+    const noContact = list.filter((o) => !o.phone || !o.email)
+    const incomplete = list.filter((o) => !o.complete)
+    const activePct = total > 0 ? Math.round((active / total) * 100) : 0
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Всего операторов', value: String(total), sub: `${active} активных`, badge: 'итог' },
+        { label: 'С логином', value: String(withLogin), sub: `${total - withLogin} без логина` },
+        { label: 'С Telegram ID', value: String(withTg), sub: `${total - withTg} без Telegram` },
+        { label: 'Неполные данные', value: String(incomplete.length), sub: `${noContact.length} без контактов`, tone: incomplete.length ? 'bad' : undefined },
+      ],
+      sections: [
+        { type: 'notes', title: 'Проверка доступов', hint: 'покрытие', lead: `${withLogin} из ${total} операторов имеют логин, ${withTg} — Telegram ID.`, items: [
+          `Есть логин: ${withLogin} · нет: ${total - withLogin}`,
+          `Есть телефон: ${list.filter((o) => o.phone).length} · нет: ${list.filter((o) => !o.phone).length}`,
+          `Есть email: ${list.filter((o) => o.email).length} · нет: ${list.filter((o) => !o.email).length}`,
+          `Есть Telegram ID: ${withTg} · нет: ${total - withTg}`,
+        ] },
+        { type: 'split', title: 'Активные / Архив', parts: [{ label: 'Активные', pct: activePct, amount: `${active}`, color: '#16a34a' }, { label: 'Архив', pct: 100 - activePct, amount: `${total - active}`, color: '#94a3b8' }], accent: { title: 'Ссылка для входа', text: 'ordaops.kz/login' } },
+        { type: 'previewTable', title: 'Требуют заполнения', hint: 'неполные данные', columns: [{ key: 'name', label: 'Оператор' }, { key: 'miss', label: 'Чего не хватает' }], rows: incomplete.slice(0, 7).map((o) => ({ name: o.name, miss: [!o.hasLogin && 'логин', !o.phone && 'телефон', !o.email && 'email', !o.tg && 'telegram'].filter(Boolean).join(', ') })), moreNote: incomplete.length === 0 ? 'все данные заполнены' : (incomplete.length > 7 ? `+ ещё ${incomplete.length - 7}` : '') },
+        { type: 'previewTable', title: 'Без Telegram ID', hint: 'не получат уведомления', columns: [{ key: 'name', label: 'Оператор' }], rows: list.filter((o) => !o.tg).slice(0, 7).map((o) => ({ name: o.name })), moreNote: withTg === total ? 'у всех есть Telegram' : '' },
+      ],
+      detail: {
+        title: 'Доступы операторов',
+        subtitle: 'логины, контакты и полнота данных (пароли скрыты)',
+        columns: cols,
+        rows: list.map((o) => ({
+          name: o.name,
+          login: o.hasLogin ? 'задан' : { text: 'нет', tone: 'warn' },
+          password: o.hasLogin ? { text: '••••••••', tone: 'mut' } : { text: 'Не задан', tone: 'warn' },
+          phone: o.phone || { text: '—', tone: 'warn' },
+          email: o.email || { text: '—', tone: 'warn' },
+          tg: o.tg || { text: '—', tone: 'warn' },
+          link: 'ordaops.kz/login',
+          status: o.complete ? { text: 'полные', tone: 'good' } : { text: 'неполные', tone: 'warn' },
+        })),
+      },
+    }, `Operatory_dostupy`)
+  }
+
   return (
     <>
         <div className="app-page-wide space-y-6">
@@ -439,15 +510,25 @@ export default function OperatorsPage() {
             accent="amber"
             icon={<Users2 className="h-5 w-5" aria-hidden />}
             actions={
-              <Button
-                onClick={() => void load()}
-                variant="outline"
-                size="icon"
-                className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
-                aria-label="Обновить"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => void handleExportPdf()}
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10 gap-1.5"
+                >
+                  <Download className="h-4 w-4" /> PDF
+                </Button>
+                <Button
+                  onClick={() => void load()}
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+                  aria-label="Обновить"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             }
           />
 
