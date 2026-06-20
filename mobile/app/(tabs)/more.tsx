@@ -12,8 +12,8 @@ import { Card, SectionTitle } from '@/components/ui'
 type Sub = { data?: { organization?: { name?: string }; subscription?: { status?: string }; package?: { name?: string } } | null }
 
 const SECTIONS: { icon: any; label: string; route?: string }[] = [
-  { icon: 'cash', label: 'Доходы' },
-  { icon: 'card', label: 'Расходы' },
+  { icon: 'cash', label: 'Доходы', route: '/income' },
+  { icon: 'card', label: 'Расходы', route: '/expenses' },
   { icon: 'swap-horizontal', label: 'Движение денег' },
   { icon: 'alert-circle', label: 'Долги с точки' },
   { icon: 'calendar', label: 'Смены' },
