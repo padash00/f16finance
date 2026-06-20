@@ -982,39 +982,70 @@ export default function SalaryPage() {
   }
 
   const downloadSalaryCSV = async () => {
-    const opRows = (data?.operators || []).map(({ operator, week }) => ({
-      name: getOperatorDisplayName(operator),
-      shifts: week.shiftsCount,
-      gross: Math.round(week.grossAmount),
-      autoBonus: Math.round(week.autoBonusTotal),
-      bonus: Math.round(week.bonusAmount),
-      fine: Math.round(week.fineAmount),
-      debt: Math.round(week.debtAmount),
-      advance: Math.round(week.advanceAmount),
-      net: Math.round(week.netAmount),
-      paid: Math.round(week.paidAmount),
-      remaining: Math.round(week.remainingAmount),
-      status: statusMeta(week.status).label,
-    }))
-    const tot = opRows.reduce((a, r) => ({ gross: a.gross + r.gross, net: a.net + r.net, paid: a.paid + r.paid, remaining: a.remaining + r.remaining }), { gross: 0, net: 0, paid: 0, remaining: 0 })
-    await downloadReportPdf('table', {
-      meta: { title: 'Ведомость зарплат', period: `Неделя ${weekStart}`, generated: new Date().toLocaleString('ru-RU') },
-      columns: [
-        { key: 'name', label: 'Оператор' },
-        { key: 'shifts', label: 'Смен', align: 'right' },
-        { key: 'gross', label: 'Начислено', align: 'right' },
-        { key: 'autoBonus', label: 'Авто-бонус', align: 'right' },
-        { key: 'bonus', label: 'Бонус', align: 'right' },
-        { key: 'fine', label: 'Штраф', align: 'right' },
-        { key: 'debt', label: 'Долг', align: 'right' },
-        { key: 'advance', label: 'Аванс', align: 'right' },
-        { key: 'net', label: 'К выплате', align: 'right' },
-        { key: 'paid', label: 'Выплачено', align: 'right' },
-        { key: 'remaining', label: 'Остаток', align: 'right' },
-        { key: 'status', label: 'Статус' },
+    const generated = new Date().toLocaleString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Ведомость зарплат', period: `Неделя ${weekStart}`, generated, brandNote: 'дашборд зарплат' }
+    const ops = (data?.operators || []).map(({ operator, week }) => {
+      const paid = Math.round(week.paidAmount), remaining = Math.round(week.remainingAmount), net = Math.round(week.netAmount)
+      const tone: 'good' | 'warn' | 'mut' = remaining <= 0 && net > 0 ? 'good' : paid > 0 && remaining > 0 ? 'warn' : 'mut'
+      return {
+        name: getOperatorDisplayName(operator), shifts: week.shiftsCount, gross: Math.round(week.grossAmount),
+        autoBonus: Math.round(week.autoBonusTotal), bonus: Math.round(week.bonusAmount), fine: Math.round(week.fineAmount),
+        debt: Math.round(week.debtAmount), advance: Math.round(week.advanceAmount), net, paid, remaining,
+        statusLabel: statusMeta(week.status).label, tone,
+      }
+    })
+
+    const cols = [
+      { key: 'name', label: 'Оператор', w: '15%' }, { key: 'shifts', label: 'Смен', align: 'right' as const, w: '5%' },
+      { key: 'gross', label: 'Начислено', align: 'right' as const, w: '9%' }, { key: 'autoBonus', label: 'Авто-бонус', align: 'right' as const, w: '8%' },
+      { key: 'bonus', label: 'Бонус', align: 'right' as const, w: '6%' }, { key: 'fine', label: 'Штраф', align: 'right' as const, w: '6%' },
+      { key: 'debt', label: 'Долг', align: 'right' as const, w: '6%' }, { key: 'advance', label: 'Аванс', align: 'right' as const, w: '7%' },
+      { key: 'net', label: 'К выплате', align: 'right' as const, w: '9%' }, { key: 'paid', label: 'Выплачено', align: 'right' as const, w: '9%' },
+      { key: 'remaining', label: 'Остаток', align: 'right' as const, signed: true, w: '8%' }, { key: 'status', label: 'Статус', w: '8%' },
+    ]
+
+    if (ops.length === 0) {
+      await downloadReportPdf('premium', {
+        meta, kpis: [{ label: 'Начислено', value: '—' }, { label: 'К выплате', value: '—' }, { label: 'Выплачено', value: '—' }, { label: 'Остаток', value: '—' }],
+        empty: { columns: cols, message: 'Нет данных за неделю', hint: 'Выберите неделю с операторами.' },
+      }, `Zarplata_${weekStart}`)
+      return
+    }
+
+    const sum = (k: keyof typeof ops[0]) => ops.reduce((a, r) => a + (typeof r[k] === 'number' ? (r[k] as number) : 0), 0)
+    const grossT = sum('gross'), netT = sum('net'), paidT = sum('paid'), remT = sum('remaining'), fineT = sum('fine'), debtT = sum('debt')
+    const maxGross = Math.max(1, ...ops.map((o) => o.gross))
+    const owed = ops.filter((o) => o.remaining > 0).sort((a, b) => b.remaining - a.remaining)
+    const paidPct = netT > 0 ? Math.round((paidT / netT) * 100) : 0
+    const byStatus = new Map<string, number>()
+    for (const o of ops) byStatus.set(o.statusLabel, (byStatus.get(o.statusLabel) || 0) + 1)
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Начислено', value: `${nf(grossT)} тг`, sub: `${ops.length} операторов`, badge: 'итог' },
+        { label: 'К выплате', value: `${nf(netT)} тг`, sub: `выплачено ${paidPct}%` },
+        { label: 'Выплачено', value: `${nf(paidT)} тг`, sub: `${ops.length - owed.length} закрыто` },
+        { label: 'Остаток', value: `${nf(remT)} тг`, sub: `штрафы ${nf(fineT)} · долги ${nf(debtT)}`, tone: remT > 0 ? 'bad' : undefined },
       ],
-      rows: opRows,
-      total: { gross: tot.gross, net: tot.net, paid: tot.paid, remaining: tot.remaining },
+      sections: [
+        { type: 'bars', title: 'Начислено по операторам', hint: 'топ по сумме', items: ops.slice().sort((a, b) => b.gross - a.gross).slice(0, 6).map((o) => ({ label: o.name, amount: o.gross, ratio: o.gross / maxGross })) },
+        { type: 'split', title: 'Выплачено / Остаток', parts: [{ label: 'Выплачено', pct: paidPct, amount: paidT, color: '#16a34a' }, { label: 'Остаток', pct: 100 - paidPct, amount: remT, color: '#f97316' }], accent: { title: 'Кому осталось выплатить', text: owed.length ? `${owed.length} операторов · ${nf(remT)} тг` : 'все выплаты закрыты' } },
+        { type: 'previewTable', title: 'Статусы выплат', hint: 'по статусу', columns: [{ key: 'status', label: 'Статус' }, { key: 'count', label: 'Операторов', align: 'right' }], rows: Array.from(byStatus.entries()).map(([status, count]) => ({ status, count })) },
+        { type: 'previewTable', title: 'Кому осталось выплатить', hint: 'топ по остатку', columns: [{ key: 'name', label: 'Оператор' }, { key: 'remaining', label: 'Остаток', align: 'right' }], rows: owed.slice(0, 7).map((o) => ({ name: o.name, remaining: o.remaining })), moreNote: owed.length > 7 ? `+ ещё ${owed.length - 7}` : '' },
+      ],
+      detail: {
+        title: 'Ведомость зарплат',
+        subtitle: `неделя ${weekStart} · по операторам`,
+        columns: cols,
+        rows: ops.map((o) => ({
+          name: o.name, shifts: o.shifts, gross: o.gross, autoBonus: o.autoBonus, bonus: o.bonus, fine: o.fine,
+          debt: o.debt, advance: o.advance, net: o.net, paid: o.paid, remaining: o.remaining,
+          status: { text: o.statusLabel, tone: o.tone },
+        })),
+        total: { name: null, gross: grossT, net: netT, paid: paidT, remaining: remT },
+      },
     }, `Zarplata_${weekStart}`)
   }
 

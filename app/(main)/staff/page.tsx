@@ -496,23 +496,64 @@ export default function StaffPageSmart() {
   }
 
   const handleExport = async () => {
-    const staffRows = filteredStaff.map(s => ({
-      name: s.full_name,
-      role: ROLE_LABEL[s.role as StaffRole]?.label || '',
-      salary: s.monthly_salary || 0,
-      status: s.is_active ? 'Активен' : 'Архив',
+    const generated = new Date().toLocaleDateString('ru-RU')
+    const nf = (v: number) => Math.round(v || 0).toLocaleString('ru-RU')
+    const meta = { title: 'Сотрудники', generated, brandNote: 'дашборд штата' }
+    const cols = [
+      { key: 'name', label: 'Сотрудник', w: '34%' }, { key: 'role', label: 'Роль', w: '28%' },
+      { key: 'salary', label: 'Оклад', align: 'right' as const, w: '20%' }, { key: 'status', label: 'Статус', w: '18%' },
+    ]
+
+    if (filteredStaff.length === 0) {
+      await downloadReportPdf('premium', {
+        meta, kpis: [{ label: 'Всего', value: '—' }, { label: 'Активные', value: '—' }, { label: 'ФОТ', value: '—' }, { label: 'Средний оклад', value: '—' }],
+        empty: { columns: cols, message: 'Нет сотрудников', hint: 'Добавьте сотрудников, чтобы сформировать отчёт.' },
+      }, `Sotrudniki_${monthYM}`)
+      return
+    }
+
+    const list = filteredStaff.map((s) => ({
+      name: s.full_name, roleLabel: ROLE_LABEL[s.role as StaffRole]?.label || '', hasRole: !!s.role,
+      salary: s.monthly_salary || 0, active: s.is_active,
     }))
-    const totalSalary = staffRows.reduce((acc, r) => acc + r.salary, 0)
-    await downloadReportPdf('table', {
-      meta: { title: 'Сотрудники', generated: new Date().toLocaleDateString('ru-RU') },
-      columns: [
-        { key: 'name', label: 'Сотрудник' },
-        { key: 'role', label: 'Роль' },
-        { key: 'salary', label: 'Оклад', align: 'right' },
-        { key: 'status', label: 'Статус' },
+    const total = list.length
+    const active = list.filter((s) => s.active).length
+    const fot = list.reduce((a, s) => a + s.salary, 0)
+    const avg = total > 0 ? Math.round(fot / total) : 0
+    const noRole = list.filter((s) => !s.hasRole)
+    const activePct = total > 0 ? Math.round((active / total) * 100) : 0
+
+    const byRoleFot = new Map<string, number>(), byRoleCnt = new Map<string, number>()
+    for (const s of list) { const r = s.roleLabel || 'Без роли'; byRoleFot.set(r, (byRoleFot.get(r) || 0) + s.salary); byRoleCnt.set(r, (byRoleCnt.get(r) || 0) + 1) }
+    const roleFot = Array.from(byRoleFot.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+    const maxRoleFot = roleFot[0]?.value || 1
+
+    await downloadReportPdf('premium', {
+      meta,
+      kpis: [
+        { label: 'Всего сотрудников', value: String(total), sub: `${active} активных`, badge: 'итог' },
+        { label: 'Активные', value: String(active), sub: `${activePct}% штата` },
+        { label: 'ФОТ', value: `${nf(fot)} тг`, sub: 'месячный фонд' },
+        { label: 'Средний оклад', value: `${nf(avg)} тг`, sub: noRole.length ? `${noRole.length} без роли` : 'роли заполнены' },
       ],
-      rows: staffRows,
-      total: { salary: totalSalary },
+      sections: [
+        { type: 'bars', title: 'ФОТ по ролям', hint: 'месячный фонд', items: roleFot.slice(0, 6).map((r) => ({ label: r.name, amount: r.value, ratio: r.value / maxRoleFot })) },
+        { type: 'split', title: 'Активные / Неактивные', parts: [{ label: 'Активные', pct: activePct, amount: `${active}`, color: '#16a34a' }, { label: 'Архив', pct: 100 - activePct, amount: `${total - active}`, color: '#94a3b8' }], accent: { title: 'Без роли', text: noRole.length ? `${noRole.length} сотрудников требуют роли` : 'все роли заданы' } },
+        { type: 'previewTable', title: 'Структура по ролям', hint: 'кол-во и ФОТ', columns: [{ key: 'role', label: 'Роль' }, { key: 'count', label: 'Чел.', align: 'right' }, { key: 'fot', label: 'ФОТ', align: 'right' }], rows: roleFot.slice(0, 7).map((r) => ({ role: r.name, count: byRoleCnt.get(r.name) || 0, fot: r.value })) },
+        { type: 'previewTable', title: 'Без роли', hint: 'требуют заполнения', columns: [{ key: 'name', label: 'Сотрудник' }, { key: 'salary', label: 'Оклад', align: 'right' }], rows: noRole.slice(0, 7).map((s) => ({ name: s.name, salary: s.salary })), moreNote: noRole.length > 7 ? `+ ещё ${noRole.length - 7}` : (noRole.length === 0 ? 'нет сотрудников без роли' : '') },
+      ],
+      detail: {
+        title: 'Сотрудники',
+        subtitle: 'роли, оклады и статусы',
+        columns: cols,
+        rows: list.map((s) => ({
+          name: s.name,
+          role: s.hasRole ? s.roleLabel : { text: '—', tone: 'warn' },
+          salary: s.salary,
+          status: { text: s.active ? 'Активен' : 'Архив', tone: s.active ? 'good' : 'mut' },
+        })),
+        total: { name: null, salary: fot },
+      },
     }, `Sotrudniki_${monthYM}`)
   }
 
