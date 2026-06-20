@@ -13,6 +13,18 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
+// Догрузка товаров чанками: один .in() на ~900 UUID превышает лимит длины URL
+// у шлюза PostgREST → запрос молча падает и секция выглядит «пустой». Бьём по 200.
+async function fetchItemsByIds(supabase: any, ids: string[], columns: string) {
+  const out: any[] = []
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase.from('inventory_items').select(columns).in('id', ids.slice(i, i + 200))
+    if (error) throw error
+    if (data) out.push(...(data as any[]))
+  }
+  return out
+}
+
 // Секции оператора в акте: набор category_id; null => вся локация.
 function operatorSection(assignments: Array<{ category_id: string | null }>) {
   const cats = new Set<string>()
@@ -51,11 +63,8 @@ export async function GET(request: Request) {
       const snapIds = new Set(((snap as any[]) || []).map((r: any) => String(r.item_id)))
       if (snapIds.size === 0) return json({ ok: true, data: { act_id: actId, items: [] } })
 
-      const { data: items } = await supabase
-        .from('inventory_items')
-        .select('id, name, barcode, unit, category_id')
-        .in('id', Array.from(snapIds))
-      const sectionItems = ((items as any[]) || []).filter((it: any) => section.all || (it.category_id && section.cats.has(String(it.category_id))))
+      const items = await fetchItemsByIds(supabase, Array.from(snapIds), 'id, name, barcode, unit, category_id')
+      const sectionItems = items.filter((it: any) => section.all || (it.category_id && section.cats.has(String(it.category_id))))
 
       const { data: counts } = await supabase.from('inventory_audit_counts').select('item_id, counted_qty').eq('act_id', actId)
       const countedBy = new Map(((counts as any[]) || []).map((c: any) => [String(c.item_id), num(c.counted_qty)]))
@@ -139,10 +148,8 @@ export async function POST(request: Request) {
     const snapIds = new Set(((snap as any[]) || []).map((r: any) => String(r.item_id)))
     let allowedItems: Set<string> = snapIds
     if (!section.all) {
-      const { data: catItems } = snapIds.size
-        ? await supabase.from('inventory_items').select('id, category_id').in('id', Array.from(snapIds))
-        : { data: [] as any[] }
-      allowedItems = new Set(((catItems as any[]) || []).filter((it: any) => it.category_id && section.cats.has(String(it.category_id))).map((it: any) => String(it.id)))
+      const catItems = snapIds.size ? await fetchItemsByIds(supabase, Array.from(snapIds), 'id, category_id') : []
+      allowedItems = new Set(catItems.filter((it: any) => it.category_id && section.cats.has(String(it.category_id))).map((it: any) => String(it.id)))
     }
 
     const now = new Date().toISOString()

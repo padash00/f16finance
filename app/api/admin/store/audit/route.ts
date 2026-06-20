@@ -54,6 +54,17 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
+// Чтение товаров чанками: один .in() на сотни UUID превышает лимит URL шлюза.
+async function fetchItemsByIds(supabase: any, ids: string[], columns: string) {
+  const out: any[] = []
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase.from('inventory_items').select(columns).in('id', ids.slice(i, i + 200))
+    if (error) throw error
+    if (data) out.push(...(data as any[]))
+  }
+  return out
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -113,11 +124,11 @@ export async function GET(request: Request) {
       const opIds = Array.from(new Set([...((assigns.data || []) as any[]).map((r) => String(r.operator_id)), ...countRows.map((r) => String(r.counted_by || '')).filter(Boolean)]))
       const catIds = Array.from(new Set(((assigns.data || []) as any[]).map((r) => String(r.category_id || '')).filter(Boolean)))
       const [items, opers, cats] = await Promise.all([
-        itemIds.length ? supabase.from('inventory_items').select('id, name, category_id').in('id', itemIds) : Promise.resolve({ data: [] as any[] }),
+        fetchItemsByIds(supabase, itemIds, 'id, name, category_id'),
         opIds.length ? supabase.from('operators').select('id, name, short_name').in('id', opIds) : Promise.resolve({ data: [] as any[] }),
         catIds.length ? supabase.from('inventory_categories').select('id, name').in('id', catIds) : Promise.resolve({ data: [] as any[] }),
       ])
-      const itemName = new Map(((items as any).data || []).map((i: any) => [String(i.id), i.name as string]))
+      const itemName = new Map((items || []).map((i: any) => [String(i.id), i.name as string]))
       const opName = new Map(((opers as any).data || []).map((o: any) => [String(o.id), (o.name || o.short_name || 'Оператор') as string]))
       const catName = new Map(((cats as any).data || []).map((c: any) => [String(c.id), c.name as string]))
       const expectedBy = new Map(snapRows.map((r) => [String(r.item_id), num(r.expected_qty)]))
@@ -148,7 +159,7 @@ export async function GET(request: Request) {
       })
 
       // прогресс по операторам (сколько из своей секции посчитал каждый)
-      const itemCat = new Map(((items as any).data || []).map((i: any) => [String(i.id), i.category_id ? String(i.category_id) : null]))
+      const itemCat = new Map((items || []).map((i: any) => [String(i.id), i.category_id ? String(i.category_id) : null]))
       const snapItemIds = snapRows.map((r) => String(r.item_id))
       const opCats = new Map<string, { all: boolean; cats: Set<string> }>()
       for (const a of (assigns.data || []) as any[]) {
@@ -408,8 +419,8 @@ export async function POST(request: Request) {
       // имена товаров для отчёта
       const reportItemIds = report.map((r) => r.item_id)
       if (reportItemIds.length) {
-        const { data: nameRows } = await supabase.from('inventory_items').select('id, name').in('id', reportItemIds)
-        const nameBy = new Map(((nameRows as any[]) || []).map((i: any) => [String(i.id), String(i.name || '')]))
+        const nameRows = await fetchItemsByIds(supabase, reportItemIds, 'id, name')
+        const nameBy = new Map(nameRows.map((i: any) => [String(i.id), String(i.name || '')]))
         for (const r of report) r.name = nameBy.get(r.item_id) || 'Товар'
       }
 
@@ -446,8 +457,8 @@ export async function POST(request: Request) {
       let debtsCreated = 0
       if (body?.assignDebt === true && shortageByItem.size > 0) {
         const itemIds = Array.from(shortageByItem.keys())
-        const { data: costItems } = itemIds.length ? await supabase.from('inventory_items').select('id, default_purchase_price').in('id', itemIds) : { data: [] as any[] }
-        const costBy = new Map(((costItems as any[]) || []).map((i: any) => [String(i.id), num((i as any).default_purchase_price)]))
+        const costItems = itemIds.length ? await fetchItemsByIds(supabase, itemIds, 'id, default_purchase_price') : []
+        const costBy = new Map(costItems.map((i: any) => [String(i.id), num((i as any).default_purchase_price)]))
         const companyId = (act as any)?.company_id || null
         const d = new Date()
         const dow = (d.getUTCDay() + 6) % 7
