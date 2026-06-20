@@ -83,42 +83,55 @@ export function createRequestSupabaseClient(request: Request) {
 }
 
 // Канонная валидация Bearer-токена: прямой GET {url}/auth/v1/user (apikey=anon + Bearer).
-// Надёжнее, чем supabase-js getUser() — тот на части токенов молча возвращает пусто.
-async function validateBearerUser(token: string): Promise<any | null> {
+// Возвращаем пользователя И причину (для диагностики прямо в тексте 401).
+async function validateBearerUser(token: string): Promise<{ user: any | null; reason: string }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anon) return null
+  if (!url || !anon) return { user: null, reason: 'server-no-env' }
   try {
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { apikey: anon, Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })
-    if (!res.ok) return null
-    const user = await res.json().catch(() => null)
-    return user && user.id ? user : null
-  } catch {
-    return null
+    if (res.ok) {
+      const user = await res.json().catch(() => null)
+      if (user && user.id) return { user, reason: 'ok' }
+      return { user: null, reason: 'gotrue-200-no-id' }
+    }
+    const body = (await res.text().catch(() => '')) || ''
+    return { user: null, reason: `gotrue-${res.status}:${body.slice(0, 100)}` }
+  } catch (e: any) {
+    return { user: null, reason: `fetch-err:${e?.message || 'ex'}` }
   }
 }
 
-export async function getRequestUser(request: Request) {
+export async function authenticateRequest(request: Request): Promise<{ user: any | null; reason: string }> {
   const bearerToken = getBearerToken(request)
   if (bearerToken) {
-    // Сначала прямой запрос к GoTrue, затем фолбэк на supabase-js (на всякий случай).
     const raw = await validateBearerUser(bearerToken)
-    if (raw) return raw
+    if (raw.user) return raw
+    // Фолбэк на supabase-js admin getUser.
     if (hasAdminSupabaseCredentials()) {
-      const { data } = await createAdminSupabaseClient().auth.getUser(bearerToken)
-      if (data?.user) return data.user
+      try {
+        const { data, error } = await createAdminSupabaseClient().auth.getUser(bearerToken)
+        if (data?.user) return { user: data.user, reason: 'admin-ok' }
+        return { user: null, reason: `${raw.reason}|admin:${error?.message || 'null'}` }
+      } catch (e: any) {
+        return { user: null, reason: `${raw.reason}|admin-ex:${e?.message || 'ex'}` }
+      }
     }
-    return null
+    return raw
   }
 
   const supabase = createRequestSupabaseClient(request)
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  return user
+  return { user: user ?? null, reason: user ? 'cookie-ok' : 'no-auth' }
+}
+
+export async function getRequestUser(request: Request) {
+  return (await authenticateRequest(request)).user
 }
 
 export type GetRequestAccessContextOptions = {
@@ -162,13 +175,13 @@ export async function getRequestAccessContext(
 
   const supabase = createRequestSupabaseClient(request)
   const cookieMap = parseCookies(request.headers.get('cookie'))
-  // Bearer (мобилка/API): валидируем токен ЯВНО через admin-клиент — не зависим от того,
-  // читает ли getUser() без аргумента кастомный Authorization-заголовок. Веб — по кукам.
-  const user = await getRequestUser(request)
+  // Bearer (мобилка/API): валидируем токен через GoTrue; причина уходит в текст 401.
+  const auth = await authenticateRequest(request)
+  const user = auth.user
 
   if (!user) {
     return {
-      response: NextResponse.json({ error: 'unauthorized' }, { status: 401 }),
+      response: NextResponse.json({ error: `unauthorized: ${auth.reason}` }, { status: 401 }),
     }
   }
 
@@ -377,12 +390,13 @@ export async function getRequestOperatorContext(request: Request): Promise<
     }
 > {
   const supabase = createRequestSupabaseClient(request)
-  // Bearer (мобилка): валидируем токен явно через admin-клиент, как в getRequestUser.
-  const user = await getRequestUser(request)
+  // Bearer (мобилка): валидируем токен через GoTrue; причина уходит в текст 401.
+  const auth = await authenticateRequest(request)
+  const user = auth.user
 
   if (!user) {
     return {
-      response: NextResponse.json({ error: 'unauthorized' }, { status: 401 }),
+      response: NextResponse.json({ error: `unauthorized: ${auth.reason}` }, { status: 401 }),
     }
   }
 
