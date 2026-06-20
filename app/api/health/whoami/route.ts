@@ -1,39 +1,54 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const dynamic = 'force-dynamic'
 
-// Диагностика: проверяет, может ли СЕРВЕР извлечь пользователя из переданного Bearer
-// токена (та же валидация, что в getRequestUser). Отдаёт только данные ИЗ самого токена
-// (его владельца) + текст ошибки — секретов нет. Нужен чтобы понять, почему unauthorized
-// при валидном на вид токене. Можно потом удалить.
+// Диагностика валидации Bearer-токена ТРЕМЯ способами, чтобы понять, где ломается:
+//  raw   — прямой GET {url}/auth/v1/user (apikey=anon + Bearer) — как валидирует GoTrue;
+//  anon  — клиент на anon-ключе + Bearer-заголовок + getUser();
+//  admin — клиент на service_role + getUser(token) (текущий серверный путь).
+// Отдаём только данные владельца токена + статусы, без секретов. Можно удалить позже.
 export async function GET(request: Request) {
   const raw = request.headers.get('authorization') || ''
-  const m = raw.match(/^Bearer\s+(.+)$/i)
-  const token = m?.[1]?.trim() || null
+  const token = (raw.match(/^Bearer\s+(.+)$/i)?.[1] || '').trim()
+  const out: Record<string, unknown> = { hasToken: !!token, hasAdminCreds: hasAdminSupabaseCredentials() }
+  if (!token) return NextResponse.json(out)
 
-  const result: Record<string, unknown> = {
-    hasToken: !!token,
-    hasAdminCreds: hasAdminSupabaseCredentials(),
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
+  let rawPart = 'raw —'
+  try {
+    const r = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, Authorization: `Bearer ${token}` } })
+    const body: any = await r.json().catch(() => null)
+    rawPart = `raw ${r.status} ${body?.id ? 'OK ' + (body?.email || '') : (body?.msg || body?.error_description || body?.error || 'no-user')}`
+  } catch (e: any) {
+    rawPart = `raw ERR ${e?.message || 'ex'}`
   }
 
-  if (!token) return NextResponse.json(result)
+  let anonPart = 'anon —'
+  try {
+    const c = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } })
+    const { data, error } = await c.auth.getUser()
+    anonPart = `anon ${data?.user?.id ? 'OK ' + (data.user.email || '') : (error?.message || 'null')}`
+  } catch (e: any) {
+    anonPart = `anon ERR ${e?.message || 'ex'}`
+  }
 
+  let adminPart = 'admin —'
   try {
     if (hasAdminSupabaseCredentials()) {
       const { data, error } = await createAdminSupabaseClient().auth.getUser(token)
-      result.userId = data?.user?.id ?? null
-      result.email = data?.user?.email ?? null
-      result.role = (data?.user as any)?.role ?? null
-      result.error = error?.message ?? null
-      result.status = (error as any)?.status ?? null
+      adminPart = `admin ${data?.user?.id ? 'OK ' + (data.user.email || '') : (error?.message || 'null')}`
     } else {
-      result.error = 'no-admin-credentials'
+      adminPart = 'admin нет-ключа'
     }
   } catch (e: any) {
-    result.error = e?.message || 'exception'
+    adminPart = `admin ERR ${e?.message || 'ex'}`
   }
 
-  return NextResponse.json(result)
+  out.verdict = `${rawPart} · ${anonPart} · ${adminPart}`
+  return NextResponse.json(out)
 }

@@ -48,7 +48,7 @@ export function AuthDiag() {
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
           if (!alive || !j) return
-          setWhoami(j.userId ? `user ${String(j.email || j.userId).slice(0, 24)}` : `НЕТ user · ${j.error || 'null'}${j.hasAdminCreds === false ? ' · нет admin-ключа' : ''}`)
+          setWhoami(j.verdict ? String(j.verdict) : (j.userId ? `user ${j.email || j.userId}` : `НЕТ user · ${j.error || 'null'}`))
         })
         .catch(() => {})
     }
