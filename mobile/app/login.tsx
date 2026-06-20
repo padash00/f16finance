@@ -3,6 +3,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollVie
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { useAuth } from '@/lib/auth'
+import { isSupabaseConfigured, supabaseHost } from '@/lib/supabase'
 import { Logo } from '@/components/logo'
 
 export default function LoginScreen() {
@@ -11,17 +12,36 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [focus, setFocus] = useState<'login' | 'pass' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showDetails, setShowDetails] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const isEmail = login.includes('@')
-  const canSubmit = !!login && !!password && !busy
+  const canSubmit = !!login && !!password && !busy && isSupabaseConfigured
 
   const onSubmit = async () => {
-    setError(null); setBusy(true)
+    setError(null); setShowDetails(false)
+    if (!isSupabaseConfigured) {
+      setError('Приложение не настроено: не заданы EXPO_PUBLIC_SUPABASE_URL / ANON_KEY в .env. После правки .env перезапусти: expo start -c.')
+      return
+    }
+    setBusy(true)
     try {
       await signIn(login, password)
     } catch (e: any) {
-      setError(e?.message === 'Invalid login credentials' ? 'Неверный логин или пароль' : (e?.message || 'Не удалось войти'))
+      const msg = String(e?.message || '')
+      if (msg === 'Invalid login credentials') {
+        setError('Неверный логин или пароль. Если на сайте этот вход работает — мобилка скорее всего смотрит в другой Supabase-проект (проверь .env).')
+        setShowDetails(true)
+      } else if (/network|fetch|timeout|Failed to fetch/i.test(msg)) {
+        setError('Нет связи с сервером авторизации. Проверь интернет и адрес Supabase.')
+        setShowDetails(true)
+      } else if (/email|confirm/i.test(msg)) {
+        setError(`Аккаунт не подтверждён или email не найден: ${msg}`)
+        setShowDetails(true)
+      } else {
+        setError(msg || 'Не удалось войти')
+        setShowDetails(true)
+      }
     } finally {
       setBusy(false)
     }
@@ -78,6 +98,11 @@ export default function LoginScreen() {
               {error ? (
                 <View style={{ backgroundColor: '#1d0f0f', borderColor: '#3b1212', borderWidth: 1, borderRadius: 12, padding: 10 }}>
                   <Text style={{ color: '#f87171', fontSize: 13 }}>{error}</Text>
+                  {showDetails ? (
+                    <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 6 }}>
+                      Supabase: {supabaseHost}{'\n'}Вход: {isEmail ? login.trim().toLowerCase() : 'оператор'}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 

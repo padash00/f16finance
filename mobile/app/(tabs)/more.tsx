@@ -18,7 +18,7 @@ const SECTIONS: { icon: any; label: string; route?: string }[] = [
   { icon: 'alert-circle', label: 'Долги с точки' },
   { icon: 'calendar', label: 'Смены' },
   { icon: 'wallet', label: 'Зарплата' },
-  { icon: 'checkmark-done', label: 'Согласования' },
+  { icon: 'checkmark-done', label: 'Согласования', route: '/approvals' },
   { icon: 'cube', label: 'Склад' },
   { icon: 'game-controller', label: 'Арена' },
   { icon: 'document-text', label: 'Отчёты' },
@@ -28,9 +28,11 @@ export default function MoreScreen() {
   const { session, signOut } = useAuth()
   const router = useRouter()
   const [sub, setSub] = useState<Sub['data']>(null)
+  const [pending, setPending] = useState(0)
 
   const load = useCallback(async () => {
     try { const r = await apiFetch<Sub>('/api/admin/my-subscription'); setSub(r.data || null) } catch { /* ignore */ }
+    try { const p = await apiFetch<{ data: any[] }>('/api/admin/expenses/pending'); setPending((p.data || []).length) } catch { /* ignore */ }
   }, [])
   useEffect(() => { void load() }, [load])
 
@@ -69,6 +71,11 @@ export default function MoreScreen() {
                 <Ionicons name={s.icon} size={18} color={T.textMut} />
               </View>
               <Text style={{ color: T.text, fontSize: 15, flex: 1 }}>{s.label}</Text>
+              {s.label === 'Согласования' && pending > 0 ? (
+                <View style={{ minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 7, backgroundColor: T.green, alignItems: 'center', justifyContent: 'center', marginRight: 6 }}>
+                  <Text style={{ color: '#04130d', fontSize: 12, fontWeight: '800' }}>{pending}</Text>
+                </View>
+              ) : null}
               {s.route ? <Ionicons name="chevron-forward" size={18} color={T.textDim} /> : <Text style={{ color: T.textDim, fontSize: 11 }}>скоро</Text>}
             </Pressable>
           ))}

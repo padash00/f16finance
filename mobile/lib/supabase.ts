@@ -10,6 +10,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('[orda-mobile] EXPO_PUBLIC_SUPABASE_URL / ANON_KEY не заданы — заполни .env')
 }
 
+/** Сконфигурировано ли приложение (есть URL+ключ). Для диагностики на экране входа. */
+export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey
+/** Хост Supabase-проекта (без протокола) — чтобы на экране входа видеть, куда стучимся. */
+export const supabaseHost = (() => {
+  try { return supabaseUrl ? new URL(supabaseUrl).host : '(не задан)' } catch { return '(некорректный URL)' }
+})()
+
 // Supabase используется ТОЛЬКО для аутентификации (вход/refresh/выход).
 // Все ДАННЫЕ идут через Next.js API (lib/api.ts) с Bearer-токеном этой сессии —
 // архитектурное правило проекта: Supabase только через API.
