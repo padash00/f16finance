@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, getStaffRoleLabel, normalizeStaffRole } from '@/lib/core/access'
+import { getEffectiveCapabilities } from '@/lib/server/capabilities'
 import { resolveOrgEntitlements } from '@/lib/server/entitlements'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import {
@@ -99,6 +100,10 @@ export async function GET(req: Request) {
     const orgFeatures = orgEnt.features
     const featuresAllAccess = orgEnt.allAccess
 
+    // Эффективные capabilities пользователя (тот же расчёт, что /access и requireCapability).
+    // Суперадмин получает ['*'] — клиент трактует как «всё разрешено».
+    const capabilities = await getEffectiveCapabilities(access).catch(() => [] as string[])
+
     return NextResponse.json({
       ok: true,
       orgFeatures,
@@ -123,6 +128,7 @@ export async function GET(req: Request) {
         isPrimary: assignment.is_primary,
       })),
       staffRole,
+      capabilities,
       roleLabel: getRoleLabel({
         isSuperAdmin,
         staffRole,

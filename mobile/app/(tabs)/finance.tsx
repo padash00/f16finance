@@ -59,7 +59,7 @@ export default function FinanceScreen() {
   const maxCat = Math.max(1, ...cats.map((c) => c.value))
   const maxComp = Math.max(1, ...comps.map((c) => c.value))
 
-  if (role && !canSee(role, '/reports')) return <NoAccess title="Финансы" />
+  if (role && !canSee(role, { path: '/reports', page: 'reports' })) return <NoAccess title="Финансы" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>

@@ -36,7 +36,7 @@ export default function AiScreen() {
 
   const s = res?.ai?.summary
 
-  if (role && !canSee(role, '/ai-cfo')) return <NoAccess title="AI Финдиректор" />
+  if (role && !canSee(role, { path: '/ai-cfo' })) return <NoAccess title="AI Финдиректор" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>

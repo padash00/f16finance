@@ -20,6 +20,7 @@ export type SessionRole = {
   rolePermissionOverrides: RolePermissionOverride[]
   orgFeatures: string[]
   featuresAllAccess: boolean
+  capabilities: string[]
 }
 
 type AuthState = {
@@ -55,6 +56,7 @@ async function fetchRole(token: string): Promise<SessionRole | null> {
       rolePermissionOverrides: Array.isArray(j.rolePermissionOverrides) ? j.rolePermissionOverrides : [],
       orgFeatures: Array.isArray(j.orgFeatures) ? j.orgFeatures : [],
       featuresAllAccess: !!j.featuresAllAccess,
+      capabilities: Array.isArray(j.capabilities) ? j.capabilities : [],
     }
   } catch {
     return null

@@ -12,18 +12,18 @@ import { Card, SectionTitle } from '@/components/ui'
 
 type Sub = { data?: { organization?: { name?: string }; subscription?: { status?: string }; package?: { name?: string } } | null }
 
-// perm — web-путь для проверки прав роли (rolePermissionOverrides из /access).
-const SECTIONS: { icon: any; label: string; route?: string; perm: string }[] = [
-  { icon: 'cash', label: 'Доходы', route: '/income', perm: '/income' },
-  { icon: 'card', label: 'Расходы', route: '/expenses', perm: '/expenses' },
-  { icon: 'swap-horizontal', label: 'Движение денег', perm: '/cashflow' },
-  { icon: 'alert-circle', label: 'Долги с точки', perm: '/point-debts' },
-  { icon: 'calendar', label: 'Смены', perm: '/shifts' },
-  { icon: 'wallet', label: 'Зарплата', perm: '/salary' },
-  { icon: 'checkmark-done', label: 'Согласования', route: '/approvals', perm: '/expenses' },
-  { icon: 'cube', label: 'Склад', perm: '/store' },
-  { icon: 'game-controller', label: 'Арена', perm: '/arena' },
-  { icon: 'document-text', label: 'Отчёты', perm: '/reports' },
+// path — web-путь (role_permissions), page — capability-страница из /access.
+const SECTIONS: { icon: any; label: string; route?: string; path: string; page?: string }[] = [
+  { icon: 'cash', label: 'Доходы', route: '/income', path: '/income', page: 'income' },
+  { icon: 'card', label: 'Расходы', route: '/expenses', path: '/expenses', page: 'expenses' },
+  { icon: 'swap-horizontal', label: 'Движение денег', path: '/cashflow', page: 'cashflow' },
+  { icon: 'alert-circle', label: 'Долги с точки', path: '/point-debts', page: 'point-debts' },
+  { icon: 'calendar', label: 'Смены', path: '/shifts', page: 'shifts' },
+  { icon: 'wallet', label: 'Зарплата', path: '/salary', page: 'salary' },
+  { icon: 'checkmark-done', label: 'Согласования', route: '/approvals', path: '/expenses', page: 'expenses-pending' },
+  { icon: 'cube', label: 'Склад', path: '/store', page: 'store' },
+  { icon: 'game-controller', label: 'Арена', path: '/arena' },
+  { icon: 'document-text', label: 'Отчёты', path: '/reports', page: 'reports' },
 ]
 
 export default function MoreScreen() {
@@ -32,7 +32,7 @@ export default function MoreScreen() {
   const [sub, setSub] = useState<Sub['data']>(null)
   const [pending, setPending] = useState(0)
 
-  const sections = SECTIONS.filter((s) => canSee(role, s.perm))
+  const sections = SECTIONS.filter((s) => canSee(role, { path: s.path, page: s.page }))
 
   const load = useCallback(async () => {
     try { const r = await apiFetch<Sub>('/api/admin/my-subscription'); setSub(r.data || null) } catch { /* ignore */ }

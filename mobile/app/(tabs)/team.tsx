@@ -42,7 +42,7 @@ export default function TeamScreen() {
   const online = p?.devices.filter((d) => d.isOnline) || []
   const offline = p?.devices.filter((d) => !d.isOnline) || []
 
-  if (role && !canSee(role, '/operators')) return <NoAccess title="Команда" />
+  if (role && !canSee(role, { path: '/operators', page: 'operators' })) return <NoAccess title="Команда" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
