@@ -26,7 +26,7 @@ export class ApiError extends Error {
  * Сервер читает Authorization: Bearer <access_token> (getRequestAccessContext)
  * и x-organization-id для выбора активной орг.
  */
-export async function apiFetch<T = any>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T = any>(path: string, init: RequestInit = {}, _retried = false): Promise<T> {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
 
@@ -40,6 +40,16 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}): P
 
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`
   const res = await fetch(url, { ...init, headers })
+
+  // Самолечение протухшего токена: при 401 один раз форсим refresh и повторяем.
+  if (res.status === 401 && !_retried && token) {
+    try {
+      const { data: refreshed } = await supabase.auth.refreshSession()
+      if (refreshed?.session?.access_token) return apiFetch<T>(path, init, true)
+    } catch {
+      /* refresh не удался — отдадим исходную 401 ниже */
+    }
+  }
 
   let json: any = null
   try {

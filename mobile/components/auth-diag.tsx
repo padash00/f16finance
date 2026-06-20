@@ -8,32 +8,31 @@ import { T } from '@/lib/theme'
 const configRef = (supabaseHost.split('.')[0] || '').toLowerCase()
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://ordaops.kz'
 
-/** Достаём ref проекта из JWT (claim ref / iss). atob есть в Hermes (RN 0.81). */
-function refFromToken(token?: string | null): string | null {
-  if (!token) return null
+type Claims = { ref: string | null; exp: number | null }
+
+/** Декодим JWT payload (claim ref/iss + exp). atob есть в Hermes (RN 0.81). */
+function decodeClaims(token?: string | null): Claims {
+  if (!token) return { ref: null, exp: null }
   const decode = (globalThis as any).atob as ((s: string) => string) | undefined
-  if (!decode) return null
+  if (!decode) return { ref: null, exp: null }
   try {
     const part = token.split('.')[1] || ''
     const b64 = part.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (part.length % 4)) % 4)
     const json = JSON.parse(decode(b64))
-    if (json.ref) return String(json.ref).toLowerCase()
-    const m = String(json.iss || '').match(/https?:\/\/([^.]+)\.supabase/)
-    return m ? m[1].toLowerCase() : null
+    let ref: string | null = json.ref ? String(json.ref).toLowerCase() : null
+    if (!ref) {
+      const m = String(json.iss || '').match(/https?:\/\/([^.]+)\.supabase/)
+      ref = m ? m[1].toLowerCase() : null
+    }
+    return { ref, exp: typeof json.exp === 'number' ? json.exp : null }
   } catch {
-    return null
+    return { ref: null, exp: null }
   }
 }
 
-/**
- * Диагностика входа: сравнивает Supabase-проект приложения, токена и СЕРВЕРА (Vercel).
- * unauthorized при совпадении app=токен, но при ином проекте сервера → сервер отвергает
- * токен. Если app≠токен — осталась старая сессия (выйти и войти). Если сервер≠токен —
- * mobile/.env смотрит не на тот проект, что Vercel.
- */
 export function AuthDiag() {
   const { session, signOut } = useAuth()
-  const tokenRef = refFromToken(session?.access_token)
+  const { ref: tokenRef, exp } = decodeClaims(session?.access_token)
   const [serverRef, setServerRef] = useState<string | null>(null)
 
   useEffect(() => {
@@ -45,30 +44,40 @@ export function AuthDiag() {
     return () => { alive = false }
   }, [])
 
+  const nowSec = Math.floor(Date.now() / 1000)
+  const expired = exp != null && exp < nowSec
+  const minsLeft = exp != null ? Math.round((exp - nowSec) / 60) : null
   const staleSession = !!tokenRef && !!configRef && tokenRef !== configRef
-  const serverMismatch = !!serverRef && !!tokenRef && serverRef !== tokenRef
+  const serverMismatch = !staleSession && !!serverRef && !!tokenRef && serverRef !== tokenRef
 
   return (
     <View style={{ gap: 8, marginTop: 8 }}>
       {staleSession ? (
-        <View style={{ backgroundColor: '#1d0f0f', borderColor: '#3b1212', borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 }}>
-          <Text style={{ color: '#fca5a5', fontSize: 13, fontWeight: '800' }}>Старая сессия другого проекта</Text>
-          <Text style={{ color: '#9ca3af', fontSize: 12 }}>Токен от «{tokenRef}», приложение настроено на «{configRef}». Выйдите и войдите заново.</Text>
-          <Pressable onPress={() => void signOut()} style={{ alignSelf: 'flex-start', backgroundColor: '#3b1212', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}>
-            <Text style={{ color: '#fca5a5', fontWeight: '800', fontSize: 13 }}>Выйти и войти заново</Text>
-          </Pressable>
-        </View>
+        <Banner title="Старая сессия другого проекта" text={`Токен от «${tokenRef}», приложение настроено на «${configRef}».`} />
       ) : serverMismatch ? (
-        <View style={{ backgroundColor: '#1d0f0f', borderColor: '#3b1212', borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
-          <Text style={{ color: '#fca5a5', fontSize: 13, fontWeight: '800' }}>Приложение и сервер — разные проекты</Text>
-          <Text style={{ color: '#9ca3af', fontSize: 12 }}>
-            Сервер (сайт) работает на проекте «{serverRef}», а приложение/токен — «{tokenRef}». Поэтому сервер отвечает unauthorized. Исправь в mobile/.env: EXPO_PUBLIC_SUPABASE_URL и ANON_KEY на проект «{serverRef}», затем перезапусти expo start -c.
-          </Text>
-        </View>
+        <Banner title="Приложение и сервер — разные проекты" text={`Сервер на «${serverRef}», токен — «${tokenRef}». Поправь mobile/.env на проект сервера и expo start -c.`} />
+      ) : expired ? (
+        <Banner title="Токен сессии истёк" text="Старая сессия в памяти не обновилась. Выйдите и войдите заново — получите свежий токен." />
       ) : null}
+
+      {/* Чистый перелогин помогает почти всегда: стирает старую сессию и берёт свежий токен. */}
+      <Pressable onPress={() => void signOut()} style={{ alignSelf: 'flex-start', backgroundColor: '#3b1212', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}>
+        <Text style={{ color: '#fca5a5', fontWeight: '800', fontSize: 13 }}>Выйти и войти заново</Text>
+      </Pressable>
+
       <Text style={{ color: T.textDim, fontSize: 10 }}>
         прилож.: {configRef || '—'} · токен: {tokenRef || 'нет'} · сервер: {serverRef || '…'}
+        {exp != null ? ` · токен ${expired ? `истёк ${-Number(minsLeft)} мин назад` : `ещё ${minsLeft} мин`}` : ''}
       </Text>
+    </View>
+  )
+}
+
+function Banner({ title, text }: { title: string; text: string }) {
+  return (
+    <View style={{ backgroundColor: '#1d0f0f', borderColor: '#3b1212', borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 }}>
+      <Text style={{ color: '#fca5a5', fontSize: 13, fontWeight: '800' }}>{title}</Text>
+      <Text style={{ color: '#9ca3af', fontSize: 12 }}>{text}</Text>
     </View>
   )
 }
