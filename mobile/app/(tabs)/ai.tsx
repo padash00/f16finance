@@ -4,8 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { canSee } from '@/lib/access'
 import { T, money } from '@/lib/theme'
 import { Card, SectionTitle } from '@/components/ui'
+import { NoAccess } from '@/components/no-access'
 
 type Summary = { where_losing?: string; where_earn?: string; main_risk?: string; main_opportunity?: string; extra_profit?: string; three_actions?: string[] }
 type Cfo = { ok: boolean; revenue?: number; expense?: number; profit?: number; ai?: { summary?: Summary } }
@@ -13,6 +16,7 @@ type Cfo = { ok: boolean; revenue?: number; expense?: number; profit?: number; a
 const PERIODS = [{ d: 7, l: '7 дней' }, { d: 30, l: '30 дней' }, { d: 90, l: '90 дней' }]
 
 export default function AiScreen() {
+  const { role } = useAuth()
   const [days, setDays] = useState(30)
   const [res, setRes] = useState<Cfo | null>(null)
   const [loading, setLoading] = useState(false)
@@ -31,6 +35,8 @@ export default function AiScreen() {
   }
 
   const s = res?.ai?.summary
+
+  if (role && !canSee(role, '/ai-cfo')) return <NoAccess title="AI Финдиректор" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>

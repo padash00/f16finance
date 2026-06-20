@@ -5,6 +5,8 @@ import { supabase } from './supabase'
 import { setActiveOrganization, setAccessToken } from './api'
 import { loginToEmail } from './operator-auth'
 
+export type RolePermissionOverride = { path: string; enabled: boolean }
+
 export type SessionRole = {
   isSuperAdmin: boolean
   isStaff: boolean
@@ -14,6 +16,10 @@ export type SessionRole = {
   displayName: string | null
   operatorId: string | null
   roleLabel: string | null
+  staffRole: string | null
+  rolePermissionOverrides: RolePermissionOverride[]
+  orgFeatures: string[]
+  featuresAllAccess: boolean
 }
 
 type AuthState = {
@@ -45,6 +51,10 @@ async function fetchRole(token: string): Promise<SessionRole | null> {
       displayName: j.displayName ?? null,
       operatorId: j.operatorId ?? null,
       roleLabel: j.roleLabel ?? null,
+      staffRole: j.staffRole ?? null,
+      rolePermissionOverrides: Array.isArray(j.rolePermissionOverrides) ? j.rolePermissionOverrides : [],
+      orgFeatures: Array.isArray(j.orgFeatures) ? j.orgFeatures : [],
+      featuresAllAccess: !!j.featuresAllAccess,
     }
   } catch {
     return null

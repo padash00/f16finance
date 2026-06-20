@@ -3,8 +3,11 @@ import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { apiFetch } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { canSee } from '@/lib/access'
 import { T } from '@/lib/theme'
 import { Card, SectionTitle, Pill } from '@/components/ui'
+import { NoAccess } from '@/components/no-access'
 
 type Device = { id: string; name: string; isOnline: boolean; ageSeconds: number | null; operatorName: string | null }
 type Presence = { devices: Device[]; onlineCount: number }
@@ -17,6 +20,7 @@ function ago(sec: number | null) {
 }
 
 export default function TeamScreen() {
+  const { role } = useAuth()
   const [p, setP] = useState<Presence | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +41,8 @@ export default function TeamScreen() {
 
   const online = p?.devices.filter((d) => d.isOnline) || []
   const offline = p?.devices.filter((d) => !d.isOnline) || []
+
+  if (role && !canSee(role, '/operators')) return <NoAccess title="Команда" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>

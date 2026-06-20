@@ -3,8 +3,11 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { apiFetch } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { canSee } from '@/lib/access'
 import { T, money, moneyShort } from '@/lib/theme'
 import { Card, SectionTitle, Pill } from '@/components/ui'
+import { NoAccess } from '@/components/no-access'
 
 type Totals = { totalIncome: number; totalExpense: number; profit: number; incomeCash: number; incomeKaspi: number; incomeOnline: number; incomeCard: number; transactionCount: number; avgTransaction: number }
 type Bundle = { data: { aggregate: { totalsCur: Totals; totalsPrev: Totals; expenseByCategory: Record<string, number>; incomeByCompany: Record<string, any> } } }
@@ -25,6 +28,7 @@ function rangeFor(preset: string) {
 }
 
 export default function FinanceScreen() {
+  const { role } = useAuth()
   const [preset, setPreset] = useState<string>('month')
   const [b, setB] = useState<Totals | null>(null)
   const [cats, setCats] = useState<{ name: string; value: number }[]>([])
@@ -54,6 +58,8 @@ export default function FinanceScreen() {
   const margin = useMemo(() => (b && b.totalIncome > 0 ? Math.round((b.profit / b.totalIncome) * 100) : 0), [b])
   const maxCat = Math.max(1, ...cats.map((c) => c.value))
   const maxComp = Math.max(1, ...comps.map((c) => c.value))
+
+  if (role && !canSee(role, '/reports')) return <NoAccess title="Финансы" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>

@@ -5,30 +5,34 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { useAuth } from '@/lib/auth'
+import { canSee } from '@/lib/access'
 import { apiFetch } from '@/lib/api'
 import { T } from '@/lib/theme'
 import { Card, SectionTitle } from '@/components/ui'
 
 type Sub = { data?: { organization?: { name?: string }; subscription?: { status?: string }; package?: { name?: string } } | null }
 
-const SECTIONS: { icon: any; label: string; route?: string }[] = [
-  { icon: 'cash', label: 'Доходы', route: '/income' },
-  { icon: 'card', label: 'Расходы', route: '/expenses' },
-  { icon: 'swap-horizontal', label: 'Движение денег' },
-  { icon: 'alert-circle', label: 'Долги с точки' },
-  { icon: 'calendar', label: 'Смены' },
-  { icon: 'wallet', label: 'Зарплата' },
-  { icon: 'checkmark-done', label: 'Согласования', route: '/approvals' },
-  { icon: 'cube', label: 'Склад' },
-  { icon: 'game-controller', label: 'Арена' },
-  { icon: 'document-text', label: 'Отчёты' },
+// perm — web-путь для проверки прав роли (rolePermissionOverrides из /access).
+const SECTIONS: { icon: any; label: string; route?: string; perm: string }[] = [
+  { icon: 'cash', label: 'Доходы', route: '/income', perm: '/income' },
+  { icon: 'card', label: 'Расходы', route: '/expenses', perm: '/expenses' },
+  { icon: 'swap-horizontal', label: 'Движение денег', perm: '/cashflow' },
+  { icon: 'alert-circle', label: 'Долги с точки', perm: '/point-debts' },
+  { icon: 'calendar', label: 'Смены', perm: '/shifts' },
+  { icon: 'wallet', label: 'Зарплата', perm: '/salary' },
+  { icon: 'checkmark-done', label: 'Согласования', route: '/approvals', perm: '/expenses' },
+  { icon: 'cube', label: 'Склад', perm: '/store' },
+  { icon: 'game-controller', label: 'Арена', perm: '/arena' },
+  { icon: 'document-text', label: 'Отчёты', perm: '/reports' },
 ]
 
 export default function MoreScreen() {
-  const { session, signOut } = useAuth()
+  const { session, role, signOut } = useAuth()
   const router = useRouter()
   const [sub, setSub] = useState<Sub['data']>(null)
   const [pending, setPending] = useState(0)
+
+  const sections = SECTIONS.filter((s) => canSee(role, s.perm))
 
   const load = useCallback(async () => {
     try { const r = await apiFetch<Sub>('/api/admin/my-subscription'); setSub(r.data || null) } catch { /* ignore */ }
@@ -58,14 +62,14 @@ export default function MoreScreen() {
           <Text style={{ color: T.textDim, fontSize: 12, marginTop: 4 }}>{session?.user?.email}</Text>
         </Card>
 
-        {/* Разделы */}
-        <SectionTitle hint="скоро в приложении">Разделы</SectionTitle>
+        {/* Разделы — отфильтрованы по правам роли (rolePermissionOverrides из /access) */}
+        <SectionTitle hint={role?.roleLabel || undefined}>Разделы</SectionTitle>
         <Card style={{ padding: 6 }}>
-          {SECTIONS.map((s, i) => (
+          {sections.map((s, i) => (
             <Pressable
               key={s.label}
               onPress={() => s.route ? router.push(s.route as any) : Alert.alert(s.label, 'Этот раздел скоро появится в приложении.')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 10, borderBottomWidth: i < SECTIONS.length - 1 ? 1 : 0, borderBottomColor: T.border }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 10, borderBottomWidth: i < sections.length - 1 ? 1 : 0, borderBottomColor: T.border }}
             >
               <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#181b1f', alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name={s.icon} size={18} color={T.textMut} />
