@@ -66,10 +66,18 @@ export async function GET(request: Request) {
       const items = await fetchItemsByIds(supabase, Array.from(snapIds), 'id, name, barcode, unit, category_id')
       const sectionItems = items.filter((it: any) => section.all || (it.category_id && section.cats.has(String(it.category_id))))
 
-      const { data: counts } = await supabase.from('inventory_audit_counts').select('item_id, counted_qty').eq('act_id', actId)
+      // Слепой счёт: оператор видит ТОЛЬКО свои введённые количества (чтобы продолжить/
+      // поправить), но не числа других кассиров. Иначе двойной слепой счёт ломается —
+      // второй кассир увидел бы цифру первого. Хранилище уже per-operator (onConflict
+      // act_id,item_id,counted_by), поэтому фильтруем чтение по counted_by.
+      const { data: counts } = await supabase
+        .from('inventory_audit_counts')
+        .select('item_id, counted_qty')
+        .eq('act_id', actId)
+        .eq('counted_by', operatorId)
       const countedBy = new Map(((counts as any[]) || []).map((c: any) => [String(c.item_id), num(c.counted_qty)]))
 
-      // СЛЕПОЙ режим: системный остаток НЕ возвращаем.
+      // СЛЕПОЙ режим: ни системный остаток, ни чужой подсчёт НЕ возвращаем.
       return json({
         ok: true,
         data: {
