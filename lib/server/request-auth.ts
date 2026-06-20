@@ -82,11 +82,36 @@ export function createRequestSupabaseClient(request: Request) {
   })
 }
 
+// Канонная валидация Bearer-токена: прямой GET {url}/auth/v1/user (apikey=anon + Bearer).
+// Надёжнее, чем supabase-js getUser() — тот на части токенов молча возвращает пусто.
+async function validateBearerUser(token: string): Promise<any | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anon) return null
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anon, Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    if (!res.ok) return null
+    const user = await res.json().catch(() => null)
+    return user && user.id ? user : null
+  } catch {
+    return null
+  }
+}
+
 export async function getRequestUser(request: Request) {
   const bearerToken = getBearerToken(request)
-  if (bearerToken && hasAdminSupabaseCredentials()) {
-    const { data } = await createAdminSupabaseClient().auth.getUser(bearerToken)
-    return data.user
+  if (bearerToken) {
+    // Сначала прямой запрос к GoTrue, затем фолбэк на supabase-js (на всякий случай).
+    const raw = await validateBearerUser(bearerToken)
+    if (raw) return raw
+    if (hasAdminSupabaseCredentials()) {
+      const { data } = await createAdminSupabaseClient().auth.getUser(bearerToken)
+      if (data?.user) return data.user
+    }
+    return null
   }
 
   const supabase = createRequestSupabaseClient(request)
