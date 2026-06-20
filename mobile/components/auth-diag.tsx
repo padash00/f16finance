@@ -34,6 +34,7 @@ export function AuthDiag() {
   const { session, signOut } = useAuth()
   const { ref: tokenRef, exp } = decodeClaims(session?.access_token)
   const [serverRef, setServerRef] = useState<string | null>(null)
+  const [whoami, setWhoami] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -41,8 +42,18 @@ export function AuthDiag() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (alive && j?.ref) setServerRef(String(j.ref).toLowerCase()) })
       .catch(() => {})
+    const token = session?.access_token
+    if (token) {
+      fetch(`${API_BASE}/api/health/whoami`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!alive || !j) return
+          setWhoami(j.userId ? `user ${String(j.email || j.userId).slice(0, 24)}` : `НЕТ user · ${j.error || 'null'}${j.hasAdminCreds === false ? ' · нет admin-ключа' : ''}`)
+        })
+        .catch(() => {})
+    }
     return () => { alive = false }
-  }, [])
+  }, [session?.access_token])
 
   const nowSec = Math.floor(Date.now() / 1000)
   const expired = exp != null && exp < nowSec
@@ -69,6 +80,7 @@ export function AuthDiag() {
         прилож.: {configRef || '—'} · токен: {tokenRef || 'нет'} · сервер: {serverRef || '…'}
         {exp != null ? ` · токен ${expired ? `истёк ${-Number(minsLeft)} мин назад` : `ещё ${minsLeft} мин`}` : ''}
       </Text>
+      <Text style={{ color: T.textDim, fontSize: 10 }}>сервер видит: {whoami || '…'}</Text>
     </View>
   )
 }
