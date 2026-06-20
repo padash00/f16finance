@@ -7,7 +7,7 @@ import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
 import { OperatorEmptyState, OperatorPanel, OperatorSectionHeading } from '@/components/operator/operator-mobile-ui'
 
 type ActRow = { act_id: string; locationName: string; comment: string | null; opened_at: string; sectionLabel: string }
-type ItemRow = { item_id: string; name: string; barcode: string | null; unit: string | null; counted: number | null }
+type ItemRow = { item_id: string; name: string; barcode: string | null; unit: string | null; counted: number | null; otherQty?: number | null; otherBy?: string | null }
 
 const fmtDate = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
@@ -69,6 +69,19 @@ export default function OperatorAuditPage() {
   useEffect(() => {
     void loadActs()
   }, [loadActs])
+
+  // Живой опрос пока открыт акт: подтягиваем отметки «уже посчитал другой кассир»,
+  // чтобы не считать позицию дважды. Свой ввод (edits) не трогаем — он отдельно.
+  useEffect(() => {
+    if (!activeAct) return
+    const t = setInterval(() => {
+      fetch(`/api/operator/audit?act=${encodeURIComponent(activeAct)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => { const list = j?.data?.items; if (Array.isArray(list)) setItems(list as ItemRow[]) })
+        .catch(() => {})
+    }, 6000)
+    return () => clearInterval(t)
+  }, [activeAct])
 
   const openAct = useCallback(async (id: string) => {
     setActiveAct(id)
@@ -166,6 +179,10 @@ export default function OperatorAuditPage() {
 
       {error ? <div className="border border-rose-500/40 bg-rose-500/[0.06] p-3 font-mono text-[12px] text-rose-300">{error}</div> : null}
 
+      {items.some((it) => it.otherBy) ? (
+        <div className="border border-emerald-500/30 bg-emerald-500/[0.06] p-2.5 font-mono text-[11px] text-emerald-300/90">Зелёным — уже посчитал другой кассир. Не считайте эти позиции повторно.</div>
+      ) : null}
+
       {/* Камера: скан штрихкода → подсветит и сфокусирует нужный товар */}
       {!itemsLoading && items.length > 0 ? (
         <CameraScanner
@@ -185,10 +202,11 @@ export default function OperatorAuditPage() {
       ) : (
         <div className="space-y-1.5">
           {items.map((it) => (
-            <div key={it.item_id} className="flex items-center justify-between gap-3 border border-[#23262b] bg-[#0b0c0d] p-3">
+            <div key={it.item_id} className={`flex items-center justify-between gap-3 border bg-[#0b0c0d] p-3 ${it.otherBy && (edits[it.item_id] ?? '') === '' ? 'border-emerald-500/30' : 'border-[#23262b]'}`}>
               <div className="min-w-0">
                 <div className="truncate font-mono text-[13px] text-zinc-100">{it.name}</div>
                 {it.barcode ? <div className="font-mono text-[10px] text-zinc-600 tabular-nums">{it.barcode}</div> : null}
+                {it.otherBy ? <div className="font-mono text-[10px] text-emerald-400/90">✓ уже посчитал(а) {it.otherBy}: {it.otherQty}</div> : null}
               </div>
               <input
                 id={`audit-input-${it.item_id}`}

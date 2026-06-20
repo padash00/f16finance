@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     // мои назначения на ОТКРЫТЫЕ акты
     const { data: myAssigns } = await supabase
       .from('inventory_audit_assignments')
-      .select('act_id, category_id, label, inventory_audit_acts!inner(id, status, location_id, comment, opened_at)')
+      .select('act_id, category_id, label, inventory_audit_acts!inner(id, status, location_id, comment, opened_at, mode)')
       .eq('operator_id', operatorId)
       .eq('inventory_audit_acts.status', 'open')
     const assignRows = (myAssigns || []) as any[]
@@ -66,30 +66,55 @@ export async function GET(request: Request) {
       const items = await fetchItemsByIds(supabase, Array.from(snapIds), 'id, name, barcode, unit, category_id')
       const sectionItems = items.filter((it: any) => section.all || (it.category_id && section.cats.has(String(it.category_id))))
 
-      // Слепой счёт: оператор видит ТОЛЬКО свои введённые количества (чтобы продолжить/
-      // поправить), но не числа других кассиров. Иначе двойной слепой счёт ломается —
-      // второй кассир увидел бы цифру первого. Хранилище уже per-operator (onConflict
-      // act_id,item_id,counted_by), поэтому фильтруем чтение по counted_by.
+      // Видимость чужих подсчётов зависит от режима акта:
+      //  • Обычный — СОВМЕСТНЫЙ счёт: показываем, что позицию уже посчитал другой кассир
+      //    (и кто), чтобы не считать одну позицию дважды.
+      //  • Двойной слепой — НЕЗАВИСИМЫЙ счёт: каждый видит только свой ввод, иначе
+      //    второй кассир увидит цифру первого и смысл слепого счёта теряется.
+      const act0 = (forAct[0] as any)?.inventory_audit_acts
+      const actObj = Array.isArray(act0) ? act0[0] : act0
+      const isDouble = String(actObj?.mode || 'single') === 'double'
+
       const { data: counts } = await supabase
         .from('inventory_audit_counts')
-        .select('item_id, counted_qty')
+        .select('item_id, counted_qty, counted_by')
         .eq('act_id', actId)
-        .eq('counted_by', operatorId)
-      const countedBy = new Map(((counts as any[]) || []).map((c: any) => [String(c.item_id), num(c.counted_qty)]))
+      const myCount = new Map<string, number>()
+      const otherCount = new Map<string, { qty: number; by: string | null }>()
+      for (const c of ((counts as any[]) || [])) {
+        const id = String(c.item_id)
+        const by = c.counted_by ? String(c.counted_by) : null
+        if (by === operatorId) myCount.set(id, num(c.counted_qty))
+        else if (!isDouble) otherCount.set(id, { qty: num(c.counted_qty), by })
+      }
 
-      // СЛЕПОЙ режим: ни системный остаток, ни чужой подсчёт НЕ возвращаем.
+      // имена кассиров, уже посчитавших позиции (для подписи «посчитал …»)
+      const otherOpIds = Array.from(new Set(Array.from(otherCount.values()).map((v) => v.by).filter(Boolean))) as string[]
+      const { data: opRows } = otherOpIds.length
+        ? await supabase.from('operators').select('id, name, short_name').in('id', otherOpIds)
+        : { data: [] as any[] }
+      const opName = new Map(((opRows as any[]) || []).map((o: any) => [String(o.id), (o.name || o.short_name || 'кассир') as string]))
+
+      // СЛЕПОЙ режим: системный остаток НЕ возвращаем.
       return json({
         ok: true,
         data: {
           act_id: actId,
+          mode: isDouble ? 'double' : 'single',
           items: sectionItems
-            .map((it: any) => ({
-              item_id: String(it.id),
-              name: it.name as string,
-              barcode: it.barcode ? String(it.barcode) : null,
-              unit: it.unit ? String(it.unit) : null,
-              counted: countedBy.has(String(it.id)) ? countedBy.get(String(it.id)) : null,
-            }))
+            .map((it: any) => {
+              const id = String(it.id)
+              const other = otherCount.get(id)
+              return {
+                item_id: id,
+                name: it.name as string,
+                barcode: it.barcode ? String(it.barcode) : null,
+                unit: it.unit ? String(it.unit) : null,
+                counted: myCount.has(id) ? myCount.get(id) : null,
+                otherQty: other ? other.qty : null,
+                otherBy: other ? (other.by ? opName.get(other.by) || 'другой кассир' : 'другой кассир') : null,
+              }
+            })
             .sort((a: any, b: any) => a.name.localeCompare(b.name)),
         },
       })
