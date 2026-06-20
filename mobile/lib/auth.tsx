@@ -3,44 +3,90 @@ import type { Session } from '@supabase/supabase-js'
 
 import { supabase } from './supabase'
 import { setActiveOrganization } from './api'
+import { loginToEmail } from './operator-auth'
+
+export type SessionRole = {
+  isSuperAdmin: boolean
+  isStaff: boolean
+  isOperator: boolean
+  isCustomer: boolean
+  persona: string | null
+  displayName: string | null
+  operatorId: string | null
+  roleLabel: string | null
+}
 
 type AuthState = {
   session: Session | null
+  role: SessionRole | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (login: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   setOrganization: (orgId: string | null) => void
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://ordaops.kz'
+
+async function fetchRole(token: string): Promise<SessionRole | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/session-role`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    const j = await res.json()
+    return {
+      isSuperAdmin: !!j.isSuperAdmin,
+      isStaff: !!j.isStaff,
+      isOperator: !!j.isOperator,
+      isCustomer: !!j.isCustomer,
+      persona: j.persona ?? null,
+      displayName: j.displayName ?? null,
+      operatorId: j.operatorId ?? null,
+      roleLabel: j.roleLabel ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
+  const [role, setRole] = useState<SessionRole | null>(null)
   const [loading, setLoading] = useState(true)
 
+  async function applySession(s: Session | null) {
+    setSession(s)
+    if (s?.access_token) setRole(await fetchRole(s.access_token))
+    else setRole(null)
+  }
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    supabase.auth.getSession().then(async ({ data }) => {
+      await applySession(data.session)
       setLoading(false)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { void applySession(s) })
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+  const signIn = async (login: string, password: string) => {
+    const { email } = loginToEmail(login)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(error.message)
   }
 
   const signOut = async () => {
     await supabase.auth.signOut()
     setActiveOrganization(null)
+    setRole(null)
   }
 
   const setOrganization = (orgId: string | null) => setActiveOrganization(orgId)
 
   return (
-    <AuthContext.Provider value={{ session, loading, signIn, signOut, setOrganization }}>
+    <AuthContext.Provider value={{ session, role, loading, signIn, signOut, setOrganization }}>
       {children}
     </AuthContext.Provider>
   )

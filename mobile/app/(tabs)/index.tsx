@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { T, money, moneyShort } from '@/lib/theme'
 import { Card, SectionTitle, Pill, Sparkline } from '@/components/ui'
 
@@ -20,6 +21,7 @@ type Dash = {
 
 export default function HomeScreen() {
   const router = useRouter()
+  const { role } = useAuth()
   const [d, setD] = useState<Dash | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,9 +53,12 @@ export default function HomeScreen() {
         contentContainerStyle={{ padding: 18, paddingBottom: 28, gap: 14 }}
         refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={load} tintColor={T.green} />}
       >
-        <View style={{ marginBottom: 2 }}>
-          <Text style={{ color: T.textMut, fontSize: 13 }}>{greeting}</Text>
-          <Text style={{ color: T.text, fontSize: 24, fontWeight: '800' }}>Кабинет владельца</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+          <View>
+            <Text style={{ color: T.textMut, fontSize: 13 }}>{greeting}{role?.displayName ? `, ${role.displayName.split(' ')[0]}` : ''}</Text>
+            <Text style={{ color: T.text, fontSize: 24, fontWeight: '800' }}>{role?.isSuperAdmin ? 'Платформа' : 'Кабинет владельца'}</Text>
+          </View>
+          {role?.isSuperAdmin ? <Pill text="Суперадмин" tone="warn" /> : role?.roleLabel ? <Pill text={role.roleLabel} tone="mut" /> : null}
         </View>
 
         {loading && !d ? (

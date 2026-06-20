@@ -6,16 +6,25 @@ import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '@/lib/auth'
 
 function AuthGate() {
-  const { session, loading } = useAuth()
+  const { session, role, loading } = useAuth()
   const segments = useSegments()
   const router = useRouter()
 
   useEffect(() => {
     if (loading) return
-    const onLogin = segments[0] === 'login'
-    if (!session && !onLogin) router.replace('/login')
-    else if (session && onLogin) router.replace('/')
-  }, [session, loading, segments])
+    const inLogin = segments[0] === 'login'
+    const inOp = segments[0] === 'op'
+
+    if (!session) {
+      if (!inLogin) router.replace('/login')
+    } else if (role?.isOperator) {
+      // Оператор → личный кабинет (отдельная навигация)
+      if (!inOp) router.replace('/op')
+    } else {
+      // Владелец / менеджер / суперадмин → кабинет владельца (табы)
+      if (inLogin || inOp) router.replace('/')
+    }
+  }, [session, role, loading, segments])
 
   if (loading) {
     return (
