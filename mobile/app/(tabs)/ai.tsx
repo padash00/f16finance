@@ -6,8 +6,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { canSee } from '@/lib/access'
-import { T, money } from '@/lib/theme'
-import { Card, SectionTitle } from '@/components/ui'
+import { T, R, S, money } from '@/lib/theme'
+import { Card, SectionTitle, Segmented, GlowHero, Pill } from '@/components/ui'
 import { NoAccess } from '@/components/no-access'
 
 type Summary = { where_losing?: string; where_earn?: string; main_risk?: string; main_opportunity?: string; extra_profit?: string; three_actions?: string[] }
@@ -40,36 +40,35 @@ export default function AiScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 28, gap: 14 }}>
+      <ScrollView contentContainerStyle={{ padding: S.lg, paddingBottom: S.xxl, gap: S.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Ionicons name="sparkles" size={22} color={T.green} />
-          <Text style={{ color: T.text, fontSize: 24, fontWeight: '800' }}>AI Финдиректор</Text>
+          <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: 'rgba(139,92,246,0.16)', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="sparkles" size={19} color={T.violet} />
+          </View>
+          <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>AI Финдиректор</Text>
         </View>
         <Text style={{ color: T.textMut, fontSize: 13 }}>Аудит финансов: где теряешь, где заработать, что сделать.</Text>
 
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {PERIODS.map((p) => (
-            <Pressable key={p.d} onPress={() => run(p.d)} disabled={loading} style={{ flex: 1, paddingVertical: 11, borderRadius: 12, alignItems: 'center', backgroundColor: days === p.d ? T.green : T.card, borderWidth: 1, borderColor: days === p.d ? T.green : T.border }}>
-              <Text style={{ color: days === p.d ? '#04130d' : T.textMut, fontWeight: '700', fontSize: 13 }}>{p.l}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <Segmented value={String(days)} options={PERIODS.map((p) => ({ key: String(p.d), label: p.l }))} onChange={(k) => run(Number(k))} />
 
         {loading ? (
           <Card style={{ alignItems: 'center', paddingVertical: 36, gap: 12 }}>
-            <ActivityIndicator color={T.green} />
+            <ActivityIndicator color={T.violet} />
             <Text style={{ color: T.textMut }}>AI считает и анализирует… (15–30 сек)</Text>
           </Card>
         ) : error ? (
-          <Card><Text style={{ color: T.red, fontWeight: '700' }}>Не удалось</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
         ) : res ? (
           <>
             {(res.revenue != null || res.profit != null) ? (
-              <Card style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Stat label="Доход" v={res.revenue} />
-                <Stat label="Расход" v={res.expense} />
-                <Stat label="Прибыль" v={res.profit} tone={(res.profit || 0) >= 0 ? T.green : T.red} />
-              </Card>
+              <GlowHero glow={(res.profit || 0) >= 0 ? T.green : T.red}>
+                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>ПРИБЫЛЬ ЗА {days} ДН.</Text>
+                <Text style={{ color: (res.profit || 0) >= 0 ? T.text : T.red, fontSize: 36, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 }}>{money(res.profit)}</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: S.lg }}>
+                  <Stat label="Доход" v={res.revenue} tone={T.greenBright} />
+                  <Stat label="Расход" v={res.expense} tone={T.amber} />
+                </View>
+              </GlowHero>
             ) : null}
 
             {s ? (
@@ -109,9 +108,9 @@ export default function AiScreen() {
 
 function Stat({ label, v, tone = T.text }: { label: string; v?: number; tone?: string }) {
   return (
-    <View>
+    <View style={{ flex: 1 }}>
       <Text style={{ color: T.textDim, fontSize: 11 }}>{label}</Text>
-      <Text style={{ color: tone, fontSize: 15, fontWeight: '800', marginTop: 3 }}>{money(v)}</Text>
+      <Text style={{ color: tone, fontSize: 15, fontWeight: '900', marginTop: 3 }}>{money(v)}</Text>
     </View>
   )
 }
@@ -119,12 +118,14 @@ function Stat({ label, v, tone = T.text }: { label: string; v?: number; tone?: s
 function Insight({ icon, color, title, text }: { icon: any; color: string; title: string; text?: string }) {
   if (!text) return null
   return (
-    <Card style={{ gap: 8 }}>
+    <Card style={{ gap: 8, borderLeftWidth: 3, borderLeftColor: color }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Ionicons name={icon} size={16} color={color} />
-        <Text style={{ color: T.text, fontSize: 14, fontWeight: '800' }}>{title}</Text>
+        <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={icon} size={15} color={color} />
+        </View>
+        <Text style={{ color: T.text, fontSize: 14.5, fontWeight: '800' }}>{title}</Text>
       </View>
-      <Text style={{ color: T.textMut, fontSize: 13, lineHeight: 19 }}>{text}</Text>
+      <Text style={{ color: T.textMut, fontSize: 13.5, lineHeight: 20 }}>{text}</Text>
     </Card>
   )
 }

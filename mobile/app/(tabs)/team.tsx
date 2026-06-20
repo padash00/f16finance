@@ -5,8 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { canSee } from '@/lib/access'
-import { T } from '@/lib/theme'
-import { Card, SectionTitle, Pill } from '@/components/ui'
+import { T, S } from '@/lib/theme'
+import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
 import { NoAccess } from '@/components/no-access'
 
 type Device = { id: string; name: string; isOnline: boolean; ageSeconds: number | null; operatorName: string | null }
@@ -46,20 +46,22 @@ export default function TeamScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 28, gap: 14 }} refreshControl={<RefreshControl refreshing={loading && !!p} onRefresh={load} tintColor={T.green} />}>
-        <Text style={{ color: T.text, fontSize: 24, fontWeight: '800' }}>Команда</Text>
+      <ScrollView contentContainerStyle={{ padding: S.lg, paddingBottom: S.xxl, gap: S.md }} refreshControl={<RefreshControl refreshing={loading && !!p} onRefresh={load} tintColor={T.green} />}>
+        <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Команда</Text>
 
         {loading && !p ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
-          <Card><Text style={{ color: T.red, fontWeight: '700' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
         ) : p ? (
           <>
-            <Card style={{ padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={{ color: T.textMut, fontSize: 13 }}>Сейчас на смене</Text>
-                <Text style={{ color: T.text, fontSize: 34, fontWeight: '900', marginTop: 4 }}>{p.onlineCount}</Text>
+            <GlowHero glow={p.onlineCount > 0 ? T.green : T.textDim}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>СЕЙЧАС НА СМЕНЕ</Text>
+                  <Text style={{ color: T.text, fontSize: 40, fontWeight: '900', marginTop: 6, letterSpacing: -0.5 }}>{p.onlineCount}</Text>
+                </View>
+                <Pill text={`${p.devices.length} устройств`} tone="mut" />
               </View>
-              <Pill text={`${p.devices.length} устройств`} tone="mut" />
-            </Card>
+            </GlowHero>
 
             {online.length > 0 ? (
               <>

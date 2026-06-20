@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { T, money } from '@/lib/theme'
-import { Card, SectionTitle, Pill } from '@/components/ui'
+import { T, R, S, money } from '@/lib/theme'
+import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
 import { AuthDiag } from '@/components/auth-diag'
 
 type Overview = {
@@ -53,25 +53,25 @@ export default function OperatorHome() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View>
             <Text style={{ color: T.textMut, fontSize: 13 }}>{role?.roleLabel || 'Оператор'}</Text>
-            <Text style={{ color: T.text, fontSize: 24, fontWeight: '800' }}>{d?.operator.name || role?.displayName || 'Оператор'}</Text>
+            <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>{d?.operator.name || role?.displayName || 'Оператор'}</Text>
           </View>
           <Pressable onPress={onLogout} hitSlop={10}><Ionicons name="log-out-outline" size={22} color={T.textMut} /></Pressable>
         </View>
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 60 }} /> : error ? (
-          <Card><Text style={{ color: T.red, fontWeight: '700' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text><AuthDiag /></Card>
+          <Card><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text><AuthDiag /></Card>
         ) : d ? (
           <>
             {/* Зарплата недели */}
-            <Card style={{ padding: 20, borderColor: '#1f3a30', backgroundColor: '#0f1714' }}>
+            <GlowHero glow={st.tone === 'good' ? T.green : T.amber}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: T.textMut, fontSize: 13 }}>К выплате за неделю</Text>
+                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>К ВЫПЛАТЕ ЗА НЕДЕЛЮ</Text>
                 <Pill text={st.text} tone={st.tone} />
               </View>
-              <Text style={{ color: T.text, fontSize: 34, fontWeight: '900', marginTop: 6 }}>{money(d.week.netAmount)}</Text>
-              <Text style={{ color: T.textDim, fontSize: 13, marginTop: 2 }}>начислено {money(d.week.grossAmount)} · выплачено {money(d.week.paidAmount)}</Text>
-              {d.week.remainingAmount > 0 ? <Text style={{ color: T.amber, fontSize: 13, marginTop: 6, fontWeight: '700' }}>Остаток: {money(d.week.remainingAmount)}</Text> : null}
-            </Card>
+              <Text style={{ color: T.text, fontSize: 38, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 }}>{money(d.week.netAmount)}</Text>
+              <Text style={{ color: T.textMut, fontSize: 13, marginTop: 3 }}>начислено {money(d.week.grossAmount)} · выплачено {money(d.week.paidAmount)}</Text>
+              {d.week.remainingAmount > 0 ? <Text style={{ color: T.amber, fontSize: 13, marginTop: 8, fontWeight: '800' }}>Остаток: {money(d.week.remainingAmount)}</Text> : null}
+            </GlowHero>
 
             {/* Корректировки */}
             <View style={{ flexDirection: 'row', gap: 10 }}>

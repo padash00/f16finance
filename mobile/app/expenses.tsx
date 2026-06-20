@@ -5,8 +5,8 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
-import { T, money } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { T, S, money } from '@/lib/theme'
+import { Card, Pill, GlowHero } from '@/components/ui'
 
 type Expense = {
   id: string
@@ -101,15 +101,15 @@ export default function ExpensesScreen() {
         refreshControl={<RefreshControl refreshing={loading && items.length > 0} onRefresh={() => load(cursor)} tintColor={T.green} />}
       >
         {/* Сводка */}
-        <Card style={{ padding: 18 }}>
-          <Text style={{ color: T.textMut, fontSize: 13 }}>Всего за месяц</Text>
-          <Text style={{ color: T.text, fontSize: 30, fontWeight: '900', marginTop: 4 }}>{money(summary.total)}</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <GlowHero glow={T.amber}>
+          <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>ВСЕГО ЗА МЕСЯЦ</Text>
+          <Text style={{ color: T.text, fontSize: 34, fontWeight: '900', marginTop: 6, letterSpacing: -0.5 }}>{money(summary.total)}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: S.md, flexWrap: 'wrap' }}>
             <Pill text={`одобрено ${money(summary.approved)}`} tone="good" />
             {summary.pending > 0 ? <Pill text={`ожидает ${money(summary.pending)}`} tone="warn" /> : null}
           </View>
           <Text style={{ color: T.textDim, fontSize: 12, marginTop: 10 }}>{items.length} записей</Text>
-        </Card>
+        </GlowHero>
 
         {error ? <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontSize: 13 }}>{error}</Text></Card> : null}
 

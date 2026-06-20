@@ -5,8 +5,8 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
-import { T, money, moneyShort } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { T, S, money, moneyShort } from '@/lib/theme'
+import { Card, Pill, GlowHero } from '@/components/ui'
 
 type Income = {
   id: string
@@ -95,16 +95,16 @@ export default function IncomeScreen() {
         contentContainerStyle={{ padding: 18, paddingTop: 6, paddingBottom: 28, gap: 12 }}
         refreshControl={<RefreshControl refreshing={loading && items.length > 0} onRefresh={() => load(cursor)} tintColor={T.green} />}
       >
-        <Card style={{ padding: 18, borderColor: '#1f3a30', backgroundColor: '#0f1714' }}>
-          <Text style={{ color: T.textMut, fontSize: 13 }}>Доход за месяц</Text>
-          <Text style={{ color: T.text, fontSize: 30, fontWeight: '900', marginTop: 4 }}>{money(summary.total)}</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <GlowHero glow={T.green}>
+          <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>ДОХОД ЗА МЕСЯЦ</Text>
+          <Text style={{ color: T.text, fontSize: 34, fontWeight: '900', marginTop: 6, letterSpacing: -0.5 }}>{money(summary.total)}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: S.md, flexWrap: 'wrap' }}>
             <Pill text={`нал ${moneyShort(summary.cash)}`} tone="mut" />
-            <Pill text={`Kaspi ${moneyShort(summary.kaspi)}`} tone="mut" />
+            <Pill text={`Kaspi ${moneyShort(summary.kaspi)}`} tone="brand" />
             {summary.other > 0 ? <Pill text={`карта/онлайн ${moneyShort(summary.other)}`} tone="mut" /> : null}
           </View>
           <Text style={{ color: T.textDim, fontSize: 12, marginTop: 10 }}>{items.length} записей</Text>
-        </Card>
+        </GlowHero>
 
         {error ? <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontSize: 13 }}>{error}</Text></Card> : null}
 
