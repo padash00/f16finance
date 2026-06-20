@@ -1,46 +1,32 @@
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
-const ACTIVE = '#10b981'
-const INACTIVE = '#6b7280'
+import { T } from '@/lib/theme'
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: ACTIVE,
-        tabBarInactiveTintColor: INACTIVE,
+        tabBarActiveTintColor: T.green,
+        tabBarInactiveTintColor: T.textDim,
         tabBarStyle: {
-          backgroundColor: '#0f1113',
-          borderTopColor: '#1c1f24',
-          height: 84,
-          paddingTop: 8,
+          backgroundColor: 'rgba(10,12,14,0.96)',
+          borderTopColor: T.borderSoft,
+          borderTopWidth: 1,
+          height: 86,
+          paddingTop: 9,
           paddingBottom: 28,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarItemStyle: { paddingTop: 2 },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Главная', tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} /> }}
-      />
-      <Tabs.Screen
-        name="finance"
-        options={{ title: 'Финансы', tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" size={size} color={color} /> }}
-      />
-      <Tabs.Screen
-        name="team"
-        options={{ title: 'Команда', tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} /> }}
-      />
-      <Tabs.Screen
-        name="ai"
-        options={{ title: 'AI', tabBarIcon: ({ color, size }) => <Ionicons name="sparkles" size={size} color={color} /> }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{ title: 'Ещё', tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} /> }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Главная', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'home' : 'home-outline'} size={23} color={color} /> }} />
+      <Tabs.Screen name="finance" options={{ title: 'Финансы', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={23} color={color} /> }} />
+      <Tabs.Screen name="team" options={{ title: 'Команда', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'people' : 'people-outline'} size={23} color={color} /> }} />
+      <Tabs.Screen name="ai" options={{ title: 'AI', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={23} color={color} /> }} />
+      <Tabs.Screen name="more" options={{ title: 'Ещё', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'grid' : 'grid-outline'} size={23} color={color} /> }} />
     </Tabs>
   )
 }

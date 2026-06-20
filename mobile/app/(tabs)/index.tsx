@@ -6,8 +6,8 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { T, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, Sparkline } from '@/components/ui'
+import { T, R, S, money, moneyShort, shadow } from '@/lib/theme'
+import { Card, SectionTitle, Pill, Sparkline, GlowHero, Skeleton } from '@/components/ui'
 import { AuthDiag } from '@/components/auth-diag'
 
 type Dash = {
@@ -51,67 +51,85 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ padding: 18, paddingBottom: 28, gap: 14 }}
+        contentContainerStyle={{ padding: S.lg, paddingBottom: S.xxl, gap: S.md }}
         refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={load} tintColor={T.green} />}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+        {/* Шапка */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2, marginBottom: 2 }}>
           <View>
             <Text style={{ color: T.textMut, fontSize: 13 }}>{greeting}{role?.displayName ? `, ${role.displayName.split(' ')[0]}` : ''}</Text>
-            <Text style={{ color: T.text, fontSize: 24, fontWeight: '800' }}>{role?.isSuperAdmin ? 'Платформа' : 'Кабинет владельца'}</Text>
+            <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>{role?.isSuperAdmin ? 'Платформа' : 'Кабинет владельца'}</Text>
           </View>
-          {role?.isSuperAdmin ? <Pill text="Суперадмин" tone="warn" /> : role?.roleLabel ? <Pill text={role.roleLabel} tone="mut" /> : null}
+          {role?.isSuperAdmin ? <Pill text="Суперадмин" tone="warn" /> : role?.roleLabel ? <Pill text={role.roleLabel} tone="brand" /> : null}
         </View>
 
         {loading && !d ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 60 }} />
+          <>
+            <Skeleton h={170} style={{ borderRadius: R.xl }} />
+            <View style={{ flexDirection: 'row', gap: S.sm }}>{[0, 1, 2].map((i) => <Skeleton key={i} h={70} style={{ flex: 1, borderRadius: R.lg }} />)}</View>
+            <Skeleton h={120} style={{ borderRadius: R.xl, marginTop: 4 }} />
+          </>
         ) : error ? (
-          <Card><Text style={{ color: T.red, fontWeight: '700' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text><AuthDiag /></Card>
+          <Card style={{ borderColor: '#3b1212' }}>
+            <Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text>
+            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
+            <AuthDiag />
+          </Card>
         ) : d ? (
           <>
-            {/* HERO — сегодня */}
-            <Card style={{ padding: 20, borderColor: '#1f3a30', backgroundColor: '#0f1714' }}>
+            {/* HERO — продажи сегодня */}
+            <GlowHero glow={chg != null && chg < 0 ? T.amber : T.green}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '600' }}>Продажи сегодня</Text>
-                {chg != null ? <Pill text={`${chg > 0 ? '↑' : chg < 0 ? '↓' : ''} ${Math.abs(chg)}% ко вчера`} tone={chg >= 0 ? 'good' : 'bad'} /> : null}
+                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>ПРОДАЖИ СЕГОДНЯ</Text>
+                {chg != null ? <Pill text={`${chg > 0 ? '↑' : chg < 0 ? '↓' : ''} ${Math.abs(chg)}%`} tone={chg >= 0 ? 'good' : 'bad'} /> : null}
               </View>
-              <Text style={{ color: T.text, fontSize: 38, fontWeight: '900', marginTop: 6 }}>{money(d.today.total)}</Text>
-              <Text style={{ color: T.textDim, fontSize: 13, marginTop: 2 }}>{d.today.count} чеков · вчера {moneyShort(d.yesterday.total)}</Text>
-              <View style={{ marginTop: 16 }}><Sparkline values={week.length ? week : [0]} /></View>
-              <Text style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>динамика за неделю</Text>
-            </Card>
+              <Text style={{ color: T.text, fontSize: 40, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 }}>{money(d.today.total)}</Text>
+              <Text style={{ color: T.textMut, fontSize: 13, marginTop: 3 }}>{d.today.count} чеков · вчера {moneyShort(d.yesterday.total)}</Text>
+              <View style={{ marginTop: S.lg }}><Sparkline values={week.length ? week : [0]} peakColor={T.greenBright} /></View>
+              <Text style={{ color: T.textDim, fontSize: 11, marginTop: S.sm, letterSpacing: 0.4 }}>ДИНАМИКА ЗА НЕДЕЛЮ</Text>
+            </GlowHero>
 
             {/* Способы оплаты */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <PayStat label="Наличные" value={d.today.cash} color={T.green} />
-              <PayStat label="Kaspi" value={d.today.kaspi} color={T.blue} />
-              <PayStat label="Карта" value={d.today.card} color={T.amber} />
+            <View style={{ flexDirection: 'row', gap: S.sm }}>
+              <PayStat label="Наличные" value={d.today.cash} color={T.greenBright} icon="cash-outline" />
+              <PayStat label="Kaspi" value={d.today.kaspi} color={T.cyan} icon="card-outline" />
+              <PayStat label="Карта" value={d.today.card + d.today.online} color={T.amber} icon="wallet-outline" />
             </View>
+
             <Card style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: T.textMut, fontSize: 13 }}>Продажи за месяц</Text>
-              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>{money(d.month_total)}</Text>
+              <View>
+                <Text style={{ color: T.textMut, fontSize: 12 }}>Продажи за месяц</Text>
+                <Text style={{ color: T.text, fontSize: 20, fontWeight: '900', marginTop: 2 }}>{money(d.month_total)}</Text>
+              </View>
+              <Pressable onPress={() => router.push('/finance')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ color: T.green, fontWeight: '800', fontSize: 13 }}>Финансы</Text>
+                <Ionicons name="arrow-forward" size={15} color={T.green} />
+              </Pressable>
             </Card>
 
             {/* Быстрые действия */}
             <SectionTitle>Быстрые действия</SectionTitle>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              <QuickAction icon="stats-chart" label="Финансы" onPress={() => router.push('/finance')} />
-              <QuickAction icon="people" label="Команда" onPress={() => router.push('/team')} />
-              <QuickAction icon="sparkles" label="AI-разбор" onPress={() => router.push('/ai')} />
-              <QuickAction icon="grid" label="Ещё" onPress={() => router.push('/more')} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
+              <QuickAction icon="stats-chart" label="Финансы" tint={T.green} onPress={() => router.push('/finance')} />
+              <QuickAction icon="people" label="Команда" tint={T.cyan} onPress={() => router.push('/team')} />
+              <QuickAction icon="sparkles" label="AI-разбор" tint={T.violet} onPress={() => router.push('/ai')} />
+              <QuickAction icon="grid" label="Ещё" tint={T.amber} onPress={() => router.push('/more')} />
             </View>
 
             {/* Требует внимания */}
             {d.low_stock.length > 0 ? (
               <>
                 <SectionTitle hint={`${d.low_stock.length} позиций`}>Требует внимания</SectionTitle>
-                <Card style={{ gap: 10 }}>
-                  {d.low_stock.slice(0, 5).map((it) => (
-                    <View key={it.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <Ionicons name="alert-circle" size={16} color={T.amber} />
+                <Card style={{ gap: 2, paddingVertical: 6 }}>
+                  {d.low_stock.slice(0, 5).map((it, i, arr) => (
+                    <View key={it.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: 'rgba(251,191,36,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="alert" size={16} color={T.amber} />
+                        </View>
                         <Text style={{ color: T.text, fontSize: 14, flex: 1 }} numberOfLines={1}>{it.name}</Text>
                       </View>
-                      <Text style={{ color: T.amber, fontSize: 13, fontWeight: '700' }}>{it.balance} / {it.threshold}</Text>
+                      <Text style={{ color: T.amber, fontSize: 13, fontWeight: '800' }}>{it.balance} / {it.threshold}</Text>
                     </View>
                   ))}
                 </Card>
@@ -122,14 +140,14 @@ export default function HomeScreen() {
             {d.recent_sales.length > 0 ? (
               <>
                 <SectionTitle>Последние продажи</SectionTitle>
-                <Card style={{ gap: 12 }}>
-                  {d.recent_sales.slice(0, 6).map((s) => (
-                    <View key={s.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Card style={{ gap: 2, paddingVertical: 6 }}>
+                  {d.recent_sales.slice(0, 6).map((s, i, arr) => (
+                    <View key={s.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
                       <View>
-                        <Text style={{ color: T.text, fontSize: 14, fontWeight: '600' }}>{money(s.total_amount)}</Text>
-                        <Text style={{ color: T.textDim, fontSize: 11 }}>{s.items_count} поз. · {s.payment_method}</Text>
+                        <Text style={{ color: T.text, fontSize: 14.5, fontWeight: '800' }}>{money(s.total_amount)}</Text>
+                        <Text style={{ color: T.textDim, fontSize: 11.5, marginTop: 1 }}>{s.items_count} поз. · {s.payment_method}</Text>
                       </View>
-                      <Text style={{ color: T.textDim, fontSize: 11 }}>{s.sold_at ? new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''}</Text>
+                      <Text style={{ color: T.textDim, fontSize: 11.5 }}>{s.sold_at ? new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''}</Text>
                     </View>
                   ))}
                 </Card>
@@ -142,22 +160,23 @@ export default function HomeScreen() {
   )
 }
 
-function PayStat({ label, value, color }: { label: string; value: number; color: string }) {
+function PayStat({ label, value, color, icon }: { label: string; value: number; color: string; icon: any }) {
   return (
-    <View style={{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 16, padding: 12 }}>
-      <Text style={{ color: T.textDim, fontSize: 11 }}>{label}</Text>
-      <Text style={{ color, fontSize: 15, fontWeight: '800', marginTop: 4 }}>{moneyShort(value)}</Text>
+    <View style={[{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.md }, shadow.card]}>
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={{ color: T.textDim, fontSize: 11, marginTop: 6 }}>{label}</Text>
+      <Text style={{ color, fontSize: 14.5, fontWeight: '900', marginTop: 2 }}>{moneyShort(value)}</Text>
     </View>
   )
 }
 
-function QuickAction({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
+function QuickAction({ icon, label, tint, onPress }: { icon: any; label: string; tint: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={{ width: '47%', flexGrow: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#10261f', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={20} color={T.green} />
+    <Pressable onPress={onPress} style={({ pressed }) => [{ width: '47.5%', flexGrow: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.lg, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? 0.7 : 1 }, shadow.card]}>
+      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tint + '22', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={20} color={tint} />
       </View>
-      <Text style={{ color: T.text, fontSize: 15, fontWeight: '700' }}>{label}</Text>
+      <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>{label}</Text>
     </Pressable>
   )
 }
