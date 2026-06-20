@@ -1,21 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, Pill, GlowHero } from '@/components/ui'
 import { AuthDiag } from '@/components/auth-diag'
 
 type Overview = {
   operator: { name: string; short_name: string | null }
-  week: { grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: string }
+  week: { grossAmount: number; bonusAmount: number; fineAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: string }
   counters: { activeTasks: number; reviewTasks: number; activeDebts: number; activeDebtAmount: number; leadPoints: number }
   nextShift: { label: string } | null
-  activeTasks: { id: string; title: string; status: string; priority: string; due_date: string | null }[]
-  recentDebts: { id: string; amount: number; comment: string | null; companyName: string | null }[]
 }
 
 const STATUS: Record<string, { text: string; tone: 'good' | 'warn' | 'mut' }> = {
@@ -25,7 +24,8 @@ const STATUS: Record<string, { text: string; tone: 'good' | 'warn' | 'mut' }> = 
 }
 
 export default function OperatorHome() {
-  const { role, signOut } = useAuth()
+  const router = useRouter()
+  const { role } = useAuth()
   const [d, setD] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,83 +44,58 @@ export default function OperatorHome() {
 
   useEffect(() => { void load() }, [load])
 
-  const onLogout = () => Alert.alert('Выйти?', '', [{ text: 'Отмена', style: 'cancel' }, { text: 'Выйти', style: 'destructive', onPress: () => void signOut() }])
   const st = d ? STATUS[d.week.status] || STATUS.draft : STATUS.draft
+  const greeting = (() => {
+    const h = new Date().getHours()
+    return h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер'
+  })()
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 28, gap: 14 }} refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={load} tintColor={T.green} />}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View>
-            <Text style={{ color: T.textMut, fontSize: 13 }}>{role?.roleLabel || 'Оператор'}</Text>
-            <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>{d?.operator.name || role?.displayName || 'Оператор'}</Text>
-          </View>
-          <Pressable onPress={onLogout} hitSlop={10}><Ionicons name="log-out-outline" size={22} color={T.textMut} /></Pressable>
+      <ScrollView contentContainerStyle={{ padding: S.lg, paddingBottom: S.xxl, gap: S.md }} refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={load} tintColor={T.green} />}>
+        <View style={{ marginTop: 2 }}>
+          <Text style={{ color: T.textMut, fontSize: 13 }}>{greeting}</Text>
+          <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>{d?.operator.name || role?.displayName || 'Оператор'}</Text>
         </View>
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 60 }} /> : error ? (
-          <Card><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text><AuthDiag /></Card>
+          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text><AuthDiag /></Card>
         ) : d ? (
           <>
             {/* Зарплата недели */}
-            <GlowHero glow={st.tone === 'good' ? T.green : T.amber}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>К ВЫПЛАТЕ ЗА НЕДЕЛЮ</Text>
-                <Pill text={st.text} tone={st.tone} />
-              </View>
-              <Text style={{ color: T.text, fontSize: 38, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 }}>{money(d.week.netAmount)}</Text>
-              <Text style={{ color: T.textMut, fontSize: 13, marginTop: 3 }}>начислено {money(d.week.grossAmount)} · выплачено {money(d.week.paidAmount)}</Text>
-              {d.week.remainingAmount > 0 ? <Text style={{ color: T.amber, fontSize: 13, marginTop: 8, fontWeight: '800' }}>Остаток: {money(d.week.remainingAmount)}</Text> : null}
-            </GlowHero>
-
-            {/* Корректировки */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Mini label="Бонус" value={d.week.bonusAmount} color={T.green} />
-              <Mini label="Штраф" value={d.week.fineAmount} color={T.red} />
-              <Mini label="Аванс" value={d.week.advanceAmount} color={T.blue} />
-            </View>
+            <Pressable onPress={() => router.push('/op/salary')}>
+              <GlowHero glow={st.tone === 'good' ? T.green : T.amber}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>К ВЫПЛАТЕ ЗА НЕДЕЛЮ</Text>
+                  <Pill text={st.text} tone={st.tone} />
+                </View>
+                <Text style={{ color: T.text, fontSize: 40, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 }}>{money(d.week.netAmount)}</Text>
+                <Text style={{ color: T.textMut, fontSize: 13, marginTop: 3 }}>начислено {money(d.week.grossAmount)} · выплачено {money(d.week.paidAmount)}</Text>
+                {d.week.remainingAmount > 0 ? <Text style={{ color: T.amber, fontSize: 13, marginTop: 8, fontWeight: '800' }}>Остаток: {money(d.week.remainingAmount)}</Text> : null}
+              </GlowHero>
+            </Pressable>
 
             {/* Следующая смена */}
             {d.nextShift ? (
-              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Ionicons name="calendar" size={20} color={T.green} />
-                <View><Text style={{ color: T.textMut, fontSize: 12 }}>Ближайшая смена</Text><Text style={{ color: T.text, fontSize: 15, fontWeight: '600' }}>{d.nextShift.label}</Text></View>
-              </Card>
-            ) : null}
-
-            {/* Задачи */}
-            {d.activeTasks.length > 0 ? (
-              <>
-                <SectionTitle hint={`${d.counters.activeTasks}`}>Мои задачи</SectionTitle>
-                <Card style={{ gap: 12 }}>
-                  {d.activeTasks.map((t) => (
-                    <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: t.priority === 'high' ? T.red : T.amber }} />
-                      <Text style={{ color: T.text, fontSize: 14, flex: 1 }} numberOfLines={1}>{t.title}</Text>
-                    </View>
-                  ))}
+              <Pressable onPress={() => router.push('/op/shifts')}>
+                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="calendar" size={20} color={T.green} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: T.textMut, fontSize: 12 }}>Ближайшая смена</Text>
+                    <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>{d.nextShift.label}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={T.textDim} />
                 </Card>
-              </>
+              </Pressable>
             ) : null}
 
-            {/* Долги */}
-            {d.recentDebts.length > 0 ? (
-              <>
-                <SectionTitle hint={money(d.counters.activeDebtAmount)}>Мои долги</SectionTitle>
-                <Card style={{ gap: 12 }}>
-                  {d.recentDebts.map((db) => (
-                    <View key={db.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ color: T.text, fontSize: 14, flex: 1 }} numberOfLines={1}>{db.comment || db.companyName || 'Долг'}</Text>
-                      <Text style={{ color: T.amber, fontSize: 14, fontWeight: '700' }}>{money(db.amount)}</Text>
-                    </View>
-                  ))}
-                </Card>
-              </>
-            ) : null}
-
-            <Pressable onPress={onLogout} style={{ marginTop: 6, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#3b1212', backgroundColor: '#160c0c', alignItems: 'center' }}>
-              <Text style={{ color: T.red, fontWeight: '700', fontSize: 15 }}>Выйти из аккаунта</Text>
-            </Pressable>
+            {/* Счётчики-ссылки */}
+            <View style={{ flexDirection: 'row', gap: S.sm }}>
+              <CounterTile icon="checkbox-outline" tint={T.cyan} label="Задачи" value={d.counters.activeTasks} onPress={() => router.push('/op/tasks')} />
+              <CounterTile icon="alert-circle-outline" tint={T.amber} label="Мои долги" value={d.counters.activeDebts} sub={d.counters.activeDebtAmount > 0 ? money(d.counters.activeDebtAmount) : undefined} onPress={() => router.push('/op/salary')} />
+            </View>
           </>
         ) : null}
       </ScrollView>
@@ -128,11 +103,15 @@ export default function OperatorHome() {
   )
 }
 
-function Mini({ label, value, color }: { label: string; value: number; color: string }) {
+function CounterTile({ icon, tint, label, value, sub, onPress }: { icon: any; tint: string; label: string; value: number; sub?: string; onPress: () => void }) {
   return (
-    <View style={{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 16, padding: 12 }}>
-      <Text style={{ color: T.textDim, fontSize: 11 }}>{label}</Text>
-      <Text style={{ color, fontSize: 15, fontWeight: '800', marginTop: 4 }}>{money(value)}</Text>
-    </View>
+    <Pressable onPress={onPress} style={{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.lg }}>
+      <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: tint + '22', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={19} color={tint} />
+      </View>
+      <Text style={{ color: T.text, fontSize: 26, fontWeight: '900', marginTop: 10 }}>{value}</Text>
+      <Text style={{ color: T.textMut, fontSize: 13 }}>{label}</Text>
+      {sub ? <Text style={{ color: T.amber, fontSize: 12, fontWeight: '700', marginTop: 2 }}>{sub}</Text> : null}
+    </Pressable>
   )
 }
