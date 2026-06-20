@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { useRouter } from 'expo-router'
 
 import { useAuth } from '@/lib/auth'
 import { supabaseHost } from '@/lib/supabase'
@@ -31,6 +32,7 @@ function decodeClaims(token?: string | null): Claims {
 }
 
 export function AuthDiag() {
+  const router = useRouter()
   const { session, signOut } = useAuth()
   const { ref: tokenRef, exp } = decodeClaims(session?.access_token)
   const [serverRef, setServerRef] = useState<string | null>(null)
@@ -71,10 +73,15 @@ export function AuthDiag() {
         <Banner title="Токен сессии истёк" text="Старая сессия в памяти не обновилась. Выйдите и войдите заново — получите свежий токен." />
       ) : null}
 
-      {/* Чистый перелогин помогает почти всегда: стирает старую сессию и берёт свежий токен. */}
-      <Pressable onPress={() => void signOut()} style={{ alignSelf: 'flex-start', backgroundColor: '#3b1212', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}>
-        <Text style={{ color: '#fca5a5', fontWeight: '800', fontSize: 13 }}>Выйти и войти заново</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {/* Чистый перелогин помогает почти всегда: стирает старую сессию и берёт свежий токен. */}
+        <Pressable onPress={() => void signOut()} style={{ backgroundColor: '#3b1212', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}>
+          <Text style={{ color: '#fca5a5', fontWeight: '800', fontSize: 13 }}>Выйти и войти заново</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/diag')} style={{ borderColor: T.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}>
+          <Text style={{ color: T.textMut, fontWeight: '800', fontSize: 13 }}>Полная диагностика</Text>
+        </Pressable>
+      </View>
 
       <Text style={{ color: T.textDim, fontSize: 10 }}>
         прилож.: {configRef || '—'} · токен: {tokenRef || 'нет'} · сервер: {serverRef || '…'}
