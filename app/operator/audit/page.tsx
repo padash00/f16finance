@@ -5,6 +5,7 @@ import { ArrowLeft, ClipboardList, Loader2, Save } from 'lucide-react'
 
 import { CameraScanner, scanFeedback } from '@/components/store/camera-scanner'
 import { OperatorEmptyState, OperatorPanel, OperatorSectionHeading } from '@/components/operator/operator-mobile-ui'
+import { supabase } from '@/lib/supabaseClient'
 
 type ActRow = { act_id: string; locationName: string; comment: string | null; opened_at: string; sectionLabel: string }
 type ItemRow = { item_id: string; name: string; barcode: string | null; unit: string | null; counted: number | null; otherQty?: number | null; otherBy?: string | null }
@@ -70,18 +71,35 @@ export default function OperatorAuditPage() {
     void loadActs()
   }, [loadActs])
 
-  // Живой опрос пока открыт акт: подтягиваем отметки «уже посчитал другой кассир»,
-  // чтобы не считать позицию дважды. Свой ввод (edits) не трогаем — он отдельно.
+  // Тихий рефетч позиций (без мигания): обновляет отметки «уже посчитал другой кассир».
+  // Свой ввод (edits) не трогаем — он живёт отдельно.
+  const refreshItems = useCallback((id: string) => {
+    return fetch(`/api/operator/audit?act=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { const list = j?.data?.items; if (Array.isArray(list)) setItems(list as ItemRow[]) })
+      .catch(() => {})
+  }, [])
+
+  // Realtime: подписываемся на изменения подсчётов этого акта — как только другой кассир
+  // сохранил позицию, у нас она сразу подсветится «уже посчитал …». Дебаунс 350мс, чтобы
+  // пачка сохранений дала один рефетч. Требует таблицу в publication supabase_realtime.
   useEffect(() => {
     if (!activeAct) return
-    const t = setInterval(() => {
-      fetch(`/api/operator/audit?act=${encodeURIComponent(activeAct)}`, { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => { const list = j?.data?.items; if (Array.isArray(list)) setItems(list as ItemRow[]) })
-        .catch(() => {})
-    }, 6000)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const bump = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => void refreshItems(activeAct), 350) }
+    const channel = supabase
+      .channel(`audit-counts-${activeAct}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_audit_counts', filter: `act_id=eq.${activeAct}` }, bump)
+      .subscribe()
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel) }
+  }, [activeAct, refreshItems])
+
+  // Страховка: если realtime-публикация на таблице не включена — мягкий опрос раз в 15с.
+  useEffect(() => {
+    if (!activeAct) return
+    const t = setInterval(() => void refreshItems(activeAct), 15000)
     return () => clearInterval(t)
-  }, [activeAct])
+  }, [activeAct, refreshItems])
 
   const openAct = useCallback(async (id: string) => {
     setActiveAct(id)
