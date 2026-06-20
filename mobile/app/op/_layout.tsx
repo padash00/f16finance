@@ -24,6 +24,7 @@ export default function OperatorLayout() {
       <Tabs.Screen name="index" options={{ title: 'Главная', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'home' : 'home-outline'} size={23} color={color} /> }} />
       <Tabs.Screen name="shifts" options={{ title: 'Смены', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={23} color={color} /> }} />
       <Tabs.Screen name="tasks" options={{ title: 'Задачи', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'checkbox' : 'checkbox-outline'} size={23} color={color} /> }} />
+      <Tabs.Screen name="audit" options={{ title: 'Ревизия', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'clipboard' : 'clipboard-outline'} size={23} color={color} /> }} />
       <Tabs.Screen name="salary" options={{ title: 'Зарплата', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={23} color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: 'Профиль', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'person' : 'person-outline'} size={23} color={color} /> }} />
     </Tabs>

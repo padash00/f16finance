@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
 import { Card, SectionTitle, Pill } from '@/components/ui'
@@ -34,6 +35,27 @@ export default function OperatorProfile() {
   useEffect(() => { void load() }, [load])
 
   const onLogout = () => Alert.alert('Выйти из аккаунта?', '', [{ text: 'Отмена', style: 'cancel' }, { text: 'Выйти', style: 'destructive', onPress: () => void signOut() }])
+
+  // смена пароля
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwErr, setPwErr] = useState<string | null>(null)
+  const changePassword = async () => {
+    setPwErr(null)
+    if (pw1.length < 6) { setPwErr('Минимум 6 символов'); return }
+    if (pw1 !== pw2) { setPwErr('Пароли не совпадают'); return }
+    setPwBusy(true)
+    try {
+      const { error: e } = await supabase.auth.updateUser({ password: pw1 })
+      if (e) throw new Error(e.message)
+      setPwOpen(false); setPw1(''); setPw2('')
+      Alert.alert('Готово', 'Пароль изменён.')
+    } catch (e: any) {
+      setPwErr(e?.message || 'Не удалось сменить пароль')
+    } finally { setPwBusy(false) }
+  }
 
   const p = d?.operator
   const contacts = p ? [
@@ -91,6 +113,16 @@ export default function OperatorProfile() {
               </>
             ) : null}
 
+            <SectionTitle>Настройки</SectionTitle>
+            <Pressable onPress={() => { setPwOpen(true); setPwErr(null); setPw1(''); setPw2('') }}>
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: '#181d23', alignItems: 'center', justifyContent: 'center' }}><Ionicons name="key-outline" size={18} color={T.textMut} /></View>
+                <Text style={{ color: T.text, fontSize: 15, fontWeight: '700', flex: 1 }}>Сменить пароль</Text>
+                <Ionicons name="chevron-forward" size={18} color={T.textDim} />
+              </Card>
+            </Pressable>
+            {p.username ? <Text style={{ color: T.textDim, fontSize: 11, marginTop: -4 }}>Логин (@{p.username}) меняет руководитель.</Text> : null}
+
             <Pressable onPress={onLogout} style={{ marginTop: 4, padding: 16, borderRadius: R.lg, borderWidth: 1, borderColor: '#3b1212', backgroundColor: '#160c0c', alignItems: 'center' }}>
               <Text style={{ color: T.red, fontWeight: '800', fontSize: 15 }}>Выйти из аккаунта</Text>
             </Pressable>
@@ -98,6 +130,27 @@ export default function OperatorProfile() {
           </>
         ) : null}
       </ScrollView>
+
+      <Modal visible={pwOpen} transparent animationType="fade" onRequestClose={() => setPwOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, borderWidth: 1, borderColor: T.border, padding: S.xl, gap: 14 }}>
+            <Text style={{ color: T.text, fontSize: 18, fontWeight: '900' }}>Сменить пароль</Text>
+            <TextInput value={pw1} onChangeText={setPw1} placeholder="Новый пароль" placeholderTextColor={T.textDim} secureTextEntry style={pwInput} />
+            <TextInput value={pw2} onChangeText={setPw2} placeholder="Повторите пароль" placeholderTextColor={T.textDim} secureTextEntry style={pwInput} />
+            {pwErr ? <Text style={{ color: T.red, fontSize: 12 }}>{pwErr}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable onPress={() => setPwOpen(false)} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: T.border }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void changePassword()} disabled={pwBusy} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: R.md, backgroundColor: T.green, opacity: pwBusy ? 0.6 : 1 }}>
+                {pwBusy ? <ActivityIndicator color="#04130d" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
+
+const pwInput = { backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: R.md, paddingHorizontal: 14, paddingVertical: 13, color: T.text, fontSize: 15 } as const
