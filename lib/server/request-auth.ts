@@ -137,9 +137,9 @@ export async function getRequestAccessContext(
 
   const supabase = createRequestSupabaseClient(request)
   const cookieMap = parseCookies(request.headers.get('cookie'))
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Bearer (мобилка/API): валидируем токен ЯВНО через admin-клиент — не зависим от того,
+  // читает ли getUser() без аргумента кастомный Authorization-заголовок. Веб — по кукам.
+  const user = await getRequestUser(request)
 
   if (!user) {
     return {
@@ -352,9 +352,8 @@ export async function getRequestOperatorContext(request: Request): Promise<
     }
 > {
   const supabase = createRequestSupabaseClient(request)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Bearer (мобилка): валидируем токен явно через admin-клиент, как в getRequestUser.
+  const user = await getRequestUser(request)
 
   if (!user) {
     return {

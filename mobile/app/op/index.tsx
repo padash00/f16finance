@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { T, money } from '@/lib/theme'
 import { Card, SectionTitle, Pill } from '@/components/ui'
+import { AuthDiag } from '@/components/auth-diag'
 
 type Overview = {
   operator: { name: string; short_name: string | null }
@@ -58,7 +59,7 @@ export default function OperatorHome() {
         </View>
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 60 }} /> : error ? (
-          <Card><Text style={{ color: T.red, fontWeight: '700' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <Card><Text style={{ color: T.red, fontWeight: '700' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text><AuthDiag /></Card>
         ) : d ? (
           <>
             {/* Зарплата недели */}
