@@ -27,6 +27,10 @@ export default function OperatorLayout() {
       <Tabs.Screen name="audit" options={{ title: 'Ревизия', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'clipboard' : 'clipboard-outline'} size={23} color={color} /> }} />
       <Tabs.Screen name="salary" options={{ title: 'Зарплата', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={23} color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: 'Профиль', tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'person' : 'person-outline'} size={23} color={color} /> }} />
+      {/* Скрытые из таб-бара — открываются с Главной */}
+      <Tabs.Screen name="checklist" options={{ href: null }} />
+      <Tabs.Screen name="incidents" options={{ href: null }} />
+      <Tabs.Screen name="knowledge" options={{ href: null }} />
     </Tabs>
   )
 }

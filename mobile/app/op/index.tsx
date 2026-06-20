@@ -96,10 +96,29 @@ export default function OperatorHome() {
               <CounterTile icon="checkbox-outline" tint={T.cyan} label="Задачи" value={d.counters.activeTasks} onPress={() => router.push('/op/tasks')} />
               <CounterTile icon="alert-circle-outline" tint={T.amber} label="Мои долги" value={d.counters.activeDebts} sub={d.counters.activeDebtAmount > 0 ? money(d.counters.activeDebtAmount) : undefined} onPress={() => router.push('/op/salary')} />
             </View>
+
+            {/* Быстрые действия */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
+              <ActionTile icon="clipboard" tint={T.amber} label="Ревизия" onPress={() => router.push('/op/audit')} />
+              <ActionTile icon="list" tint={T.blue} label="Чек-листы" onPress={() => router.push('/op/checklist')} />
+              <ActionTile icon="warning" tint={T.red} label="Инциденты" onPress={() => router.push('/op/incidents')} />
+              <ActionTile icon="book" tint={T.violet} label="База знаний" onPress={() => router.push('/op/knowledge')} />
+            </View>
           </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+function ActionTile({ icon, tint, label, onPress }: { icon: any; tint: string; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={{ width: '47.5%', flexGrow: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.lg, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: tint + '22', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={19} color={tint} />
+      </View>
+      <Text style={{ color: T.text, fontSize: 14.5, fontWeight: '800' }}>{label}</Text>
+    </Pressable>
   )
 }
 
