@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js'
 
 import { supabase } from './supabase'
-import { setActiveOrganization } from './api'
+import { setActiveOrganization, setAccessToken } from './api'
 import { loginToEmail } from './operator-auth'
 
 export type SessionRole = {
@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function applySession(s: Session | null) {
     setSession(s)
+    setAccessToken(s?.access_token ?? null) // держим токен для apiFetch синхронно
     if (s?.access_token) setRole(await fetchRole(s.access_token))
     else setRole(null)
   }
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut()
     setActiveOrganization(null)
+    setAccessToken(null)
     setRole(null)
   }
 

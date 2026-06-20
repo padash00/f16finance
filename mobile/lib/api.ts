@@ -11,6 +11,14 @@ export function getActiveOrganization() {
   return activeOrganizationId
 }
 
+/** Токен текущей сессии — синхронно обновляется из AuthProvider (onAuthStateChange).
+ *  Нужен потому что supabase.auth.getSession() в RN иногда отдаёт пусто, пока контекст
+ *  уже держит валидную сессию — из-за чего запрос уходил без Authorization (no-auth). */
+let cachedAccessToken: string | null = null
+export function setAccessToken(token: string | null) {
+  cachedAccessToken = token
+}
+
 export class ApiError extends Error {
   status: number
   code?: string
@@ -27,8 +35,13 @@ export class ApiError extends Error {
  * и x-organization-id для выбора активной орг.
  */
 export async function apiFetch<T = any>(path: string, init: RequestInit = {}, _retried = false): Promise<T> {
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
+  // Берём токен из кэша (синхронен с контекстом), а если пусто — из getSession().
+  let token = cachedAccessToken
+  if (!token) {
+    const { data } = await supabase.auth.getSession()
+    token = data.session?.access_token ?? null
+    if (token) cachedAccessToken = token
+  }
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -45,7 +58,10 @@ export async function apiFetch<T = any>(path: string, init: RequestInit = {}, _r
   if (res.status === 401 && !_retried && token) {
     try {
       const { data: refreshed } = await supabase.auth.refreshSession()
-      if (refreshed?.session?.access_token) return apiFetch<T>(path, init, true)
+      if (refreshed?.session?.access_token) {
+        cachedAccessToken = refreshed.session.access_token
+        return apiFetch<T>(path, init, true)
+      }
     } catch {
       /* refresh не удался — отдадим исходную 401 ниже */
     }
