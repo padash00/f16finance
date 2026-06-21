@@ -5,19 +5,36 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "orda",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#070809",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "kz.ordaops.mobile"
+      "bundleIdentifier": "kz.ordaops.mobile",
+      "userInterfaceStyle": "dark",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Для быстрого и безопасного входа в Orda по Face ID."
+      }
     },
     "android": {
-      "package": "kz.ordaops.mobile"
+      "package": "kz.ordaops.mobile",
+      "userInterfaceStyle": "dark",
+      "adaptiveIcon": {
+        "backgroundColor": "#070809"
+      }
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      "expo-local-authentication",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#070809",
+          "resizeMode": "contain"
+        }
+      ]
     ]
   }
 }
