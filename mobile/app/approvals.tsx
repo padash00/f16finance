@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { T, money } from '@/lib/theme'
 import { Card, Pill } from '@/components/ui'
 
@@ -62,8 +63,10 @@ export default function ApprovalsScreen() {
     setBusyId(e.id)
     try {
       await apiFetch(`/api/admin/expenses/${e.id}/approve`, { method: 'POST' })
+      haptic.success()
       setItems((p) => p.filter((x) => x.id !== e.id))
     } catch (err: any) {
+      haptic.error()
       setError(err?.message || 'Не удалось одобрить')
     } finally {
       setBusyId(null)
@@ -77,9 +80,11 @@ export default function ApprovalsScreen() {
     setBusyId(id)
     try {
       await apiFetch(`/api/admin/expenses/${id}/decline`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) })
+      haptic.success()
       setItems((p) => p.filter((x) => x.id !== id))
       setDeclineId(null); setReason('')
     } catch (err: any) {
+      haptic.error()
       setError(err?.message || 'Не удалось отклонить')
     } finally {
       setBusyId(null)
@@ -149,7 +154,7 @@ export default function ApprovalsScreen() {
                     <Text style={{ color: T.green, fontWeight: '800', fontSize: 14 }}>Одобрить</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => { setDeclineId(e.id); setReason(''); setError(null) }}
+                    onPress={() => { haptic.warning(); setDeclineId(e.id); setReason(''); setError(null) }}
                     disabled={busy}
                     style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#3b1212', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 18, opacity: busy ? 0.6 : 1 }}
                   >

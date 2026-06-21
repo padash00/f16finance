@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
@@ -101,11 +102,13 @@ export default function NewsScreen() {
           body: text,
         }),
       })
+      haptic.success()
       setModalOpen(false)
       setDraftTitle('')
       setDraftBody('')
       await load()
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось опубликовать')
     } finally {
       setSaving(false)

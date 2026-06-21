@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
@@ -223,10 +224,12 @@ export default function ExpensesScreen() {
         method: 'POST',
         body: JSON.stringify({ session_id: sessionId }),
       })
+      haptic.success()
       setModalOpen(false)
       setForm(emptyForm)
       await load(cursor)
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось создать расход')
     } finally {
       setSaving(false)
@@ -235,6 +238,7 @@ export default function ExpensesScreen() {
 
   const confirmDelete = (e: Expense) => {
     const title = e.one_off_payee || e.category || 'Расход'
+    haptic.warning()
     Alert.alert('Удалить расход?', `${title} · ${money(amountOf(e))}`, [
       { text: 'Отмена', style: 'cancel' },
       {
@@ -247,8 +251,10 @@ export default function ExpensesScreen() {
               method: 'POST',
               body: JSON.stringify({ action: 'deleteExpense', expenseId: e.id }),
             })
+            haptic.success()
             await load(cursor)
           } catch (err: any) {
+            haptic.error()
             Alert.alert('Ошибка', err?.message || 'Не удалось удалить')
           } finally {
             setDeletingId(null)
@@ -307,10 +313,12 @@ export default function ExpensesScreen() {
           },
         }),
       })
+      haptic.success()
       setEditId(null)
       setEditForm(emptyEdit)
       await load(cursor)
     } catch (e: any) {
+      haptic.error()
       setEditError(e?.message || 'Не удалось сохранить')
     } finally {
       setEditSaving(false)

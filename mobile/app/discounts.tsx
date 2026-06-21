@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
@@ -151,10 +152,12 @@ export default function DiscountsScreen() {
           },
         }),
       })
+      haptic.success()
       setModalOpen(false)
       setForm(emptyForm)
       await load()
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось сохранить')
     } finally {
       setSaving(false)
@@ -173,8 +176,10 @@ export default function DiscountsScreen() {
           payload: { is_active: !d.is_active },
         }),
       })
+      haptic.success()
       await load()
     } catch (e: any) {
+      haptic.error()
       setError(e?.message || 'Не удалось изменить статус')
     } finally {
       setBusyId(null)

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { T, R, S } from '@/lib/theme'
 import { Card, SectionTitle, Pill } from '@/components/ui'
 
@@ -71,8 +72,8 @@ export default function OperatorAudit() {
     try {
       await apiFetch('/api/operator/audit', { method: 'POST', body: JSON.stringify({ act_id: active, counts }) })
       setItems((prev) => prev.map((it) => { const c = counts.find((x) => x.item_id === it.item_id); return c ? { ...it, counted: c.counted_qty } : it }))
-      setAutoStatus('saved')
-    } catch { for (const c of counts) dirty.current.add(c.item_id); setAutoStatus('error') }
+      setAutoStatus('saved'); haptic.success()
+    } catch { for (const c of counts) dirty.current.add(c.item_id); setAutoStatus('error'); haptic.error() }
   }, [active])
 
   const onCount = useCallback((id: string, val: string) => {

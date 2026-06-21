@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R, money, moneyShort } from '@/lib/theme'
@@ -202,9 +203,11 @@ export default function StaffScreen() {
           company_id: adjKind === 'advance' ? adjCompanyId : null,
         }),
       })
+      haptic.success()
       setAdjStaff(null)
       await load()
     } catch (e: any) {
+      haptic.error()
       setAdjError(e?.message || 'Не удалось сохранить')
     } finally {
       setAdjSaving(false)
@@ -271,9 +274,11 @@ export default function StaffScreen() {
           // сотрудник создан, но приглашение не ушло — не считаем фатальной ошибкой
         }
       }
+      haptic.success()
       setCreateOpen(false)
       await load()
     } catch (e: any) {
+      haptic.error()
       setCError(e?.message || 'Не удалось создать сотрудника')
     } finally {
       setCSaving(false)

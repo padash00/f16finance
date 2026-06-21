@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R } from '@/lib/theme'
@@ -153,12 +154,14 @@ export default function RequestsScreen() {
           items,
         }),
       })
+      haptic.success()
       closeDecide()
       setDecideReq(null)
       setQtyDraft({})
       setDecisionComment('')
       await load()
     } catch (e: any) {
+      haptic.error()
       setDecisionError(e?.message || 'Не удалось обработать заявку')
     } finally {
       setSavingDecision(false)

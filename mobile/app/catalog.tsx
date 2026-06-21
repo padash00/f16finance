@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { T, R, S, money } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
 import { canDo } from '@/lib/access'
@@ -153,9 +154,11 @@ export default function CatalogScreen() {
             : { action: 'createItem', payload },
         ),
       })
+      haptic.success()
       setFormOpen(false)
       await load()
     } catch (e: any) {
+      haptic.error()
       setFormErr(e?.message || 'Не удалось сохранить')
     } finally {
       setSaving(false)

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
@@ -76,11 +77,13 @@ export default function DebtsScreen() {
         method: 'POST',
         body: JSON.stringify({ action: 'markPaid', itemIds: ids }),
       })
+      haptic.success()
       setConfirmOpen(false)
       setSelected(new Set())
       setSelectMode(false)
       await load(week)
     } catch (e: any) {
+      haptic.error()
       setSettleError(e?.message || 'Не удалось списать')
     } finally {
       setSettling(false)
@@ -198,7 +201,7 @@ export default function DebtsScreen() {
             <Text style={{ color: T.text, fontSize: 16, fontWeight: '900' }}>{money(selectedAmount)}</Text>
           </View>
           <Pressable
-            onPress={() => { setSettleError(null); setConfirmOpen(true) }}
+            onPress={() => { haptic.warning(); setSettleError(null); setConfirmOpen(true) }}
             disabled={selected.size === 0}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 18, paddingVertical: 13, opacity: selected.size === 0 ? 0.4 : 1 }}
           >

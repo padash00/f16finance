@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { T, S, money, moneyShort } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
 
@@ -76,8 +77,10 @@ export default function InvoicesScreen() {
           method: 'POST',
           body: JSON.stringify({ invoiceId: inv.id, action }),
         })
+        haptic.success()
         await load(filter)
       } catch (e: any) {
+        haptic.error()
         Alert.alert('Ошибка', e?.message || 'Не удалось выполнить действие')
       } finally {
         setBusyId(null)
@@ -89,6 +92,7 @@ export default function InvoicesScreen() {
   const confirmAction = useCallback(
     (inv: Inv, action: 'markPaid' | 'void') => {
       const paid = action === 'markPaid'
+      if (!paid) haptic.warning()
       Alert.alert(
         paid ? 'Отметить оплаченным?' : 'Аннулировать счёт?',
         `${inv.orgName || '—'} · ${money(inv.amount)}`,

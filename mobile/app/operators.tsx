@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
@@ -193,9 +194,11 @@ export default function OperatorsScreen() {
           },
         }),
       })
+      haptic.success()
       await load()
       closeModalForce()
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось сохранить')
     } finally {
       setSaving(false)
@@ -214,8 +217,10 @@ export default function OperatorsScreen() {
           is_active: next,
         }),
       })
+      haptic.success()
       await load()
     } catch (e: any) {
+      haptic.error()
       setError(e?.message || 'Не удалось изменить статус')
     } finally {
       setTogglingId(null)
@@ -282,14 +287,17 @@ export default function OperatorsScreen() {
             body: JSON.stringify({ operatorId, username, email, name }),
           },
         )
+        haptic.success()
         await load()
         setCreated({ name, username: acc?.username || username, password: acc?.password || '' })
         return // оставляем модалку открытой, чтобы показать пароль
       }
 
+      haptic.success()
       await load()
       closeModalForce()
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось сохранить')
     } finally {
       setSaving(false)

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R, money, moneyShort, zoneLabel } from '@/lib/theme'
@@ -220,11 +221,13 @@ export default function IncomeScreen() {
           }),
         })
       }
+      haptic.success()
       setModalOpen(false)
       setEditId(null)
       setEditKaspiBeforeMidnight(null)
       await load(cursor)
     } catch (e: any) {
+      haptic.error()
       const msg = e?.message === 'duplicate' ? 'Такой доход уже есть за эту дату и смену' : (e?.message || 'Не удалось сохранить')
       setFormError(msg)
     } finally {

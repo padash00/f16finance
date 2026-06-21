@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
@@ -126,11 +127,13 @@ export default function CustomersScreen() {
           }),
         })
       }
+      haptic.success()
       setModalOpen(false)
       setEditId(null)
       setForm(emptyForm)
       await load()
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось сохранить')
     } finally {
       setSaving(false)

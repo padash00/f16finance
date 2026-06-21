@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
@@ -185,9 +186,11 @@ export default function GoalsScreen() {
           }),
         })
       }
+      haptic.success()
       setModalOpen(false)
       await load(year)
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось сохранить цель')
     } finally {
       setSaving(false)

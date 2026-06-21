@@ -18,6 +18,7 @@ import { T, R, S, money, moneyShort } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
+import { haptic } from '@/lib/haptics'
 
 type Supplier = { id: string; name: string; organization_name?: string | null }
 type Location = { id: string; name: string; location_type?: 'warehouse' | 'point_display' | null }
@@ -233,9 +234,11 @@ export default function ReceiptsScreen() {
           },
         }),
       })
+      haptic.success()
       setFormOpen(false)
       await load(scope)
     } catch (e: any) {
+      haptic.error()
       setFormError(e?.message || 'Не удалось провести оприходование')
     } finally {
       setSaving(false)

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
 import { Card, GlowHero } from '@/components/ui'
@@ -122,8 +123,10 @@ export default function MessagesScreen() {
         body: JSON.stringify({ recipientUserId: chatUser.id, message: text }),
       })
       setDraft('')
+      haptic.success()
       await loadConversation(chatUser.id)
     } catch (e: any) {
+      haptic.error()
       setChatError(e?.message || 'Не удалось отправить')
     } finally {
       setSending(false)

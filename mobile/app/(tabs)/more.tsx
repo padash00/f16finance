@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
+import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/lib/auth'
 import { canSee, hasFeature } from '@/lib/access'
 import { apiFetch } from '@/lib/api'
+import { authenticate, biometricLabel, isBiometricAvailable, isBiometricEnabled, setBiometricEnabled } from '@/lib/biometric'
+import { haptic } from '@/lib/haptics'
 import { T, R, S } from '@/lib/theme'
 import { Card, SectionTitle } from '@/components/ui'
 
@@ -86,6 +88,26 @@ export default function MoreScreen() {
   }, [])
   useEffect(() => { void load() }, [load])
 
+  // биометрия входа
+  const [bioAvail, setBioAvail] = useState(false)
+  const [bioOn, setBioOn] = useState(false)
+  const [bioLabel, setBioLabel] = useState('биометрии')
+  useEffect(() => {
+    void (async () => {
+      const av = await isBiometricAvailable()
+      setBioAvail(av)
+      if (av) { setBioOn(await isBiometricEnabled()); setBioLabel(await biometricLabel()) }
+    })()
+  }, [])
+  const toggleBio = async (v: boolean) => {
+    if (v) {
+      if (!(await authenticate())) { haptic.error(); return }
+      haptic.success()
+    }
+    await setBiometricEnabled(v)
+    setBioOn(v)
+  }
+
   const onLogout = () => {
     Alert.alert('Выйти из аккаунта?', '', [
       { text: 'Отмена', style: 'cancel' },
@@ -133,6 +155,22 @@ export default function MoreScreen() {
             </Card>
           </View>
         ))}
+
+        {bioAvail ? (
+          <View style={{ gap: S.sm }}>
+            <SectionTitle>Безопасность</SectionTitle>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(16,185,129,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="finger-print" size={20} color={T.green} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: T.text, fontSize: 15, fontWeight: '700' }}>Вход по {bioLabel}</Text>
+                <Text style={{ color: T.textDim, fontSize: 12 }}>Блокировать приложение при открытии</Text>
+              </View>
+              <Switch value={bioOn} onValueChange={(v) => void toggleBio(v)} trackColor={{ true: T.green, false: '#2a2f37' }} thumbColor="#fff" />
+            </Card>
+          </View>
+        ) : null}
 
         <Pressable onPress={onLogout} style={{ marginTop: 4, padding: 16, borderRadius: R.lg, borderWidth: 1, borderColor: '#3b1212', backgroundColor: '#160c0c', alignItems: 'center' }}>
           <Text style={{ color: T.red, fontWeight: '800', fontSize: 15 }}>Выйти из аккаунта</Text>

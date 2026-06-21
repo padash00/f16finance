@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
@@ -50,9 +51,11 @@ export default function OperatorProfile() {
     try {
       const { error: e } = await supabase.auth.updateUser({ password: pw1 })
       if (e) throw new Error(e.message)
+      haptic.success()
       setPwOpen(false); setPw1(''); setPw2('')
       Alert.alert('Готово', 'Пароль изменён.')
     } catch (e: any) {
+      haptic.error()
       setPwErr(e?.message || 'Не удалось сменить пароль')
     } finally { setPwBusy(false) }
   }

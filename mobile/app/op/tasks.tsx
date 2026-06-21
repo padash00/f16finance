@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
 import { T, R, S } from '@/lib/theme'
 import { Card, Pill } from '@/components/ui'
 
@@ -45,8 +46,10 @@ export default function OperatorTasks() {
     setError(null)
     try {
       await apiFetch('/api/operator/tasks', { method: 'POST', body: JSON.stringify({ action: 'respondTask', taskId: t.id, response: 'accept' }) })
+      haptic.success()
       await load()
     } catch (e: any) {
+      haptic.error()
       setError(e?.message || 'Не удалось взять задачу')
     } finally {
       setAcceptBusyId(null)
@@ -65,9 +68,11 @@ export default function OperatorTasks() {
         method: 'POST',
         body: JSON.stringify({ action: 'respondTask', taskId: completeTask.id, response: 'complete', note: note.trim() || null }),
       })
+      haptic.success()
       closeComplete()
       await load()
     } catch (e: any) {
+      haptic.error()
       setModalError(e?.message || 'Не удалось завершить задачу')
     } finally {
       setSaving(false)
