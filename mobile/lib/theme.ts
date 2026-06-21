@@ -42,6 +42,21 @@ export const money = (v: number | null | undefined) => {
   return Math.round(Number(v)).toLocaleString('ru-RU') + ' ₸'
 }
 
+// Человекочитаемые подписи зон (в БД хранятся кодами: pc, ps5, ramen, extra…).
+const ZONE_LABELS: Record<string, string> = {
+  pc: 'ПК', pс: 'ПК', comp: 'ПК', computers: 'ПК', computer: 'ПК',
+  ps: 'PlayStation', ps3: 'PlayStation 3', ps4: 'PlayStation 4', ps5: 'PlayStation 5',
+  xbox: 'Xbox', vr: 'VR', sim: 'Симулятор', vip: 'VIP', console: 'Консоли',
+  ramen: 'Рамен', kitchen: 'Кухня', bar: 'Бар', shop: 'Магазин', cafe: 'Кафе',
+  extra: 'Extra', arena: 'Арена', club: 'Клуб',
+}
+export const zoneLabel = (z?: string | null) => {
+  if (!z) return ''
+  const k = String(z).trim().toLowerCase()
+  if (ZONE_LABELS[k]) return ZONE_LABELS[k]
+  return k.length <= 4 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1)
+}
+
 export const moneyShort = (v: number | null | undefined) => {
   const n = Number(v || 0)
   if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' млн ₸'

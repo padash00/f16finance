@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
-import { T, S, R, money, moneyShort } from '@/lib/theme'
+import { T, S, R, money, moneyShort, zoneLabel } from '@/lib/theme'
 import { Card, Pill, GlowHero } from '@/components/ui'
 
 type Income = {
@@ -287,7 +287,7 @@ export default function IncomeScreen() {
           <Card style={{ padding: 0 }}>
             {items.map((e, i) => {
               const cmp = e.company_id ? companyName[e.company_id] : null
-              const meta = [cmp, shiftLabel(e.shift), e.zone].filter(Boolean).join(' · ')
+              const meta = [cmp, shiftLabel(e.shift), zoneLabel(e.zone)].filter(Boolean).join(' · ')
               return (
                 <Pressable
                   key={e.id}
