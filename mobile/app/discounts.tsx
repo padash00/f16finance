@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
-import { T, S, money } from '@/lib/theme'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
+import { T, R, S, money } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
 
 type DiscountType = 'percent' | 'fixed' | 'promo_code'
@@ -28,6 +30,29 @@ type Discount = {
 
 type Filter = 'all' | 'active' | 'promo'
 
+type FormState = {
+  name: string
+  type: DiscountType
+  value: string
+  promo_code: string
+  min_order_amount: string
+  valid_from: string
+  valid_to: string
+  usage_limit: string
+}
+const emptyForm: FormState = {
+  name: '',
+  type: 'percent',
+  value: '',
+  promo_code: '',
+  min_order_amount: '',
+  valid_from: '',
+  valid_to: '',
+  usage_limit: '',
+}
+
+const num = (v: string) => Number(String(v).replace(',', '.'))
+
 const typeLabel = (t: DiscountType) =>
   t === 'percent' ? 'Скидка %' : t === 'fixed' ? 'Фиксированная' : 'Промокод'
 
@@ -49,10 +74,23 @@ function status(d: Discount): { text: string; tone: 'good' | 'bad' | 'warn' | 'm
 
 export default function DiscountsScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canCreate = canDo(role, 'discounts.create')
+  const canEdit = canDo(role, 'discounts.edit')
+
   const [items, setItems] = useState<Discount[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // модалка создания
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  // переключение активности
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -67,6 +105,81 @@ export default function DiscountsScreen() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // company_id для новой скидки: берём из уже существующих (у владельца обычно одна компания)
+  const defaultCompanyId = useMemo(() => {
+    const withCompany = items.find((d) => d.company_id)
+    return withCompany?.company_id ?? null
+  }, [items])
+
+  const openCreate = () => {
+    setForm(emptyForm)
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (saving) return
+    setModalOpen(false)
+    setForm(emptyForm)
+    setFormError(null)
+  }
+
+  const submit = async () => {
+    if (!form.name.trim()) { setFormError('Название скидки обязательно'); return }
+    const value = num(form.value)
+    if (!Number.isFinite(value) || value < 0) { setFormError('Укажите корректное значение'); return }
+    if (form.type === 'promo_code' && !form.promo_code.trim()) { setFormError('Введите промокод'); return }
+
+    setSaving(true)
+    setFormError(null)
+    try {
+      await apiFetch('/api/admin/discounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'createDiscount',
+          payload: {
+            name: form.name.trim(),
+            type: form.type,
+            value,
+            promo_code: form.type === 'promo_code' ? form.promo_code.trim() : null,
+            min_order_amount: form.min_order_amount.trim() ? num(form.min_order_amount) || 0 : 0,
+            valid_from: form.valid_from.trim() || null,
+            valid_to: form.valid_to.trim() || null,
+            usage_limit: form.usage_limit.trim() ? Math.trunc(num(form.usage_limit)) || null : null,
+            company_id: defaultCompanyId,
+          },
+        }),
+      })
+      setModalOpen(false)
+      setForm(emptyForm)
+      await load()
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось сохранить')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (d: Discount) => {
+    setBusyId(d.id)
+    setError(null)
+    try {
+      await apiFetch('/api/admin/discounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'updateDiscount',
+          discountId: d.id,
+          payload: { is_active: !d.is_active },
+        }),
+      })
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось изменить статус')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const summary = useMemo(() => {
     const today = todayIso()
@@ -95,6 +208,16 @@ export default function DiscountsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 4 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Скидки</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Создать</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView
@@ -176,12 +299,173 @@ export default function DiscountsScreen() {
                       <Text style={{ color: T.textDim, fontSize: 12 }}>Использований: {d.usage_count}</Text>
                     )}
                   </View>
+
+                  {canEdit ? (
+                    <Pressable
+                      onPress={() => void toggleActive(d)}
+                      disabled={busyId === d.id}
+                      hitSlop={6}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        marginTop: 12,
+                        borderRadius: R.md,
+                        paddingVertical: 9,
+                        borderWidth: 1,
+                        borderColor: d.is_active ? T.border : '#10b981',
+                        backgroundColor: d.is_active ? 'transparent' : '#0c3a2c',
+                        opacity: busyId === d.id ? 0.6 : 1,
+                      }}
+                    >
+                      {busyId === d.id ? (
+                        <ActivityIndicator color={d.is_active ? T.textMut : T.green} size="small" />
+                      ) : (
+                        <>
+                          <Ionicons name={d.is_active ? 'pause' : 'play'} size={15} color={d.is_active ? T.textMut : T.green} />
+                          <Text style={{ color: d.is_active ? T.textMut : T.green, fontSize: 13, fontWeight: '800' }}>
+                            {d.is_active ? 'Выключить' : 'Включить'}
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  ) : null}
                 </View>
               )
             })}
           </Card>
         )}
       </ScrollView>
+
+      {/* Модалка создания скидки */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Новая скидка</Text>
+              <Pressable onPress={closeModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Название *</Text>
+                <TextInput
+                  value={form.name}
+                  onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+                  placeholder="Например: Скидка выходного дня"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Тип</Text>
+                <Segmented
+                  value={form.type}
+                  onChange={(v) => setForm((f) => ({ ...f, type: v }))}
+                  options={[
+                    { key: 'percent', label: 'Процент' },
+                    { key: 'fixed', label: 'Фикс. ₸' },
+                    { key: 'promo_code', label: 'Промокод' },
+                  ]}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>
+                  {form.type === 'fixed' ? 'Значение, ₸ *' : 'Значение, % *'}
+                </Text>
+                <TextInput
+                  value={form.value}
+                  onChangeText={(v) => setForm((f) => ({ ...f, value: v }))}
+                  placeholder={form.type === 'fixed' ? '500' : '10'}
+                  placeholderTextColor={T.textDim}
+                  keyboardType="decimal-pad"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {form.type === 'promo_code' ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Промокод *</Text>
+                  <TextInput
+                    value={form.promo_code}
+                    onChangeText={(v) => setForm((f) => ({ ...f, promo_code: v.toUpperCase() }))}
+                    placeholder="SALE2026"
+                    placeholderTextColor={T.textDim}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15, fontVariant: ['tabular-nums'] }}
+                  />
+                </View>
+              ) : null}
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Минимальная сумма заказа, ₸</Text>
+                <TextInput
+                  value={form.min_order_amount}
+                  onChangeText={(v) => setForm((f) => ({ ...f, min_order_amount: v }))}
+                  placeholder="0"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="decimal-pad"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Действует с</Text>
+                  <TextInput
+                    value={form.valid_from}
+                    onChangeText={(v) => setForm((f) => ({ ...f, valid_from: v }))}
+                    placeholder="ГГГГ-ММ-ДД"
+                    placeholderTextColor={T.textDim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15, fontVariant: ['tabular-nums'] }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Действует до</Text>
+                  <TextInput
+                    value={form.valid_to}
+                    onChangeText={(v) => setForm((f) => ({ ...f, valid_to: v }))}
+                    placeholder="ГГГГ-ММ-ДД"
+                    placeholderTextColor={T.textDim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15, fontVariant: ['tabular-nums'] }}
+                  />
+                </View>
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Лимит использований</Text>
+                <TextInput
+                  value={form.usage_limit}
+                  onChangeText={(v) => setForm((f) => ({ ...f, usage_limit: v }))}
+                  placeholder="без лимита"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="number-pad"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+            </ScrollView>
+
+            {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }

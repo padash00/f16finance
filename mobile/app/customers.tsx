@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
 import { Card, Pill, GlowHero } from '@/components/ui'
 
@@ -25,12 +27,26 @@ type Customer = {
   company: { id: string; name: string; code: string | null } | null
 }
 
+type FormState = { name: string; phone: string; card_number: string; email: string; notes: string }
+const emptyForm: FormState = { name: '', phone: '', card_number: '', email: '', notes: '' }
+
 export default function CustomersScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canCreate = canDo(role, 'customers.create')
+  const canEdit = canDo(role, 'customers.edit')
+
   const [items, setItems] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+
+  // модалка создания/редактирования
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -46,6 +62,80 @@ export default function CustomersScreen() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  const openCreate = () => {
+    setEditId(null)
+    setForm(emptyForm)
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const openEdit = (c: Customer) => {
+    setEditId(c.id)
+    setForm({
+      name: c.name || '',
+      phone: c.phone || '',
+      card_number: c.card_number || '',
+      email: c.email || '',
+      notes: c.notes || '',
+    })
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (saving) return
+    setModalOpen(false)
+    setEditId(null)
+    setForm(emptyForm)
+    setFormError(null)
+  }
+
+  const submit = async () => {
+    if (!form.name.trim()) { setFormError('Имя клиента обязательно'); return }
+    setSaving(true)
+    setFormError(null)
+    try {
+      if (editId) {
+        await apiFetch('/api/admin/customers', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'updateCustomer',
+            customerId: editId,
+            payload: {
+              name: form.name.trim(),
+              phone: form.phone.trim(),
+              card_number: form.card_number.trim(),
+              email: form.email.trim(),
+              notes: form.notes.trim(),
+            },
+          }),
+        })
+      } else {
+        await apiFetch('/api/admin/customers', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'createCustomer',
+            payload: {
+              name: form.name.trim(),
+              phone: form.phone.trim() || null,
+              card_number: form.card_number.trim() || null,
+              email: form.email.trim() || null,
+              notes: form.notes.trim() || null,
+            },
+          }),
+        })
+      }
+      setModalOpen(false)
+      setEditId(null)
+      setForm(emptyForm)
+      await load()
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось сохранить')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -69,6 +159,16 @@ export default function CustomersScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 4 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Клиенты</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Добавить</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Поиск */}
@@ -142,9 +242,19 @@ export default function CustomersScreen() {
                       {c.company?.name ? <Pill text={c.company.name} tone="brand" /> : null}
                     </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
+                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
                     <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>{money(c.total_spent || 0)}</Text>
-                    <Text style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>потрачено</Text>
+                    <Text style={{ color: T.textDim, fontSize: 11 }}>потрачено</Text>
+                    {canEdit ? (
+                      <Pressable
+                        onPress={() => openEdit(c)}
+                        hitSlop={8}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: T.border, borderRadius: R.sm, paddingHorizontal: 10, paddingVertical: 5, marginTop: 2 }}
+                      >
+                        <Ionicons name="create-outline" size={14} color={T.textMut} />
+                        <Text style={{ color: T.textMut, fontSize: 12, fontWeight: '700' }}>Изменить</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
               )
@@ -152,6 +262,92 @@ export default function CustomersScreen() {
           </Card>
         )}
       </ScrollView>
+
+      {/* Модалка создания/редактирования */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>{editId ? 'Изменить клиента' : 'Новый клиент'}</Text>
+              <Pressable onPress={closeModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 12 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Имя *</Text>
+                <TextInput
+                  value={form.name}
+                  onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+                  placeholder="Имя клиента"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Телефон</Text>
+                <TextInput
+                  value={form.phone}
+                  onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
+                  placeholder="+7 700 000 00 00"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="phone-pad"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Номер карты</Text>
+                <TextInput
+                  value={form.card_number}
+                  onChangeText={(v) => setForm((f) => ({ ...f, card_number: v }))}
+                  placeholder="Например 1024"
+                  placeholderTextColor={T.textDim}
+                  autoCapitalize="none"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Email</Text>
+                <TextInput
+                  value={form.email}
+                  onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
+                  placeholder="client@example.com"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Заметки</Text>
+                <TextInput
+                  value={form.notes}
+                  onChangeText={(v) => setForm((f) => ({ ...f, notes: v }))}
+                  placeholder="Дополнительно"
+                  placeholderTextColor={T.textDim}
+                  multiline
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15, minHeight: 70, textAlignVertical: 'top' }}
+                />
+              </View>
+            </ScrollView>
+
+            {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }

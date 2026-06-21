@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
 import { Card, SectionTitle, Pill, GlowHero, Segmented, BarRow } from '@/components/ui'
 
@@ -83,14 +85,28 @@ const PERIOD_OPTIONS: { key: PeriodKind; label: string }[] = [
   { key: 'month', label: 'Месяц' },
 ]
 
+const MONTH_OPTIONS: { key: number; label: string }[] = MONTH_FULL.map((m, i) => ({ key: i, label: m }))
+
 export default function GoalsScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canEdit = canDo(role, 'goals.edit')
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(currentYear)
   const [tab, setTab] = useState<PeriodKind>('year')
   const [data, setData] = useState<ApiData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // ─── Модалка «Задать цель» ───────────────────────────────────────────────
+  const [modalOpen, setModalOpen] = useState(false)
+  const [mPeriod, setMPeriod] = useState<PeriodKind>('year')
+  const [mMonthIdx, setMMonthIdx] = useState<number>(new Date().getMonth())
+  const [mCompanyId, setMCompanyId] = useState<string | null>(null) // null = вся организация
+  const [mRevenue, setMRevenue] = useState('')
+  const [mProfit, setMProfit] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const load = useCallback(async (y: number) => {
     setLoading(true); setError(null)
@@ -109,6 +125,74 @@ export default function GoalsScreen() {
   const companies = data?.companies || []
   const plans = data?.plans || []
   const daily = data?.dailyAggregates || []
+
+  // Открыть модалку: предзаполнить целями из существующих планов (если есть)
+  const openGoalModal = useCallback(() => {
+    const period: PeriodKind = tab === 'month' ? 'month' : tab
+    const monthIdx = new Date().getMonth()
+    setMPeriod(period)
+    setMMonthIdx(monthIdx)
+    setMCompanyId(null)
+    const matchStart = period === 'month' ? `${year}-${String(monthIdx + 1).padStart(2, '0')}` : null
+    const findTarget = (metric: Metric) => {
+      const p = plans.find((pl) =>
+        pl.period_kind === period && pl.metric === metric && !pl.company_id &&
+        (matchStart == null || pl.period_start.slice(0, 7) === matchStart))
+      return p ? String(Number(p.target_amount || 0)) : ''
+    }
+    setMRevenue(findTarget('revenue'))
+    setMProfit(findTarget('profit'))
+    setFormError(null)
+    setModalOpen(true)
+  }, [tab, year, plans])
+
+  const closeGoalModal = useCallback(() => {
+    if (saving) return
+    setModalOpen(false)
+    setFormError(null)
+  }, [saving])
+
+  const submitGoal = useCallback(async () => {
+    const num = (v: string) => Number(String(v).trim().replace(',', '.'))
+    const revRaw = mRevenue.trim()
+    const profRaw = mProfit.trim()
+    const targets: { metric: Metric; target_amount: number }[] = []
+    if (revRaw) {
+      const v = num(revRaw)
+      if (!Number.isFinite(v) || v < 0) { setFormError('Неверная сумма выручки'); return }
+      targets.push({ metric: 'revenue', target_amount: Math.round(v) })
+    }
+    if (profRaw) {
+      const v = num(profRaw)
+      if (!Number.isFinite(v) || v < 0) { setFormError('Неверная сумма прибыли'); return }
+      targets.push({ metric: 'profit', target_amount: Math.round(v) })
+    }
+    if (targets.length === 0) { setFormError('Укажите цель по выручке или прибыли'); return }
+
+    setSaving(true)
+    setFormError(null)
+    try {
+      for (const t of targets) {
+        await apiFetch('/api/admin/kpi-plans', {
+          method: 'POST',
+          body: JSON.stringify({
+            period_kind: mPeriod,
+            month_idx: mPeriod === 'month' ? mMonthIdx : undefined,
+            metric: t.metric,
+            company_id: mCompanyId,
+            target_amount: t.target_amount,
+            year,
+          }),
+        })
+      }
+      setModalOpen(false)
+      await load(year)
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось сохранить цель')
+    } finally {
+      setSaving(false)
+    }
+  }, [mRevenue, mProfit, mPeriod, mMonthIdx, mCompanyId, year, load])
 
   // Факт по выбранному периоду (общий по организации)
   const orgFacts = useMemo(() => {
@@ -163,6 +247,16 @@ export default function GoalsScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 4 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Цели и KPI</Text>
+        {canEdit ? (
+          <Pressable
+            onPress={openGoalModal}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="flag" size={15} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Цель</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Навигация по году */}
@@ -313,6 +407,111 @@ export default function GoalsScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      {/* Модалка «Задать цель» */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeGoalModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Цель на {year}</Text>
+              <Pressable onPress={closeGoalModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 14 }}>
+              {/* Период */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Период</Text>
+                <Segmented value={mPeriod} options={PERIOD_OPTIONS} onChange={setMPeriod} />
+              </View>
+
+              {/* Месяц (только для period=month) */}
+              {mPeriod === 'month' ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Месяц</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {MONTH_OPTIONS.map((m) => {
+                      const active = m.key === mMonthIdx
+                      return (
+                        <Pressable
+                          key={m.key}
+                          onPress={() => setMMonthIdx(m.key)}
+                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(52,211,153,0.12)' : T.bg }}
+                        >
+                          <Text style={{ color: active ? T.greenBright : T.textMut, fontSize: 12, fontWeight: '700' }}>{m.label}</Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Точка / организация */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Куда</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  <Pressable
+                    onPress={() => setMCompanyId(null)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, borderWidth: 1, borderColor: mCompanyId == null ? T.green : T.border, backgroundColor: mCompanyId == null ? 'rgba(52,211,153,0.12)' : T.bg }}
+                  >
+                    <Text style={{ color: mCompanyId == null ? T.greenBright : T.textMut, fontSize: 12, fontWeight: '700' }}>Вся организация</Text>
+                  </Pressable>
+                  {companies.map((c) => {
+                    const active = mCompanyId === c.id
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => setMCompanyId(c.id)}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(52,211,153,0.12)' : T.bg }}
+                      >
+                        <Text style={{ color: active ? T.greenBright : T.textMut, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>{c.name}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+
+              {/* Выручка */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Цель по выручке, ₸</Text>
+                <TextInput
+                  value={mRevenue}
+                  onChangeText={setMRevenue}
+                  placeholder="Например 5000000"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="numeric"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Прибыль */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Цель по прибыли, ₸</Text>
+                <TextInput
+                  value={mProfit}
+                  onChangeText={setMProfit}
+                  placeholder="Например 1500000"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="numeric"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <Text style={{ color: T.textDim, fontSize: 11 }}>Оставьте поле пустым, если не задаёте эту цель.</Text>
+            </ScrollView>
+
+            {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeGoalModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submitGoal()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }

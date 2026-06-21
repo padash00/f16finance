@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
@@ -24,6 +24,14 @@ export default function OperatorTasks() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // быстрое действие «взять в работу» по строке
+  const [acceptBusyId, setAcceptBusyId] = useState<string | null>(null)
+  // модалка завершения
+  const [completeTask, setCompleteTask] = useState<Task | null>(null)
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     setError(null)
     try { const r = await apiFetch<{ tasks: Task[] }>('/api/operator/tasks'); setTasks(r.tasks || []) }
@@ -31,6 +39,40 @@ export default function OperatorTasks() {
     finally { setLoading(false) }
   }, [])
   useEffect(() => { void load() }, [load])
+
+  const accept = useCallback(async (t: Task) => {
+    setAcceptBusyId(t.id)
+    setError(null)
+    try {
+      await apiFetch('/api/operator/tasks', { method: 'POST', body: JSON.stringify({ action: 'respondTask', taskId: t.id, response: 'accept' }) })
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось взять задачу')
+    } finally {
+      setAcceptBusyId(null)
+    }
+  }, [load])
+
+  const openComplete = useCallback((t: Task) => { setCompleteTask(t); setNote(''); setModalError(null) }, [])
+  const closeComplete = useCallback(() => { setCompleteTask(null); setNote(''); setModalError(null) }, [])
+
+  const submitComplete = useCallback(async () => {
+    if (!completeTask) return
+    setSaving(true)
+    setModalError(null)
+    try {
+      await apiFetch('/api/operator/tasks', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'respondTask', taskId: completeTask.id, response: 'complete', note: note.trim() || null }),
+      })
+      closeComplete()
+      await load()
+    } catch (e: any) {
+      setModalError(e?.message || 'Не удалось завершить задачу')
+    } finally {
+      setSaving(false)
+    }
+  }, [completeTask, note, closeComplete, load])
 
   const active = tasks.filter((t) => t.status !== 'done')
   const done = tasks.filter((t) => t.status === 'done')
@@ -50,7 +92,16 @@ export default function OperatorTasks() {
           </Card>
         ) : (
           <>
-            {active.map((t) => <TaskRow key={t.id} t={t} />)}
+            {error ? <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontSize: 13 }}>{error}</Text></Card> : null}
+            {active.map((t) => (
+              <TaskRow
+                key={t.id}
+                t={t}
+                accepting={acceptBusyId === t.id}
+                onAccept={() => void accept(t)}
+                onComplete={() => openComplete(t)}
+              />
+            ))}
             {done.length > 0 ? (
               <>
                 <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700', marginTop: 8, letterSpacing: 0.4 }}>ВЫПОЛНЕНО ({done.length})</Text>
@@ -60,13 +111,44 @@ export default function OperatorTasks() {
           </>
         )}
       </ScrollView>
+
+      {/* Модалка завершения задачи */}
+      <Modal visible={!!completeTask} transparent animationType="slide" onRequestClose={closeComplete}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, borderWidth: 1, borderColor: T.border, padding: S.xl, gap: S.md }}>
+            <Text style={{ color: T.text, fontSize: 18, fontWeight: '900' }}>Завершить задачу</Text>
+            {completeTask ? <Text style={{ color: T.textMut, fontSize: 13 }} numberOfLines={2}>{completeTask.title}</Text> : null}
+            <Text style={{ color: T.textDim, fontSize: 12 }}>Комментарий — необязательно, его увидит постановщик задачи.</Text>
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="Например: всё сделано, фото в чате"
+              placeholderTextColor={T.textDim}
+              multiline
+              style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: R.md, padding: 14, color: T.text, fontSize: 15, minHeight: 80, textAlignVertical: 'top' }}
+            />
+            {modalError ? <Text style={{ color: T.red, fontSize: 12 }}>{modalError}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: S.sm }}>
+              <Pressable onPress={closeComplete} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submitComplete()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: R.md, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Завершить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
 
-function TaskRow({ t, dim }: { t: Task; dim?: boolean }) {
+function TaskRow({ t, dim, accepting, onAccept, onComplete }: { t: Task; dim?: boolean; accepting?: boolean; onAccept?: () => void; onComplete?: () => void }) {
   const st = STATUS[t.status] || STATUS.todo
   const due = fmtDue(t.due_date)
+  const canAccept = t.status === 'todo' || t.status === 'backlog'
+  const canComplete = t.status !== 'done'
+  const showActions = !dim && (onAccept || onComplete) && (canAccept || canComplete)
   return (
     <Card style={{ gap: 8, opacity: dim ? 0.6 : 1, borderLeftWidth: 3, borderLeftColor: prColor(t.priority) }}>
       <Text style={{ color: T.text, fontSize: 15, fontWeight: '700' }} numberOfLines={2}>{t.title}</Text>
@@ -75,6 +157,30 @@ function TaskRow({ t, dim }: { t: Task; dim?: boolean }) {
         {t.company_name ? <Text style={{ color: T.textDim, fontSize: 12 }}>{t.company_name}</Text> : null}
         {due ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="time-outline" size={12} color={T.textDim} /><Text style={{ color: T.textDim, fontSize: 12 }}>{due}</Text></View> : null}
       </View>
+
+      {showActions ? (
+        <View style={{ flexDirection: 'row', gap: S.sm, marginTop: 2 }}>
+          {canAccept && onAccept ? (
+            <Pressable
+              onPress={onAccept}
+              disabled={accepting}
+              style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, backgroundColor: '#0c3a2c', borderWidth: 1, borderColor: '#10b981', borderRadius: R.md, paddingVertical: 11, opacity: accepting ? 0.6 : 1 }}
+            >
+              {accepting ? <ActivityIndicator color={T.green} size="small" /> : <Ionicons name="play" size={16} color={T.green} />}
+              <Text style={{ color: T.green, fontWeight: '800', fontSize: 14 }}>Взять в работу</Text>
+            </Pressable>
+          ) : null}
+          {canComplete && onComplete ? (
+            <Pressable
+              onPress={onComplete}
+              style={{ flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, backgroundColor: T.green, borderRadius: R.md, paddingVertical: 11 }}
+            >
+              <Ionicons name="checkmark" size={16} color="#04130d" />
+              <Text style={{ color: '#04130d', fontWeight: '900', fontSize: 14 }}>Выполнено</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </Card>
   )
 }

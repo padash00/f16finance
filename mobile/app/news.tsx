@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
 import { Card, Pill, GlowHero } from '@/components/ui'
 
@@ -34,10 +36,21 @@ const fmtTime = (iso: string | null) => {
 
 export default function NewsScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canCreateCap = canDo(role, 'news.create')
+
   const [posts, setPosts] = useState<Post[]>([])
   const [unread, setUnread] = useState(0)
+  const [canPublish, setCanPublish] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // модалка публикации
+  const [modalOpen, setModalOpen] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftBody, setDraftBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -46,6 +59,7 @@ export default function NewsScreen() {
       const res = await apiFetch<Resp>('/api/news?limit=50')
       setPosts(res?.posts || [])
       setUnread(Number(res?.unreadCount || 0))
+      setCanPublish(!!res?.canPublish)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить')
     } finally {
@@ -55,11 +69,64 @@ export default function NewsScreen() {
 
   useEffect(() => { void load() }, [load])
 
+  // Кнопку показываем только если есть и право в приложении, и серверный флаг публикации
+  const showPublish = canCreateCap && canPublish
+
+  const openCreate = () => {
+    setDraftTitle('')
+    setDraftBody('')
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (saving) return
+    setModalOpen(false)
+    setDraftTitle('')
+    setDraftBody('')
+    setFormError(null)
+  }
+
+  const submit = async () => {
+    const text = draftBody.trim()
+    if (!text) { setFormError('Введите текст новости'); return }
+    if (text.length > 2000) { setFormError('Слишком длинный текст (макс 2000)'); return }
+    setSaving(true)
+    setFormError(null)
+    try {
+      await apiFetch('/api/news', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: draftTitle.trim() || null,
+          body: text,
+        }),
+      })
+      setModalOpen(false)
+      setDraftTitle('')
+      setDraftBody('')
+      await load()
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось опубликовать')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 6 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Лента</Text>
+        {showPublish ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Новость</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView
@@ -138,6 +205,54 @@ export default function NewsScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* Модалка публикации новости */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Новая новость</Text>
+              <Pressable onPress={closeModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 12 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Заголовок</Text>
+                <TextInput
+                  value={draftTitle}
+                  onChangeText={setDraftTitle}
+                  placeholder="Необязательно"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Текст *</Text>
+                <TextInput
+                  value={draftBody}
+                  onChangeText={setDraftBody}
+                  placeholder="Текст новости..."
+                  placeholderTextColor={T.textDim}
+                  multiline
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15, minHeight: 120, textAlignVertical: 'top' }}
+                />
+              </View>
+            </ScrollView>
+
+            {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Опубликовать</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }

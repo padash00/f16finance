@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
-import { T, S, money, moneyShort } from '@/lib/theme'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
+import { T, S, R, money, moneyShort } from '@/lib/theme'
 import { Card, Pill, GlowHero } from '@/components/ui'
 
 type Income = {
@@ -21,32 +23,81 @@ type Income = {
   comment: string | null
 }
 
+type Company = { id: string; name?: string }
+type Operator = { id: string; name?: string; short_name?: string | null }
+
+type Shift = 'day' | 'night'
+
+type FormState = {
+  date: string
+  companyId: string
+  operatorId: string
+  shift: Shift
+  zone: string
+  cash: string
+  kaspi: string
+  card: string
+  online: string
+  comment: string
+}
+
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
 const monthRange = (d: Date) => ({ from: iso(new Date(d.getFullYear(), d.getMonth(), 1)), to: iso(new Date(d.getFullYear(), d.getMonth() + 1, 0)) })
 const amountOf = (e: Income) => Number(e.cash_amount || 0) + Number(e.kaspi_amount || 0) + Number(e.online_amount || 0) + Number(e.card_amount || 0)
 const fmtDay = (s: string | null) => (s ? new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }) : '—')
 const shiftLabel = (s: string | null) => (s === 'day' ? 'День' : s === 'night' ? 'Ночь' : s || '')
+const num = (v: string) => {
+  const n = Number(String(v).replace(',', '.').trim())
+  return Number.isFinite(n) ? n : 0
+}
+const emptyForm = (): FormState => ({
+  date: iso(new Date()),
+  companyId: '',
+  operatorId: '',
+  shift: 'day',
+  zone: '',
+  cash: '',
+  kaspi: '',
+  card: '',
+  online: '',
+  comment: '',
+})
 
 export default function IncomeScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canCreate = canDo(role, 'income.create')
+
   const [cursor, setCursor] = useState(() => new Date())
   const [items, setItems] = useState<Income[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [companyName, setCompanyName] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // модалка добавления дохода
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const load = useCallback(async (d: Date) => {
     setLoading(true); setError(null)
     const { from, to } = monthRange(d)
     try {
-      const [inc, comp] = await Promise.all([
+      const [inc, comp, ops] = await Promise.all([
         apiFetch<{ data: Income[] }>(`/api/admin/incomes?from=${from}&to=${to}`),
-        apiFetch<{ data: Array<{ id: string; name?: string }> }>('/api/admin/companies').catch(() => ({ data: [] })),
+        apiFetch<{ data: Company[] }>('/api/admin/companies').catch(() => ({ data: [] })),
+        apiFetch<{ data: Operator[] }>('/api/admin/operators?active_only=true').catch(() => ({ data: [] })),
       ])
       const rows = (inc.data || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
       setItems(rows)
+      const comps = comp.data || []
+      setCompanies(comps)
+      setOperators(ops.data || [])
       const map: Record<string, string> = {}
-      for (const c of comp.data || []) if (c?.id) map[String(c.id)] = c.name || ''
+      for (const c of comps) if (c?.id) map[String(c.id)] = c.name || ''
       setCompanyName(map)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить')
@@ -74,11 +125,76 @@ export default function IncomeScreen() {
     return { total, cash, kaspi, other }
   }, [items])
 
+  const openCreate = () => {
+    const f = emptyForm()
+    if (companies.length === 1 && companies[0]?.id) f.companyId = String(companies[0].id)
+    setForm(f)
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (saving) return
+    setModalOpen(false)
+    setFormError(null)
+  }
+
+  const formTotal = useMemo(
+    () => num(form.cash) + num(form.kaspi) + num(form.card) + num(form.online),
+    [form.cash, form.kaspi, form.card, form.online],
+  )
+
+  const submit = async () => {
+    if (!form.date.trim()) { setFormError('Дата обязательна'); return }
+    if (!form.companyId) { setFormError('Выберите компанию'); return }
+    if (!form.operatorId) { setFormError('Выберите оператора'); return }
+    if (formTotal <= 0) { setFormError('Введите хотя бы одну сумму'); return }
+    setSaving(true)
+    setFormError(null)
+    try {
+      await apiFetch('/api/admin/incomes', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'createIncome',
+          payload: {
+            date: form.date.trim(),
+            company_id: form.companyId,
+            operator_id: form.operatorId,
+            shift: form.shift,
+            zone: form.zone.trim() || null,
+            cash_amount: num(form.cash),
+            kaspi_amount: num(form.kaspi),
+            online_amount: num(form.online),
+            card_amount: num(form.card),
+            comment: form.comment.trim() || null,
+          },
+        }),
+      })
+      setModalOpen(false)
+      await load(cursor)
+    } catch (e: any) {
+      const msg = e?.message === 'duplicate' ? 'Такой доход уже есть за эту дату и смену' : (e?.message || 'Не удалось сохранить')
+      setFormError(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 6 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '800', flex: 1 }}>Доходы</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Добавить</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingBottom: 6 }}>
@@ -136,6 +252,187 @@ export default function IncomeScreen() {
           </Card>
         )}
       </ScrollView>
+
+      {/* Модалка добавления дохода */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Новый доход</Text>
+              <Pressable onPress={closeModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 440 }} contentContainerStyle={{ gap: 12 }}>
+              {/* Дата */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Дата *</Text>
+                <TextInput
+                  value={form.date}
+                  onChangeText={(v) => setForm((f) => ({ ...f, date: v }))}
+                  placeholder="ГГГГ-ММ-ДД"
+                  placeholderTextColor={T.textDim}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Компания */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Компания *</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {companies.length === 0 ? (
+                    <Text style={{ color: T.textDim, fontSize: 13 }}>Нет доступных компаний</Text>
+                  ) : companies.map((c) => {
+                    const active = form.companyId === String(c.id)
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => setForm((f) => ({ ...f, companyId: String(c.id) }))}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.md, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(16,185,129,0.14)' : T.bg }}
+                      >
+                        <Text style={{ color: active ? T.green : T.textMut, fontSize: 13, fontWeight: '700' }}>{c.name || 'Компания'}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+
+              {/* Оператор */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Оператор *</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {operators.length === 0 ? (
+                    <Text style={{ color: T.textDim, fontSize: 13 }}>Нет операторов</Text>
+                  ) : operators.map((o) => {
+                    const active = form.operatorId === String(o.id)
+                    return (
+                      <Pressable
+                        key={o.id}
+                        onPress={() => setForm((f) => ({ ...f, operatorId: String(o.id) }))}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.md, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(16,185,129,0.14)' : T.bg }}
+                      >
+                        <Text style={{ color: active ? T.green : T.textMut, fontSize: 13, fontWeight: '700' }}>{o.short_name || o.name || 'Оператор'}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+
+              {/* Смена */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Смена *</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {(['day', 'night'] as Shift[]).map((sh) => {
+                    const active = form.shift === sh
+                    return (
+                      <Pressable
+                        key={sh}
+                        onPress={() => setForm((f) => ({ ...f, shift: sh }))}
+                        style={{ flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(16,185,129,0.14)' : T.bg }}
+                      >
+                        <Text style={{ color: active ? T.green : T.textMut, fontSize: 14, fontWeight: '800' }}>{sh === 'day' ? 'День' : 'Ночь'}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+
+              {/* Зона */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Зона</Text>
+                <TextInput
+                  value={form.zone}
+                  onChangeText={(v) => setForm((f) => ({ ...f, zone: v }))}
+                  placeholder="Необязательно"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Суммы */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Наличные</Text>
+                  <TextInput
+                    value={form.cash}
+                    onChangeText={(v) => setForm((f) => ({ ...f, cash: v }))}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Kaspi</Text>
+                  <TextInput
+                    value={form.kaspi}
+                    onChangeText={(v) => setForm((f) => ({ ...f, kaspi: v }))}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Карта</Text>
+                  <TextInput
+                    value={form.card}
+                    onChangeText={(v) => setForm((f) => ({ ...f, card: v }))}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Онлайн</Text>
+                  <TextInput
+                    value={form.online}
+                    onChangeText={(v) => setForm((f) => ({ ...f, online: v }))}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  />
+                </View>
+              </View>
+
+              {/* Комментарий */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Комментарий</Text>
+                <TextInput
+                  value={form.comment}
+                  onChangeText={(v) => setForm((f) => ({ ...f, comment: v }))}
+                  placeholder="Дополнительно"
+                  placeholderTextColor={T.textDim}
+                  multiline
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15, minHeight: 64, textAlignVertical: 'top' }}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 }}>
+                <Text style={{ color: T.textDim, fontSize: 13, fontWeight: '700' }}>Итого</Text>
+                <Text style={{ color: T.green, fontSize: 17, fontWeight: '900' }}>{money(formTotal)}</Text>
+              </View>
+            </ScrollView>
+
+            {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }

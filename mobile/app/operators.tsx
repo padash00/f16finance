@@ -1,11 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
-import { T, S, money, moneyShort } from '@/lib/theme'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
+import { T, R, S, money, moneyShort } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
 
 type Profile = {
@@ -64,12 +78,47 @@ const initials = (name: string) => {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
+type CreateForm = {
+  name: string
+  fullName: string
+  shortName: string
+  position: string
+  phone: string
+  email: string
+  withLogin: boolean
+  username: string
+}
+
+const emptyCreate: CreateForm = {
+  name: '',
+  fullName: '',
+  shortName: '',
+  position: '',
+  phone: '',
+  email: '',
+  withLogin: false,
+  username: '',
+}
+
+type CreatedAccount = { name: string; username: string; password: string }
+
 export default function OperatorsScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canCreate = canDo(role, 'operators.create')
+
   const [filter, setFilter] = useState<'all' | 'active'>('active')
   const [items, setItems] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Модалка создания оператора
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState<CreateForm>(emptyCreate)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  // Сгенерированные сервером логин/пароль (показываем после успеха)
+  const [created, setCreated] = useState<CreatedAccount | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -87,6 +136,93 @@ export default function OperatorsScreen() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const openCreate = () => {
+    setForm(emptyCreate)
+    setFormError(null)
+    setCreated(null)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (saving) return
+    setModalOpen(false)
+    setForm(emptyCreate)
+    setFormError(null)
+    setCreated(null)
+  }
+
+  const submitCreate = async () => {
+    const name = form.name.trim()
+    if (!name) {
+      setFormError('Имя оператора обязательно')
+      return
+    }
+    const username = form.username.trim()
+    const email = form.email.trim()
+    if (form.withLogin) {
+      if (username.length < 3) {
+        setFormError('Логин — минимум 3 символа')
+        return
+      }
+      if (!email) {
+        setFormError('Для создания логина нужен Email')
+        return
+      }
+    }
+
+    setSaving(true)
+    setFormError(null)
+    try {
+      // 1) Создаём оператора (организация подставляется сервером из сессии).
+      const res = await apiFetch<{ ok?: boolean; data?: { id: string; name?: string } }>(
+        '/api/admin/operators',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'createOperator',
+            payload: {
+              name,
+              full_name: form.fullName.trim() || null,
+              short_name: form.shortName.trim() || null,
+              position: form.position.trim() || null,
+              phone: form.phone.trim() || null,
+              email: email || null,
+            },
+          }),
+        },
+      )
+
+      const operatorId = res?.data?.id
+      // 2) Опционально — заводим логин. Пароль генерирует сервер и возвращает его.
+      if (form.withLogin && operatorId) {
+        const acc = await apiFetch<{ username?: string; password?: string }>(
+          '/api/admin/create-operator-account',
+          {
+            method: 'POST',
+            body: JSON.stringify({ operatorId, username, email, name }),
+          },
+        )
+        await load()
+        setCreated({ name, username: acc?.username || username, password: acc?.password || '' })
+        return // оставляем модалку открытой, чтобы показать пароль
+      }
+
+      await load()
+      closeModalForce()
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось сохранить')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const closeModalForce = () => {
+    setModalOpen(false)
+    setForm(emptyCreate)
+    setFormError(null)
+    setCreated(null)
+  }
 
   const visible = useMemo(() => {
     if (filter === 'active') return items.filter((o) => o.is_active !== false)
@@ -108,6 +244,16 @@ export default function OperatorsScreen() {
           <Ionicons name="chevron-back" size={24} color={T.text} />
         </Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Операторы</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Добавить</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={{ paddingHorizontal: S.lg, paddingBottom: 6 }}>
@@ -222,6 +368,175 @@ export default function OperatorsScreen() {
           </Text>
         ) : null}
       </ScrollView>
+
+      {/* Модалка создания оператора */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}
+        >
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>
+                {created ? 'Оператор создан' : 'Новый оператор'}
+              </Text>
+              <Pressable onPress={created ? closeModalForce : closeModal} hitSlop={10}>
+                <Ionicons name="close" size={22} color={T.textMut} />
+              </Pressable>
+            </View>
+
+            {created ? (
+              // Экран успеха: показываем сгенерированные сервером логин и пароль
+              <View style={{ gap: 12 }}>
+                <Text style={{ color: T.textMut, fontSize: 13 }}>
+                  Логин создан для «{created.name}». Сохраните пароль — он показывается один раз.
+                </Text>
+                <View style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 14, gap: 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: T.textDim, fontSize: 13 }}>Логин</Text>
+                    <Text style={{ color: T.text, fontSize: 14, fontWeight: '800' }} selectable>{created.username}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ color: T.textDim, fontSize: 13 }}>Пароль</Text>
+                    <Text style={{ color: T.greenBright, fontSize: 14, fontWeight: '800', flexShrink: 1, textAlign: 'right' }} selectable>
+                      {created.password || '—'}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  onPress={closeModalForce}
+                  style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green }}
+                >
+                  <Text style={{ color: '#04130d', fontWeight: '900' }}>Готово</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12 }}>
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Имя *</Text>
+                    <TextInput
+                      value={form.name}
+                      onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+                      placeholder="Например: Маржан"
+                      placeholderTextColor={T.textDim}
+                      style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                    />
+                  </View>
+
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Полное ФИО</Text>
+                    <TextInput
+                      value={form.fullName}
+                      onChangeText={(v) => setForm((f) => ({ ...f, fullName: v }))}
+                      placeholder="Жумабекова Маржан Нурлановна"
+                      placeholderTextColor={T.textDim}
+                      style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                    />
+                  </View>
+
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Краткое имя</Text>
+                    <TextInput
+                      value={form.shortName}
+                      onChangeText={(v) => setForm((f) => ({ ...f, shortName: v }))}
+                      placeholder="Маржан (день)"
+                      placeholderTextColor={T.textDim}
+                      style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                    />
+                  </View>
+
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Должность</Text>
+                    <TextInput
+                      value={form.position}
+                      onChangeText={(v) => setForm((f) => ({ ...f, position: v }))}
+                      placeholder="Старший оператор"
+                      placeholderTextColor={T.textDim}
+                      style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                    />
+                  </View>
+
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Телефон</Text>
+                    <TextInput
+                      value={form.phone}
+                      onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
+                      placeholder="+7 700 000 00 00"
+                      placeholderTextColor={T.textDim}
+                      keyboardType="phone-pad"
+                      style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                    />
+                  </View>
+
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>
+                      Email{form.withLogin ? ' *' : ''}
+                    </Text>
+                    <TextInput
+                      value={form.email}
+                      onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
+                      placeholder="operator@example.com"
+                      placeholderTextColor={T.textDim}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: T.text, fontSize: 14, fontWeight: '700' }}>Создать логин</Text>
+                      <Text style={{ color: T.textDim, fontSize: 12, marginTop: 2 }}>Пароль сгенерируется автоматически</Text>
+                    </View>
+                    <Switch
+                      value={form.withLogin}
+                      onValueChange={(v) => setForm((f) => ({ ...f, withLogin: v }))}
+                      trackColor={{ false: T.card2, true: T.green }}
+                      thumbColor="#04130d"
+                    />
+                  </View>
+
+                  {form.withLogin ? (
+                    <View style={{ gap: 6 }}>
+                      <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Логин *</Text>
+                      <TextInput
+                        value={form.username}
+                        onChangeText={(v) => setForm((f) => ({ ...f, username: v }))}
+                        placeholder="например marzhan"
+                        placeholderTextColor={T.textDim}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                      />
+                    </View>
+                  ) : null}
+                </ScrollView>
+
+                {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+                  <Pressable
+                    onPress={closeModal}
+                    disabled={saving}
+                    style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}
+                  >
+                    <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void submitCreate()}
+                    disabled={saving}
+                    style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}
+                  >
+                    {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Создать</Text>}
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
