@@ -14,10 +14,12 @@ type Income = {
   id: string
   date: string | null
   company_id: string | null
+  operator_id: string | null
   shift: string | null
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  kaspi_before_midnight: number | null
   online_amount: number | null
   card_amount: number | null
   comment: string | null
@@ -67,6 +69,7 @@ export default function IncomeScreen() {
   const router = useRouter()
   const { role } = useAuth()
   const canCreate = canDo(role, 'income.create')
+  const canEdit = canDo(role, 'income.edit')
 
   const [cursor, setCursor] = useState(() => new Date())
   const [items, setItems] = useState<Income[]>([])
@@ -76,8 +79,11 @@ export default function IncomeScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // модалка добавления дохода
+  // модалка добавления / редактирования дохода
   const [modalOpen, setModalOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  // сохраняем «касса до полуночи» при редактировании, чтобы апдейт не обнулил поле
+  const [editKaspiBeforeMidnight, setEditKaspiBeforeMidnight] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -128,7 +134,28 @@ export default function IncomeScreen() {
   const openCreate = () => {
     const f = emptyForm()
     if (companies.length === 1 && companies[0]?.id) f.companyId = String(companies[0].id)
+    setEditId(null)
+    setEditKaspiBeforeMidnight(null)
     setForm(f)
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const openEdit = (e: Income) => {
+    setEditId(e.id)
+    setEditKaspiBeforeMidnight(e.kaspi_before_midnight ?? null)
+    setForm({
+      date: e.date || iso(new Date()),
+      companyId: e.company_id ? String(e.company_id) : '',
+      operatorId: e.operator_id ? String(e.operator_id) : '',
+      shift: (e.shift === 'night' ? 'night' : 'day') as Shift,
+      zone: e.zone || '',
+      cash: e.cash_amount != null ? String(e.cash_amount) : '',
+      kaspi: e.kaspi_amount != null ? String(e.kaspi_amount) : '',
+      card: e.card_amount != null ? String(e.card_amount) : '',
+      online: e.online_amount != null ? String(e.online_amount) : '',
+      comment: e.comment || '',
+    })
     setFormError(null)
     setModalOpen(true)
   }
@@ -136,6 +163,8 @@ export default function IncomeScreen() {
   const closeModal = () => {
     if (saving) return
     setModalOpen(false)
+    setEditId(null)
+    setEditKaspiBeforeMidnight(null)
     setFormError(null)
   }
 
@@ -152,25 +181,48 @@ export default function IncomeScreen() {
     setSaving(true)
     setFormError(null)
     try {
-      await apiFetch('/api/admin/incomes', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'createIncome',
-          payload: {
-            date: form.date.trim(),
-            company_id: form.companyId,
-            operator_id: form.operatorId,
-            shift: form.shift,
-            zone: form.zone.trim() || null,
-            cash_amount: num(form.cash),
-            kaspi_amount: num(form.kaspi),
-            online_amount: num(form.online),
-            card_amount: num(form.card),
-            comment: form.comment.trim() || null,
-          },
-        }),
-      })
+      if (editId) {
+        // Эндпоинт updateIncome правит только эти поля; company/shift/zone неизменны
+        await apiFetch('/api/admin/incomes', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'updateIncome',
+            incomeId: editId,
+            payload: {
+              date: form.date.trim(),
+              operator_id: form.operatorId,
+              cash_amount: num(form.cash),
+              kaspi_amount: num(form.kaspi),
+              kaspi_before_midnight: editKaspiBeforeMidnight,
+              online_amount: num(form.online),
+              card_amount: num(form.card),
+              comment: form.comment.trim() || null,
+            },
+          }),
+        })
+      } else {
+        await apiFetch('/api/admin/incomes', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'createIncome',
+            payload: {
+              date: form.date.trim(),
+              company_id: form.companyId,
+              operator_id: form.operatorId,
+              shift: form.shift,
+              zone: form.zone.trim() || null,
+              cash_amount: num(form.cash),
+              kaspi_amount: num(form.kaspi),
+              online_amount: num(form.online),
+              card_amount: num(form.card),
+              comment: form.comment.trim() || null,
+            },
+          }),
+        })
+      }
       setModalOpen(false)
+      setEditId(null)
+      setEditKaspiBeforeMidnight(null)
       await load(cursor)
     } catch (e: any) {
       const msg = e?.message === 'duplicate' ? 'Такой доход уже есть за эту дату и смену' : (e?.message || 'Не удалось сохранить')
@@ -237,7 +289,12 @@ export default function IncomeScreen() {
               const cmp = e.company_id ? companyName[e.company_id] : null
               const meta = [cmp, shiftLabel(e.shift), e.zone].filter(Boolean).join(' · ')
               return (
-                <View key={e.id} style={{ flexDirection: 'row', gap: 12, padding: 14, borderBottomWidth: i < items.length - 1 ? 1 : 0, borderBottomColor: T.border }}>
+                <Pressable
+                  key={e.id}
+                  onPress={canEdit ? () => openEdit(e) : undefined}
+                  disabled={!canEdit}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: i < items.length - 1 ? 1 : 0, borderBottomColor: T.border }}
+                >
                   <View style={{ alignItems: 'center', width: 42 }}>
                     <Text style={{ color: T.textMut, fontSize: 11, fontWeight: '700' }}>{fmtDay(e.date)}</Text>
                   </View>
@@ -246,7 +303,8 @@ export default function IncomeScreen() {
                     {e.comment ? <Text style={{ color: T.textDim, fontSize: 12, marginTop: 1 }} numberOfLines={1}>{e.comment}</Text> : null}
                   </View>
                   <Text style={{ color: T.green, fontSize: 15, fontWeight: '800' }}>{money(amountOf(e))}</Text>
-                </View>
+                  {canEdit ? <Ionicons name="create-outline" size={16} color={T.textDim} /> : null}
+                </Pressable>
               )
             })}
           </Card>
@@ -258,7 +316,7 @@ export default function IncomeScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Новый доход</Text>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>{editId ? 'Изменить доход' : 'Новый доход'}</Text>
               <Pressable onPress={closeModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
             </View>
 
@@ -279,8 +337,8 @@ export default function IncomeScreen() {
 
               {/* Компания */}
               <View style={{ gap: 6 }}>
-                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Компания *</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Компания *{editId ? ' (нельзя изменить)' : ''}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, opacity: editId ? 0.55 : 1 }}>
                   {companies.length === 0 ? (
                     <Text style={{ color: T.textDim, fontSize: 13 }}>Нет доступных компаний</Text>
                   ) : companies.map((c) => {
@@ -288,6 +346,7 @@ export default function IncomeScreen() {
                     return (
                       <Pressable
                         key={c.id}
+                        disabled={!!editId}
                         onPress={() => setForm((f) => ({ ...f, companyId: String(c.id) }))}
                         style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.md, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(16,185,129,0.14)' : T.bg }}
                       >
@@ -321,13 +380,14 @@ export default function IncomeScreen() {
 
               {/* Смена */}
               <View style={{ gap: 6 }}>
-                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Смена *</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Смена *{editId ? ' (нельзя изменить)' : ''}</Text>
+                <View style={{ flexDirection: 'row', gap: 8, opacity: editId ? 0.55 : 1 }}>
                   {(['day', 'night'] as Shift[]).map((sh) => {
                     const active = form.shift === sh
                     return (
                       <Pressable
                         key={sh}
+                        disabled={!!editId}
                         onPress={() => setForm((f) => ({ ...f, shift: sh }))}
                         style={{ flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: R.md, borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? 'rgba(16,185,129,0.14)' : T.bg }}
                       >
@@ -340,13 +400,14 @@ export default function IncomeScreen() {
 
               {/* Зона */}
               <View style={{ gap: 6 }}>
-                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Зона</Text>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Зона{editId ? ' (нельзя изменить)' : ''}</Text>
                 <TextInput
                   value={form.zone}
+                  editable={!editId}
                   onChangeText={(v) => setForm((f) => ({ ...f, zone: v }))}
                   placeholder="Необязательно"
                   placeholderTextColor={T.textDim}
-                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: editId ? T.textMut : T.text, fontSize: 15, opacity: editId ? 0.6 : 1 }}
                 />
               </View>
 
@@ -427,7 +488,7 @@ export default function IncomeScreen() {
                 <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
               </Pressable>
               <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>{editId ? 'Изменить' : 'Добавить'}</Text>}
               </Pressable>
             </View>
           </View>

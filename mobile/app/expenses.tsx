@@ -62,10 +62,24 @@ const emptyForm: FormState = {
 
 const num = (v: string) => Number(String(v).replace(',', '.')) || 0
 
+// Форма редактирования расхода. updateExpense обновляет «плоскую» запись напрямую
+// (validatePayload/normalizePayload), без мастера: нужны date, company_id, category (текст),
+// cash_amount/kaspi_amount, comment. Поэтому форма правки отдельная от формы создания.
+type EditState = {
+  date: string
+  company_id: string
+  category: string
+  amount_cash: string
+  amount_kaspi: string
+  comment: string
+}
+const emptyEdit: EditState = { date: '', company_id: '', category: '', amount_cash: '', amount_kaspi: '', comment: '' }
+
 export default function ExpensesScreen() {
   const router = useRouter()
   const { role } = useAuth()
   const canCreate = canDo(role, 'expenses.create')
+  const canEdit = canDo(role, 'expenses.edit')
   const canDelete = canDo(role, 'expenses.delete')
 
   const [cursor, setCursor] = useState(() => new Date())
@@ -84,6 +98,12 @@ export default function ExpensesScreen() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // модалка редактирования расхода (отдельная — обновляет запись напрямую, без мастера)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<EditState>(emptyEdit)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const load = useCallback(async (d: Date) => {
     setLoading(true); setError(null)
@@ -238,6 +258,65 @@ export default function ExpensesScreen() {
     ])
   }
 
+  const openEdit = useCallback((e: Expense) => {
+    setEditId(e.id)
+    setEditForm({
+      date: e.date || iso(new Date()),
+      company_id: e.company_id || '',
+      category: e.category || '',
+      amount_cash: e.cash_amount ? String(e.cash_amount) : '',
+      amount_kaspi: e.kaspi_amount ? String(e.kaspi_amount) : '',
+      comment: e.comment || '',
+    })
+    setEditError(null)
+  }, [])
+
+  const closeEdit = () => {
+    if (editSaving) return
+    setEditId(null)
+    setEditForm(emptyEdit)
+    setEditError(null)
+  }
+
+  // Обновление расхода: updateExpense → validatePayload/normalizePayload напрямую.
+  const submitEdit = async () => {
+    if (!editId) return
+    const cash = num(editForm.amount_cash)
+    const kaspi = num(editForm.amount_kaspi)
+    if (!editForm.date.trim()) { setEditError('Дата обязательна'); return }
+    if (!editForm.company_id) { setEditError('Выберите точку'); return }
+    if (!editForm.category.trim()) { setEditError('Категория обязательна'); return }
+    if (cash + kaspi <= 0) { setEditError('Сумма расхода обязательна'); return }
+
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      await apiFetch('/api/admin/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'updateExpense',
+          expenseId: editId,
+          payload: {
+            date: editForm.date.trim(),
+            company_id: editForm.company_id,
+            operator_id: null,
+            category: editForm.category.trim(),
+            cash_amount: cash,
+            kaspi_amount: kaspi,
+            comment: editForm.comment.trim() || null,
+          },
+        }),
+      })
+      setEditId(null)
+      setEditForm(emptyEdit)
+      await load(cursor)
+    } catch (e: any) {
+      setEditError(e?.message || 'Не удалось сохранить')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const inputStyle = { backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 } as const
 
   return (
@@ -312,15 +391,22 @@ export default function ExpensesScreen() {
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 6 }}>
                     <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>{money(amountOf(e))}</Text>
-                    {canDelete ? (
-                      deletingId === e.id ? (
-                        <ActivityIndicator color={T.red} size="small" />
-                      ) : (
-                        <Pressable onPress={() => confirmDelete(e)} hitSlop={8} style={{ padding: 2 }}>
-                          <Ionicons name="trash-outline" size={17} color={T.red} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      {canEdit ? (
+                        <Pressable onPress={() => openEdit(e)} hitSlop={8} style={{ padding: 2 }}>
+                          <Ionicons name="create-outline" size={17} color={T.textMut} />
                         </Pressable>
-                      )
-                    ) : null}
+                      ) : null}
+                      {canDelete ? (
+                        deletingId === e.id ? (
+                          <ActivityIndicator color={T.red} size="small" />
+                        ) : (
+                          <Pressable onPress={() => confirmDelete(e)} hitSlop={8} style={{ padding: 2 }}>
+                            <Ionicons name="trash-outline" size={17} color={T.red} />
+                          </Pressable>
+                        )
+                      ) : null}
+                    </View>
                   </View>
                 </View>
               )
@@ -481,6 +567,115 @@ export default function ExpensesScreen() {
               </Pressable>
               <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
                 {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Модалка редактирования расхода */}
+      <Modal visible={editId !== null} transparent animationType="slide" onRequestClose={closeEdit}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Изменить расход</Text>
+              <Pressable onPress={closeEdit} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12 }}>
+              {/* Дата */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Дата * (ГГГГ-ММ-ДД)</Text>
+                <TextInput
+                  value={editForm.date}
+                  onChangeText={(v) => setEditForm((f) => ({ ...f, date: v }))}
+                  placeholder="2026-01-31"
+                  placeholderTextColor={T.textDim}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={inputStyle}
+                />
+              </View>
+
+              {/* Точка */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Точка *</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {companies.map((c) => {
+                    const active = editForm.company_id === c.id
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => setEditForm((f) => ({ ...f, company_id: c.id }))}
+                        style={{ borderWidth: 1, borderColor: active ? T.green : T.border, backgroundColor: active ? T.greenSoft : T.bg, borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 8 }}
+                      >
+                        <Text style={{ color: active ? T.green : T.textMut, fontSize: 13, fontWeight: '700' }}>{c.name || c.id}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+
+              {/* Категория (текст) */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Категория *</Text>
+                <TextInput
+                  value={editForm.category}
+                  onChangeText={(v) => setEditForm((f) => ({ ...f, category: v }))}
+                  placeholder="Например: Хозяйственные расходы"
+                  placeholderTextColor={T.textDim}
+                  style={inputStyle}
+                />
+              </View>
+
+              {/* Суммы */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Наличные ₸</Text>
+                  <TextInput
+                    value={editForm.amount_cash}
+                    onChangeText={(v) => setEditForm((f) => ({ ...f, amount_cash: v }))}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="decimal-pad"
+                    style={inputStyle}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Безнал / карта ₸</Text>
+                  <TextInput
+                    value={editForm.amount_kaspi}
+                    onChangeText={(v) => setEditForm((f) => ({ ...f, amount_kaspi: v }))}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="decimal-pad"
+                    style={inputStyle}
+                  />
+                </View>
+              </View>
+
+              {/* Комментарий */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Комментарий</Text>
+                <TextInput
+                  value={editForm.comment}
+                  onChangeText={(v) => setEditForm((f) => ({ ...f, comment: v }))}
+                  placeholder="Зачем, для кого, на какую смену"
+                  placeholderTextColor={T.textDim}
+                  multiline
+                  style={{ ...inputStyle, minHeight: 64, textAlignVertical: 'top' }}
+                />
+              </View>
+            </ScrollView>
+
+            {editError ? <Text style={{ color: T.red, fontSize: 12 }}>{editError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeEdit} disabled={editSaving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: editSaving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submitEdit()} disabled={editSaving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: editSaving ? 0.6 : 1 }}>
+                {editSaving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
               </Pressable>
             </View>
           </View>
