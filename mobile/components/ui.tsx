@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { T, R, S, shadow } from '@/lib/theme'
+import { haptic } from '@/lib/haptics'
 
 /** Появление: плавный fade + лёгкий подъём при монтировании (премиум-ощущение). */
 export function FadeIn({ children, delay = 0, y = 10, style }: { children: ReactNode; delay?: number; y?: number; style?: StyleProp<ViewStyle> }) {
@@ -119,7 +120,7 @@ export function Segmented<T_ extends string>({ value, options, onChange }: { val
       {options.map((o) => {
         const active = o.key === value
         return (
-          <Pressable key={o.key} onPress={() => onChange(o.key)} style={{ flex: 1, paddingVertical: 9, borderRadius: R.sm, alignItems: 'center' }}>
+          <Pressable key={o.key} onPress={() => { haptic.tap(); onChange(o.key) }} style={{ flex: 1, paddingVertical: 9, borderRadius: R.sm, alignItems: 'center' }}>
             <Text style={{ color: active ? '#04130d' : T.textMut, fontWeight: '800', fontSize: 13 }}>{o.label}</Text>
           </Pressable>
         )
@@ -184,7 +185,7 @@ export function Tappable({ children, onPress, style }: { children: ReactNode; on
   const s = useRef(new Animated.Value(1)).current
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { haptic.light(); onPress() }}
       onPressIn={() => Animated.spring(s, { toValue: 0.97, useNativeDriver: true, friction: 8 }).start()}
       onPressOut={() => Animated.spring(s, { toValue: 1, useNativeDriver: true, friction: 8 }).start()}
     >

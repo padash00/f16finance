@@ -2,10 +2,12 @@ import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { T } from '@/lib/theme'
+import { haptic } from '@/lib/haptics'
 
 export default function OperatorLayout() {
   return (
     <Tabs
+      screenListeners={{ tabPress: () => haptic.tap() }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: T.green,
