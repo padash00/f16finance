@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Easing, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import { T, R, S, shadow } from '@/lib/theme'
 
 /** Появление: плавный fade + лёгкий подъём при монтировании (премиум-ощущение). */
@@ -49,15 +50,21 @@ export function GlowHero({ children, glow = T.green, style }: { children: ReactN
     loop.start()
     return () => loop.stop()
   }, [pulse])
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] })
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] })
   return (
-    <FadeIn style={[{ borderRadius: R.xl, overflow: 'hidden', borderWidth: 1, borderColor: '#20262e', backgroundColor: '#0c0f13' }, shadow.glow(glow), style]}>
-      <Animated.View pointerEvents="none" style={{ position: 'absolute', top: -130, right: -90, opacity: 0.9, transform: [{ scale }] }}>
-        <Glow color={glow} size={280} />
+    <FadeIn style={[{ borderRadius: R.xl, overflow: 'hidden', borderWidth: 1, borderColor: glow + '55' }, shadow.glow(glow), style]}>
+      {/* ВИДНЫЙ цветной градиент-фон */}
+      <LinearGradient
+        colors={[glow + '4d', glow + '1f', '#0a0d11']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Animated.View pointerEvents="none" style={{ position: 'absolute', top: -120, right: -80, opacity: 0.85, transform: [{ scale }] }}>
+        <Glow color={glow} size={300} />
       </Animated.View>
-      <Glow color={T.cyan} size={170} style={{ bottom: -80, left: -50 }} />
       {/* верхний блик */}
-      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 64, backgroundColor: 'rgba(255,255,255,0.035)' }} />
+      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70, backgroundColor: 'rgba(255,255,255,0.05)' }} />
       <View style={{ padding: S.xl }}>{children}</View>
     </FadeIn>
   )
