@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
@@ -7,7 +7,7 @@ import { haptic } from '@/lib/haptics'
 
 /** Появление: плавный fade + лёгкий подъём при монтировании (премиум-ощущение). */
 export function FadeIn({ children, delay = 0, y = 10, style }: { children: ReactNode; delay?: number; y?: number; style?: StyleProp<ViewStyle> }) {
-  const a = useRef(new Animated.Value(0)).current
+  const [a] = useState(() => new Animated.Value(0))
   useEffect(() => {
     Animated.timing(a, { toValue: 1, duration: 320, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
   }, [a, delay])
@@ -41,7 +41,7 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
 
 /** Карточка-герой с цветным свечением за контентом + мягкий пульс свечения. */
 export function GlowHero({ children, glow = T.green, style }: { children: ReactNode; glow?: string; style?: ViewStyle }) {
-  const pulse = useRef(new Animated.Value(0)).current
+  const [pulse] = useState(() => new Animated.Value(0))
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -103,7 +103,7 @@ export function Pill({ text, tone = 'mut' }: { text: string; tone?: 'good' | 'ba
 export function Segmented<T_ extends string>({ value, options, onChange }: { value: T_; options: { key: T_; label: string }[]; onChange: (k: T_) => void }) {
   const idx = Math.max(0, options.findIndex((o) => o.key === value))
   const [w, setW] = useState(0)
-  const x = useRef(new Animated.Value(idx)).current
+  const [x] = useState(() => new Animated.Value(idx))
   useEffect(() => {
     Animated.spring(x, { toValue: idx, useNativeDriver: true, friction: 10, tension: 90 }).start()
   }, [idx, x])
@@ -132,7 +132,7 @@ export function Segmented<T_ extends string>({ value, options, onChange }: { val
 
 /** Плейсхолдер загрузки с лёгким мерцанием. */
 export function Skeleton({ h = 16, w = '100%', style }: { h?: number; w?: number | string; style?: ViewStyle }) {
-  const a = useRef(new Animated.Value(0.4)).current
+  const [a] = useState(() => new Animated.Value(0.4))
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -164,7 +164,7 @@ export function Sparkline({ values, peakColor = T.green }: { values: number[]; p
 /** Прогресс-бар-строка с анимированным заполнением. */
 export function BarRow({ label, value, max, color = T.green, valueLabel }: { label: string; value: number; max: number; color?: string; valueLabel: string }) {
   const pct = Math.max(3, Math.min(100, (value / Math.max(1, max)) * 100))
-  const a = useRef(new Animated.Value(0)).current
+  const [a] = useState(() => new Animated.Value(0))
   useEffect(() => {
     Animated.timing(a, { toValue: pct, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start()
   }, [a, pct])
@@ -203,7 +203,7 @@ export function PrimaryButton({
 }) {
   const g = BTN_GRAD[tone]
   const fg = tone === 'red' ? '#fff' : '#04130d'
-  const s = useRef(new Animated.Value(1)).current
+  const [s] = useState(() => new Animated.Value(1))
   const off = disabled || loading
   return (
     <Pressable
@@ -298,7 +298,7 @@ export function SkeletonList({ rows = 5 }: { rows?: number }) {
 
 /** Нажимаемая обёртка с лёгким scale/opacity при нажатии (микро-интеракция). */
 export function Tappable({ children, onPress, style }: { children: ReactNode; onPress: () => void; style?: ViewStyle }) {
-  const s = useRef(new Animated.Value(1)).current
+  const [s] = useState(() => new Animated.Value(1))
   return (
     <Pressable
       onPress={() => { haptic.light(); onPress() }}
