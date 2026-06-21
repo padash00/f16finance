@@ -110,6 +110,7 @@ export default function OperatorsScreen() {
   const canEdit = canDo(role, 'operators.edit')
 
   const [filter, setFilter] = useState<'all' | 'active'>('active')
+  const [search, setSearch] = useState('')
   const [items, setItems] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -317,6 +318,22 @@ export default function OperatorsScreen() {
     return items
   }, [items, filter])
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return visible
+    return visible.filter((x) => {
+      const p = profileOf(x)
+      return (
+        displayName(x).toLowerCase().includes(q) ||
+        x.name?.toLowerCase().includes(q) ||
+        x.short_name?.toLowerCase().includes(q) ||
+        p.position?.toLowerCase().includes(q) ||
+        p.phone?.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q)
+      )
+    })
+  }, [visible, search])
+
   const summary = useMemo(() => {
     const total = items.length
     const active = items.filter((o) => o.is_active !== false).length
@@ -355,6 +372,23 @@ export default function OperatorsScreen() {
         />
       </View>
 
+      {/* Поиск */}
+      <View style={{ paddingHorizontal: S.lg, paddingVertical: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.card2, borderRadius: R.md, borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Ionicons name="search" size={16} color={T.textDim} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Имя, должность, телефон, email"
+            placeholderTextColor={T.textDim}
+            style={{ flex: 1, color: T.text, fontSize: 14, padding: 0 }}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search ? (<Pressable onPress={() => setSearch('')} hitSlop={8}><Ionicons name="close-circle" size={16} color={T.textDim} /></Pressable>) : null}
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.md }}
         refreshControl={<RefreshControl refreshing={loading && items.length > 0} onRefresh={() => load()} tintColor={T.green} />}
@@ -375,11 +409,13 @@ export default function OperatorsScreen() {
 
         {loading && items.length === 0 ? (
           <SkeletonList rows={6} />
+        ) : !loading && filtered.length === 0 && search.trim() ? (
+          <EmptyState icon="search-outline" title="Ничего не найдено" />
         ) : !loading && visible.length === 0 ? (
           <EmptyState icon="people-outline" title="Операторы не найдены" />
         ) : (
           <Card style={{ padding: 0 }}>
-            {visible.map((op, i) => {
+            {filtered.map((op, i) => {
               const p = profileOf(op)
               const st = statsOf(op)
               const name = displayName(op)
@@ -393,7 +429,7 @@ export default function OperatorsScreen() {
                     flexDirection: 'row',
                     gap: 12,
                     padding: 14,
-                    borderBottomWidth: i < visible.length - 1 ? 1 : 0,
+                    borderBottomWidth: i < filtered.length - 1 ? 1 : 0,
                     borderBottomColor: T.borderSoft,
                   }}
                 >
@@ -461,7 +497,7 @@ export default function OperatorsScreen() {
 
         {!loading && items.length > 0 ? (
           <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center', marginTop: 2 }}>
-            Показано {visible.length} из {items.length}
+            Показано {filtered.length} из {items.length}
           </Text>
         ) : null}
       </ScrollView>

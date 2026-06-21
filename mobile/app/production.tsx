@@ -68,6 +68,7 @@ export default function ProductionScreen() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [tab, setTab] = useState<'recipes' | 'ingredients'>('recipes')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -121,6 +122,25 @@ export default function ProductionScreen() {
     () => ingredients.filter((g) => Number(g.stock_qty || 0) < 0).length,
     [ingredients],
   )
+
+  const filteredRecipes = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return recipes
+    return recipes.filter((x) =>
+      x.name?.toLowerCase().includes(q) ||
+      x.category?.toLowerCase().includes(q)
+    )
+  }, [recipes, search])
+
+  const filteredIngredients = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return ingredients
+    return ingredients.filter((x) =>
+      x.name?.toLowerCase().includes(q) ||
+      x.category?.toLowerCase().includes(q) ||
+      x.unit?.toLowerCase().includes(q)
+    )
+  }, [ingredients, search])
 
   const openCreate = () => {
     setFName(''); setFUnit(''); setFPrice(''); setFCategory('')
@@ -205,6 +225,23 @@ export default function ProductionScreen() {
         })}
       </View>
 
+      {/* Поиск */}
+      <View style={{ paddingHorizontal: S.lg, paddingVertical: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.card2, borderRadius: R.md, borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Ionicons name="search" size={16} color={T.textDim} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Поиск по названию, категории"
+            placeholderTextColor={T.textDim}
+            style={{ flex: 1, color: T.text, fontSize: 14, padding: 0 }}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search ? (<Pressable onPress={() => setSearch('')} hitSlop={8}><Ionicons name="close-circle" size={16} color={T.textDim} /></Pressable>) : null}
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.md }}
         refreshControl={<RefreshControl refreshing={loading && (recipes.length > 0 || ingredients.length > 0)} onRefresh={load} tintColor={T.green} />}
@@ -226,9 +263,11 @@ export default function ProductionScreen() {
 
             {recipes.length === 0 ? (
               <EmptyState icon="restaurant-outline" title="Техкарт нет" hint="Создайте первую на веб-портале" />
+            ) : filteredRecipes.length === 0 ? (
+              <EmptyState icon="search-outline" title="Ничего не найдено" />
             ) : (
               <Card style={{ padding: 0 }}>
-                {recipes.map((r, i) => {
+                {filteredRecipes.map((r, i) => {
                   const yieldLoss = Number(r.yield_factor || 1) < 1
                     ? Math.round((1 - Number(r.yield_factor || 1)) * 100)
                     : 0
@@ -239,7 +278,7 @@ export default function ProductionScreen() {
                     yieldLoss > 0 ? `потери ${yieldLoss}%` : null,
                   ].filter(Boolean).join(' · ')
                   return (
-                    <View key={r.id} style={{ flexDirection: 'row', gap: 12, padding: 14, borderBottomWidth: i < recipes.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
+                    <View key={r.id} style={{ flexDirection: 'row', gap: 12, padding: 14, borderBottomWidth: i < filteredRecipes.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <Text style={{ color: T.text, fontSize: 14.5, fontWeight: '700' }} numberOfLines={1}>{r.name}</Text>
@@ -270,13 +309,15 @@ export default function ProductionScreen() {
 
             {ingredients.length === 0 ? (
               <EmptyState icon="cube-outline" title="Ингредиентов нет" hint="Добавьте сырьё на веб-портале" />
+            ) : filteredIngredients.length === 0 ? (
+              <EmptyState icon="search-outline" title="Ничего не найдено" />
             ) : (
               <Card style={{ padding: 0 }}>
-                {ingredients.map((g, i) => {
+                {filteredIngredients.map((g, i) => {
                   const stock = Number(g.stock_qty || 0)
                   const price = Number(g.purchase_price || 0)
                   return (
-                    <View key={g.id} style={{ flexDirection: 'row', gap: 12, padding: 14, borderBottomWidth: i < ingredients.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
+                    <View key={g.id} style={{ flexDirection: 'row', gap: 12, padding: 14, borderBottomWidth: i < filteredIngredients.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={{ color: T.text, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>
                           {g.name} <Text style={{ color: T.textDim, fontSize: 12 }}>/ {g.unit || '—'}</Text>

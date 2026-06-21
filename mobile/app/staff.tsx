@@ -73,6 +73,7 @@ export default function StaffScreen() {
   const [accounts, setAccounts] = useState<Record<string, AccountInfo>>({})
   const [companies, setCompanies] = useState<Company[]>([])
   const [showInactive, setShowInactive] = useState(false)
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -162,6 +163,18 @@ export default function StaffScreen() {
       return (a.full_name || '').localeCompare(b.full_name || '')
     })
   }, [items, showInactive])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return visible
+    return visible.filter((x) =>
+      x.full_name?.toLowerCase().includes(q) ||
+      x.short_name?.toLowerCase().includes(q) ||
+      x.role?.toLowerCase().includes(q) ||
+      x.phone?.toLowerCase().includes(q) ||
+      x.email?.toLowerCase().includes(q)
+    )
+  }, [visible, search])
 
   const openAdjust = (s: Staff) => {
     setAdjStaff(s)
@@ -304,6 +317,23 @@ export default function StaffScreen() {
         ) : null}
       </View>
 
+      {/* Поиск */}
+      <View style={{ paddingHorizontal: S.lg, paddingVertical: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.card2, borderRadius: R.md, borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Ionicons name="search" size={16} color={T.textDim} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Имя, роль, телефон, email"
+            placeholderTextColor={T.textDim}
+            style={{ flex: 1, color: T.text, fontSize: 14, padding: 0 }}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search ? (<Pressable onPress={() => setSearch('')} hitSlop={8}><Ionicons name="close-circle" size={16} color={T.textDim} /></Pressable>) : null}
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.md }}
         refreshControl={<RefreshControl refreshing={loading && items.length > 0} onRefresh={() => load()} tintColor={T.green} />}
@@ -342,9 +372,11 @@ export default function StaffScreen() {
           <SkeletonList rows={6} />
         ) : visible.length === 0 && !loading ? (
           <EmptyState icon="people-outline" title="Список сотрудников пуст" />
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="search-outline" title="Ничего не найдено" />
         ) : (
           <Card style={{ padding: 0 }}>
-            {visible.map((s, i) => {
+            {filtered.map((s, i) => {
               const role = ROLE_LABEL[s.role || 'other'] || 'Сотрудник'
               const acc = accounts[s.id]
               const accState = acc?.accountState
@@ -356,7 +388,7 @@ export default function StaffScreen() {
                     gap: 12,
                     padding: 14,
                     opacity: s.is_active ? 1 : 0.55,
-                    borderBottomWidth: i < visible.length - 1 ? 1 : 0,
+                    borderBottomWidth: i < filtered.length - 1 ? 1 : 0,
                     borderBottomColor: T.borderSoft,
                   }}
                 >
@@ -397,9 +429,9 @@ export default function StaffScreen() {
           </Card>
         )}
 
-        {visible.length > 0 ? (
+        {filtered.length > 0 ? (
           <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center' }}>
-            Показано {visible.length} из {items.length}
+            Показано {filtered.length} из {items.length}
           </Text>
         ) : null}
       </ScrollView>

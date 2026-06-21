@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
-import { T, S, money, moneyShort } from '@/lib/theme'
+import { T, S, R, money, moneyShort } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type Supplier = {
@@ -37,6 +37,7 @@ const initials = (name: string) => {
 export default function SuppliersScreen() {
   const router = useRouter()
   const [filter, setFilter] = useState<'all' | 'debts'>('all')
+  const [search, setSearch] = useState('')
   const [items, setItems] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,6 +75,18 @@ export default function SuppliersScreen() {
     return [...list].sort((a, b) => Number(b.receipts_total || 0) - Number(a.receipts_total || 0))
   }, [items, filter])
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return visible
+    return visible.filter((x) =>
+      x.name?.toLowerCase().includes(q) ||
+      x.organization_name?.toLowerCase().includes(q) ||
+      x.contact_name?.toLowerCase().includes(q) ||
+      x.phone?.toLowerCase().includes(q) ||
+      x.bin_iin?.toLowerCase().includes(q)
+    )
+  }, [visible, search])
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 6 }}>
@@ -92,6 +105,23 @@ export default function SuppliersScreen() {
             { key: 'debts', label: 'С долгом' },
           ]}
         />
+      </View>
+
+      {/* Поиск */}
+      <View style={{ paddingHorizontal: S.lg, paddingVertical: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.card2, borderRadius: R.md, borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Ionicons name="search" size={16} color={T.textDim} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Имя, организация, телефон, БИН/ИИН"
+            placeholderTextColor={T.textDim}
+            style={{ flex: 1, color: T.text, fontSize: 14, padding: 0 }}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search ? (<Pressable onPress={() => setSearch('')} hitSlop={8}><Ionicons name="close-circle" size={16} color={T.textDim} /></Pressable>) : null}
+        </View>
       </View>
 
       <ScrollView
@@ -119,9 +149,11 @@ export default function SuppliersScreen() {
             icon="people-outline"
             title={filter === 'debts' ? 'Нет поставщиков с долгом' : 'Поставщики не найдены'}
           />
+        ) : !loading && filtered.length === 0 ? (
+          <EmptyState icon="search-outline" title="Ничего не найдено" />
         ) : (
           <Card style={{ padding: 0 }}>
-            {visible.map((s, i) => {
+            {filtered.map((s, i) => {
               const name = s.name?.trim() || s.organization_name?.trim() || 'Без названия'
               const org = s.organization_name?.trim() && s.organization_name.trim() !== name ? s.organization_name.trim() : null
               const contact = [s.contact_name?.trim() || null, s.phone?.trim() || null].filter(Boolean).join(' • ')
@@ -133,7 +165,7 @@ export default function SuppliersScreen() {
                     flexDirection: 'row',
                     gap: 12,
                     padding: 14,
-                    borderBottomWidth: i < visible.length - 1 ? 1 : 0,
+                    borderBottomWidth: i < filtered.length - 1 ? 1 : 0,
                     borderBottomColor: T.borderSoft,
                   }}
                 >
@@ -187,7 +219,7 @@ export default function SuppliersScreen() {
 
         {!loading && items.length > 0 ? (
           <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center', marginTop: 2 }}>
-            Показано {visible.length} из {items.length}
+            Показано {filtered.length} из {items.length}
           </Text>
         ) : null}
       </ScrollView>
