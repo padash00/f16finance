@@ -42,19 +42,13 @@ export const money = (v: number | null | undefined) => {
   return Math.round(Number(v)).toLocaleString('ru-RU') + ' ₸'
 }
 
-// Человекочитаемые подписи зон (в БД хранятся кодами: pc, ps5, ramen, extra…).
-const ZONE_LABELS: Record<string, string> = {
-  pc: 'ПК', pс: 'ПК', comp: 'ПК', computers: 'ПК', computer: 'ПК',
-  ps: 'PlayStation', ps3: 'PlayStation 3', ps4: 'PlayStation 4', ps5: 'PlayStation 5',
-  xbox: 'Xbox', vr: 'VR', sim: 'Симулятор', vip: 'VIP', console: 'Консоли',
-  ramen: 'Рамен', kitchen: 'Кухня', bar: 'Бар', shop: 'Магазин', cafe: 'Кафе',
-  extra: 'Extra', arena: 'Арена', club: 'Клуб',
-}
+// Зона в БД — свободный текст, который вводит пользователь (pc, ps5, ramen, extra…),
+// плюс арена-сессии пишут 'pc'. Каноничного справочника нет — просто аккуратно
+// форматируем введённое: короткие коды (pc/ps5/vip) → верхний регистр, слова → с заглавной.
 export const zoneLabel = (z?: string | null) => {
-  if (!z) return ''
-  const k = String(z).trim().toLowerCase()
-  if (ZONE_LABELS[k]) return ZONE_LABELS[k]
-  return k.length <= 4 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1)
+  const v = String(z ?? '').trim()
+  if (!v) return ''
+  return v.length <= 3 ? v.toUpperCase() : v.charAt(0).toUpperCase() + v.slice(1)
 }
 
 export const moneyShort = (v: number | null | undefined) => {
