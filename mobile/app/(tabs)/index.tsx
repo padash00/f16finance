@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { LinearGradient } from 'expo-linear-gradient'
 
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -155,7 +156,7 @@ export default function HomeScreen() {
             ) : null}
           </>
         ) : null}
-        <Text style={{ color: T.textDim, fontSize: 11, textAlign: 'center', marginTop: 8 }}>сборка 21.06 · v5 (хаптика + биометрия)</Text>
+        <Text style={{ color: T.textDim, fontSize: 11, textAlign: 'center', marginTop: 8 }}>сборка 21.06 · v6 (градиенты везде)</Text>
       </ScrollView>
     </SafeAreaView>
   )
@@ -164,9 +165,9 @@ export default function HomeScreen() {
 function PayStat({ label, value, color, icon }: { label: string; value: number; color: string; icon: any }) {
   return (
     <View style={[{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.md, alignItems: 'flex-start' }, shadow.card]}>
-      <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
+      <LinearGradient colors={[color + '40', color + '12']} style={{ width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name={icon} size={20} color={color} />
-      </View>
+      </LinearGradient>
       <Text style={{ color: T.textMut, fontSize: 13, marginTop: 9 }}>{label}</Text>
       <Text style={{ color, fontSize: 17, fontWeight: '900', marginTop: 2 }}>{moneyShort(value)}</Text>
     </View>
@@ -176,9 +177,9 @@ function PayStat({ label, value, color, icon }: { label: string; value: number; 
 function QuickAction({ icon, label, tint, onPress }: { icon: any; label: string; tint: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ width: '47.5%', flexGrow: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.lg, flexDirection: 'row', alignItems: 'center', gap: 13, opacity: pressed ? 0.7 : 1 }, shadow.card]}>
-      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: tint + '22', alignItems: 'center', justifyContent: 'center' }}>
+      <LinearGradient colors={[tint + '4d', tint + '14']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name={icon} size={25} color={tint} />
-      </View>
+      </LinearGradient>
       <Text style={{ color: T.text, fontSize: 16.5, fontWeight: '800' }}>{label}</Text>
     </Pressable>
   )
