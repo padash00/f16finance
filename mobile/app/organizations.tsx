@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
 import { Card, Pill, GlowHero, SectionTitle } from '@/components/ui'
+import { haptic } from '@/lib/haptics'
 
 type Subscription = {
   status: string
@@ -68,6 +69,8 @@ export default function OrganizationsScreen() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [picked, setPicked] = useState<Org | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -94,6 +97,39 @@ export default function OrganizationsScreen() {
       (o) => (o.name || '').toLowerCase().includes(q) || (o.slug || '').toLowerCase().includes(q),
     )
   }, [orgs, search])
+
+  // Действие над подпиской/статусом организации (реальные actions PATCH /api/admin/organizations).
+  const runAction = useCallback(
+    async (org: Org, body: Record<string, unknown>, key: string) => {
+      setBusy(key)
+      try {
+        await apiFetch('/api/admin/organizations', {
+          method: 'PATCH',
+          body: JSON.stringify({ organizationId: org.id, ...body }),
+        })
+        haptic.success()
+        setPicked(null)
+        await load()
+      } catch (e: any) {
+        haptic.error()
+        Alert.alert('Не удалось', e?.message || 'Ошибка сервера')
+      } finally {
+        setBusy(null)
+      }
+    },
+    [load],
+  )
+
+  const confirmDestructive = useCallback(
+    (title: string, message: string, onYes: () => void) => {
+      haptic.warning()
+      Alert.alert(title, message, [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Подтвердить', style: 'destructive', onPress: onYes },
+      ])
+    },
+    [],
+  )
 
   const ov = overview
   const mrr = ov ? Number(ov.liveMrr || 0) : 0
@@ -206,15 +242,17 @@ export default function OrganizationsScreen() {
               const st = STATUS[statusOf(org)] || { text: statusOf(org) || '—', tone: 'mut' as const }
               const planName = org.subscription?.plan?.name || null
               return (
-                <View
+                <Pressable
                   key={org.id}
-                  style={{
+                  onPress={() => { haptic.tap(); setPicked(org) }}
+                  style={({ pressed }) => ({
                     flexDirection: 'row',
                     gap: 12,
                     padding: 14,
                     borderBottomWidth: i < filtered.length - 1 ? 1 : 0,
                     borderBottomColor: T.borderSoft,
-                  }}
+                    opacity: pressed ? 0.6 : 1,
+                  })}
                 >
                   <View
                     style={{
@@ -246,10 +284,11 @@ export default function OrganizationsScreen() {
                     </View>
                   </View>
 
-                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'center', gap: 4 }}>
                     <Text style={{ color: T.textDim, fontSize: 11 }}>{fmtDate(org.createdAt)}</Text>
+                    <Ionicons name="ellipsis-horizontal-circle-outline" size={18} color={T.textDim} />
                   </View>
-                </View>
+                </Pressable>
               )
             })}
           </Card>
@@ -261,6 +300,204 @@ export default function OrganizationsScreen() {
           </Text>
         ) : null}
       </ScrollView>
+
+      {/* Действия над организацией (суперадмин) */}
+      <Modal visible={!!picked} transparent animationType="slide" onRequestClose={() => setPicked(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: '#000000aa', justifyContent: 'flex-end' }}
+          onPress={() => (busy ? null : setPicked(null))}
+        >
+          <Pressable
+            style={{
+              backgroundColor: T.bg,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderColor: T.border,
+              paddingHorizontal: S.lg,
+              paddingTop: S.md,
+              paddingBottom: S.xxl,
+              gap: S.sm,
+            }}
+            onPress={() => {}}
+          >
+            <View style={{ alignItems: 'center', marginBottom: 4 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: T.border }} />
+            </View>
+
+            {picked ? (
+              <>
+                <Text style={{ color: T.text, fontSize: 18, fontWeight: '900' }} numberOfLines={1}>
+                  {picked.name || 'Без названия'}
+                </Text>
+                <Text style={{ color: T.textDim, fontSize: 12, marginBottom: 4 }}>
+                  Подписка: {(STATUS[picked.subscription?.status || ''] || { text: picked.subscription?.status || '—' }).text}
+                  {'   '}Статус орг.: {(STATUS[picked.status] || { text: picked.status || '—' }).text}
+                </Text>
+
+                {(() => {
+                  const subSt = picked.subscription?.status || ''
+                  const hasSub = !!picked.subscription
+                  const orgSuspended = picked.status === 'suspended'
+                  const org = picked
+
+                  const Btn = ({
+                    label,
+                    icon,
+                    color,
+                    actKey,
+                    onPress,
+                  }: {
+                    label: string
+                    icon: keyof typeof Ionicons.glyphMap
+                    color: string
+                    actKey: string
+                    onPress: () => void
+                  }) => (
+                    <Pressable
+                      onPress={onPress}
+                      disabled={!!busy}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        backgroundColor: T.card,
+                        borderWidth: 1,
+                        borderColor: T.border,
+                        borderRadius: R.md,
+                        paddingVertical: 14,
+                        paddingHorizontal: 14,
+                        opacity: busy && busy !== actKey ? 0.5 : 1,
+                      }}
+                    >
+                      <Ionicons name={icon} size={18} color={color} />
+                      <Text style={{ color: T.text, fontSize: 15, fontWeight: '700', flex: 1 }}>{label}</Text>
+                      {busy === actKey ? <ActivityIndicator color={color} /> : null}
+                    </Pressable>
+                  )
+
+                  return (
+                    <View style={{ gap: S.sm }}>
+                      {!hasSub ? (
+                        <Card style={{ borderColor: T.border }}>
+                          <Text style={{ color: T.textMut, fontSize: 13 }}>
+                            У организации нет подписки — действия над подпиской недоступны.
+                          </Text>
+                        </Card>
+                      ) : null}
+
+                      {hasSub && subSt !== 'active' ? (
+                        <Btn
+                          label="Активировать подписку"
+                          icon="play-circle-outline"
+                          color={T.greenBright}
+                          actKey="activate"
+                          onPress={() => runAction(org, { subscriptionAction: 'activate' }, 'activate')}
+                        />
+                      ) : null}
+
+                      {hasSub ? (
+                        <Btn
+                          label="Пробный период (14 дней)"
+                          icon="hourglass-outline"
+                          color={T.violet}
+                          actKey="startTrial"
+                          onPress={() => runAction(org, { subscriptionAction: 'startTrial', trialDays: 14 }, 'startTrial')}
+                        />
+                      ) : null}
+
+                      {hasSub ? (
+                        <Btn
+                          label="Продлить цикл (+30 дней)"
+                          icon="refresh-outline"
+                          color={T.cyan}
+                          actKey="renewCycle"
+                          onPress={() => runAction(org, { subscriptionAction: 'renewCycle' }, 'renewCycle')}
+                        />
+                      ) : null}
+
+                      {hasSub ? (
+                        <Btn
+                          label="Отметить оплату"
+                          icon="cash-outline"
+                          color={T.greenBright}
+                          actKey="recordPayment"
+                          onPress={() => runAction(org, { subscriptionAction: 'recordPayment' }, 'recordPayment')}
+                        />
+                      ) : null}
+
+                      {hasSub && subSt !== 'past_due' ? (
+                        <Btn
+                          label="Пометить просроченной"
+                          icon="alert-circle-outline"
+                          color={T.red}
+                          actKey="markPastDue"
+                          onPress={() =>
+                            confirmDestructive(
+                              'Просрочить подписку?',
+                              `Подписка «${org.name}» будет помечена как просроченная.`,
+                              () => runAction(org, { subscriptionAction: 'markPastDue' }, 'markPastDue'),
+                            )
+                          }
+                        />
+                      ) : null}
+
+                      {hasSub && subSt !== 'canceled' ? (
+                        <Btn
+                          label="Отменить подписку"
+                          icon="close-circle-outline"
+                          color={T.red}
+                          actKey="cancelNow"
+                          onPress={() =>
+                            confirmDestructive(
+                              'Отменить подписку?',
+                              `Подписка «${org.name}» будет немедленно отменена.`,
+                              () => runAction(org, { subscriptionAction: 'cancelNow' }, 'cancelNow'),
+                            )
+                          }
+                        />
+                      ) : null}
+
+                      {/* Статус самой организации */}
+                      {orgSuspended ? (
+                        <Btn
+                          label="Разморозить организацию"
+                          icon="lock-open-outline"
+                          color={T.greenBright}
+                          actKey="orgActive"
+                          onPress={() => runAction(org, { organizationStatus: 'active' }, 'orgActive')}
+                        />
+                      ) : (
+                        <Btn
+                          label="Заморозить организацию"
+                          icon="snow-outline"
+                          color={T.red}
+                          actKey="orgSuspend"
+                          onPress={() =>
+                            confirmDestructive(
+                              'Заморозить организацию?',
+                              `Доступ организации «${org.name}» будет приостановлен.`,
+                              () => runAction(org, { organizationStatus: 'suspended' }, 'orgSuspend'),
+                            )
+                          }
+                        />
+                      )}
+
+                      <Pressable
+                        onPress={() => (busy ? null : setPicked(null))}
+                        disabled={!!busy}
+                        style={{ paddingVertical: 14, alignItems: 'center', marginTop: 2 }}
+                      >
+                        <Text style={{ color: T.textMut, fontSize: 15, fontWeight: '700' }}>Закрыть</Text>
+                      </Pressable>
+                    </View>
+                  )
+                })()}
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   )
 }

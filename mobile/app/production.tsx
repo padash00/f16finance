@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
+import { haptic } from '@/lib/haptics'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
 import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+
+const num = (v: string) => {
+  const n = Number(String(v).replace(',', '.').trim())
+  return Number.isFinite(n) ? n : 0
+}
 
 type Component = {
   id?: string
@@ -52,11 +60,25 @@ type Resp = {
 
 export default function ProductionScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  // Бэкенд POST /ingredients разрешает owner/manager (canManage). canDo даёт true
+  // владельцу/суперадмину; менеджеру без явного capability добавляем по staffRole.
+  const canCreate = canDo(role, 'production.create') || role?.staffRole === 'manager'
+
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [tab, setTab] = useState<'recipes' | 'ingredients'>('recipes')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Модалка «Добавить ингредиент» (POST /api/admin/production/ingredients)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [fName, setFName] = useState('')
+  const [fUnit, setFUnit] = useState('')
+  const [fPrice, setFPrice] = useState('')
+  const [fCategory, setFCategory] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -100,11 +122,60 @@ export default function ProductionScreen() {
     [ingredients],
   )
 
+  const openCreate = () => {
+    setFName(''); setFUnit(''); setFPrice(''); setFCategory('')
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (saving) return
+    setModalOpen(false)
+    setFormError(null)
+  }
+
+  const submit = async () => {
+    const name = fName.trim()
+    if (!name) { setFormError('Название обязательно'); return }
+    setSaving(true)
+    setFormError(null)
+    try {
+      await apiFetch('/api/admin/production/ingredients', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          unit: fUnit.trim() || 'г',
+          purchase_price: num(fPrice),
+          category: fCategory.trim() || null,
+        }),
+      })
+      haptic.success()
+      setModalOpen(false)
+      setTab('ingredients')
+      await load()
+    } catch (e: any) {
+      haptic.error()
+      setFormError(e?.message || 'Не удалось сохранить')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 4 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Производство</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.green, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color="#04130d" />
+            <Text style={{ color: '#04130d', fontSize: 13, fontWeight: '900' }}>Ингредиент</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Переключатель раздела */}
@@ -239,6 +310,85 @@ export default function ProductionScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Модалка «Добавить ингредиент» */}
+      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Новый ингредиент</Text>
+              <Pressable onPress={closeModal} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12 }}>
+              {/* Название */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Название *</Text>
+                <TextInput
+                  value={fName}
+                  onChangeText={setFName}
+                  placeholder="Например, Мука пшеничная"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Единица + цена закупа */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Единица</Text>
+                  <TextInput
+                    value={fUnit}
+                    onChangeText={setFUnit}
+                    placeholder="г"
+                    placeholderTextColor={T.textDim}
+                    autoCapitalize="none"
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  />
+                </View>
+                <View style={{ flex: 1.4, gap: 6 }}>
+                  <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Цена закупа / ед.</Text>
+                  <TextInput
+                    value={fPrice}
+                    onChangeText={setFPrice}
+                    placeholder="0"
+                    placeholderTextColor={T.textDim}
+                    keyboardType="numeric"
+                    style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                  />
+                </View>
+              </View>
+
+              {/* Категория */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Категория</Text>
+                <TextInput
+                  value={fCategory}
+                  onChangeText={setFCategory}
+                  placeholder="Необязательно"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              <Text style={{ color: T.textDim, fontSize: 11.5 }}>
+                Остаток задаётся отдельно через приход/инвентаризацию — новый ингредиент создаётся с нулевым остатком.
+              </Text>
+            </ScrollView>
+
+            {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
+                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Добавить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
