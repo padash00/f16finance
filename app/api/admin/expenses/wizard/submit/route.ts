@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
+import { pushToOrganization } from '@/lib/server/push'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -282,6 +283,14 @@ export async function POST(request: Request) {
           },
         }).catch(() => null)
       }
+
+      // Push в мобильное приложение владельцам организации.
+      const pushTotal = Number(payload.amount_cash || 0) + Number(payload.amount_kaspi || 0)
+      await pushToOrganization(supabase as any, access.activeOrganization?.id || null, {
+        title: 'Расход на одобрение',
+        body: `${payload.category_name || 'Расход'} · ${fmtMoney(pushTotal)} — нужно одобрить`,
+        data: { type: 'expense_approval', expenseId: (inserted as any)?.id || null },
+      })
     }
 
     return json({ ok: true, data: inserted })

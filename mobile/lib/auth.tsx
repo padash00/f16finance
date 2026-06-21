@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { setActiveOrganization, setAccessToken } from './api'
 import { loginToEmail } from './operator-auth'
+import { registerPushToken } from './push'
 
 export type RolePermissionOverride = { path: string; enabled: boolean }
 
@@ -71,8 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function applySession(s: Session | null) {
     setSession(s)
     setAccessToken(s?.access_token ?? null) // держим токен для apiFetch синхронно
-    if (s?.access_token) setRole(await fetchRole(s.access_token))
-    else setRole(null)
+    if (s?.access_token) {
+      setRole(await fetchRole(s.access_token))
+      void registerPushToken() // регистрируем push-токен (best-effort)
+    } else setRole(null)
   }
 
   useEffect(() => {
