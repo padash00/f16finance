@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill, ErrorState, EmptyState } from '@/components/ui'
+import { Card, SectionTitle, Pill, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type Tpl = { id: string; title: string; description: string | null; shift_scope: string | null; blocks_shift: boolean | null }
 type Item = { id: string; template_id: string; title: string; description: string | null; is_required: boolean | null; requires_photo: boolean | null; severity: string | null; sort_order: number | null }
@@ -47,7 +47,7 @@ export default function OperatorChecklist() {
           <Text style={{ color: T.blue, fontSize: 12 }}>Отметка пунктов — на открытой смене через терминал. Здесь видно, что нужно проверить.</Text>
         </View>
 
-        {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
+        {loading && !d ? <SkeletonList rows={6} /> : error ? (
           <ErrorState message={error} onRetry={() => void load()} />
         ) : (d?.checklist_templates || []).length === 0 ? (
           <EmptyState icon="list-outline" title="Чек-листов нет" />

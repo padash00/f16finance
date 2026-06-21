@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type Post = {
   id: string
@@ -150,7 +150,7 @@ export default function NewsScreen() {
         ) : null}
 
         {loading && posts.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && posts.length === 0 ? (
           <EmptyState icon="newspaper-outline" title="Лента пуста" hint="Ещё нет постов" />
         ) : (

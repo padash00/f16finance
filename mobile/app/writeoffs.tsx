@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type InventoryItem = {
   id: string
@@ -148,7 +148,7 @@ export default function WriteoffsScreen() {
         {error ? <ErrorState message={error} onRetry={() => load(scope)} /> : null}
 
         {loading && writeoffs.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && writeoffs.length === 0 ? (
           <EmptyState icon="trash-outline" title="Списаний пока нет" />
         ) : (

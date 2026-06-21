@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 
@@ -232,7 +232,7 @@ export default function CatalogScreen() {
         ) : null}
 
         {loading && items.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && filtered.length === 0 ? (
           <EmptyState icon="pricetags-outline" title={items.length === 0 ? 'Каталог пуст' : 'Ничего не найдено'} />
         ) : (

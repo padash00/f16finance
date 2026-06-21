@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type Task = { id: string; title: string; status: string; priority: string | null; due_date: string | null; company_name: string | null }
 
@@ -87,7 +87,7 @@ export default function OperatorTasks() {
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingBottom: S.xxl, gap: S.md }} refreshControl={<RefreshControl refreshing={loading && tasks.length > 0} onRefresh={load} tintColor={T.green} />}>
         <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Задачи</Text>
 
-        {loading && tasks.length === 0 ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
+        {loading && tasks.length === 0 ? <SkeletonList rows={6} /> : error ? (
           <ErrorState message={error} onRetry={() => void load()} />
         ) : tasks.length === 0 ? (
           <EmptyState icon="checkmark-done-circle" title="Задач нет" hint="Новые задачи появятся здесь." />

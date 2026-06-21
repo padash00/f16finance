@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S } from '@/lib/theme'
-import { Card, GlowHero, ErrorState, EmptyState } from '@/components/ui'
+import { Card, GlowHero, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type EventType = 'shift' | 'birthday' | 'holiday' | 'announcement'
 
@@ -131,7 +131,7 @@ export default function CalendarScreen() {
         {error ? <ErrorState message={error} onRetry={() => load(year, month)} /> : null}
 
         {loading && events.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && events.length === 0 ? (
           <EmptyState icon="calendar-outline" title="В этом месяце нет событий" />
         ) : (

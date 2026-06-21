@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type Staff = {
   id: string
@@ -339,7 +339,7 @@ export default function StaffScreen() {
         ) : null}
 
         {loading && items.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : visible.length === 0 && !loading ? (
           <EmptyState icon="people-outline" title="Список сотрудников пуст" />
         ) : (

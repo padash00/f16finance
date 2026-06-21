@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type Operator = { id: string; name: string; short_name: string | null; is_active: boolean }
 type Profile = {
@@ -129,7 +129,7 @@ export default function OperatorAnalyticsScreen() {
         refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={() => load()} tintColor={T.green} />}
       >
         {loading && !d ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : error ? (
           <ErrorState message={error} onRetry={() => load()} />
         ) : d ? (

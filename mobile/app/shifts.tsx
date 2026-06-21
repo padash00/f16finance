@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, Segmented, ErrorState, EmptyState } from '@/components/ui'
+import { Card, Pill, Segmented, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type Shift = {
   id: string
@@ -58,7 +58,7 @@ export default function ShiftsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.sm }} refreshControl={<RefreshControl refreshing={loading && shifts.length > 0} onRefresh={() => load(filter)} tintColor={T.green} />}>
-        {loading && shifts.length === 0 ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
+        {loading && shifts.length === 0 ? <SkeletonList rows={6} /> : error ? (
           <ErrorState message={error} onRetry={() => load(filter)} />
         ) : shifts.length === 0 ? (
           <EmptyState icon="time-outline" title="Смен нет" />

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
@@ -292,7 +292,7 @@ export default function PosReturnsScreen() {
         ) : null}
 
         {loading && !data ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && items.length === 0 && !error ? (
           <EmptyState icon="checkmark-done-circle-outline" title="Возвратов в этом месяце нет" />
         ) : (

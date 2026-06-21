@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type Item = { id: string; company_name: string; debtor_name: string; item_name: string; quantity: number; total_amount: number; created_by_name: string; comment: string | null; created_at: string }
 type Resp = { weekStart: string; weekEnd: string; items: Item[]; totals: { count: number; amount: number } }
@@ -132,7 +132,7 @@ export default function DebtsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.md }} refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={() => load(week)} tintColor={T.green} />}>
-        {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
+        {loading && !d ? <SkeletonList rows={6} /> : error ? (
           <ErrorState message={error} onRetry={() => load(week)} />
         ) : d ? (
           <>

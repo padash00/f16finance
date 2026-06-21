@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, Segmented, BarRow, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, Segmented, BarRow, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 // ─── Типы ответа /api/admin/kpi-plans ──────────────────────────────────────
 type PeriodKind = 'year' | 'h1' | 'h2' | 'month'
@@ -292,7 +292,7 @@ export default function GoalsScreen() {
         ) : null}
 
         {loading && !data ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : data ? (
           <>
             {/* Герой: выручка периода + цель */}

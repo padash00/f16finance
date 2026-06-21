@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill, ErrorState, EmptyState } from '@/components/ui'
+import { Card, SectionTitle, Pill, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type Shift = { id: string; date: string; shift_type: string; comment: string | null }
 type Group = { company: { id: string; name: string; code: string | null }; shifts: Shift[] }
@@ -40,7 +40,7 @@ export default function OperatorShifts() {
         <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Смены</Text>
         {r ? <Text style={{ color: T.textMut, fontSize: 13 }}>Неделя {new Date(r.weekStart).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} — {new Date(r.weekEnd).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} · {total} смен</Text> : null}
 
-        {loading && !r ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
+        {loading && !r ? <SkeletonList rows={6} /> : error ? (
           <ErrorState message={error} onRetry={() => void load()} />
         ) : groups.length === 0 ? (
           <EmptyState icon="calendar-clear-outline" title="На этой неделе смен нет" />

@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
-import { Card, GlowHero, ErrorState, EmptyState } from '@/components/ui'
+import { Card, GlowHero, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type Thread = {
   otherUserId: string
@@ -161,7 +161,7 @@ export default function MessagesScreen() {
         {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
 
         {loading && threads.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && threads.length === 0 && !error ? (
           <EmptyState icon="chatbubbles-outline" title="Переписок ещё нет" />
         ) : (

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { haptic } from '@/lib/haptics'
@@ -302,7 +302,7 @@ export default function ReceiptsScreen() {
         {error ? <ErrorState message={error} onRetry={() => load(scope)} /> : null}
 
         {loading && !data ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && receipts.length === 0 ? (
           <EmptyState icon="cube-outline" title="Документов приёмки пока нет" />
         ) : (

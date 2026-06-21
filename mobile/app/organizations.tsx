@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, SectionTitle, ErrorState, EmptyState } from '@/components/ui'
+import { Card, Pill, GlowHero, SectionTitle, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 import { haptic } from '@/lib/haptics'
 
 type Subscription = {
@@ -225,7 +225,7 @@ export default function OrganizationsScreen() {
         ) : null}
 
         {loading && orgs.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && filtered.length === 0 ? (
           <EmptyState icon="business-outline" title={search ? 'Ничего не найдено' : 'Нет организаций'} />
         ) : (

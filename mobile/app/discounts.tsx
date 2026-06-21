@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type DiscountType = 'percent' | 'fixed' | 'promo_code'
 
@@ -251,7 +251,7 @@ export default function DiscountsScreen() {
         {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {loading && items.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : filtered.length === 0 && !loading ? (
           <EmptyState icon="pricetags-outline" title="Скидок не найдено" />
         ) : (

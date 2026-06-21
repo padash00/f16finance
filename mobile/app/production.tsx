@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 const num = (v: string) => {
   const n = Number(String(v).replace(',', '.').trim())
@@ -210,7 +210,7 @@ export default function ProductionScreen() {
         refreshControl={<RefreshControl refreshing={loading && (recipes.length > 0 || ingredients.length > 0)} onRefresh={load} tintColor={T.green} />}
       >
         {loading && recipes.length === 0 && ingredients.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : error ? (
           <ErrorState message={error} onRetry={() => void load()} />
         ) : tab === 'recipes' ? (

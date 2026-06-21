@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, Segmented, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 type BirthdayItem = {
   id: string
@@ -161,7 +161,7 @@ export default function BirthdaysScreen() {
         {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {loading && items.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && visible.length === 0 ? (
           <EmptyState
             icon="gift-outline"

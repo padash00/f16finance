@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, SkeletonList } from '@/components/ui'
 
 // Платформа: счета по всем организациям (только суперадмин). Просмотр.
 
@@ -157,7 +157,7 @@ export default function InvoicesScreen() {
         {error ? <ErrorState message={error} onRetry={() => load(filter)} /> : null}
 
         {loading && rows.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && rows.length === 0 ? (
           <EmptyState icon="document-text-outline" title="Счетов нет" />
         ) : (

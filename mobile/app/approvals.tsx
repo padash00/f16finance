@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, money } from '@/lib/theme'
-import { Card, Pill, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type Expense = {
   id: string
@@ -112,7 +112,7 @@ export default function ApprovalsScreen() {
         ) : null}
 
         {loading && items.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 50 }} />
+          <SkeletonList rows={6} />
         ) : items.length === 0 ? (
           <EmptyState icon="checkmark-done-circle-outline" title="Всё согласовано" />
         ) : (

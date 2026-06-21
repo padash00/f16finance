@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Modal, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill, ErrorState, EmptyState, PrimaryButton } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState, PrimaryButton, SkeletonList } from '@/components/ui'
 
 type Article = { id: string; title: string; summary: string | null; content: string | null; severity: string | null; requires_confirmation: boolean; version: number | null; category?: { title?: string | null } | null }
 type Data = { articles: Article[]; pending_confirmations: Article[] }
@@ -56,7 +56,7 @@ export default function OperatorKnowledge() {
           </View>
         ) : null}
 
-        {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
+        {loading && !d ? <SkeletonList rows={6} /> : error ? (
           <ErrorState message={error} onRetry={() => void load()} />
         ) : (d?.articles || []).length === 0 ? (
           <EmptyState icon="book-outline" title="Материалов пока нет" />

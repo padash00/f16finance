@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, SkeletonList } from '@/components/ui'
 
 type Staff = { id?: string; full_name?: string | null; role?: string | null } | null
 type Location = { id?: string; name?: string | null; code?: string | null; company?: { id?: string; name?: string | null } | null } | null
@@ -247,7 +247,7 @@ export default function RequestsScreen() {
         refreshControl={<RefreshControl refreshing={loading && anyItems} onRefresh={() => load()} tintColor={T.green} />}
       >
         {loading && !anyItems ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : error ? (
           <ErrorState message={error} onRetry={() => load()} />
         ) : !anyItems ? (

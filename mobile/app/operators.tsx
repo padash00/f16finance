@@ -21,7 +21,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton, SkeletonList } from '@/components/ui'
 
 type Profile = {
   full_name?: string | null
@@ -374,7 +374,7 @@ export default function OperatorsScreen() {
         {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {loading && items.length === 0 ? (
-          <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
+          <SkeletonList rows={6} />
         ) : !loading && visible.length === 0 ? (
           <EmptyState icon="people-outline" title="Операторы не найдены" />
         ) : (
