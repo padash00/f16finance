@@ -66,11 +66,11 @@ export function GlowHero({ children, glow = T.green, style }: { children: ReactN
 export function SectionTitle({ children, hint }: { children: ReactNode; hint?: string }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: S.md, marginTop: S.sm }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <View style={{ width: 3, height: 15, borderRadius: 2, backgroundColor: T.green }} />
-        <Text style={{ color: T.text, fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }}>{children}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+        <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: T.green }} />
+        <Text style={{ color: T.text, fontSize: 19, fontWeight: '800', letterSpacing: 0.2 }}>{children}</Text>
       </View>
-      {hint ? <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '600' }}>{hint}</Text> : null}
+      {hint ? <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '600' }}>{hint}</Text> : null}
     </View>
   )
 }
@@ -84,8 +84,8 @@ export function Pill({ text, tone = 'mut' }: { text: string; tone?: 'good' | 'ba
     brand: { bg: 'rgba(34,211,238,0.14)', fg: '#22d3ee', bd: 'rgba(34,211,238,0.28)' },
   }[tone]
   return (
-    <View style={{ backgroundColor: map.bg, borderColor: map.bd, borderWidth: 1, borderRadius: R.pill, paddingHorizontal: 11, paddingVertical: 4 }}>
-      <Text style={{ color: map.fg, fontSize: 12, fontWeight: '800' }}>{text}</Text>
+    <View style={{ backgroundColor: map.bg, borderColor: map.bd, borderWidth: 1, borderRadius: R.pill, paddingHorizontal: 12, paddingVertical: 5 }}>
+      <Text style={{ color: map.fg, fontSize: 13, fontWeight: '800' }}>{text}</Text>
     </View>
   )
 }
@@ -162,11 +162,11 @@ export function BarRow({ label, value, max, color = T.green, valueLabel }: { lab
   return (
     <View style={{ gap: 6 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ color: T.text, fontSize: 13.5 }} numberOfLines={1}>{label}</Text>
-        <Text style={{ color, fontSize: 13.5, fontWeight: '800' }}>{valueLabel}</Text>
+        <Text style={{ color: T.text, fontSize: 15 }} numberOfLines={1}>{label}</Text>
+        <Text style={{ color, fontSize: 15, fontWeight: '800' }}>{valueLabel}</Text>
       </View>
-      <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' }}>
-        <Animated.View style={{ width: a.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }), height: 8, borderRadius: R.pill, backgroundColor: color }} />
+      <View style={{ height: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.pill, overflow: 'hidden' }}>
+        <Animated.View style={{ width: a.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }), height: 10, borderRadius: R.pill, backgroundColor: color }} />
       </View>
     </View>
   )

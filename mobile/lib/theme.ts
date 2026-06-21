@@ -9,10 +9,10 @@ export const T = {
   border: '#222831',
   borderSoft: '#191e25',
 
-  // текст
+  // текст (повышенный контраст — читаемо в любом возрасте)
   text: '#ffffff',
-  textMut: '#9aa6b4',
-  textDim: '#5c6675',
+  textMut: '#b6c0cd',
+  textDim: '#8b95a4',
 
   // бренд / акценты (aurora)
   green: '#10b981',

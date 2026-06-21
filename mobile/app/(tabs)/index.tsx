@@ -80,13 +80,13 @@ export default function HomeScreen() {
             {/* HERO — продажи сегодня */}
             <GlowHero glow={chg != null && chg < 0 ? T.amber : T.green}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 }}>ПРОДАЖИ СЕГОДНЯ</Text>
+                <Text style={{ color: T.textMut, fontSize: 14, fontWeight: '800', letterSpacing: 0.4 }}>ПРОДАЖИ СЕГОДНЯ</Text>
                 {chg != null ? <Pill text={`${chg > 0 ? '↑' : chg < 0 ? '↓' : ''} ${Math.abs(chg)}%`} tone={chg >= 0 ? 'good' : 'bad'} /> : null}
               </View>
-              <Text style={{ color: T.text, fontSize: 40, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 }}>{money(d.today.total)}</Text>
-              <Text style={{ color: T.textMut, fontSize: 13, marginTop: 3 }}>{d.today.count} чеков · вчера {moneyShort(d.yesterday.total)}</Text>
+              <Text style={{ color: T.text, fontSize: 48, fontWeight: '900', marginTop: 8, letterSpacing: -1 }}>{money(d.today.total)}</Text>
+              <Text style={{ color: T.textMut, fontSize: 15, marginTop: 4 }}>{d.today.count} чеков · вчера {moneyShort(d.yesterday.total)}</Text>
               <View style={{ marginTop: S.lg }}><Sparkline values={week.length ? week : [0]} peakColor={T.greenBright} /></View>
-              <Text style={{ color: T.textDim, fontSize: 11, marginTop: S.sm, letterSpacing: 0.4 }}>ДИНАМИКА ЗА НЕДЕЛЮ</Text>
+              <Text style={{ color: T.textDim, fontSize: 12, marginTop: S.sm, letterSpacing: 0.5 }}>ДИНАМИКА ЗА НЕДЕЛЮ</Text>
             </GlowHero>
 
             {/* Способы оплаты */}
@@ -98,8 +98,8 @@ export default function HomeScreen() {
 
             <Card style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View>
-                <Text style={{ color: T.textMut, fontSize: 12 }}>Продажи за месяц</Text>
-                <Text style={{ color: T.text, fontSize: 20, fontWeight: '900', marginTop: 2 }}>{money(d.month_total)}</Text>
+                <Text style={{ color: T.textMut, fontSize: 13.5 }}>Продажи за месяц</Text>
+                <Text style={{ color: T.text, fontSize: 23, fontWeight: '900', marginTop: 2 }}>{money(d.month_total)}</Text>
               </View>
               <Pressable onPress={() => router.push('/finance')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={{ color: T.green, fontWeight: '800', fontSize: 13 }}>Финансы</Text>
@@ -124,12 +124,12 @@ export default function HomeScreen() {
                   {d.low_stock.slice(0, 5).map((it, i, arr) => (
                     <View key={it.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: 'rgba(251,191,36,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                          <Ionicons name="alert" size={16} color={T.amber} />
+                        <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(251,191,36,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="alert" size={18} color={T.amber} />
                         </View>
-                        <Text style={{ color: T.text, fontSize: 14, flex: 1 }} numberOfLines={1}>{it.name}</Text>
+                        <Text style={{ color: T.text, fontSize: 15.5, flex: 1 }} numberOfLines={1}>{it.name}</Text>
                       </View>
-                      <Text style={{ color: T.amber, fontSize: 13, fontWeight: '800' }}>{it.balance} / {it.threshold}</Text>
+                      <Text style={{ color: T.amber, fontSize: 15, fontWeight: '800' }}>{it.balance} / {it.threshold}</Text>
                     </View>
                   ))}
                 </Card>
@@ -144,10 +144,10 @@ export default function HomeScreen() {
                   {d.recent_sales.slice(0, 6).map((s, i, arr) => (
                     <View key={s.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderBottomWidth: i < arr.length - 1 ? 1 : 0, borderBottomColor: T.borderSoft }}>
                       <View>
-                        <Text style={{ color: T.text, fontSize: 14.5, fontWeight: '800' }}>{money(s.total_amount)}</Text>
-                        <Text style={{ color: T.textDim, fontSize: 11.5, marginTop: 1 }}>{s.items_count} поз. · {s.payment_method}</Text>
+                        <Text style={{ color: T.text, fontSize: 16, fontWeight: '800' }}>{money(s.total_amount)}</Text>
+                        <Text style={{ color: T.textMut, fontSize: 13, marginTop: 1 }}>{s.items_count} поз. · {s.payment_method}</Text>
                       </View>
-                      <Text style={{ color: T.textDim, fontSize: 11.5 }}>{s.sold_at ? new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''}</Text>
+                      <Text style={{ color: T.textDim, fontSize: 13 }}>{s.sold_at ? new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : ''}</Text>
                     </View>
                   ))}
                 </Card>
@@ -162,21 +162,23 @@ export default function HomeScreen() {
 
 function PayStat({ label, value, color, icon }: { label: string; value: number; color: string; icon: any }) {
   return (
-    <View style={[{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.md }, shadow.card]}>
-      <Ionicons name={icon} size={16} color={color} />
-      <Text style={{ color: T.textDim, fontSize: 11, marginTop: 6 }}>{label}</Text>
-      <Text style={{ color, fontSize: 14.5, fontWeight: '900', marginTop: 2 }}>{moneyShort(value)}</Text>
+    <View style={[{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.md, alignItems: 'flex-start' }, shadow.card]}>
+      <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <Text style={{ color: T.textMut, fontSize: 13, marginTop: 9 }}>{label}</Text>
+      <Text style={{ color, fontSize: 17, fontWeight: '900', marginTop: 2 }}>{moneyShort(value)}</Text>
     </View>
   )
 }
 
 function QuickAction({ icon, label, tint, onPress }: { icon: any; label: string; tint: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ width: '47.5%', flexGrow: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.lg, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? 0.7 : 1 }, shadow.card]}>
-      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tint + '22', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={20} color={tint} />
+    <Pressable onPress={onPress} style={({ pressed }) => [{ width: '47.5%', flexGrow: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.lg, padding: S.lg, flexDirection: 'row', alignItems: 'center', gap: 13, opacity: pressed ? 0.7 : 1 }, shadow.card]}>
+      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: tint + '22', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={25} color={tint} />
       </View>
-      <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>{label}</Text>
+      <Text style={{ color: T.text, fontSize: 16.5, fontWeight: '800' }}>{label}</Text>
     </Pressable>
   )
 }
