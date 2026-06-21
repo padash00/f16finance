@@ -5,59 +5,60 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 
 import { useAuth } from '@/lib/auth'
-import { canSee } from '@/lib/access'
+import { canSee, hasFeature } from '@/lib/access'
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
 import { Card, SectionTitle } from '@/components/ui'
 
 type Sub = { data?: { organization?: { name?: string }; subscription?: { status?: string }; package?: { name?: string } } | null }
-type Section = { icon: any; label: string; route?: string; path: string; page?: string; group: string; superadmin?: boolean }
+type Section = { icon: any; label: string; route?: string; path: string; page?: string; group: string; superadmin?: boolean; feature?: string }
 
-// group — раздел меню, path — web-путь (role_permissions), page — capability из /access.
+// group — раздел меню, path — web-путь (role_permissions), page — capability из /access,
+// feature — код подписки/пакета (скрывается, если у орг нет этой фичи; F16 allAccess → всё видно).
 const SECTIONS: Section[] = [
-  // Финансы
+  // Финансы (база — core, без гейта; аналитика — finance.pnl)
   { group: 'Финансы', icon: 'cash', label: 'Доходы', route: '/income', path: '/income', page: 'income' },
   { group: 'Финансы', icon: 'card', label: 'Расходы', route: '/expenses', path: '/expenses', page: 'expenses' },
   { group: 'Финансы', icon: 'checkmark-done', label: 'Согласования', route: '/approvals', path: '/expenses', page: 'expenses-pending' },
-  { group: 'Финансы', icon: 'alert-circle', label: 'Долги с точки', route: '/debts', path: '/point-debts', page: 'point-debts' },
-  { group: 'Финансы', icon: 'swap-vertical', label: 'Движение денег', route: '/cashflow', path: '/cashflow', page: 'cashflow' },
-  { group: 'Финансы', icon: 'analytics', label: 'Анализ', route: '/analysis', path: '/analysis', page: 'analysis' },
-  { group: 'Финансы', icon: 'bar-chart', label: 'Аналитика', route: '/analytics', path: '/analytics', page: 'analysis' },
-  { group: 'Финансы', icon: 'trending-up', label: 'Рентабельность', route: '/profitability', path: '/profitability', page: 'profitability' },
-  { group: 'Финансы', icon: 'trending-up-outline', label: 'Прогноз', route: '/forecast', path: '/forecast', page: 'forecast' },
-  // Команда
-  { group: 'Команда', icon: 'calendar', label: 'Смены', route: '/shifts', path: '/shifts', page: 'shifts' },
-  { group: 'Команда', icon: 'people-circle', label: 'Операторы', route: '/operators', path: '/operators', page: 'operators' },
-  { group: 'Команда', icon: 'stats-chart', label: 'Аналитика операторов', route: '/operator-analytics', path: '/operator-analytics', page: 'operator-analytics' },
-  { group: 'Команда', icon: 'trophy', label: 'Рейтинг операторов', route: '/performance', path: '/performance', page: 'performance' },
-  { group: 'Команда', icon: 'id-card', label: 'Сотрудники', route: '/staff', path: '/staff', page: 'staff' },
-  { group: 'Команда', icon: 'gift', label: 'Дни рождения', route: '/birthdays', path: '/birthdays', page: 'hr' },
-  { group: 'Команда', icon: 'wallet', label: 'Зарплата', path: '/salary', page: 'salary' },
-  // Клиенты
-  { group: 'Клиенты', icon: 'person', label: 'Клиенты', route: '/customers', path: '/customers', page: 'customers' },
-  { group: 'Клиенты', icon: 'pricetags', label: 'Скидки', route: '/discounts', path: '/discounts', page: 'discounts' },
-  // Склад
-  { group: 'Склад', icon: 'cube', label: 'Склад', route: '/warehouse', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'pricetag', label: 'Каталог товаров', route: '/catalog', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'swap-horizontal', label: 'Заявки склада', route: '/requests', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'download', label: 'Приходы', route: '/receipts', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'git-compare', label: 'Движения склада', route: '/movements', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'clipboard', label: 'Ревизии склада', route: '/stocktakes', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'trash', label: 'Списания', route: '/writeoffs', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'business', label: 'Поставщики', route: '/suppliers', path: '/store', page: 'store' },
-  { group: 'Склад', icon: 'restaurant', label: 'Производство', route: '/production', path: '/production', page: 'production' },
-  // Продажи (POS)
-  { group: 'Продажи', icon: 'receipt', label: 'POS-чеки', route: '/pos-receipts', path: '/pos-receipts', page: 'pos' },
-  { group: 'Продажи', icon: 'arrow-undo', label: 'POS-возвраты', route: '/pos-returns', path: '/pos-returns', page: 'pos' },
+  { group: 'Финансы', icon: 'alert-circle', label: 'Долги с точки', route: '/debts', path: '/point-debts', page: 'point-debts', feature: 'club.pos' },
+  { group: 'Финансы', icon: 'swap-vertical', label: 'Движение денег', route: '/cashflow', path: '/cashflow', page: 'cashflow', feature: 'finance.pnl' },
+  { group: 'Финансы', icon: 'analytics', label: 'Анализ', route: '/analysis', path: '/analysis', page: 'analysis', feature: 'finance.pnl' },
+  { group: 'Финансы', icon: 'bar-chart', label: 'Аналитика', route: '/analytics', path: '/analytics', page: 'analysis', feature: 'finance.pnl' },
+  { group: 'Финансы', icon: 'trending-up', label: 'Рентабельность', route: '/profitability', path: '/profitability', page: 'profitability', feature: 'finance.pnl' },
+  { group: 'Финансы', icon: 'trending-up-outline', label: 'Прогноз', route: '/forecast', path: '/forecast', page: 'forecast', feature: 'finance.pnl' },
+  // Команда (POS/операторы — club.pos; HR — hr.pro)
+  { group: 'Команда', icon: 'calendar', label: 'Смены', route: '/shifts', path: '/shifts', page: 'shifts', feature: 'club.pos' },
+  { group: 'Команда', icon: 'people-circle', label: 'Операторы', route: '/operators', path: '/operators', page: 'operators', feature: 'club.pos' },
+  { group: 'Команда', icon: 'stats-chart', label: 'Аналитика операторов', route: '/operator-analytics', path: '/operator-analytics', page: 'operator-analytics', feature: 'club.pos' },
+  { group: 'Команда', icon: 'trophy', label: 'Рейтинг операторов', route: '/performance', path: '/performance', page: 'performance', feature: 'club.pos' },
+  { group: 'Команда', icon: 'id-card', label: 'Сотрудники', route: '/staff', path: '/staff', page: 'staff', feature: 'hr.pro' },
+  { group: 'Команда', icon: 'gift', label: 'Дни рождения', route: '/birthdays', path: '/birthdays', page: 'hr', feature: 'hr.pro' },
+  { group: 'Команда', icon: 'wallet', label: 'Зарплата', path: '/salary', page: 'salary', feature: 'club.pos' },
+  // Клиенты (loyalty.crm)
+  { group: 'Клиенты', icon: 'person', label: 'Клиенты', route: '/customers', path: '/customers', page: 'customers', feature: 'loyalty.crm' },
+  { group: 'Клиенты', icon: 'pricetags', label: 'Скидки', route: '/discounts', path: '/discounts', page: 'discounts', feature: 'loyalty.crm' },
+  // Склад (shop.catalog)
+  { group: 'Склад', icon: 'cube', label: 'Склад', route: '/warehouse', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'pricetag', label: 'Каталог товаров', route: '/catalog', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'swap-horizontal', label: 'Заявки склада', route: '/requests', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'download', label: 'Приходы', route: '/receipts', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'git-compare', label: 'Движения склада', route: '/movements', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'clipboard', label: 'Ревизии склада', route: '/stocktakes', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'trash', label: 'Списания', route: '/writeoffs', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'business', label: 'Поставщики', route: '/suppliers', path: '/store', page: 'store', feature: 'shop.catalog' },
+  { group: 'Склад', icon: 'restaurant', label: 'Производство', route: '/production', path: '/production', page: 'production', feature: 'restaurant.recipes_lite' },
+  // Продажи (POS) — club.pos
+  { group: 'Продажи', icon: 'receipt', label: 'POS-чеки', route: '/pos-receipts', path: '/pos-receipts', page: 'pos', feature: 'club.pos' },
+  { group: 'Продажи', icon: 'arrow-undo', label: 'POS-возвраты', route: '/pos-returns', path: '/pos-returns', page: 'pos', feature: 'club.pos' },
   // Планы и связь
-  { group: 'Планы и связь', icon: 'flag', label: 'Цели и KPI', route: '/goals', path: '/goals', page: 'goals' },
-  { group: 'Планы и связь', icon: 'calculator', label: 'Финмодель точки', route: '/branch-plan', path: '/branch-plan', page: 'branch-plan' },
-  { group: 'Планы и связь', icon: 'flask', label: 'Симуляция', route: '/simulation', path: '/simulation', page: 'simulation' },
+  { group: 'Планы и связь', icon: 'flag', label: 'Цели и KPI', route: '/goals', path: '/goals', page: 'goals', feature: 'finance.pnl' },
+  { group: 'Планы и связь', icon: 'calculator', label: 'Финмодель точки', route: '/branch-plan', path: '/branch-plan', page: 'branch-plan', feature: 'finance.pnl' },
+  { group: 'Планы и связь', icon: 'flask', label: 'Симуляция', route: '/simulation', path: '/simulation', page: 'simulation', feature: 'finance.pnl' },
   { group: 'Планы и связь', icon: 'newspaper', label: 'Новости', route: '/news', path: '/news', page: 'news' },
   { group: 'Планы и связь', icon: 'chatbubbles', label: 'Сообщения', route: '/messages', path: '/messages', page: 'messages' },
   { group: 'Планы и связь', icon: 'calendar-number', label: 'Календарь', route: '/calendar', path: '/calendar', page: 'calendar' },
   // Прочее
-  { group: 'Прочее', icon: 'game-controller', label: 'Арена', route: '/arena', path: '/arena' },
+  { group: 'Прочее', icon: 'game-controller', label: 'Арена', route: '/arena', path: '/arena', feature: 'club.pos' },
   // Платформа (только суперадмин)
   { group: 'Платформа', icon: 'planet', label: 'Кокпит платформы', route: '/platform', path: '/platform', superadmin: true },
   { group: 'Платформа', icon: 'business', label: 'Организации', route: '/organizations', path: '/organizations', superadmin: true },
@@ -72,7 +73,11 @@ export default function MoreScreen() {
   const [sub, setSub] = useState<Sub['data']>(null)
   const [pending, setPending] = useState(0)
 
-  const visible = SECTIONS.filter((s) => (s.superadmin ? !!role?.isSuperAdmin : canSee(role, { path: s.path, page: s.page })))
+  const visible = SECTIONS.filter((s) =>
+    s.superadmin
+      ? !!role?.isSuperAdmin
+      : canSee(role, { path: s.path, page: s.page }) && hasFeature(role, s.feature),
+  )
   const groups = GROUP_ORDER.map((g) => ({ name: g, items: visible.filter((s) => s.group === g) })).filter((g) => g.items.length > 0)
 
   const load = useCallback(async () => {

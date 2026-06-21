@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { canSee } from '@/lib/access'
+import { canSee, hasFeature } from '@/lib/access'
 import { T, S } from '@/lib/theme'
 import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
 import { NoAccess } from '@/components/no-access'
@@ -42,7 +42,7 @@ export default function TeamScreen() {
   const online = p?.devices.filter((d) => d.isOnline) || []
   const offline = p?.devices.filter((d) => !d.isOnline) || []
 
-  if (role && !canSee(role, { path: '/operators', page: 'operators' })) return <NoAccess title="Команда" />
+  if (role && (!canSee(role, { path: '/operators', page: 'operators' }) || !hasFeature(role, 'club.pos'))) return <NoAccess title="Команда" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { ActivityIndicator, View } from 'react-native'
-import { Slot, useRouter, useSegments } from 'expo-router'
+import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 
 import { AuthProvider, useAuth } from '@/lib/auth'
@@ -33,7 +33,7 @@ function AuthGate() {
       </View>
     )
   }
-  return <Slot />
+  return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: '#070809' } }} />
 }
 
 export default function RootLayout() {

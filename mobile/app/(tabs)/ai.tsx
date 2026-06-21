@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { canSee } from '@/lib/access'
+import { canSee, hasFeature } from '@/lib/access'
 import { T, R, S, money } from '@/lib/theme'
 import { Card, SectionTitle, Segmented, GlowHero, Pill } from '@/components/ui'
 import { NoAccess } from '@/components/no-access'
@@ -36,7 +36,7 @@ export default function AiScreen() {
 
   const s = res?.ai?.summary
 
-  if (role && !canSee(role, { path: '/ai-cfo' })) return <NoAccess title="AI Финдиректор" />
+  if (role && (!canSee(role, { path: '/ai-cfo' }) || !hasFeature(role, 'ai.cfo'))) return <NoAccess title="AI Финдиректор" />
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
