@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState } from '@/components/ui'
 
 type Project = { id: string; name: string; companies: { id: string; name: string }[] }
 
@@ -33,13 +33,9 @@ export default function ArenaScreen() {
 
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.md }} refreshControl={<RefreshControl refreshing={loading && projects.length > 0} onRefresh={load} tintColor={T.green} />}>
         {loading && projects.length === 0 ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : projects.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="game-controller-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Арена не подключена</Text>
-            <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center' }}>Точки с игровой зоной появятся здесь.</Text>
-          </Card>
+          <EmptyState icon="game-controller-outline" title="Арена не подключена" hint="Точки с игровой зоной появятся здесь." />
         ) : (
           projects.map((p) => (
             <Card key={p.id} style={{ gap: 10 }}>

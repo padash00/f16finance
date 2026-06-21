@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton } from '@/components/ui'
 
 type Staff = { id?: string; full_name?: string | null; role?: string | null } | null
 type Location = { id?: string; name?: string | null; code?: string | null; company?: { id?: string; name?: string | null } | null } | null
@@ -249,16 +249,9 @@ export default function RequestsScreen() {
         {loading && !anyItems ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : !anyItems ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="swap-horizontal" size={38} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Заявок пока нет</Text>
-            <Text style={{ color: T.textMut, fontSize: 13, textAlign: 'center' }}>Здесь появятся запросы точек на пополнение витрин со склада</Text>
-          </Card>
+          <EmptyState icon="swap-horizontal" title="Заявок пока нет" />
         ) : (
           <>
             <GlowHero glow={groups.pending.length > 0 ? T.amber : T.green}>
@@ -345,13 +338,7 @@ export default function RequestsScreen() {
               >
                 {savingDecision ? <ActivityIndicator color={T.red} size="small" /> : <Text style={{ color: T.red, fontWeight: '800' }}>Отклонить</Text>}
               </Pressable>
-              <Pressable
-                onPress={() => void submitDecision(true)}
-                disabled={savingDecision}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: savingDecision ? 0.6 : 1 }}
-              >
-                {savingDecision ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Одобрить</Text>}
-              </Pressable>
+              <PrimaryButton label="Одобрить" loading={savingDecision} disabled={savingDecision} onPress={() => void submitDecision(true)} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

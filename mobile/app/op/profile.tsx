@@ -8,7 +8,7 @@ import { haptic } from '@/lib/haptics'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill } from '@/components/ui'
+import { Card, SectionTitle, Pill, ErrorState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Profile = {
   operator: {
@@ -74,7 +74,7 @@ export default function OperatorProfile() {
         <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Профиль</Text>
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : p ? (
           <>
             <Card style={{ alignItems: 'center', gap: 6, paddingVertical: 24 }}>
@@ -142,12 +142,8 @@ export default function OperatorProfile() {
             <TextInput value={pw2} onChangeText={setPw2} placeholder="Повторите пароль" placeholderTextColor={T.textDim} secureTextEntry style={pwInput} />
             {pwErr ? <Text style={{ color: T.red, fontSize: 12 }}>{pwErr}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable onPress={() => setPwOpen(false)} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: T.border }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void changePassword()} disabled={pwBusy} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: R.md, backgroundColor: T.green, opacity: pwBusy ? 0.6 : 1 }}>
-                {pwBusy ? <ActivityIndicator color="#04130d" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={() => setPwOpen(false)} disabled={pwBusy} style={{ flex: 1 }} />
+              <PrimaryButton label="Сохранить" loading={pwBusy} disabled={pwBusy} onPress={() => void changePassword()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

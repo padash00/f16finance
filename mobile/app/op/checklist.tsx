@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill } from '@/components/ui'
+import { Card, SectionTitle, Pill, ErrorState, EmptyState } from '@/components/ui'
 
 type Tpl = { id: string; title: string; description: string | null; shift_scope: string | null; blocks_shift: boolean | null }
 type Item = { id: string; template_id: string; title: string; description: string | null; is_required: boolean | null; requires_photo: boolean | null; severity: string | null; sort_order: number | null }
@@ -48,9 +48,9 @@ export default function OperatorChecklist() {
         </View>
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : (d?.checklist_templates || []).length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}><Ionicons name="list-outline" size={36} color={T.textDim} /><Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Чек-листов нет</Text></Card>
+          <EmptyState icon="list-outline" title="Чек-листов нет" />
         ) : (d?.checklist_templates || []).map((t) => {
           const items = itemsByTpl.get(t.id) || []
           return (

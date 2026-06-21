@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, BarRow } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, BarRow, ErrorState, EmptyState } from '@/components/ui'
 
 // ─── Типы ответов API (только реально существующие поля) ──────────────────────
 type IncomeRow = {
@@ -311,19 +311,13 @@ export default function ProfitabilityScreen() {
         refreshControl={<RefreshControl refreshing={loading && incomes.length > 0} onRefresh={() => load(cursor)} tintColor={T.green} />}
       >
         {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load(cursor)} />
         ) : null}
 
         {loading && incomes.length === 0 && !error ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : empty ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="trending-up" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>За этот месяц данных нет</Text>
-          </Card>
+          <EmptyState icon="trending-up" title="За этот месяц данных нет" />
         ) : !error ? (
           <>
             {/* Чистая прибыль — герой */}

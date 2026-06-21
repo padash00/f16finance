@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, money } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Expense = {
   id: string
@@ -108,17 +108,13 @@ export default function ApprovalsScreen() {
         refreshControl={<RefreshControl refreshing={loading && items.length > 0} onRefresh={load} tintColor={T.green} />}
       >
         {error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontSize: 13 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 50 }} />
         ) : items.length === 0 ? (
-          <Card style={{ alignItems: 'center', gap: 8, paddingVertical: 36 }}>
-            <Ionicons name="checkmark-done-circle" size={40} color={T.green} />
-            <Text style={{ color: T.text, fontSize: 16, fontWeight: '700' }}>Всё согласовано</Text>
-            <Text style={{ color: T.textDim, fontSize: 13 }}>Новых расходов на одобрение нет.</Text>
-          </Card>
+          <EmptyState icon="checkmark-done-circle-outline" title="Всё согласовано" />
         ) : (
           items.map((e) => {
             const title = e.one_off_payee || e.category || 'Расход'
@@ -184,12 +180,8 @@ export default function ApprovalsScreen() {
             />
             {error ? <Text style={{ color: T.red, fontSize: 12 }}>{error}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable onPress={() => { setDeclineId(null); setReason('') }} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submitDecline()} disabled={busyId === declineId} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#3b1212', opacity: busyId === declineId ? 0.6 : 1 }}>
-                {busyId === declineId ? <ActivityIndicator color={T.red} size="small" /> : <Text style={{ color: '#fca5a5', fontWeight: '800' }}>Отклонить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={() => { setDeclineId(null); setReason('') }} disabled={busyId === declineId} style={{ flex: 1 }} />
+              <PrimaryButton label="Отклонить" tone="red" loading={busyId === declineId} disabled={busyId === declineId} onPress={() => void submitDecline()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState } from '@/components/ui'
 
 type Incident = {
   id: string; kind: string | null; severity: string | null; status: string | null
@@ -42,12 +42,9 @@ export default function OperatorIncidents() {
 
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.sm }} refreshControl={<RefreshControl refreshing={loading && items.length > 0} onRefresh={load} tintColor={T.green} />}>
         {loading && items.length === 0 ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : items.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="shield-checkmark-outline" size={38} color={T.green} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Инцидентов нет</Text>
-          </Card>
+          <EmptyState icon="shield-checkmark-outline" title="Инцидентов нет" />
         ) : items.map((it) => (
           <Card key={it.id} style={{ gap: 8, borderLeftWidth: 3, borderLeftColor: it.severity === 'high' ? T.red : it.severity === 'medium' ? T.amber : T.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>

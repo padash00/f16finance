@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState } from '@/components/ui'
 
 type Overview = {
   week: { grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: string }
@@ -38,7 +38,7 @@ export default function OperatorSalary() {
         <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Зарплата</Text>
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : d ? (
           <>
             <GlowHero glow={st.tone === 'good' ? T.green : T.amber}>

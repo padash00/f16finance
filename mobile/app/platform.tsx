@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState } from '@/components/ui'
 
 type Overview = {
   organizationCount: number
@@ -108,10 +108,7 @@ export default function PlatformScreen() {
         {loading && !data ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : (
           <>
             <GlowHero glow={T.violet}>
@@ -178,10 +175,7 @@ export default function PlatformScreen() {
             {/* Последние организации */}
             <SectionTitle>Последние организации</SectionTitle>
             {orgs.length === 0 ? (
-              <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-                <Ionicons name="business-outline" size={38} color={T.textDim} />
-                <Text style={{ color: T.textMut, fontSize: 14 }}>Организаций пока нет</Text>
-              </Card>
+              <EmptyState icon="business-outline" title="Организаций пока нет" />
             ) : (
               <Card style={{ padding: 0 }}>
                 {orgs.slice(0, 12).map((org, i, arr) => {

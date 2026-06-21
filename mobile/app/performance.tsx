@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, Segmented } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
 
 type RankingItem = {
   operator_id: string
@@ -186,10 +186,7 @@ export default function PerformanceScreen() {
         {loading && !data ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load(period)} />
         ) : (
           <>
             {leader ? (
@@ -227,11 +224,7 @@ export default function PerformanceScreen() {
             ) : null}
 
             {ranking.length === 0 ? (
-              <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-                <Ionicons name="trophy-outline" size={38} color={T.textDim} />
-                <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Нет данных за период</Text>
-                <Text style={{ color: T.textMut, fontSize: 13 }}>Смен с выручкой не найдено</Text>
-              </Card>
+              <EmptyState icon="trophy-outline" title="Нет данных за период" hint="Смен с выручкой не найдено" />
             ) : null}
 
             {qualifying.length > 0 ? (

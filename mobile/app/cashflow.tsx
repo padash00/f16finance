@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, BarRow } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, BarRow, ErrorState, EmptyState } from '@/components/ui'
 
 type IncomeRow = {
   id: string
@@ -149,20 +149,12 @@ export default function CashflowScreen() {
           </Text>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load(cursor)} /> : null}
 
         {loading && dailyData.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : dailyData.length === 0 && !loading ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 30 }}>
-            <Ionicons name="swap-vertical-outline" size={36} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14, marginTop: 8 }}>Нет движений за этот месяц</Text>
-          </Card>
+          <EmptyState icon="swap-vertical-outline" title="Нет движений за этот месяц" />
         ) : (
           <>
             {/* Доходы / Расходы */}

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
 
 type InvItem = {
   id: string
@@ -170,20 +170,12 @@ export default function StocktakesScreen() {
           ) : null}
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load(scope)} /> : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && items.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="clipboard-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Ревизий пока нет</Text>
-          </Card>
+          <EmptyState icon="clipboard-outline" title="Ревизий пока нет" />
         ) : (
           <Card style={{ padding: 0 }}>
             {items.map((r, i) => {

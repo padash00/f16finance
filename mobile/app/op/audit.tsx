@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill } from '@/components/ui'
+import { Card, SectionTitle, Pill, ErrorState, EmptyState } from '@/components/ui'
 
 type Act = { act_id: string; locationName: string; comment: string | null; opened_at: string; sectionLabel: string }
 type Item = { item_id: string; name: string; barcode: string | null; unit: string | null; counted: number | null; otherQty?: number | null; otherBy?: string | null }
@@ -92,13 +92,9 @@ export default function OperatorAudit() {
           <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Ревизия</Text>
           <Text style={{ color: T.textMut, fontSize: 13 }}>Считайте товар по своей секции. Системный остаток не показывается.</Text>
 
-          {error ? <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>{error}</Text></Card> : null}
+          {error ? <ErrorState message={error} onRetry={() => void loadActs()} /> : null}
           {loading ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : acts.length === 0 ? (
-            <Card style={{ alignItems: 'center', paddingVertical: 36, gap: 8 }}>
-              <Ionicons name="clipboard-outline" size={38} color={T.textDim} />
-              <Text style={{ color: T.text, fontSize: 16, fontWeight: '800' }}>Нет активных ревизий</Text>
-              <Text style={{ color: T.textDim, fontSize: 13, textAlign: 'center' }}>Когда руководитель назначит вас на акт — он появится здесь.</Text>
-            </Card>
+            <EmptyState icon="clipboard-outline" title="Нет активных ревизий" hint="Когда руководитель назначит вас на акт — он появится здесь." />
           ) : acts.map((a) => (
             <Pressable key={a.act_id} onPress={() => void openAct(a.act_id)}>
               <Card style={{ gap: 6, borderLeftWidth: 3, borderLeftColor: T.amber }}>
@@ -139,10 +135,7 @@ export default function OperatorAudit() {
         ) : null}
 
         {itemsLoading ? <ActivityIndicator color={T.green} style={{ marginTop: 30 }} /> : items.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="cube-outline" size={36} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>В вашей секции нет товаров</Text>
-          </Card>
+          <EmptyState icon="cube-outline" title="В вашей секции нет товаров" />
         ) : items.map((it) => {
           const mineEmpty = (edits[it.item_id] ?? '') === ''
           return (

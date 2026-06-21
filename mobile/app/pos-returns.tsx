@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
@@ -288,19 +288,13 @@ export default function PosReturnsScreen() {
         </GlowHero>
 
         {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load(cursor)} />
         ) : null}
 
         {loading && !data ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && items.length === 0 && !error ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="checkmark-done-circle" size={38} color={T.green} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Возвратов в этом месяце нет</Text>
-          </Card>
+          <EmptyState icon="checkmark-done-circle-outline" title="Возвратов в этом месяце нет" />
         ) : (
           byCompany.map((g) => (
             <View key={g.name} style={{ gap: S.sm }}>
@@ -572,40 +566,15 @@ function ReturnForm(props: {
 
             {/* Кнопки */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: S.sm }}>
-              <Pressable
-                onPress={onClose}
-                disabled={saving}
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  borderRadius: R.md,
-                  borderWidth: 1,
-                  borderColor: T.borderSoft,
-                  alignItems: 'center',
-                  opacity: saving ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: T.textMut, fontWeight: '800', fontSize: 15 }}>Отмена</Text>
-              </Pressable>
-              <Pressable
-                onPress={onSubmit}
+              <GhostButton label="Отмена" onPress={onClose} disabled={saving} style={{ flex: 1 }} />
+              <PrimaryButton
+                label="Оформить возврат"
+                tone="red"
+                loading={saving}
                 disabled={saving || !sale || returnTotal <= 0}
-                style={{
-                  flex: 1.4,
-                  paddingVertical: 14,
-                  borderRadius: R.md,
-                  backgroundColor: T.red,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: saving || !sale || returnTotal <= 0 ? 0.5 : 1,
-                }}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#0b0e12" />
-                ) : (
-                  <Text style={{ color: '#0b0e12', fontWeight: '900', fontSize: 15 }}>Оформить возврат</Text>
-                )}
-              </Pressable>
+                onPress={() => void onSubmit()}
+                style={{ flex: 1.4 }}
+              />
             </View>
           </ScrollView>
         </View>

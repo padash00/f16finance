@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill, GlowHero } from '@/components/ui'
+import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Post = {
   id: string
@@ -146,20 +146,13 @@ export default function NewsScreen() {
         </GlowHero>
 
         {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : null}
 
         {loading && posts.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && posts.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="newspaper-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Лента пуста</Text>
-            <Text style={{ color: T.textMut, fontSize: 13 }}>Ещё нет постов</Text>
-          </Card>
+          <EmptyState icon="newspaper-outline" title="Лента пуста" hint="Ещё нет постов" />
         ) : (
           posts.map((post) => (
             <Card key={post.id} style={post.viewed ? undefined : { borderColor: 'rgba(139,92,246,0.4)' }}>
@@ -246,12 +239,8 @@ export default function NewsScreen() {
             {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Опубликовать</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeModal} disabled={saving} style={{ flex: 1 }} />
+              <PrimaryButton label="Опубликовать" loading={saving} disabled={saving} onPress={() => void submit()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

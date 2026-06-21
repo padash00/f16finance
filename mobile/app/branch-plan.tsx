@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, BarRow } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, BarRow, ErrorState, EmptyState } from '@/components/ui'
 
 // ── Типы payload (зеркало веб-страницы /branch-plan) ───────────────────────
 type PcComponent = { id: string; name: string; price: number }
@@ -211,16 +211,9 @@ export default function BranchPlanScreen() {
         {loading && drafts.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => loadList()} />
         ) : drafts.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="calculator-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Сохранённых моделей нет</Text>
-            <Text style={{ color: T.textMut, fontSize: 13, textAlign: 'center' }}>Создайте финмодель в веб-портале</Text>
-          </Card>
+          <EmptyState icon="calculator-outline" title="Сохранённых моделей нет" hint="Создайте финмодель в веб-портале" />
         ) : (
           <>
             {/* Выбор модели */}

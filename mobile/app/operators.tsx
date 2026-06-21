@@ -21,7 +21,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Profile = {
   full_name?: string | null
@@ -371,20 +371,12 @@ export default function OperatorsScreen() {
           ) : null}
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && visible.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="people-circle-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Операторы не найдены</Text>
-          </Card>
+          <EmptyState icon="people-outline" title="Операторы не найдены" />
         ) : (
           <Card style={{ padding: 0 }}>
             {visible.map((op, i) => {
@@ -508,12 +500,7 @@ export default function OperatorsScreen() {
                     </Text>
                   </View>
                 </View>
-                <Pressable
-                  onPress={closeModalForce}
-                  style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green }}
-                >
-                  <Text style={{ color: '#04130d', fontWeight: '900' }}>Готово</Text>
-                </Pressable>
+                <PrimaryButton label="Готово" onPress={closeModalForce} />
               </View>
             ) : (
               <>
@@ -624,24 +611,14 @@ export default function OperatorsScreen() {
                 {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
 
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-                  <Pressable
-                    onPress={closeModal}
+                  <GhostButton label="Отмена" onPress={closeModal} disabled={saving} style={{ flex: 1 }} />
+                  <PrimaryButton
+                    label={editingId ? 'Сохранить' : 'Создать'}
+                    loading={saving}
                     disabled={saving}
-                    style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}
-                  >
-                    <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-                  </Pressable>
-                  <Pressable
                     onPress={() => void (editingId ? submitEdit() : submitCreate())}
-                    disabled={saving}
-                    style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}
-                  >
-                    {saving ? (
-                      <ActivityIndicator color="#04130d" size="small" />
-                    ) : (
-                      <Text style={{ color: '#04130d', fontWeight: '900' }}>{editingId ? 'Сохранить' : 'Создать'}</Text>
-                    )}
-                  </Pressable>
+                    style={{ flex: 1 }}
+                  />
                 </View>
               </>
             )}

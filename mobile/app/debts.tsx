@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Item = { id: string; company_name: string; debtor_name: string; item_name: string; quantity: number; total_amount: number; created_by_name: string; comment: string | null; created_at: string }
 type Resp = { weekStart: string; weekEnd: string; items: Item[]; totals: { count: number; amount: number } }
@@ -133,7 +133,7 @@ export default function DebtsScreen() {
 
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.md }} refreshControl={<RefreshControl refreshing={loading && !!d} onRefresh={() => load(week)} tintColor={T.green} />}>
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => load(week)} />
         ) : d ? (
           <>
             <GlowHero glow={T.amber}>
@@ -143,10 +143,7 @@ export default function DebtsScreen() {
             </GlowHero>
 
             {byCompany.length === 0 ? (
-              <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-                <Ionicons name="checkmark-done-circle" size={38} color={T.green} />
-                <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Долгов на этой неделе нет</Text>
-              </Card>
+              <EmptyState icon="checkmark-done-circle-outline" title="Долгов на этой неделе нет" />
             ) : byCompany.map((g) => (
               <View key={g.name} style={{ gap: S.sm }}>
                 <SectionTitle hint={moneyShort(g.amount)}>{g.name}</SectionTitle>
@@ -239,12 +236,8 @@ export default function DebtsScreen() {
             {settleError ? <Text style={{ color: T.red, fontSize: 12 }}>{settleError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-              <Pressable onPress={() => !settling && setConfirmOpen(false)} disabled={settling} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: settling ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void markPaid()} disabled={settling} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: settling ? 0.6 : 1 }}>
-                {settling ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Списать</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={() => !settling && setConfirmOpen(false)} disabled={settling} style={{ flex: 1 }} />
+              <PrimaryButton label="Списать" loading={settling} disabled={settling} onPress={() => void markPaid()} style={{ flex: 1 }} />
             </View>
           </View>
         </View>

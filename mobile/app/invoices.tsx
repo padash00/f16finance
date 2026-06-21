@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
 
 // Платформа: счета по всем организациям (только суперадмин). Просмотр.
 
@@ -154,20 +154,12 @@ export default function InvoicesScreen() {
           <Text style={{ color: T.textDim, fontSize: 12, marginTop: 10 }}>Биллинг по всем организациям · {rows.length} в списке</Text>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load(filter)} /> : null}
 
         {loading && rows.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && rows.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="document-text-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Счетов нет</Text>
-          </Card>
+          <EmptyState icon="document-text-outline" title="Счетов нет" />
         ) : (
           <Card style={{ padding: 0 }}>
             {rows.map((r, i) => {

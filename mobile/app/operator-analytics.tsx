@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState } from '@/components/ui'
 
 type Operator = { id: string; name: string; short_name: string | null; is_active: boolean }
 type Profile = {
@@ -131,10 +131,7 @@ export default function OperatorAnalyticsScreen() {
         {loading && !d ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : d ? (
           <>
             <GlowHero glow={T.green}>
@@ -147,10 +144,7 @@ export default function OperatorAnalyticsScreen() {
             </GlowHero>
 
             {rows.length === 0 ? (
-              <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-                <Ionicons name="people-outline" size={38} color={T.textDim} />
-                <Text style={{ color: T.textMut, fontSize: 14 }}>Операторов нет</Text>
-              </Card>
+              <EmptyState icon="people-outline" title="Операторов нет" />
             ) : (
               <>
                 <SectionTitle hint={`${rows.length}`}>Операторы</SectionTitle>

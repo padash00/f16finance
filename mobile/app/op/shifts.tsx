@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill } from '@/components/ui'
+import { Card, SectionTitle, Pill, ErrorState, EmptyState } from '@/components/ui'
 
 type Shift = { id: string; date: string; shift_type: string; comment: string | null }
 type Group = { company: { id: string; name: string; code: string | null }; shifts: Shift[] }
@@ -41,13 +41,9 @@ export default function OperatorShifts() {
         {r ? <Text style={{ color: T.textMut, fontSize: 13 }}>Неделя {new Date(r.weekStart).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} — {new Date(r.weekEnd).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} · {total} смен</Text> : null}
 
         {loading && !r ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : groups.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 36, gap: 8 }}>
-            <Ionicons name="calendar-clear-outline" size={40} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 16, fontWeight: '800' }}>На этой неделе смен нет</Text>
-            <Text style={{ color: T.textDim, fontSize: 13 }}>Когда руководитель назначит — появятся тут.</Text>
-          </Card>
+          <EmptyState icon="calendar-clear-outline" title="На этой неделе смен нет" />
         ) : (
           groups.map((g) => (
             <View key={g.company.id} style={{ gap: S.sm }}>

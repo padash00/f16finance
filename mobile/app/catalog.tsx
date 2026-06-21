@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 
@@ -228,21 +228,13 @@ export default function CatalogScreen() {
         </GlowHero>
 
         {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && filtered.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="pricetag-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14, marginTop: 4 }}>
-              {items.length === 0 ? 'Каталог пуст' : 'Ничего не найдено'}
-            </Text>
-          </Card>
+          <EmptyState icon="pricetags-outline" title={items.length === 0 ? 'Каталог пуст' : 'Ничего не найдено'} />
         ) : (
           <Card style={{ padding: 0 }}>
             {filtered.map((it, i) => {
@@ -335,20 +327,8 @@ export default function CatalogScreen() {
               ) : null}
 
               <View style={{ flexDirection: 'row', gap: S.md, marginTop: S.sm }}>
-                <Pressable
-                  onPress={() => setFormOpen(false)}
-                  disabled={saving}
-                  style={{ flex: 1, paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center' }}
-                >
-                  <Text style={{ color: T.textMut, fontWeight: '800', fontSize: 15 }}>Отмена</Text>
-                </Pressable>
-                <Pressable
-                  onPress={submit}
-                  disabled={saving}
-                  style={{ flex: 1.4, paddingVertical: 14, borderRadius: R.md, backgroundColor: T.green, alignItems: 'center', opacity: saving ? 0.7 : 1 }}
-                >
-                  {saving ? <ActivityIndicator color="#04130d" /> : <Text style={{ color: '#04130d', fontWeight: '900', fontSize: 15 }}>Сохранить</Text>}
-                </Pressable>
+                <GhostButton label="Отмена" onPress={() => setFormOpen(false)} disabled={saving} style={{ flex: 1 }} />
+                <PrimaryButton label="Сохранить" loading={saving} disabled={saving} onPress={() => void submit()} style={{ flex: 1.4 }} />
               </View>
             </ScrollView>
           </View>

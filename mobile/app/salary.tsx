@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, R, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, SectionTitle } from '@/components/ui'
+import { Card, Pill, GlowHero, SectionTitle, ErrorState, EmptyState } from '@/components/ui'
 
 // ── Типы ответа GET /api/admin/staff-salary ─────────────────────────────────
 type Staff = {
@@ -204,12 +204,7 @@ export default function SalaryScreen() {
           </View>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {/* Сводка начислений/удержаний по всем за месяц */}
         {!loading || rows.length > 0 ? (
@@ -237,10 +232,7 @@ export default function SalaryScreen() {
         {loading && rows.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 30 }} />
         ) : rows.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 30 }}>
-            <Ionicons name="cash-outline" size={36} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14, marginTop: 8 }}>Нет данных по зарплатам</Text>
-          </Card>
+          <EmptyState icon="wallet-outline" title="Нет данных по зарплатам" />
         ) : (
           rows.map((r) => {
             const name = r.staff.full_name || r.staff.short_name || 'Без имени'

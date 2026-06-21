@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, BarRow } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, BarRow, ErrorState, EmptyState } from '@/components/ui'
 
 type Projected = {
   month0Label?: string
@@ -154,10 +154,7 @@ export default function ForecastScreen() {
             <Text style={{ color: T.textMut, fontSize: 13 }}>ИИ анализирует 90 дней данных…</Text>
           </View>
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load()} />
         ) : d ? (
           <>
             {/* Герой: прогноз текущего месяца */}
@@ -354,10 +351,7 @@ export default function ForecastScreen() {
             ) : null}
           </>
         ) : (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="trending-up-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Прогноз недоступен</Text>
-          </Card>
+          <EmptyState icon="trending-up-outline" title="Прогноз недоступен" />
         )}
       </ScrollView>
     </SafeAreaView>

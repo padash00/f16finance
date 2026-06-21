@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 const num = (v: string) => {
   const n = Number(String(v).replace(',', '.').trim())
@@ -212,10 +212,7 @@ export default function ProductionScreen() {
         {loading && recipes.length === 0 && ingredients.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : tab === 'recipes' ? (
           <>
             <GlowHero glow={T.green}>
@@ -228,11 +225,7 @@ export default function ProductionScreen() {
             </GlowHero>
 
             {recipes.length === 0 ? (
-              <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-                <Ionicons name="restaurant-outline" size={38} color={T.textDim} />
-                <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Техкарт нет</Text>
-                <Text style={{ color: T.textMut, fontSize: 13 }}>Создайте первую на веб-портале</Text>
-              </Card>
+              <EmptyState icon="restaurant-outline" title="Техкарт нет" hint="Создайте первую на веб-портале" />
             ) : (
               <Card style={{ padding: 0 }}>
                 {recipes.map((r, i) => {
@@ -276,11 +269,7 @@ export default function ProductionScreen() {
             </GlowHero>
 
             {ingredients.length === 0 ? (
-              <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-                <Ionicons name="cube-outline" size={38} color={T.textDim} />
-                <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Ингредиентов нет</Text>
-                <Text style={{ color: T.textMut, fontSize: 13 }}>Добавьте сырьё на веб-портале</Text>
-              </Card>
+              <EmptyState icon="cube-outline" title="Ингредиентов нет" hint="Добавьте сырьё на веб-портале" />
             ) : (
               <Card style={{ padding: 0 }}>
                 {ingredients.map((g, i) => {
@@ -379,12 +368,8 @@ export default function ProductionScreen() {
             {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Добавить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeModal} disabled={saving} style={{ flex: 1 }} />
+              <PrimaryButton label="Добавить" loading={saving} disabled={saving} onPress={() => void submit()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

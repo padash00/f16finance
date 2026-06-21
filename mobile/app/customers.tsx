@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, GlowHero } from '@/components/ui'
+import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Customer = {
   id: string
@@ -208,25 +208,14 @@ export default function CustomersScreen() {
           </View>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && items.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="people-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Клиентов пока нет</Text>
-          </Card>
+          <EmptyState icon="people-outline" title="Клиентов пока нет" />
         ) : filtered.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 30, gap: 8 }}>
-            <Ionicons name="search-outline" size={34} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Ничего не найдено</Text>
-          </Card>
+          <EmptyState icon="search-outline" title="Ничего не найдено" />
         ) : (
           <Card style={{ padding: 0 }}>
             {filtered.map((c, i) => {
@@ -341,12 +330,8 @@ export default function CustomersScreen() {
             {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeModal} disabled={saving} style={{ flex: 1 }} />
+              <PrimaryButton label="Сохранить" loading={saving} disabled={saving} onPress={() => void submit()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

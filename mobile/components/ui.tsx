@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import { T, R, S, shadow } from '@/lib/theme'
 import { haptic } from '@/lib/haptics'
 
@@ -177,6 +178,121 @@ export function BarRow({ label, value, max, color = T.green, valueLabel }: { lab
         <Animated.View style={{ width: a.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }), height: 10, borderRadius: R.pill, backgroundColor: color }} />
       </View>
     </View>
+  )
+}
+
+/** Градиенты для основной кнопки по тону. */
+const BTN_GRAD: Record<'green' | 'amber' | 'red' | 'brand', [string, string]> = {
+  green: ['#34f0b6', '#10b981'],
+  amber: ['#fcd34d', '#f59e0b'],
+  red: ['#fb7185', '#e11d48'],
+  brand: ['#22d3ee', '#0ea5e9'],
+}
+
+/** Премиальная кнопка основного действия: градиент + scale-нажатие + хаптика + спиннер. */
+export function PrimaryButton({
+  label, onPress, loading = false, disabled = false, tone = 'green', icon, style,
+}: {
+  label: string
+  onPress: () => void
+  loading?: boolean
+  disabled?: boolean
+  tone?: 'green' | 'amber' | 'red' | 'brand'
+  icon?: keyof typeof Ionicons.glyphMap
+  style?: StyleProp<ViewStyle>
+}) {
+  const g = BTN_GRAD[tone]
+  const fg = tone === 'red' ? '#fff' : '#04130d'
+  const s = useRef(new Animated.Value(1)).current
+  const off = disabled || loading
+  return (
+    <Pressable
+      disabled={off}
+      onPress={() => { haptic.tap(); onPress() }}
+      onPressIn={() => Animated.spring(s, { toValue: 0.97, useNativeDriver: true, friction: 8 }).start()}
+      onPressOut={() => Animated.spring(s, { toValue: 1, useNativeDriver: true, friction: 8 }).start()}
+      style={style}
+    >
+      <Animated.View style={{ transform: [{ scale: s }], opacity: off ? 0.55 : 1, borderRadius: 14, overflow: 'hidden' }}>
+        <LinearGradient colors={g} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ paddingVertical: 14, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+          {loading ? (
+            <ActivityIndicator color={fg} size="small" />
+          ) : (
+            <>
+              {icon ? <Ionicons name={icon} size={17} color={fg} /> : null}
+              <Text style={{ color: fg, fontWeight: '900', fontSize: 15 }}>{label}</Text>
+            </>
+          )}
+        </LinearGradient>
+      </Animated.View>
+    </Pressable>
+  )
+}
+
+/** Вторичная кнопка (контур) — пара к PrimaryButton (например «Отмена»). */
+export function GhostButton({ label, onPress, disabled = false, style }: { label: string; onPress: () => void; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={() => { haptic.light(); onPress() }}
+      style={[{ alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: disabled ? 0.55 : 1 }, style]}
+    >
+      <Text style={{ color: T.textMut, fontWeight: '800', fontSize: 15 }}>{label}</Text>
+    </Pressable>
+  )
+}
+
+/** Состояние ошибки загрузки с кнопкой «Повторить». */
+export function ErrorState({ message, onRetry }: { message?: string | null; onRetry?: () => void }) {
+  return (
+    <Card style={{ alignItems: 'center', paddingVertical: 26, borderColor: 'rgba(251,113,133,0.25)' }}>
+      <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(251,113,133,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="cloud-offline-outline" size={24} color={T.red} />
+      </View>
+      <Text style={{ color: T.text, fontSize: 15, fontWeight: '800', marginTop: 12 }}>Не удалось загрузить</Text>
+      {message ? <Text style={{ color: T.textDim, fontSize: 12.5, marginTop: 4, textAlign: 'center', paddingHorizontal: 20 }}>{message}</Text> : null}
+      {onRetry ? (
+        <Pressable
+          onPress={() => { haptic.tap(); onRetry() }}
+          style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: T.border, borderRadius: R.pill, paddingHorizontal: 18, paddingVertical: 9 }}
+        >
+          <Ionicons name="refresh" size={15} color={T.text} />
+          <Text style={{ color: T.text, fontWeight: '800', fontSize: 13 }}>Повторить</Text>
+        </Pressable>
+      ) : null}
+    </Card>
+  )
+}
+
+/** Пустое состояние списка: иконка + заголовок + подсказка + опц. действие. */
+export function EmptyState({ icon = 'file-tray-outline', title, hint, action }: { icon?: keyof typeof Ionicons.glyphMap; title: string; hint?: string; action?: ReactNode }) {
+  return (
+    <Card style={{ alignItems: 'center', paddingVertical: 32 }}>
+      <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={26} color={T.textDim} />
+      </View>
+      <Text style={{ color: T.textMut, fontSize: 14.5, fontWeight: '700', marginTop: 12, textAlign: 'center' }}>{title}</Text>
+      {hint ? <Text style={{ color: T.textDim, fontSize: 12.5, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>{hint}</Text> : null}
+      {action ? <View style={{ marginTop: 14 }}>{action}</View> : null}
+    </Card>
+  )
+}
+
+/** Скелет-список строк (приятнее голого спиннера при загрузке). */
+export function SkeletonList({ rows = 5 }: { rows?: number }) {
+  return (
+    <Card style={{ padding: 0 }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <View key={i} style={{ flexDirection: 'row', gap: 12, padding: 14, alignItems: 'center', borderBottomWidth: i < rows - 1 ? 1 : 0, borderBottomColor: T.border }}>
+          <Skeleton h={38} w={38} style={{ borderRadius: 19 }} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Skeleton h={13} w={'60%'} />
+            <Skeleton h={11} w={'38%'} />
+          </View>
+          <Skeleton h={14} w={56} />
+        </View>
+      ))}
+    </Card>
   )
 }
 

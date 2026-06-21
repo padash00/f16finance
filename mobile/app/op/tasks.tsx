@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Task = { id: string; title: string; status: string; priority: string | null; due_date: string | null; company_name: string | null }
 
@@ -88,13 +88,9 @@ export default function OperatorTasks() {
         <Text style={{ color: T.text, fontSize: 25, fontWeight: '900', letterSpacing: 0.2 }}>Задачи</Text>
 
         {loading && tasks.length === 0 ? <ActivityIndicator color={T.green} style={{ marginTop: 50 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Не удалось загрузить</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : tasks.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 36, gap: 8 }}>
-            <Ionicons name="checkmark-done-circle" size={40} color={T.green} />
-            <Text style={{ color: T.text, fontSize: 16, fontWeight: '800' }}>Задач нет</Text>
-            <Text style={{ color: T.textDim, fontSize: 13 }}>Новые задачи появятся здесь.</Text>
-          </Card>
+          <EmptyState icon="checkmark-done-circle" title="Задач нет" hint="Новые задачи появятся здесь." />
         ) : (
           <>
             {error ? <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontSize: 13 }}>{error}</Text></Card> : null}
@@ -134,12 +130,8 @@ export default function OperatorTasks() {
             />
             {modalError ? <Text style={{ color: T.red, fontSize: 12 }}>{modalError}</Text> : null}
             <View style={{ flexDirection: 'row', gap: S.sm }}>
-              <Pressable onPress={closeComplete} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submitComplete()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: R.md, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Завершить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeComplete} disabled={saving} style={{ flex: 1 }} />
+              <PrimaryButton label="Завершить" loading={saving} disabled={saving} onPress={() => void submitComplete()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

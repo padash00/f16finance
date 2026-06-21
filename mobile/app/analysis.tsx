@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, Segmented, BarRow } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, Segmented, BarRow, ErrorState, EmptyState } from '@/components/ui'
 
 type PaymentMethod = 'cash' | 'kaspi' | 'card' | 'online'
 
@@ -141,16 +141,9 @@ export default function AnalysisScreen() {
         {loading && !a ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
+          <ErrorState message={error} onRetry={() => load(range)} />
         ) : !a ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="bar-chart-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Нет данных</Text>
-            <Text style={{ color: T.textMut, fontSize: 13 }}>Проверьте период и наличие операций</Text>
-          </Card>
+          <EmptyState icon="bar-chart-outline" title="Нет данных" />
         ) : (
           <>
             {/* Прибыль за период */}

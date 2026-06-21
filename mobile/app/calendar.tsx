@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S } from '@/lib/theme'
-import { Card, GlowHero } from '@/components/ui'
+import { Card, GlowHero, ErrorState, EmptyState } from '@/components/ui'
 
 type EventType = 'shift' | 'birthday' | 'holiday' | 'announcement'
 
@@ -128,20 +128,12 @@ export default function CalendarScreen() {
           <Text style={{ color: T.textDim, fontSize: 12, marginTop: 6 }}>Смены · ДР · праздники РК · объявления</Text>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load(year, month)} /> : null}
 
         {loading && events.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && events.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="calendar-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>В этом месяце нет событий</Text>
-          </Card>
+          <EmptyState icon="calendar-outline" title="В этом месяце нет событий" />
         ) : (
           grouped.map((g) => (
             <Card key={g.date} style={{ padding: 0 }}>

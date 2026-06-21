@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api'
 import { haptic } from '@/lib/haptics'
 import { useAuth } from '@/lib/auth'
 import { T, R, S } from '@/lib/theme'
-import { Card, GlowHero } from '@/components/ui'
+import { Card, GlowHero, ErrorState, EmptyState } from '@/components/ui'
 
 type Thread = {
   otherUserId: string
@@ -158,20 +158,12 @@ export default function MessagesScreen() {
           <Text style={{ color: T.textMut, fontSize: 13, marginTop: 3 }}>{threads.length} переписок</Text>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
 
         {loading && threads.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && threads.length === 0 && !error ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="chatbubbles-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Переписок ещё нет</Text>
-          </Card>
+          <EmptyState icon="chatbubbles-outline" title="Переписок ещё нет" />
         ) : (
           <Card style={{ padding: 0 }}>
             {threads.map((t, i) => (

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, SectionTitle } from '@/components/ui'
+import { Card, Pill, GlowHero, SectionTitle, ErrorState, EmptyState } from '@/components/ui'
 import { haptic } from '@/lib/haptics'
 
 type Subscription = {
@@ -163,12 +163,7 @@ export default function OrganizationsScreen() {
           ) : null}
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {ov ? (
           <Card style={{ gap: 0 }}>
@@ -232,10 +227,7 @@ export default function OrganizationsScreen() {
         {loading && orgs.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && filtered.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="business-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>{search ? 'Ничего не найдено' : 'Нет организаций'}</Text>
-          </Card>
+          <EmptyState icon="business-outline" title={search ? 'Ничего не найдено' : 'Нет организаций'} />
         ) : (
           <Card style={{ padding: 0 }}>
             {filtered.map((org, i) => {

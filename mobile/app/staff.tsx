@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, S, R, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero } from '@/components/ui'
+import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Staff = {
   id: string
@@ -318,12 +318,7 @@ export default function StaffScreen() {
           </View>
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {stats.inactive > 0 ? (
           <Pressable
@@ -346,10 +341,7 @@ export default function StaffScreen() {
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : visible.length === 0 && !loading ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 30 }}>
-            <Ionicons name="people-outline" size={36} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14, marginTop: 8 }}>Список сотрудников пуст</Text>
-          </Card>
+          <EmptyState icon="people-outline" title="Список сотрудников пуст" />
         ) : (
           <Card style={{ padding: 0 }}>
             {visible.map((s, i) => {
@@ -513,12 +505,8 @@ export default function StaffScreen() {
             {adjError ? <Text style={{ color: T.red, fontSize: 12 }}>{adjError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable onPress={closeAdjust} disabled={adjSaving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: adjSaving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submitAdjust()} disabled={adjSaving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: activeKind.glow, opacity: adjSaving ? 0.6 : 1 }}>
-                {adjSaving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeAdjust} disabled={adjSaving} style={{ flex: 1 }} />
+              <PrimaryButton label="Сохранить" loading={adjSaving} disabled={adjSaving} onPress={() => void submitAdjust()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -642,12 +630,8 @@ export default function StaffScreen() {
             {cError ? <Text style={{ color: T.red, fontSize: 12 }}>{cError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable onPress={closeCreate} disabled={cSaving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: cSaving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submitCreate()} disabled={cSaving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: cSaving ? 0.6 : 1 }}>
-                {cSaving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Создать</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeCreate} disabled={cSaving} style={{ flex: 1 }} />
+              <PrimaryButton label="Создать" loading={cSaving} disabled={cSaving} onPress={() => void submitCreate()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

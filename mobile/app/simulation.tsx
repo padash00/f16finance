@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S, money, moneyShort } from '@/lib/theme'
-import { Card, Pill, GlowHero, Segmented, BarRow } from '@/components/ui'
+import { Card, Pill, GlowHero, Segmented, BarRow, ErrorState, EmptyState } from '@/components/ui'
 
 type Company = { id: string; name: string; code?: string | null }
 type Tariff = { id: string; name: string; paid_hours: number; bonus_hours: number; price: number }
@@ -213,21 +213,12 @@ export default function SimulationScreen() {
           )}
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load(companyId || undefined)} /> : null}
 
         {loading && zones.length === 0 && tariffs.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && zones.length === 0 && tariffs.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="flask-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>Конфигурация симуляции не задана</Text>
-            <Text style={{ color: T.textDim, fontSize: 12, textAlign: 'center' }}>Зоны и тарифы настраиваются в веб-портале</Text>
-          </Card>
+          <EmptyState icon="flask-outline" title="Конфигурация симуляции не задана" hint="Зоны и тарифы настраиваются в веб-портале" />
         ) : (
           <>
             {/* Обратный расчёт загрузки */}

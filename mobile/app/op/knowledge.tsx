@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S } from '@/lib/theme'
-import { Card, Pill } from '@/components/ui'
+import { Card, Pill, ErrorState, EmptyState, PrimaryButton } from '@/components/ui'
 
 type Article = { id: string; title: string; summary: string | null; content: string | null; severity: string | null; requires_confirmation: boolean; version: number | null; category?: { title?: string | null } | null }
 type Data = { articles: Article[]; pending_confirmations: Article[] }
@@ -57,9 +57,9 @@ export default function OperatorKnowledge() {
         ) : null}
 
         {loading && !d ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => void load()} />
         ) : (d?.articles || []).length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}><Ionicons name="book-outline" size={36} color={T.textDim} /><Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Материалов пока нет</Text></Card>
+          <EmptyState icon="book-outline" title="Материалов пока нет" />
         ) : (d?.articles || []).map((a) => (
           <Pressable key={a.id} onPress={() => setOpen(a)}>
             <Card style={{ gap: 6 }}>
@@ -88,9 +88,8 @@ export default function OperatorKnowledge() {
             {open?.summary ? <Text style={{ color: T.textMut, fontSize: 14, lineHeight: 20 }}>{open.summary}</Text> : null}
             {open?.content ? <Text style={{ color: T.text, fontSize: 15, lineHeight: 23 }}>{open.content}</Text> : null}
             {open && open.requires_confirmation && pendingIds.has(open.id) ? (
-              <Pressable onPress={() => open && void confirm(open)} disabled={confirming} style={{ backgroundColor: T.green, borderRadius: R.md, paddingVertical: 15, alignItems: 'center', marginTop: 8 }}>
-                {confirming ? <ActivityIndicator color="#04130d" /> : <Text style={{ color: '#04130d', fontWeight: '900', fontSize: 15 }}>Подтверждаю, что ознакомился</Text>}
-              </Pressable>
+              <PrimaryButton label="Подтверждаю, что ознакомился" loading={confirming} disabled={confirming} onPress={() => open && void confirm(open)} style={{ marginTop: 8 }} />
+
             ) : open && open.requires_confirmation ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginTop: 8 }}>
                 <Ionicons name="checkmark-circle" size={18} color={T.green} /><Text style={{ color: T.green, fontWeight: '700' }}>Уже подтверждено</Text>

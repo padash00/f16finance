@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, Segmented } from '@/components/ui'
+import { Card, Pill, Segmented, ErrorState, EmptyState } from '@/components/ui'
 
 type Shift = {
   id: string
@@ -59,12 +59,9 @@ export default function ShiftsScreen() {
 
       <ScrollView contentContainerStyle={{ padding: S.lg, paddingTop: 6, paddingBottom: S.xxl, gap: S.sm }} refreshControl={<RefreshControl refreshing={loading && shifts.length > 0} onRefresh={() => load(filter)} tintColor={T.green} />}>
         {loading && shifts.length === 0 ? <ActivityIndicator color={T.green} style={{ marginTop: 40 }} /> : error ? (
-          <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text><Text style={{ color: T.textMut, marginTop: 6 }}>{error}</Text></Card>
+          <ErrorState message={error} onRetry={() => load(filter)} />
         ) : shifts.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="time-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.text, fontSize: 15, fontWeight: '800' }}>Смен нет</Text>
-          </Card>
+          <EmptyState icon="time-outline" title="Смен нет" />
         ) : (
           shifts.map((s) => {
             const op = s.operator

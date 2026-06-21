@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics'
 import { canDo } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
 import { T, R, S, money } from '@/lib/theme'
-import { Card, Pill, GlowHero } from '@/components/ui'
+import { Card, Pill, GlowHero, ErrorState, EmptyState, PrimaryButton, GhostButton } from '@/components/ui'
 
 type Expense = {
   id: string
@@ -370,15 +370,12 @@ export default function ExpensesScreen() {
           <Text style={{ color: T.textDim, fontSize: 12, marginTop: 10 }}>{items.length} записей</Text>
         </GlowHero>
 
-        {error ? <Card style={{ borderColor: '#3b1212' }}><Text style={{ color: T.red, fontSize: 13 }}>{error}</Text></Card> : null}
+        {error ? <ErrorState message={error} onRetry={() => load(cursor)} /> : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : items.length === 0 && !loading ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 30 }}>
-            <Ionicons name="receipt-outline" size={36} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14, marginTop: 8 }}>В этом месяце расходов нет</Text>
-          </Card>
+          <EmptyState icon="receipt-outline" title="В этом месяце расходов нет" />
         ) : (
           <Card style={{ padding: 0 }}>
             {items.map((e, i) => {
@@ -570,12 +567,8 @@ export default function ExpensesScreen() {
             {formError ? <Text style={{ color: T.red, fontSize: 12 }}>{formError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-              <Pressable onPress={closeModal} disabled={saving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: saving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submit()} disabled={saving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeModal} disabled={saving} style={{ flex: 1 }} />
+              <PrimaryButton label="Сохранить" loading={saving} disabled={saving} onPress={() => void submit()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -679,12 +672,8 @@ export default function ExpensesScreen() {
             {editError ? <Text style={{ color: T.red, fontSize: 12 }}>{editError}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
-              <Pressable onPress={closeEdit} disabled={editSaving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: editSaving ? 0.6 : 1 }}>
-                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
-              </Pressable>
-              <Pressable onPress={() => void submitEdit()} disabled={editSaving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: editSaving ? 0.6 : 1 }}>
-                {editSaving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
-              </Pressable>
+              <GhostButton label="Отмена" onPress={closeEdit} disabled={editSaving} style={{ flex: 1 }} />
+              <PrimaryButton label="Сохранить" loading={editSaving} disabled={editSaving} onPress={() => void submitEdit()} style={{ flex: 1 }} />
             </View>
           </View>
         </KeyboardAvoidingView>

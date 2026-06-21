@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { apiFetch } from '@/lib/api'
 import { T, S } from '@/lib/theme'
-import { Card, SectionTitle, Pill, GlowHero, Segmented } from '@/components/ui'
+import { Card, SectionTitle, Pill, GlowHero, Segmented, ErrorState, EmptyState } from '@/components/ui'
 
 type BirthdayItem = {
   id: string
@@ -158,22 +158,15 @@ export default function BirthdaysScreen() {
           {nearestLabel ? <Text style={{ color: T.textDim, fontSize: 12, marginTop: 10 }}>{nearestLabel}</Text> : null}
         </GlowHero>
 
-        {error ? (
-          <Card style={{ borderColor: '#3b1212' }}>
-            <Text style={{ color: T.red, fontWeight: '800' }}>Ошибка</Text>
-            <Text style={{ color: T.textMut, marginTop: 6, fontSize: 13 }}>{error}</Text>
-          </Card>
-        ) : null}
+        {error ? <ErrorState message={error} onRetry={() => load()} /> : null}
 
         {loading && items.length === 0 ? (
           <ActivityIndicator color={T.green} style={{ marginTop: 40 }} />
         ) : !loading && visible.length === 0 ? (
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-            <Ionicons name="gift-outline" size={38} color={T.textDim} />
-            <Text style={{ color: T.textMut, fontSize: 14 }}>
-              {range === 'today' ? 'Сегодня дней рождения нет' : 'В выбранном периоде дней рождения нет'}
-            </Text>
-          </Card>
+          <EmptyState
+            icon="gift-outline"
+            title={range === 'today' ? 'Сегодня дней рождения нет' : 'В выбранном периоде дней рождения нет'}
+          />
         ) : (
           <>
             <SectionTitle hint={`${visible.length}`}>Список</SectionTitle>
