@@ -42,13 +42,19 @@ export const money = (v: number | null | undefined) => {
   return Math.round(Number(v)).toLocaleString('ru-RU') + ' ₸'
 }
 
-// Зона в БД — свободный текст, который вводит пользователь (pc, ps5, ramen, extra…),
-// плюс арена-сессии пишут 'pc'. Каноничного справочника нет — просто аккуратно
-// форматируем введённое: короткие коды (pc/ps5/vip) → верхний регистр, слова → с заглавной.
+// Зона — enum zone_type в БД, ровно 6 значений: pc, ps5, vr, ramen, cafe, other.
+const ZONE_LABELS: Record<string, string> = {
+  pc: 'ПК',
+  ps5: 'PS5',
+  vr: 'VR',
+  ramen: 'Рамен',
+  cafe: 'Кафе',
+  other: 'Другое',
+}
 export const zoneLabel = (z?: string | null) => {
-  const v = String(z ?? '').trim()
+  const v = String(z ?? '').trim().toLowerCase()
   if (!v) return ''
-  return v.length <= 3 ? v.toUpperCase() : v.charAt(0).toUpperCase() + v.slice(1)
+  return ZONE_LABELS[v] ?? (v.length <= 3 ? v.toUpperCase() : v.charAt(0).toUpperCase() + v.slice(1))
 }
 
 export const moneyShort = (v: number | null | undefined) => {
