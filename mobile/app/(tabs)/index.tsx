@@ -155,6 +155,7 @@ export default function HomeScreen() {
             ) : null}
           </>
         ) : null}
+        <Text style={{ color: T.textDim, fontSize: 11, textAlign: 'center', marginTop: 8 }}>сборка 21.06 · v2 (новый дизайн)</Text>
       </ScrollView>
     </SafeAreaView>
   )
