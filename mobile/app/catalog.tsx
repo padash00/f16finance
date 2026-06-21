@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { apiFetch } from '@/lib/api'
 import { T, R, S, money } from '@/lib/theme'
 import { Card, Pill, GlowHero, Segmented } from '@/components/ui'
+import { canDo } from '@/lib/access'
+import { useAuth } from '@/lib/auth'
 
 type CatalogItem = {
   id: string
@@ -29,14 +31,31 @@ type CatalogItem = {
 type Filter = 'all' | 'in_stock' | 'out'
 
 const qtyOf = (it: CatalogItem) => Number(it.total_balance ?? it.catalog_qty ?? 0)
+const numOf = (v: string) => Number(String(v).replace(',', '.'))
 
 export default function CatalogScreen() {
   const router = useRouter()
+  const { role } = useAuth()
+  const canCreate = canDo(role, 'store-catalog.create')
+  const canEdit = canDo(role, 'store-catalog.edit')
+
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+
+  // форма
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<CatalogItem | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [formErr, setFormErr] = useState<string | null>(null)
+  const [fName, setFName] = useState('')
+  const [fBarcode, setFBarcode] = useState('')
+  const [fCategoryId, setFCategoryId] = useState<string | null>(null)
+  const [fSale, setFSale] = useState('')
+  const [fPurchase, setFPurchase] = useState('')
+  const [fUnit, setFUnit] = useState('шт')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -51,6 +70,15 @@ export default function CatalogScreen() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // существующие категории — для быстрого выбора в форме
+  const categories = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const it of items) {
+      if (it.category?.id && it.category?.name) map.set(it.category.id, it.category.name)
+    }
+    return Array.from(map, ([id, name]) => ({ id, name }))
+  }, [items])
 
   const summary = useMemo(() => {
     let positions = 0, inStock = 0, retailValue = 0
@@ -77,11 +105,77 @@ export default function CatalogScreen() {
     })
   }, [items, search, filter])
 
+  const openCreate = useCallback(() => {
+    setEditing(null)
+    setFName(''); setFBarcode(''); setFCategoryId(null)
+    setFSale(''); setFPurchase(''); setFUnit('шт')
+    setFormErr(null)
+    setFormOpen(true)
+  }, [])
+
+  const openEdit = useCallback((it: CatalogItem) => {
+    setEditing(it)
+    setFName(it.name || '')
+    setFBarcode(it.barcode || '')
+    setFCategoryId(it.category_id || it.category?.id || null)
+    setFSale(it.sale_price != null ? String(it.sale_price) : '')
+    setFPurchase(it.default_purchase_price != null ? String(it.default_purchase_price) : '')
+    setFUnit(it.unit || 'шт')
+    setFormErr(null)
+    setFormOpen(true)
+  }, [])
+
+  const submit = useCallback(async () => {
+    const name = fName.trim()
+    const barcode = fBarcode.trim()
+    if (!name) { setFormErr('Укажите название'); return }
+    if (!barcode) { setFormErr('Укажите штрихкод'); return }
+    const sale = fSale.trim() ? numOf(fSale) : 0
+    const purchase = fPurchase.trim() ? numOf(fPurchase) : 0
+    if (!Number.isFinite(sale) || sale < 0) { setFormErr('Цена продажи некорректна'); return }
+    if (!Number.isFinite(purchase) || purchase < 0) { setFormErr('Цена закупа некорректна'); return }
+
+    setSaving(true); setFormErr(null)
+    const payload = {
+      name,
+      barcode,
+      category_id: fCategoryId || null,
+      sale_price: sale,
+      default_purchase_price: purchase,
+      unit: fUnit.trim() || 'шт',
+    }
+    try {
+      await apiFetch('/api/admin/inventory', {
+        method: 'POST',
+        body: JSON.stringify(
+          editing
+            ? { action: 'updateItem', id: editing.id, payload }
+            : { action: 'createItem', payload },
+        ),
+      })
+      setFormOpen(false)
+      await load()
+    } catch (e: any) {
+      setFormErr(e?.message || 'Не удалось сохранить')
+    } finally {
+      setSaving(false)
+    }
+  }, [fName, fBarcode, fCategoryId, fSale, fPurchase, fUnit, editing, load])
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: T.bg }} edges={['top']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 4 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Каталог товаров</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ width: 38, height: 38, borderRadius: R.md, backgroundColor: T.green, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="add" size={24} color="#04130d" />
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Поиск */}
@@ -168,10 +262,21 @@ export default function CatalogScreen() {
                       {sh > 0 ? <Pill text={`витрина ${sh}`} tone="warn" /> : null}
                     </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: T.green, fontSize: 15, fontWeight: '800' }}>{money(it.sale_price)}</Text>
-                    {Number(it.default_purchase_price || 0) > 0 ? (
-                      <Text style={{ color: T.textDim, fontSize: 11.5, marginTop: 3 }}>закуп {money(it.default_purchase_price)}</Text>
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ color: T.green, fontSize: 15, fontWeight: '800' }}>{money(it.sale_price)}</Text>
+                      {Number(it.default_purchase_price || 0) > 0 ? (
+                        <Text style={{ color: T.textDim, fontSize: 11.5, marginTop: 3 }}>закуп {money(it.default_purchase_price)}</Text>
+                      ) : null}
+                    </View>
+                    {canEdit ? (
+                      <Pressable
+                        onPress={() => openEdit(it)}
+                        hitSlop={10}
+                        style={{ marginTop: 8, width: 32, height: 32, borderRadius: R.sm, backgroundColor: T.card2, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Ionicons name="pencil" size={15} color={T.textMut} />
+                      </Pressable>
                     ) : null}
                   </View>
                 </View>
@@ -180,6 +285,107 @@ export default function CatalogScreen() {
           </Card>
         )}
       </ScrollView>
+
+      {/* Форма создания / редактирования */}
+      <Modal visible={formOpen} animationType="slide" transparent onRequestClose={() => setFormOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: T.bg, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, borderWidth: 1, borderColor: T.border, maxHeight: '92%' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: S.lg, paddingBottom: S.sm }}>
+              <Text style={{ color: T.text, fontSize: 19, fontWeight: '900' }}>{editing ? 'Редактировать товар' : 'Новый товар'}</Text>
+              <Pressable onPress={() => setFormOpen(false)} hitSlop={10}><Ionicons name="close" size={24} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingHorizontal: S.lg, paddingBottom: S.xl, gap: S.md }} keyboardShouldPersistTaps="handled">
+              <Field label="Название">
+                <Input value={fName} onChangeText={setFName} placeholder="Например, Кола 0.5" />
+              </Field>
+              <Field label="Штрихкод">
+                <Input value={fBarcode} onChangeText={setFBarcode} placeholder="Штрихкод" autoCapitalize="none" keyboardType="default" />
+              </Field>
+
+              <View style={{ flexDirection: 'row', gap: S.md }}>
+                <Field label="Цена продажи" style={{ flex: 1 }}>
+                  <Input value={fSale} onChangeText={setFSale} placeholder="0" keyboardType="decimal-pad" />
+                </Field>
+                <Field label="Цена закупа" style={{ flex: 1 }}>
+                  <Input value={fPurchase} onChangeText={setFPurchase} placeholder="0" keyboardType="decimal-pad" />
+                </Field>
+              </View>
+
+              <Field label="Единица">
+                <Input value={fUnit} onChangeText={setFUnit} placeholder="шт" autoCapitalize="none" />
+              </Field>
+
+              <Field label="Категория">
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  <CatChip label="Без категории" active={!fCategoryId} onPress={() => setFCategoryId(null)} />
+                  {categories.map((c) => (
+                    <CatChip key={c.id} label={c.name} active={fCategoryId === c.id} onPress={() => setFCategoryId(c.id)} />
+                  ))}
+                </View>
+              </Field>
+
+              {formErr ? (
+                <Card style={{ borderColor: '#3b1212' }}>
+                  <Text style={{ color: T.red, fontWeight: '700', fontSize: 13.5 }}>{formErr}</Text>
+                </Card>
+              ) : null}
+
+              <View style={{ flexDirection: 'row', gap: S.md, marginTop: S.sm }}>
+                <Pressable
+                  onPress={() => setFormOpen(false)}
+                  disabled={saving}
+                  style={{ flex: 1, paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center' }}
+                >
+                  <Text style={{ color: T.textMut, fontWeight: '800', fontSize: 15 }}>Отмена</Text>
+                </Pressable>
+                <Pressable
+                  onPress={submit}
+                  disabled={saving}
+                  style={{ flex: 1.4, paddingVertical: 14, borderRadius: R.md, backgroundColor: T.green, alignItems: 'center', opacity: saving ? 0.7 : 1 }}
+                >
+                  {saving ? <ActivityIndicator color="#04130d" /> : <Text style={{ color: '#04130d', fontWeight: '900', fontSize: 15 }}>Сохранить</Text>}
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  )
+}
+
+function Field({ label, children, style }: { label: string; children: React.ReactNode; style?: any }) {
+  return (
+    <View style={[{ gap: 7 }, style]}>
+      <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '700', letterSpacing: 0.2 }}>{label}</Text>
+      {children}
+    </View>
+  )
+}
+
+function Input(props: React.ComponentProps<typeof TextInput>) {
+  return (
+    <TextInput
+      placeholderTextColor={T.textDim}
+      autoCorrect={false}
+      {...props}
+      style={[{ color: T.text, fontSize: 15, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: R.md, paddingHorizontal: 14, paddingVertical: 12 }, props.style]}
+    />
+  )
+}
+
+function CatChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 13, paddingVertical: 8, borderRadius: R.pill, borderWidth: 1,
+        backgroundColor: active ? 'rgba(16,185,129,0.16)' : T.card,
+        borderColor: active ? 'rgba(16,185,129,0.4)' : T.border,
+      }}
+    >
+      <Text style={{ color: active ? '#34f0b6' : T.textMut, fontWeight: '800', fontSize: 13 }}>{label}</Text>
+    </Pressable>
   )
 }

@@ -106,19 +106,24 @@ export default function OperatorsScreen() {
   const router = useRouter()
   const { role } = useAuth()
   const canCreate = canDo(role, 'operators.create')
+  const canEdit = canDo(role, 'operators.edit')
 
   const [filter, setFilter] = useState<'all' | 'active'>('active')
   const [items, setItems] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Модалка создания оператора
+  // Модалка создания/редактирования оператора
   const [modalOpen, setModalOpen] = useState(false)
+  // editingId = null → режим создания, иначе — правка существующего
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateForm>(emptyCreate)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   // Сгенерированные сервером логин/пароль (показываем после успеха)
   const [created, setCreated] = useState<CreatedAccount | null>(null)
+  // id оператора, у которого сейчас переключается активность
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -138,15 +143,89 @@ export default function OperatorsScreen() {
   }, [load])
 
   const openCreate = () => {
+    setEditingId(null)
     setForm(emptyCreate)
     setFormError(null)
     setCreated(null)
     setModalOpen(true)
   }
 
+  const openEdit = (op: Operator) => {
+    const p = profileOf(op)
+    setEditingId(op.id)
+    setForm({
+      name: op.name || '',
+      fullName: p.full_name || '',
+      shortName: op.short_name || '',
+      position: p.position || '',
+      phone: p.phone || '',
+      email: p.email || '',
+      withLogin: false,
+      username: '',
+    })
+    setFormError(null)
+    setCreated(null)
+    setModalOpen(true)
+  }
+
+  const submitEdit = async () => {
+    if (!editingId) return
+    const name = form.name.trim()
+    if (!name) {
+      setFormError('Имя оператора обязательно')
+      return
+    }
+    setSaving(true)
+    setFormError(null)
+    try {
+      await apiFetch('/api/admin/operators', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'updateOperator',
+          operatorId: editingId,
+          payload: {
+            name,
+            full_name: form.fullName.trim() || null,
+            short_name: form.shortName.trim() || null,
+            position: form.position.trim() || null,
+            phone: form.phone.trim() || null,
+            email: form.email.trim() || null,
+          },
+        }),
+      })
+      await load()
+      closeModalForce()
+    } catch (e: any) {
+      setFormError(e?.message || 'Не удалось сохранить')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (op: Operator) => {
+    const next = op.is_active === false
+    setTogglingId(op.id)
+    try {
+      await apiFetch('/api/admin/operators', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'toggleOperatorActive',
+          operatorId: op.id,
+          is_active: next,
+        }),
+      })
+      await load()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось изменить статус')
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   const closeModal = () => {
     if (saving) return
     setModalOpen(false)
+    setEditingId(null)
     setForm(emptyCreate)
     setFormError(null)
     setCreated(null)
@@ -219,6 +298,7 @@ export default function OperatorsScreen() {
 
   const closeModalForce = () => {
     setModalOpen(false)
+    setEditingId(null)
     setForm(emptyCreate)
     setFormError(null)
     setCreated(null)
@@ -352,9 +432,26 @@ export default function OperatorsScreen() {
                     </View>
                   </View>
 
-                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'center', gap: 8 }}>
                     <Text style={{ color: T.greenBright, fontSize: 14.5, fontWeight: '800' }}>{money(st.totalTurnover)}</Text>
-                    <Text style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>30 дней</Text>
+                    <Text style={{ color: T.textDim, fontSize: 11 }}>30 дней</Text>
+                    {canEdit ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                        {togglingId === op.id ? (
+                          <ActivityIndicator color={T.green} size="small" />
+                        ) : (
+                          <Switch
+                            value={active}
+                            onValueChange={() => void toggleActive(op)}
+                            trackColor={{ false: T.card2, true: T.green }}
+                            thumbColor="#04130d"
+                          />
+                        )}
+                        <Pressable onPress={() => openEdit(op)} hitSlop={8}>
+                          <Ionicons name="create-outline" size={20} color={T.textMut} />
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               )
@@ -378,7 +475,7 @@ export default function OperatorsScreen() {
           <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>
-                {created ? 'Оператор создан' : 'Новый оператор'}
+                {created ? 'Оператор создан' : editingId ? 'Редактировать оператора' : 'Новый оператор'}
               </Text>
               <Pressable onPress={created ? closeModalForce : closeModal} hitSlop={10}>
                 <Ionicons name="close" size={22} color={T.textMut} />
@@ -485,20 +582,22 @@ export default function OperatorsScreen() {
                     />
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: T.text, fontSize: 14, fontWeight: '700' }}>Создать логин</Text>
-                      <Text style={{ color: T.textDim, fontSize: 12, marginTop: 2 }}>Пароль сгенерируется автоматически</Text>
+                  {!editingId ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: T.text, fontSize: 14, fontWeight: '700' }}>Создать логин</Text>
+                        <Text style={{ color: T.textDim, fontSize: 12, marginTop: 2 }}>Пароль сгенерируется автоматически</Text>
+                      </View>
+                      <Switch
+                        value={form.withLogin}
+                        onValueChange={(v) => setForm((f) => ({ ...f, withLogin: v }))}
+                        trackColor={{ false: T.card2, true: T.green }}
+                        thumbColor="#04130d"
+                      />
                     </View>
-                    <Switch
-                      value={form.withLogin}
-                      onValueChange={(v) => setForm((f) => ({ ...f, withLogin: v }))}
-                      trackColor={{ false: T.card2, true: T.green }}
-                      thumbColor="#04130d"
-                    />
-                  </View>
+                  ) : null}
 
-                  {form.withLogin ? (
+                  {!editingId && form.withLogin ? (
                     <View style={{ gap: 6 }}>
                       <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Логин *</Text>
                       <TextInput
@@ -525,11 +624,15 @@ export default function OperatorsScreen() {
                     <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => void submitCreate()}
+                    onPress={() => void (editingId ? submitEdit() : submitCreate())}
                     disabled={saving}
                     style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: saving ? 0.6 : 1 }}
                   >
-                    {saving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Создать</Text>}
+                    {saving ? (
+                      <ActivityIndicator color="#04130d" size="small" />
+                    ) : (
+                      <Text style={{ color: '#04130d', fontWeight: '900' }}>{editingId ? 'Сохранить' : 'Создать'}</Text>
+                    )}
                   </Pressable>
                 </View>
               </>

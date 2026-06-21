@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -50,6 +50,7 @@ export default function InvoicesScreen() {
   const [rows, setRows] = useState<Inv[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async (status: FilterKey) => {
     setLoading(true)
@@ -66,6 +67,43 @@ export default function InvoicesScreen() {
   }, [])
 
   useEffect(() => { void load(filter) }, [filter, load])
+
+  const runAction = useCallback(
+    async (inv: Inv, action: 'markPaid' | 'void') => {
+      setBusyId(inv.id)
+      try {
+        await apiFetch(`/api/admin/platform/invoices`, {
+          method: 'POST',
+          body: JSON.stringify({ invoiceId: inv.id, action }),
+        })
+        await load(filter)
+      } catch (e: any) {
+        Alert.alert('Ошибка', e?.message || 'Не удалось выполнить действие')
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [filter, load],
+  )
+
+  const confirmAction = useCallback(
+    (inv: Inv, action: 'markPaid' | 'void') => {
+      const paid = action === 'markPaid'
+      Alert.alert(
+        paid ? 'Отметить оплаченным?' : 'Аннулировать счёт?',
+        `${inv.orgName || '—'} · ${money(inv.amount)}`,
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: paid ? 'Оплачен' : 'Аннулировать',
+            style: paid ? 'default' : 'destructive',
+            onPress: () => void runAction(inv, action),
+          },
+        ],
+      )
+    },
+    [runAction],
+  )
 
   const summary = useMemo(() => {
     let unpaid = 0
@@ -131,41 +169,94 @@ export default function InvoicesScreen() {
             {rows.map((r, i) => {
               const st = STATUS[r.status] || STATUS.issued
               const voided = r.status === 'void'
+              const actionable = r.status === 'issued' || r.status === 'overdue'
+              const busy = busyId === r.id
               const sub = [r.orgSlug || null, r.dueDate ? `до ${fmtDate(r.dueDate)}` : fmtDate(r.createdAt)].filter(Boolean).join(' · ')
               return (
                 <View
                   key={r.id}
                   style={{
-                    flexDirection: 'row',
-                    gap: 12,
                     padding: 14,
                     borderBottomWidth: i < rows.length - 1 ? 1 : 0,
                     borderBottomColor: T.borderSoft,
                   }}
                 >
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ color: T.text, fontSize: 15, fontWeight: '700' }} numberOfLines={1}>{r.orgName || '—'}</Text>
-                    {sub ? <Text style={{ color: T.textDim, fontSize: 12, marginTop: 2 }} numberOfLines={1}>{sub}</Text> : null}
-                    {r.note ? <Text style={{ color: T.textDim, fontSize: 12, marginTop: 1 }} numberOfLines={1}>{r.note}</Text> : null}
-                    <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-                      <Pill text={st.label} tone={st.tone} />
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: T.text, fontSize: 15, fontWeight: '700' }} numberOfLines={1}>{r.orgName || '—'}</Text>
+                      {sub ? <Text style={{ color: T.textDim, fontSize: 12, marginTop: 2 }} numberOfLines={1}>{sub}</Text> : null}
+                      {r.note ? <Text style={{ color: T.textDim, fontSize: 12, marginTop: 1 }} numberOfLines={1}>{r.note}</Text> : null}
+                      <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+                        <Pill text={st.label} tone={st.tone} />
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                      <Text
+                        style={{
+                          color: voided ? T.textDim : T.text,
+                          fontSize: 15,
+                          fontWeight: '800',
+                          textDecorationLine: voided ? 'line-through' : 'none',
+                        }}
+                      >
+                        {money(r.amount)}
+                      </Text>
+                      {r.currency && r.currency !== 'KZT' ? (
+                        <Text style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>{r.currency}</Text>
+                      ) : null}
                     </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                    <Text
-                      style={{
-                        color: voided ? T.textDim : T.text,
-                        fontSize: 15,
-                        fontWeight: '800',
-                        textDecorationLine: voided ? 'line-through' : 'none',
-                      }}
-                    >
-                      {money(r.amount)}
-                    </Text>
-                    {r.currency && r.currency !== 'KZT' ? (
-                      <Text style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>{r.currency}</Text>
-                    ) : null}
-                  </View>
+
+                  {actionable ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                      <Pressable
+                        onPress={() => confirmAction(r, 'markPaid')}
+                        disabled={busy}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          backgroundColor: 'rgba(34,197,94,0.12)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(34,197,94,0.35)',
+                          opacity: busy ? 0.5 : 1,
+                        }}
+                      >
+                        {busy ? (
+                          <ActivityIndicator color={T.green} size="small" />
+                        ) : (
+                          <>
+                            <Ionicons name="checkmark-circle-outline" size={17} color={T.green} />
+                            <Text style={{ color: T.green, fontSize: 14, fontWeight: '800' }}>Оплачен</Text>
+                          </>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        onPress={() => confirmAction(r, 'void')}
+                        disabled={busy}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          backgroundColor: 'rgba(239,68,68,0.10)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(239,68,68,0.30)',
+                          opacity: busy ? 0.5 : 1,
+                        }}
+                      >
+                        <Ionicons name="close-circle-outline" size={17} color={T.red} />
+                        <Text style={{ color: T.red, fontSize: 14, fontWeight: '800' }}>Аннулировать</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               )
             })}

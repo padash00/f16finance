@@ -55,10 +55,18 @@ const ACCOUNT_LABEL: Record<AccountState, { text: string; tone: 'good' | 'warn' 
   no_email: { text: 'Нет email', tone: 'warn' },
 }
 
+const CREATE_ROLES: { key: string; label: string }[] = [
+  { key: 'owner', label: 'Собственник' },
+  { key: 'manager', label: 'Руководитель' },
+  { key: 'marketer', label: 'Маркетолог' },
+  { key: 'other', label: 'Сотрудник' },
+]
+
 export default function StaffScreen() {
   const router = useRouter()
   const { role } = useAuth()
   const canAdjust = canDo(role, 'salary.adjust')
+  const canCreate = canDo(role, 'staff.create')
 
   const [items, setItems] = useState<Staff[]>([])
   const [accounts, setAccounts] = useState<Record<string, AccountInfo>>({})
@@ -75,6 +83,17 @@ export default function StaffScreen() {
   const [adjCompanyId, setAdjCompanyId] = useState<string | null>(null)
   const [adjSaving, setAdjSaving] = useState(false)
   const [adjError, setAdjError] = useState<string | null>(null)
+
+  // модалка создания сотрудника (+ опц. приглашение аккаунта по email)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [cFullName, setCFullName] = useState('')
+  const [cRole, setCRole] = useState('other')
+  const [cSalary, setCSalary] = useState('')
+  const [cPhone, setCPhone] = useState('')
+  const [cEmail, setCEmail] = useState('')
+  const [cInvite, setCInvite] = useState(true)
+  const [cSaving, setCSaving] = useState(false)
+  const [cError, setCError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -192,6 +211,75 @@ export default function StaffScreen() {
     }
   }
 
+  const openCreate = () => {
+    setCFullName('')
+    setCRole('other')
+    setCSalary('')
+    setCPhone('')
+    setCEmail('')
+    setCInvite(true)
+    setCError(null)
+    setCreateOpen(true)
+  }
+
+  const closeCreate = () => {
+    if (cSaving) return
+    setCreateOpen(false)
+    setCError(null)
+  }
+
+  const submitCreate = async () => {
+    const fullName = cFullName.trim()
+    if (!fullName) {
+      setCError('Укажите ФИО')
+      return
+    }
+    const salary = Math.round(Number(String(cSalary).replace(',', '.')))
+    if (!Number.isFinite(salary) || salary <= 0) {
+      setCError('Оклад должен быть больше 0')
+      return
+    }
+    const email = cEmail.trim().toLowerCase()
+    if (cInvite && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCError('Некорректный email для приглашения')
+      return
+    }
+    setCSaving(true)
+    setCError(null)
+    try {
+      const res = await apiFetch<{ data?: { id?: string } }>('/api/admin/staff', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'createStaff',
+          payload: {
+            full_name: fullName,
+            role: cRole,
+            monthly_salary: salary,
+            phone: cPhone.trim() || null,
+            email: email || null,
+          },
+        }),
+      })
+      const newId = res?.data?.id ? String(res.data.id) : null
+      if (cInvite && email && newId) {
+        try {
+          await apiFetch('/api/admin/staff-accounts', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'inviteStaffAccount', staffId: newId }),
+          })
+        } catch {
+          // сотрудник создан, но приглашение не ушло — не считаем фатальной ошибкой
+        }
+      }
+      setCreateOpen(false)
+      await load()
+    } catch (e: any) {
+      setCError(e?.message || 'Не удалось создать сотрудника')
+    } finally {
+      setCSaving(false)
+    }
+  }
+
   const activeKind = ADJ_KINDS.find((k) => k.key === adjKind) || ADJ_KINDS[0]
 
   return (
@@ -199,6 +287,16 @@ export default function StaffScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: S.lg, paddingTop: 8, paddingBottom: 6 }}>
         <Pressable onPress={() => router.back()} hitSlop={10}><Ionicons name="chevron-back" size={24} color={T.text} /></Pressable>
         <Text style={{ color: T.text, fontSize: 22, fontWeight: '900', flex: 1 }}>Сотрудники</Text>
+        {canCreate ? (
+          <Pressable
+            onPress={openCreate}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${T.green}22`, borderWidth: 1, borderColor: T.green, borderRadius: R.pill, paddingHorizontal: 12, paddingVertical: 7 }}
+          >
+            <Ionicons name="add" size={16} color={T.green} />
+            <Text style={{ color: T.green, fontSize: 13, fontWeight: '800' }}>Сотрудник</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView
@@ -415,6 +513,135 @@ export default function StaffScreen() {
               </Pressable>
               <Pressable onPress={() => void submitAdjust()} disabled={adjSaving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: activeKind.glow, opacity: adjSaving ? 0.6 : 1 }}>
                 {adjSaving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Сохранить</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Модалка создания сотрудника */}
+      <Modal visible={createOpen} transparent animationType="slide" onRequestClose={closeCreate}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ backgroundColor: T.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: T.border, padding: 20, gap: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ color: T.text, fontSize: 18, fontWeight: '800' }}>Новый сотрудник</Text>
+              <Pressable onPress={closeCreate} hitSlop={10}><Ionicons name="close" size={22} color={T.textMut} /></Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }}>
+              {/* ФИО */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>ФИО *</Text>
+                <TextInput
+                  value={cFullName}
+                  onChangeText={setCFullName}
+                  placeholder="Иванов Иван"
+                  placeholderTextColor={T.textDim}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Роль */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Роль</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {CREATE_ROLES.map((r) => {
+                    const on = cRole === r.key
+                    return (
+                      <Pressable
+                        key={r.key}
+                        onPress={() => setCRole(r.key)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: on ? T.green : T.border,
+                          backgroundColor: on ? `${T.green}22` : 'transparent',
+                        }}
+                      >
+                        <Text style={{ color: on ? T.green : T.textMut, fontSize: 13, fontWeight: '700' }}>{r.label}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+              </View>
+
+              {/* Оклад */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Оклад / мес (₸) *</Text>
+                <TextInput
+                  value={cSalary}
+                  onChangeText={setCSalary}
+                  placeholder="0"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="numeric"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Телефон */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Телефон</Text>
+                <TextInput
+                  value={cPhone}
+                  onChangeText={setCPhone}
+                  placeholder="+7 700 000 00 00"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="phone-pad"
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Email */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: T.textDim, fontSize: 12, fontWeight: '700' }}>Email</Text>
+                <TextInput
+                  value={cEmail}
+                  onChangeText={setCEmail}
+                  placeholder="name@example.com"
+                  placeholderTextColor={T.textDim}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={{ backgroundColor: T.bg, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, color: T.text, fontSize: 15 }}
+                />
+              </View>
+
+              {/* Приглашение аккаунта */}
+              <Pressable
+                onPress={() => setCInvite((v) => !v)}
+                disabled={!cEmail.trim()}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, opacity: cEmail.trim() ? 1 : 0.5 }}
+              >
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    borderWidth: 1.5,
+                    borderColor: cInvite && cEmail.trim() ? T.green : T.border,
+                    backgroundColor: cInvite && cEmail.trim() ? T.green : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {cInvite && cEmail.trim() ? <Ionicons name="checkmark" size={15} color="#04130d" /> : null}
+                </View>
+                <Text style={{ color: T.textMut, fontSize: 13, fontWeight: '600', flex: 1 }}>
+                  Отправить приглашение на email (сотрудник сам задаст пароль)
+                </Text>
+              </Pressable>
+            </ScrollView>
+
+            {cError ? <Text style={{ color: T.red, fontSize: 12 }}>{cError}</Text> : null}
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable onPress={closeCreate} disabled={cSaving} style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: T.border, opacity: cSaving ? 0.6 : 1 }}>
+                <Text style={{ color: T.textMut, fontWeight: '700' }}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={() => void submitCreate()} disabled={cSaving} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: T.green, opacity: cSaving ? 0.6 : 1 }}>
+                {cSaving ? <ActivityIndicator color="#04130d" size="small" /> : <Text style={{ color: '#04130d', fontWeight: '900' }}>Создать</Text>}
               </Pressable>
             </View>
           </View>

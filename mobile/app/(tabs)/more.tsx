@@ -33,7 +33,7 @@ const SECTIONS: Section[] = [
   { group: 'Команда', icon: 'trophy', label: 'Рейтинг операторов', route: '/performance', path: '/performance', page: 'performance', feature: 'club.pos' },
   { group: 'Команда', icon: 'id-card', label: 'Сотрудники', route: '/staff', path: '/staff', page: 'staff', feature: 'hr.pro' },
   { group: 'Команда', icon: 'gift', label: 'Дни рождения', route: '/birthdays', path: '/birthdays', page: 'hr', feature: 'hr.pro' },
-  { group: 'Команда', icon: 'wallet', label: 'Зарплата', path: '/salary', page: 'salary', feature: 'club.pos' },
+  { group: 'Команда', icon: 'wallet', label: 'Зарплата', route: '/salary', path: '/salary', page: 'salary', feature: 'club.pos' },
   // Клиенты (loyalty.crm)
   { group: 'Клиенты', icon: 'person', label: 'Клиенты', route: '/customers', path: '/customers', page: 'customers', feature: 'loyalty.crm' },
   { group: 'Клиенты', icon: 'pricetags', label: 'Скидки', route: '/discounts', path: '/discounts', page: 'discounts', feature: 'loyalty.crm' },
