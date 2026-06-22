@@ -44,16 +44,16 @@ const PRODUCT = 'Orda Control'
 const eyebrowClass =
   'inline-flex items-center gap-2 rounded-full border border-[#16a34a]/25 bg-[#16a34a]/[0.07] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-[#15803d]'
 const h1Class =
-  'font-display text-[42px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0f2038] sm:text-[54px] lg:text-[64px]'
+  'font-display text-[46px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0f2038] sm:text-[60px] lg:text-[72px]'
 const h2Class =
-  'font-display text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-[#0f2038] sm:text-[38px] lg:text-[42px]'
-const leadClass = 'text-[17px] leading-[1.6] text-[#56657d] sm:text-[19px]'
-const sectionClass = 'mx-auto max-w-[1240px] px-6 py-20 sm:px-10 lg:py-24 lg:px-12'
+  'font-display text-[34px] font-bold leading-[1.08] tracking-[-0.02em] text-[#0f2038] sm:text-[42px] lg:text-[48px]'
+const leadClass = 'text-[19px] leading-[1.6] text-[#56657d] sm:text-[21px]'
+const sectionClass = 'mx-auto max-w-[1600px] px-6 py-20 sm:px-10 lg:py-24 lg:px-14'
 const cardClass = 'rounded-[20px] border border-[#d6dde8] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]'
 const btnPrimary =
-  'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-7 py-[15px] text-[16px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
+  'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-8 py-[16px] text-[17px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
 const btnGhost =
-  'rounded-[14px] border border-[#c8d1de] bg-white px-7 py-[15px] text-[16px] font-semibold text-[#0f2038] transition hover:border-[#16a34a]/40 hover:text-[#15803d]'
+  'rounded-[14px] border border-[#c8d1de] bg-white px-8 py-[16px] text-[17px] font-semibold text-[#0f2038] transition hover:border-[#16a34a]/40 hover:text-[#15803d]'
 
 // ─────────────── ДАННЫЕ ───────────────
 
@@ -131,7 +131,7 @@ export default async function MarketingHomePage() {
 
       {/* Шапка */}
       <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3.5 sm:px-10 lg:px-12">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-6 py-3.5 sm:px-10 lg:px-12">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
             <div>
@@ -162,7 +162,7 @@ export default async function MarketingHomePage() {
           <div className="absolute -top-24 right-[-6%] h-[440px] w-[440px] rounded-full bg-[#16a34a]/[0.08] blur-[130px]" />
           <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#38bdf8]/[0.07] blur-[130px]" />
         </div>
-        <div className="relative mx-auto max-w-[1240px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
+        <div className="relative mx-auto max-w-[1600px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
           <div className="grid gap-14 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
             <HeroIn className="max-w-[600px]">
               <div className={eyebrowClass}><Sparkles className="h-3.5 w-3.5" />Финансовая управляемость</div>
@@ -225,10 +225,10 @@ export default async function MarketingHomePage() {
             {painPoints.map((p) => (
               <StaggerItem key={p.pain}>
                 <div className={`group h-full ${cardClass} transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30`}>
-                  <h3 className="font-display text-[16px] font-bold leading-[1.3] text-[#0f2038]">{p.pain}</h3>
-                  <div className="mt-4 flex items-start gap-2.5 rounded-[12px] bg-[#16a34a]/[0.06] p-3">
+                  <h3 className="font-display text-[18px] font-bold leading-[1.3] text-[#0f2038]">{p.pain}</h3>
+                  <div className="mt-4 flex items-start gap-2.5 rounded-[12px] bg-[#16a34a]/[0.06] p-3.5">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" />
-                    <span className="text-[13px] leading-[1.5] text-[#475569]">{p.solution}</span>
+                    <span className="text-[14px] leading-[1.5] text-[#475569]">{p.solution}</span>
                   </div>
                 </div>
               </StaggerItem>
@@ -250,8 +250,8 @@ export default async function MarketingHomePage() {
               <StaggerItem key={pillar.title}>
                 <div className={`group h-full ${cardClass} transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30`}>
                   <div className="grid h-11 w-11 place-items-center rounded-[13px] bg-[#16a34a]/[0.1] text-[#16a34a] transition-transform duration-300 group-hover:scale-110"><Icon className="h-5 w-5" /></div>
-                  <h3 className="mt-5 font-display text-[19px] font-bold tracking-[-0.01em] text-[#0f2038]">{pillar.title}</h3>
-                  <p className="mt-2 text-[14px] leading-[1.5] text-[#56657d]">{pillar.subtitle}</p>
+                  <h3 className="mt-5 font-display text-[21px] font-bold tracking-[-0.01em] text-[#0f2038]">{pillar.title}</h3>
+                  <p className="mt-2 text-[15px] leading-[1.5] text-[#56657d]">{pillar.subtitle}</p>
                 </div>
               </StaggerItem>
             )
@@ -276,8 +276,8 @@ export default async function MarketingHomePage() {
                     return (
                       <div key={c.title} className="rounded-[16px] border border-[#e2e8f0] bg-[#eef2f8] p-4">
                         <Icon className="h-5 w-5 text-[#16a34a]" />
-                        <div className="mt-2.5 text-[14px] font-bold text-[#0f2038]">{c.title}</div>
-                        <div className="mt-1 text-[12.5px] leading-[1.5] text-[#5b6b82]">{c.text}</div>
+                        <div className="mt-2.5 text-[15px] font-bold text-[#0f2038]">{c.title}</div>
+                        <div className="mt-1 text-[13.5px] leading-[1.5] text-[#5b6b82]">{c.text}</div>
                       </div>
                     )
                   })}
@@ -305,8 +305,8 @@ export default async function MarketingHomePage() {
                   <div className={`group flex h-full items-start gap-4 ${cardClass} ${aud.href ? 'cursor-pointer transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30' : ''}`}>
                     <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#16a34a]/[0.1] text-[#16a34a]"><Icon className="h-5 w-5" /></div>
                     <div className="min-w-0">
-                      <h3 className="font-display text-[18px] font-bold tracking-[-0.01em] text-[#0f2038]">{aud.title}</h3>
-                      <p className="mt-1.5 text-[13.5px] leading-[1.5] text-[#56657d]">{aud.text}</p>
+                      <h3 className="font-display text-[19px] font-bold tracking-[-0.01em] text-[#0f2038]">{aud.title}</h3>
+                      <p className="mt-1.5 text-[14.5px] leading-[1.5] text-[#56657d]">{aud.text}</p>
                       {aud.href ? <span className="mt-2.5 inline-flex items-center gap-1 text-[13px] font-semibold text-[#16a34a]">Подробнее <ArrowRight className="h-3.5 w-3.5" /></span> : null}
                     </div>
                   </div>
@@ -377,11 +377,11 @@ export default async function MarketingHomePage() {
                 : `h-full ${cardClass} transition duration-300 hover:-translate-y-1`}>
                 {plan.highlight && plan.badge ? <span className="absolute right-5 top-5 rounded-full bg-[#16a34a] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">{plan.badge}</span> : null}
                 <div className={'text-[11px] font-semibold uppercase tracking-[0.12em] ' + (plan.highlight ? 'text-[#15803d]' : 'text-[#64748b]')}>{plan.levelLabel}</div>
-                <div className="mt-1.5 font-display text-[24px] font-bold text-[#0f2038]">{plan.name}</div>
-                <p className="mt-2 text-[13.5px] leading-[1.5] text-[#56657d]">{plan.description}</p>
+                <div className="mt-1.5 font-display text-[26px] font-bold text-[#0f2038]">{plan.name}</div>
+                <p className="mt-2 text-[14.5px] leading-[1.5] text-[#56657d]">{plan.description}</p>
                 <ul className="mt-5 space-y-2.5 border-t border-[#e2e8f0] pt-5">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[13.5px] leading-[1.5] text-[#475569]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" /><span>{f}</span></li>
+                    <li key={f} className="flex items-start gap-2 text-[14.5px] leading-[1.5] text-[#475569]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" /><span>{f}</span></li>
                   ))}
                 </ul>
                 <Button asChild className={plan.highlight
@@ -406,8 +406,8 @@ export default async function MarketingHomePage() {
             {faqItems.map((item) => (
               <StaggerItem key={item.question}>
                 <div className={`h-full ${cardClass}`}>
-                  <h3 className="font-display text-[16px] font-bold leading-[1.35] text-[#0f2038]">{item.question}</h3>
-                  <p className="mt-2.5 text-[13.5px] leading-[1.6] text-[#56657d]">{item.answer}</p>
+                  <h3 className="font-display text-[17px] font-bold leading-[1.35] text-[#0f2038]">{item.question}</h3>
+                  <p className="mt-2.5 text-[14.5px] leading-[1.6] text-[#56657d]">{item.answer}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -443,7 +443,7 @@ export default async function MarketingHomePage() {
 
       {/* ФУТЕР */}
       <footer className="border-t border-[#e2e8f0] bg-white">
-        <div className="mx-auto flex max-w-[1240px] flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-10 lg:px-12">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-10 lg:px-12">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
             <div>
