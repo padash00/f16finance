@@ -208,6 +208,17 @@ export default async function MarketingHomePage() {
                       <StatCard label="Прибыль за месяц" value={1960000} unit="₸" delta="+12%" up />
                       <StatCard label="ФОТ" value={540000} unit="₸" delta="0%" />
                     </div>
+                    <div className="mt-3.5 rounded-[14px] border border-[#e2e8f0] bg-white p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748b]">Выручка · 7 дней</span>
+                        <span className="text-[11px] font-semibold text-[#16a34a]">+8%</span>
+                      </div>
+                      <div className="mt-3 flex h-12 items-end gap-1.5">
+                        {[42, 55, 38, 64, 48, 72, 80].map((h, i) => (
+                          <div key={i} className={`flex-1 rounded-t-[3px] bg-gradient-to-t from-[#16a34a]/25 ${i === 6 ? 'to-[#16a34a]' : 'to-[#16a34a]/80'}`} style={{ height: `${h}%` }} />
+                        ))}
+                      </div>
+                    </div>
                     <div className="mt-3.5 rounded-[14px] border border-[#16a34a]/20 bg-[#16a34a]/[0.05] p-4">
                       <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[#15803d]"><Bot className="h-4 w-4" />AI-наблюдение</div>
                       <div className="mt-2 text-[13px] leading-[1.55] text-[#56657d]">
@@ -261,7 +272,9 @@ export default async function MarketingHomePage() {
           <div className={eyebrowClass}>Как это работает</div>
           <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3 шага</h2>
         </Reveal>
-        <Stagger className="mt-10 grid gap-5 md:grid-cols-3">
+        <div className="relative mt-10">
+          <div aria-hidden className="absolute inset-x-[14%] top-[50px] hidden h-[2px] bg-gradient-to-r from-[#16a34a]/45 via-[#cbd3e0] to-[#f97316]/45 md:block" />
+        <Stagger className="relative z-10 grid gap-5 md:grid-cols-3">
           {steps.map((s, i) => {
             const Icon = s.icon
             const isOrange = s.tone === 'orange'
@@ -279,6 +292,7 @@ export default async function MarketingHomePage() {
             )
           })}
         </Stagger>
+        </div>
       </section>
 
       {/* ВОЗМОЖНОСТИ (4 столпа) */}
@@ -383,7 +397,9 @@ export default async function MarketingHomePage() {
                 <Fragment key={row.criterion}>
                   <div className={'px-5 py-4 text-[13.5px] font-semibold text-[#0f2038] ' + (ri < comparisonRows.length - 1 ? 'border-b border-[#e2e8f0]' : '')}>{row.criterion}</div>
                   {comparisonColumns.map((col) => (
-                    <div key={col.key} className={'border-l border-[#e2e8f0] px-5 py-4 text-[13px] ' + (ri < comparisonRows.length - 1 ? 'border-b ' : '') + (col.highlight ? 'bg-[#16a34a]/[0.04] font-medium text-[#0f2038]' : 'text-[#56657d]')}>{row.values[col.key]}</div>
+                    <div key={col.key} className={'border-l border-[#e2e8f0] px-5 py-4 text-[13px] ' + (ri < comparisonRows.length - 1 ? 'border-b ' : '') + (col.highlight ? 'bg-[#16a34a]/[0.04] font-medium text-[#0f2038]' : 'text-[#56657d]')}>
+                      {col.highlight ? <span className="inline-flex items-start gap-1.5"><CheckCircle2 className="mt-[1px] h-3.5 w-3.5 shrink-0 text-[#16a34a]" />{row.values[col.key]}</span> : row.values[col.key]}
+                    </div>
                   ))}
                 </Fragment>
               ))}
