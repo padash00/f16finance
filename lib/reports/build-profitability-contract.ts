@@ -39,11 +39,23 @@ export type BranchData = {
 }
 
 // Превращает ответ branch-report в JSON-контракт для orda-report-template.
-export function buildProfitabilityContract(data: BranchData, generated: string) {
+export type ProfitabilityOptions = {
+  /** Ручной ФОТ — адм. сотрудники (₸). >0 включает override. */
+  payrollStaff?: number
+  /** Ручной ФОТ — операторы по сменам (₸). */
+  payrollOps?: number
+  /** Пояснение к отчёту (рендерится внизу PDF). */
+  note?: string
+  /** Распределение чистой прибыли по партнёрам. */
+  partners?: Array<{ name: string; percent: number }>
+}
+
+export function buildProfitabilityContract(data: BranchData, generated: string, opts: ProfitabilityOptions = {}) {
   const r2 = (n: number) => Math.round(Number(n) || 0)
   const money = (n: number) => n.toLocaleString('ru-RU').replace(/ /g, ' ')
 
-  const categories = (data.expenses || [])
+  type Cat = { name: string; amount: number; g: string; sub: string | undefined }
+  let categories: Cat[] = (data.expenses || [])
     .filter((e) => Number(e.amount) > 0)
     .map((e) => ({
       name: e.category || '—',
@@ -51,17 +63,38 @@ export function buildProfitabilityContract(data: BranchData, generated: string) 
       g: mapGroup(e.accountingGroup),
       sub: (e.comments && e.comments[0]) || undefined,
     }))
-    .sort((a, b) => b.amount - a.amount)
-
-  const fot = (data.expenses || [])
-    .filter((e) => (e.accountingGroup === 'payroll' || e.accountingGroup === 'payroll_advance') && Number(e.amount) > 0)
-    .map((e) => ({ label: e.category || 'ФОТ', amount: r2(e.amount) }))
-    .sort((a, b) => b.amount - a.amount)
 
   const turnover = r2(data.turnover)
   const tax = r2(data.turnoverTax)
-  const expensesTotal = r2(data.expensesTotal)
-  const profit = r2(data.netProfit)
+
+  // Ручной ФОТ: заменяет журнальную зарплату/аванс (группа ФОТ) и в блоке ФОТ,
+  // и в строках расходов, и пересчитывает чистую прибыль — полная согласованность.
+  const payStaff = Math.max(0, r2(opts.payrollStaff ?? 0))
+  const payOps = Math.max(0, r2(opts.payrollOps ?? 0))
+  const hasPayrollOverride = payStaff > 0 || payOps > 0
+
+  let fot: Array<{ label: string; amount: number }>
+  let expensesTotal: number
+
+  if (hasPayrollOverride) {
+    const oldPayroll = categories.filter((c) => c.g === 'fot').reduce((s, c) => s + c.amount, 0)
+    const overrideLines: Cat[] = []
+    if (payStaff > 0) overrideLines.push({ name: 'Адм. сотрудники', amount: payStaff, g: 'fot', sub: 'ФОТ (вручную)' })
+    if (payOps > 0) overrideLines.push({ name: 'Операторы по сменам', amount: payOps, g: 'fot', sub: 'ФОТ (вручную)' })
+    categories = [...categories.filter((c) => c.g !== 'fot'), ...overrideLines]
+    fot = overrideLines.map((l) => ({ label: l.name, amount: l.amount })).sort((a, b) => b.amount - a.amount)
+    expensesTotal = r2(data.expensesTotal) - oldPayroll + (payStaff + payOps)
+  } else {
+    fot = (data.expenses || [])
+      .filter((e) => (e.accountingGroup === 'payroll' || e.accountingGroup === 'payroll_advance') && Number(e.amount) > 0)
+      .map((e) => ({ label: e.category || 'ФОТ', amount: r2(e.amount) }))
+      .sort((a, b) => b.amount - a.amount)
+    expensesTotal = r2(data.expensesTotal)
+  }
+
+  categories.sort((a, b) => b.amount - a.amount)
+
+  const profit = hasPayrollOverride ? turnover - tax - expensesTotal : r2(data.netProfit)
   const margin = turnover > 0 ? Number(((profit / turnover) * 100).toFixed(1)) : 0
 
   const top = categories[0]
@@ -81,6 +114,14 @@ export function buildProfitabilityContract(data: BranchData, generated: string) 
       }
     : undefined
 
+  // Распределение чистой прибыли по партнёрам (доля от пересчитанной прибыли).
+  const partners = (Array.isArray(opts.partners) ? opts.partners : [])
+    .map((p) => ({ name: String(p?.name || '').trim(), percent: Number(p?.percent) || 0 }))
+    .filter((p) => p.name && p.percent > 0)
+    .map((p) => ({ name: p.name, percent: p.percent, amount: Math.round((profit * p.percent) / 100) }))
+
+  const note = String(opts.note || '').trim() || undefined
+
   return {
     name: data.company.name,
     period: periodLabel(data.period.from, data.period.to),
@@ -96,5 +137,7 @@ export function buildProfitabilityContract(data: BranchData, generated: string) 
     fotTotal: fot.reduce((s, f) => s + f.amount, 0),
     categories,
     capex,
+    partners,
+    note,
   }
 }

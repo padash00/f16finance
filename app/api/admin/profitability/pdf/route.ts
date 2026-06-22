@@ -59,7 +59,20 @@ export async function GET(req: Request) {
 
     // JSON-контракт → HTML по единому шаблону orda-report-template.
     const generated = new Date().toLocaleDateString('ru-RU')
-    const contract = buildProfitabilityContract(brJson.data as BranchData, generated)
+    // Партнёры приходят как encodeURIComponent(JSON) → один лишний слой декодирования.
+    let partners: Array<{ name: string; percent: number }> = []
+    if (partnersRaw) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(partnersRaw))
+        if (Array.isArray(parsed)) partners = parsed
+      } catch { /* битый partners — игнорируем */ }
+    }
+    const contract = buildProfitabilityContract(brJson.data as BranchData, generated, {
+      payrollStaff: Number(payrollStaffOverride) || 0,
+      payrollOps: Number(payrollOpsOverride) || 0,
+      note,
+      partners,
+    })
     if (!includeCapex) (contract as any).capex = undefined
     // Шрифты онлайн (Inter + Manrope с кириллицей).
     const fontCss = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Manrope:wght@700;800&display=swap');"
