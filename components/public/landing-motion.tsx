@@ -5,8 +5,8 @@
 // на сервере (SEO сохраняется), оживает анимацией при попадании во вьюпорт.
 // Все анимации уважают prefers-reduced-motion.
 
-import { motion, useReducedMotion } from 'framer-motion'
-import type { ReactNode } from 'react'
+import { animate, motion, useInView, useReducedMotion } from 'framer-motion'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 const EASE = [0.16, 1, 0.3, 1] as const
 
@@ -80,6 +80,69 @@ export function HeroIn({ children, delay = 0, className }: { children: ReactNode
     >
       {children}
     </motion.div>
+  )
+}
+
+/** Счётчик, «накручивающийся» от 0 до значения при появлении во вьюпорте. */
+export function CountUp({ value, suffix = '', duration = 1.4 }: { value: number; suffix?: string; duration?: number }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const inView = useInView(ref, { once: true, margin: '-40px' })
+  const rm = useReducedMotion()
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    if (!inView) return
+    if (rm) {
+      setDisplay(value)
+      return
+    }
+    const controls = animate(0, value, {
+      duration,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => setDisplay(v),
+    })
+    return () => controls.stop()
+  }, [inView, rm, value, duration])
+  const formatted = Math.round(display)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return (
+    <span ref={ref} className="tabular-nums">
+      {formatted}
+      {suffix}
+    </span>
+  )
+}
+
+/** Пульсирующая точка LIVE-индикатора. */
+export function LiveDot({ className }: { className?: string }) {
+  const rm = useReducedMotion()
+  return (
+    <motion.span
+      className={className ?? 'h-1.5 w-1.5 rounded-full bg-[var(--color-accent-teal)]'}
+      animate={rm ? undefined : { opacity: [1, 0.25, 1], scale: [1, 0.75, 1] }}
+      transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+    />
+  )
+}
+
+/** Текст с медленно переливающимся градиентом (для выделения в заголовке). */
+export function ShimmerText({ children, className }: { children: ReactNode; className?: string }) {
+  const rm = useReducedMotion()
+  return (
+    <motion.span
+      className={className}
+      style={{
+        backgroundImage: 'linear-gradient(110deg,#ffb25c,#ff9c57,#ff7b4d,#ffce8f,#ffb25c)',
+        backgroundSize: '200% 100%',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        color: 'transparent',
+      }}
+      animate={rm ? undefined : { backgroundPosition: ['0% 50%', '200% 50%'] }}
+      transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+    >
+      {children}
+    </motion.span>
   )
 }
 

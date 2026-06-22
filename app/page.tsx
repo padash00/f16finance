@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
-import { AmbientGlow, HeroIn, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
+import { AmbientGlow, CountUp, HeroIn, LiveDot, Reveal, ShimmerText, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -533,9 +533,7 @@ export default async function MarketingHomePage() {
 
             <h1 className={h1Class}>
               {PRODUCT} — финансовая управляемость бизнеса{' '}
-              <span className="bg-gradient-to-br from-[#ffb25c] via-[#ff9c57] to-[#ff7b4d] bg-clip-text text-transparent">
-                без Excel, хаоса и ручных пересчётов
-              </span>
+              <ShimmerText>без Excel, хаоса и ручных пересчётов</ShimmerText>
             </h1>
 
             <p className={`${leadClass} max-w-[620px]`}>
@@ -544,16 +542,15 @@ export default async function MarketingHomePage() {
               сотрудниками и товарным учётом.
             </p>
 
-            <div className="flex flex-wrap gap-2.5">
+            <Stagger className="flex flex-wrap gap-2.5">
               {heroBadges.map((b) => (
-                <span
-                  key={b}
-                  className="rounded-[14px] border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[15px] font-medium text-[var(--color-text-soft)]"
-                >
-                  {b}
-                </span>
+                <StaggerItem key={b}>
+                  <span className="inline-block rounded-[14px] border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[15px] font-medium text-[var(--color-text-soft)]">
+                    {b}
+                  </span>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
 
             <div className="flex flex-wrap gap-3 pt-2">
               <Button
@@ -601,16 +598,16 @@ export default async function MarketingHomePage() {
                     Финансовый дашборд
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent-teal)]/30 bg-[var(--color-accent-teal)]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent-teal)]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent-teal)]" />
+                    <LiveDot />
                     live
                   </span>
                 </div>
 
                 <div className="mt-5 grid grid-cols-2 gap-3">
-                  <Metric label="Выручка за день" value="412 800" unit="₸" delta="+8%" trend="up" />
-                  <Metric label="Маржа" value="38%" delta="-1.4%" trend="down" />
-                  <Metric label="Прибыль за месяц" value="1 960 000" unit="₸" delta="+12%" trend="up" />
-                  <Metric label="ФОТ" value="540 000" unit="₸" delta="0%" trend="flat" />
+                  <Metric label="Выручка за день" value={412800} unit="₸" delta="+8%" trend="up" />
+                  <Metric label="Маржа" value={38} suffix="%" delta="-1.4%" trend="down" />
+                  <Metric label="Прибыль за месяц" value={1960000} unit="₸" delta="+12%" trend="up" />
+                  <Metric label="ФОТ" value={540000} unit="₸" delta="0%" trend="flat" />
                 </div>
 
                 <div className="mt-4 rounded-[16px] border border-[var(--color-accent-gold)]/25 bg-[var(--color-accent-gold)]/[0.07] p-4">
@@ -1253,12 +1250,14 @@ function Metric({
   label,
   value,
   unit,
+  suffix,
   delta,
   trend,
 }: {
   label: string
-  value: string
+  value: number
   unit?: string
+  suffix?: string
   delta: string
   trend: 'up' | 'down' | 'flat'
 }) {
@@ -1269,7 +1268,7 @@ function Metric({
       </div>
       <div className="mt-1.5 flex items-baseline gap-1">
         <span className="font-display text-[26px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--color-text-primary)] tabular-nums">
-          {value}
+          <CountUp value={value} suffix={suffix} />
         </span>
         {unit ? <span className="text-[12px] text-[var(--color-text-muted)]">{unit}</span> : null}
       </div>
