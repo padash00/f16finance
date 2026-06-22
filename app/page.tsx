@@ -77,10 +77,8 @@ const bandLightClass =
 // ─────────────────────── HERO ───────────────────────
 
 const heroBadges = [
-  'Прибыль и маржа каждый день',
+  'Прибыль каждый день',
   'AI объясняет цифры',
-  'Закрытие смен с авто-сверкой',
-  'Склад и витрина по полочкам',
   'Отчёты в Telegram',
 ]
 
@@ -533,13 +531,11 @@ export default async function MarketingHomePage() {
 
             <h1 className={h1Class}>
               {PRODUCT} — финансовая управляемость бизнеса{' '}
-              <ShimmerText>без Excel, хаоса и ручных пересчётов</ShimmerText>
+              <ShimmerText>без Excel и хаоса</ShimmerText>
             </h1>
 
-            <p className={`${leadClass} max-w-[620px]`}>
-              Система для продаж, смен, склада, расходов, зарплат, Telegram-отчётов и AI-аналитики.
-              Подходит магазинам, компьютерным клубам, кафе, сервисам, студиям и бизнесам с кассой,
-              сотрудниками и товарным учётом.
+            <p className={`${leadClass} max-w-[540px]`}>
+              Продажи, смены, склад, зарплаты и AI-аналитика — в одной системе.
             </p>
 
             <Stagger className="flex flex-wrap gap-2.5">
