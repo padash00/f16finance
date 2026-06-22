@@ -40,14 +40,14 @@ const sections = [
 
 export default function OfferPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.08),transparent_25%),linear-gradient(180deg,#050816_0%,#0a1020_48%,#050816_100%)] text-white">
-      <header className="border-b border-white/5 bg-black/30 backdrop-blur">
+    <main className="min-h-screen bg-white text-[#475569]">
+      <header className="border-b border-[#eef1f6] bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
-          <Link href="/" className="flex items-center gap-2.5 text-slate-200 hover:text-amber-200">
+          <Link href="/" className="flex items-center gap-2.5 text-[#56657d] hover:text-[#16a34a]">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">К {SITE_NAME}</span>
           </Link>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-[#8a97ad]">
             Версия от {LEGAL_VERSION} · обновлено {LEGAL_LAST_UPDATED}
           </span>
         </div>
@@ -56,8 +56,8 @@ export default function OfferPage() {
       <div className="mx-auto max-w-screen-2xl px-6 py-12 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[260px_1fr] lg:items-start">
           <aside className="lg:sticky lg:top-8">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <div className="text-xs font-semibold uppercase tracking-wider text-amber-200">
+            <div className="rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+              <div className="text-xs font-semibold uppercase tracking-wider text-[#16a34a]">
                 Содержание
               </div>
               <ul className="mt-3 space-y-1.5 text-sm">
@@ -65,37 +65,37 @@ export default function OfferPage() {
                   <li key={s.id}>
                     <a
                       href={`#${s.id}`}
-                      className="block rounded-lg px-2 py-1 text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      className="block rounded-lg px-2 py-1 text-[#56657d] transition hover:bg-[#16a34a]/[0.07] hover:text-[#16a34a]"
                     >
                       {s.title}
                     </a>
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 grid gap-1 text-xs text-slate-400">
-                <Link href="/privacy" className="hover:text-amber-200">→ Политика конфиденциальности</Link>
-                <Link href="/terms" className="hover:text-amber-200">→ Пользовательское соглашение</Link>
-                <Link href="/sla" className="hover:text-amber-200">→ SLA</Link>
-                <Link href="/cookies" className="hover:text-amber-200">→ Cookies</Link>
+              <div className="mt-4 grid gap-1 text-xs text-[#7a8aa3]">
+                <Link href="/privacy" className="hover:text-[#16a34a]">→ Политика конфиденциальности</Link>
+                <Link href="/terms" className="hover:text-[#16a34a]">→ Пользовательское соглашение</Link>
+                <Link href="/sla" className="hover:text-[#16a34a]">→ SLA</Link>
+                <Link href="/cookies" className="hover:text-[#16a34a]">→ Cookies</Link>
               </div>
             </div>
           </aside>
 
-          <article className="prose-doc max-w-3xl space-y-8 text-slate-200">
+          <article className="prose-doc max-w-3xl space-y-8 text-[#475569]">
             <header>
-              <h1 className="text-3xl font-semibold leading-tight tracking-[-0.02em] text-white sm:text-4xl">
+              <h1 className="text-3xl font-semibold leading-tight tracking-[-0.02em] text-[#0f2038] sm:text-4xl">
                 Публичная оферта на оказание услуг
                 <br />
                 информационной системы «{PRODUCT_NAME}»
               </h1>
-              <p className="mt-4 text-sm leading-7 text-slate-400">
+              <p className="mt-4 text-sm leading-7 text-[#56657d]">
                 Настоящий документ является публичной офертой {LEGAL_ENTITY.shortName} в
                 соответствии со статьями 395 и 396 Гражданского кодекса Республики
                 Казахстан. Регистрация в Сервисе, вход в Личный кабинет, использование
                 Сервиса или оплата выставленного счёта означают полный и безоговорочный
                 акцепт условий настоящей оферты.
               </p>
-              <p className="mt-3 text-sm leading-7 text-slate-400">
+              <p className="mt-3 text-sm leading-7 text-[#56657d]">
                 <strong>Город:</strong> {LEGAL_ENTITY.city}, {LEGAL_ENTITY.country}
                 <br />
                 <strong>Дата вступления в силу:</strong> {LEGAL_EFFECTIVE_DATE}
@@ -105,34 +105,34 @@ export default function OfferPage() {
             </header>
 
             <section id="terms">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">1. Термины и определения</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">1. Термины и определения</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
-                <p><strong className="text-white">Исполнитель</strong> — {LEGAL_ENTITY.fullName}, БИН {LEGAL_ENTITY.bin}, реквизиты приведены в разделе 15.</p>
-                <p><strong className="text-white">Заказчик</strong> — юридическое лицо, индивидуальный предприниматель или дееспособное физическое лицо, акцептовавшее настоящую оферту и использующее Сервис для собственных хозяйственных нужд.</p>
-                <p><strong className="text-white">Сервис «{PRODUCT_NAME}»</strong> — облачное программное обеспечение, доступное по адресу {PRODUCT_SITE} и в виде клиентских приложений для Windows (далее — Operator Desktop, Kiosk), предоставляемое по модели SaaS для управления операционной деятельностью игровых клубов, точек продаж и связанного бизнеса Заказчика.</p>
-                <p><strong className="text-white">Личный кабинет</strong> — раздел Сервиса, доступный Заказчику и его уполномоченным сотрудникам после прохождения аутентификации.</p>
-                <p><strong className="text-white">Operator Desktop</strong> — клиентское приложение для Windows, устанавливаемое на рабочее место кассира/оператора и работающее с серверной частью Сервиса по защищённому каналу. Поддерживает ограниченную работу без интернета (см. раздел 4 и SLA).</p>
-                <p><strong className="text-white">Тарифный план</strong> — набор функций Сервиса и лимитов, доступных Заказчику в зависимости от выбранного тарифа. Перечень действующих тарифных планов публикуется на сайте {PRODUCT_SITE}.</p>
-                <p><strong className="text-white">Подписка</strong> — оплаченный период доступа Заказчика к выбранному Тарифному плану.</p>
-                <p><strong className="text-white">Пробный период</strong> — бесплатный период доступа продолжительностью {TRIAL_DAYS} календарных дней, предоставляемый при первичной регистрации Заказчика (см. раздел 6).</p>
-                <p><strong className="text-white">Учётная запись</strong> — совокупность данных Заказчика и его пользователей в Сервисе, включая логины, пароли, токены устройств и связанные конфиденциальные параметры.</p>
-                <p><strong className="text-white">AI/OCR-функции</strong> — вспомогательные функции Сервиса, использующие внешних поставщиков моделей искусственного интеллекта (OpenAI, Google Gemini), для подсказок по категоризации, распознавания чеков и аналитических отчётов.</p>
-                <p><strong className="text-white">Telegram-уведомления</strong> — функция отправки отчётов и уведомлений сотрудникам Заказчика через мессенджер Telegram по заранее предоставленным Заказчиком идентификаторам чатов.</p>
+                <p><strong className="text-[#0f2038]">Исполнитель</strong> — {LEGAL_ENTITY.fullName}, БИН {LEGAL_ENTITY.bin}, реквизиты приведены в разделе 15.</p>
+                <p><strong className="text-[#0f2038]">Заказчик</strong> — юридическое лицо, индивидуальный предприниматель или дееспособное физическое лицо, акцептовавшее настоящую оферту и использующее Сервис для собственных хозяйственных нужд.</p>
+                <p><strong className="text-[#0f2038]">Сервис «{PRODUCT_NAME}»</strong> — облачное программное обеспечение, доступное по адресу {PRODUCT_SITE} и в виде клиентских приложений для Windows (далее — Operator Desktop, Kiosk), предоставляемое по модели SaaS для управления операционной деятельностью игровых клубов, точек продаж и связанного бизнеса Заказчика.</p>
+                <p><strong className="text-[#0f2038]">Личный кабинет</strong> — раздел Сервиса, доступный Заказчику и его уполномоченным сотрудникам после прохождения аутентификации.</p>
+                <p><strong className="text-[#0f2038]">Operator Desktop</strong> — клиентское приложение для Windows, устанавливаемое на рабочее место кассира/оператора и работающее с серверной частью Сервиса по защищённому каналу. Поддерживает ограниченную работу без интернета (см. раздел 4 и SLA).</p>
+                <p><strong className="text-[#0f2038]">Тарифный план</strong> — набор функций Сервиса и лимитов, доступных Заказчику в зависимости от выбранного тарифа. Перечень действующих тарифных планов публикуется на сайте {PRODUCT_SITE}.</p>
+                <p><strong className="text-[#0f2038]">Подписка</strong> — оплаченный период доступа Заказчика к выбранному Тарифному плану.</p>
+                <p><strong className="text-[#0f2038]">Пробный период</strong> — бесплатный период доступа продолжительностью {TRIAL_DAYS} календарных дней, предоставляемый при первичной регистрации Заказчика (см. раздел 6).</p>
+                <p><strong className="text-[#0f2038]">Учётная запись</strong> — совокупность данных Заказчика и его пользователей в Сервисе, включая логины, пароли, токены устройств и связанные конфиденциальные параметры.</p>
+                <p><strong className="text-[#0f2038]">AI/OCR-функции</strong> — вспомогательные функции Сервиса, использующие внешних поставщиков моделей искусственного интеллекта (OpenAI, Google Gemini), для подсказок по категоризации, распознавания чеков и аналитических отчётов.</p>
+                <p><strong className="text-[#0f2038]">Telegram-уведомления</strong> — функция отправки отчётов и уведомлений сотрудникам Заказчика через мессенджер Telegram по заранее предоставленным Заказчиком идентификаторам чатов.</p>
               </div>
             </section>
 
             <section id="subject">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">2. Предмет договора</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">2. Предмет договора</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>2.1.</strong> Исполнитель предоставляет Заказчику право использования Сервиса «{PRODUCT_NAME}» в объёме, соответствующем выбранному Тарифному плану, а Заказчик обязуется принять и оплатить эти услуги в порядке и сроки, установленные настоящей офертой.</p>
-                <p><strong>2.2.</strong> Сервис предоставляется на условиях «как есть» (as is) с уровнем доступности, определённым в SLA (см. <Link href="/sla" className="text-amber-200 hover:underline">страницу SLA</Link>).</p>
+                <p><strong>2.2.</strong> Сервис предоставляется на условиях «как есть» (as is) с уровнем доступности, определённым в SLA (см. <Link href="/sla" className="text-[#16a34a] hover:underline">страницу SLA</Link>).</p>
                 <p><strong>2.3.</strong> Целевые пользователи Сервиса — компьютерные клубы, киберспортивные арены, точки продаж, магазины, кафе и иные коммерческие предприятия, которым требуется учёт смен, операторов, сотрудников, расходов, доходов, склада, продаж и финансовых показателей.</p>
                 <p><strong>2.4.</strong> Исполнитель НЕ является бухгалтером, налоговым консультантом, банком, кассой, агентом, арендодателем, финансовым посредником, оператором фискальных данных или работодателем по отношению к сотрудникам Заказчика. Сервис — это инструмент учёта; ответственность за корректность вносимых данных и принимаемых на их основе решений лежит на Заказчике.</p>
               </div>
             </section>
 
             <section id="acceptance">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">3. Порядок акцепта оферты</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">3. Порядок акцепта оферты</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>3.1.</strong> Полным и безоговорочным акцептом оферты признаётся совершение Заказчиком одного из следующих действий:</p>
                 <ul className="list-disc space-y-1 pl-6">
@@ -147,7 +147,7 @@ export default function OfferPage() {
             </section>
 
             <section id="service">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">4. Условия оказания услуг</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">4. Условия оказания услуг</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>4.1.</strong> Сервис предоставляется удалённо через сеть Интернет. Доступ осуществляется через веб-интерфейс ({PRODUCT_SITE}) и клиентские приложения Operator Desktop и Kiosk.</p>
                 <p><strong>4.2. Многотенантность.</strong> Данные каждой организации Заказчика изолированы от данных иных Заказчиков на уровне базы данных. Один Заказчик может создавать несколько компаний и точек в пределах лимитов своего Тарифного плана.</p>
@@ -160,7 +160,7 @@ export default function OfferPage() {
             </section>
 
             <section id="price">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">5. Тарифы и порядок расчётов</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">5. Тарифы и порядок расчётов</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>5.1.</strong> Перечень действующих Тарифных планов (в т.ч. Start, Business, Pro, Enterprise), состав функций и лимитов публикуются на сайте {PRODUCT_SITE}. Конкретный Тарифный план, стоимость, валюта расчётов и расчётный период согласовываются Сторонами в счёте на оплату.</p>
                 <p><strong>5.2.</strong> Валюта расчётов — тенге Республики Казахстан (KZT), если иное не указано в счёте.</p>
@@ -172,7 +172,7 @@ export default function OfferPage() {
             </section>
 
             <section id="trial">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">6. Пробный период</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">6. Пробный период</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>6.1.</strong> При первичной регистрации Заказчик получает бесплатный пробный период доступа к Сервису продолжительностью {TRIAL_DAYS} (четырнадцать) календарных дней с момента подтверждения email и создания организации.</p>
                 <p><strong>6.2.</strong> В течение пробного периода Заказчику доступен полный набор функций выбранного Тарифного плана в пределах его лимитов.</p>
@@ -182,7 +182,7 @@ export default function OfferPage() {
             </section>
 
             <section id="rights">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">7. Права и обязанности сторон</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">7. Права и обязанности сторон</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>7.1. Исполнитель обязуется:</strong></p>
                 <ul className="list-disc space-y-1 pl-6">
@@ -215,7 +215,7 @@ export default function OfferPage() {
             </section>
 
             <section id="liability">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">8. Ответственность сторон</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">8. Ответственность сторон</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>8.1.</strong> Стороны несут ответственность за неисполнение или ненадлежащее исполнение обязательств в соответствии с законодательством Республики Казахстан и условиями настоящей оферты.</p>
                 <p><strong>8.2. Ограничение ответственности Исполнителя.</strong> Совокупный размер ответственности Исполнителя перед Заказчиком по всем основаниям, включая упущенную выгоду, ограничен суммой, фактически уплаченной Заказчиком за Сервис за последние 3 (три) месяца, предшествующие событию, послужившему основанием для требования.</p>
@@ -234,17 +234,17 @@ export default function OfferPage() {
             </section>
 
             <section id="data">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">9. Персональные данные</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">9. Персональные данные</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
-                <p><strong>9.1.</strong> Обработка персональных данных в Сервисе осуществляется в соответствии с Законом Республики Казахстан «О персональных данных и их защите» и <Link href="/privacy" className="text-amber-200 hover:underline">Политикой конфиденциальности</Link>, являющейся неотъемлемой частью настоящей оферты.</p>
+                <p><strong>9.1.</strong> Обработка персональных данных в Сервисе осуществляется в соответствии с Законом Республики Казахстан «О персональных данных и их защите» и <Link href="/privacy" className="text-[#16a34a] hover:underline">Политикой конфиденциальности</Link>, являющейся неотъемлемой частью настоящей оферты.</p>
                 <p><strong>9.2.</strong> В отношении персональных данных сотрудников, операторов и клиентов клуба Заказчика Исполнитель действует как уполномоченное лицо (обработчик), а Заказчик — как собственник (оператор) персональных данных.</p>
                 <p><strong>9.3.</strong> Заказчик гарантирует, что им получены все необходимые согласия субъектов персональных данных и имеются законные основания для передачи данных в Сервис.</p>
-                <p><strong>9.4.</strong> Заказчик соглашается с использованием Cookies и аналогичных технологий в порядке, описанном на странице <Link href="/cookies" className="text-amber-200 hover:underline">/cookies</Link>.</p>
+                <p><strong>9.4.</strong> Заказчик соглашается с использованием Cookies и аналогичных технологий в порядке, описанном на странице <Link href="/cookies" className="text-[#16a34a] hover:underline">/cookies</Link>.</p>
               </div>
             </section>
 
             <section id="force">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">10. Форс-мажор</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">10. Форс-мажор</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>10.1.</strong> Стороны освобождаются от ответственности за неисполнение обязательств по настоящей оферте, если такое неисполнение явилось следствием обстоятельств непреодолимой силы: стихийных бедствий, военных действий, эпидемий, забастовок, актов органов государственной власти, массовых сбоев работы провайдеров инфраструктуры (Supabase, Vercel, Telegram, OpenAI, Google Gemini), магистральных интернет-провайдеров, DDoS-атак, иных обстоятельств вне разумного контроля Сторон.</p>
                 <p><strong>10.2.</strong> Сторона, для которой создалась невозможность исполнения обязательств, обязана незамедлительно уведомить другую Сторону об этом, но не позднее 7 (семи) календарных дней с момента наступления соответствующих обстоятельств.</p>
@@ -252,7 +252,7 @@ export default function OfferPage() {
             </section>
 
             <section id="term">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">11. Срок действия и расторжение</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">11. Срок действия и расторжение</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>11.1.</strong> Настоящая оферта действует с момента её акцепта Заказчиком и до момента её расторжения в порядке, предусмотренном настоящим разделом.</p>
                 <p><strong>11.2.</strong> Заказчик вправе в любой момент расторгнуть договор, направив уведомление на {LEGAL_ENTITY.emailSupport} и прекратив использование Сервиса. Уже оплаченные средства за неиспользованный остаток расчётного периода возвращаются в порядке п. 5.6.</p>
@@ -262,7 +262,7 @@ export default function OfferPage() {
             </section>
 
             <section id="disputes">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">12. Разрешение споров</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">12. Разрешение споров</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>12.1.</strong> Все споры, разногласия и требования, возникающие из настоящей оферты или в связи с ней, разрешаются Сторонами путём переговоров. Срок ответа на претензию — 30 (тридцать) календарных дней с момента её получения.</p>
                 <p><strong>12.2.</strong> При недостижении соглашения спор подлежит рассмотрению в судебных органах Республики Казахстан по месту нахождения Исполнителя (город {LEGAL_ENTITY.city}) в соответствии с законодательством РК.</p>
@@ -271,7 +271,7 @@ export default function OfferPage() {
             </section>
 
             <section id="changes">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">13. Изменение условий оферты</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">13. Изменение условий оферты</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>13.1.</strong> Исполнитель вправе в одностороннем порядке вносить изменения в настоящую оферту. Новая редакция вступает в силу с момента её публикации по адресу {PRODUCT_SITE}/offer, если иное не указано в самой редакции.</p>
                 <p><strong>13.2.</strong> Об изменениях, существенно затрагивающих права и обязанности Заказчика (изменение цен, состава функций, политики персональных данных), Исполнитель уведомляет Заказчика не менее чем за 30 (тридцать) календарных дней путём публикации и/или направления уведомления на электронную почту Заказчика.</p>
@@ -280,14 +280,14 @@ export default function OfferPage() {
             </section>
 
             <section id="final">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">14. Заключительные положения</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">14. Заключительные положения</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>14.1.</strong> Неотъемлемыми частями настоящей оферты являются:</p>
                 <ul className="list-disc space-y-1 pl-6">
-                  <li><Link href="/privacy" className="text-amber-200 hover:underline">Политика конфиденциальности</Link> — порядок обработки персональных данных;</li>
-                  <li><Link href="/terms" className="text-amber-200 hover:underline">Пользовательское соглашение</Link> — правила использования Сервиса;</li>
-                  <li><Link href="/sla" className="text-amber-200 hover:underline">SLA</Link> — соглашение об уровне обслуживания;</li>
-                  <li><Link href="/cookies" className="text-amber-200 hover:underline">Политика Cookies</Link> — использование файлов cookie и аналитики.</li>
+                  <li><Link href="/privacy" className="text-[#16a34a] hover:underline">Политика конфиденциальности</Link> — порядок обработки персональных данных;</li>
+                  <li><Link href="/terms" className="text-[#16a34a] hover:underline">Пользовательское соглашение</Link> — правила использования Сервиса;</li>
+                  <li><Link href="/sla" className="text-[#16a34a] hover:underline">SLA</Link> — соглашение об уровне обслуживания;</li>
+                  <li><Link href="/cookies" className="text-[#16a34a] hover:underline">Политика Cookies</Link> — использование файлов cookie и аналитики.</li>
                 </ul>
                 <p><strong>14.2.</strong> Если какое-либо положение настоящей оферты признаётся недействительным или неисполнимым, остальные положения сохраняют полную силу.</p>
                 <p><strong>14.3.</strong> Электронная переписка по адресам {LEGAL_ENTITY.emailInfo} и {LEGAL_ENTITY.emailSupport} и через Личный кабинет признаётся надлежащим способом обмена юридически значимыми сообщениями.</p>
@@ -295,37 +295,37 @@ export default function OfferPage() {
             </section>
 
             <section id="requisites">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">15. Реквизиты Исполнителя</h2>
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm leading-7">
-                <div className="grid gap-2 text-slate-300">
-                  <div><strong className="text-white">Наименование:</strong> {LEGAL_ENTITY.fullName}</div>
-                  <div><strong className="text-white">БИН:</strong> {LEGAL_ENTITY.bin}</div>
-                  <div><strong className="text-white">Адрес:</strong> {LEGAL_ENTITY.address}</div>
-                  <div><strong className="text-white">Банк:</strong> {LEGAL_ENTITY.bank}</div>
-                  <div><strong className="text-white">ИИК:</strong> {LEGAL_ENTITY.iik}</div>
-                  <div><strong className="text-white">БИК:</strong> {LEGAL_ENTITY.bik}</div>
-                  <div><strong className="text-white">Кбе:</strong> {LEGAL_ENTITY.kbe}</div>
-                  <div><strong className="text-white">Телефон:</strong> {LEGAL_ENTITY.phone}</div>
-                  <div><strong className="text-white">Email (общий):</strong> {LEGAL_ENTITY.emailInfo}</div>
-                  <div><strong className="text-white">Email (поддержка):</strong> {LEGAL_ENTITY.emailSupport}</div>
-                  <div><strong className="text-white">Сайт:</strong> https://{PRODUCT_SITE}</div>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">15. Реквизиты Исполнителя</h2>
+              <div className="mt-4 rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+                <div className="grid gap-2 text-[#56657d]">
+                  <div><strong className="text-[#0f2038]">Наименование:</strong> {LEGAL_ENTITY.fullName}</div>
+                  <div><strong className="text-[#0f2038]">БИН:</strong> {LEGAL_ENTITY.bin}</div>
+                  <div><strong className="text-[#0f2038]">Адрес:</strong> {LEGAL_ENTITY.address}</div>
+                  <div><strong className="text-[#0f2038]">Банк:</strong> {LEGAL_ENTITY.bank}</div>
+                  <div><strong className="text-[#0f2038]">ИИК:</strong> {LEGAL_ENTITY.iik}</div>
+                  <div><strong className="text-[#0f2038]">БИК:</strong> {LEGAL_ENTITY.bik}</div>
+                  <div><strong className="text-[#0f2038]">Кбе:</strong> {LEGAL_ENTITY.kbe}</div>
+                  <div><strong className="text-[#0f2038]">Телефон:</strong> {LEGAL_ENTITY.phone}</div>
+                  <div><strong className="text-[#0f2038]">Email (общий):</strong> {LEGAL_ENTITY.emailInfo}</div>
+                  <div><strong className="text-[#0f2038]">Email (поддержка):</strong> {LEGAL_ENTITY.emailSupport}</div>
+                  <div><strong className="text-[#0f2038]">Сайт:</strong> https://{PRODUCT_SITE}</div>
                 </div>
               </div>
             </section>
 
             <section id="history">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">16. История редакций</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">16. История редакций</h2>
               <div className="mt-4 space-y-2 text-sm leading-7">
                 {LEGAL_HISTORY.map((entry) => (
                   <div key={entry.date} className="flex gap-3">
-                    <span className="shrink-0 font-mono text-xs text-amber-200">{entry.date}</span>
-                    <span className="text-slate-300">{entry.note}</span>
+                    <span className="shrink-0 font-mono text-xs text-[#16a34a]">{entry.date}</span>
+                    <span className="text-[#56657d]">{entry.note}</span>
                   </div>
                 ))}
               </div>
             </section>
 
-            <footer className="border-t border-white/10 pt-8 text-xs text-slate-500">
+            <footer className="border-t border-[#eef1f6] pt-8 text-xs text-[#8a97ad]">
               <p>
                 Настоящая оферта составлена в соответствии с Гражданским кодексом
                 Республики Казахстан (ст. 395–397), Законом Республики Казахстан

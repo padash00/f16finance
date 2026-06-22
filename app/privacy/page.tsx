@@ -39,14 +39,14 @@ const sections = [
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.08),transparent_25%),linear-gradient(180deg,#050816_0%,#0a1020_48%,#050816_100%)] text-white">
-      <header className="border-b border-white/5 bg-black/30 backdrop-blur">
+    <main className="min-h-screen bg-white text-[#475569]">
+      <header className="border-b border-[#eef1f6] bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
-          <Link href="/" className="flex items-center gap-2.5 text-slate-200 hover:text-amber-200">
+          <Link href="/" className="flex items-center gap-2.5 text-[#56657d] hover:text-[#16a34a]">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">К {SITE_NAME}</span>
           </Link>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-[#8a97ad]">
             Версия от {LEGAL_VERSION} · обновлено {LEGAL_LAST_UPDATED}
           </span>
         </div>
@@ -55,8 +55,8 @@ export default function PrivacyPage() {
       <div className="mx-auto max-w-screen-2xl px-6 py-12 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[260px_1fr] lg:items-start">
           <aside className="lg:sticky lg:top-8">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <div className="text-xs font-semibold uppercase tracking-wider text-amber-200">
+            <div className="rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+              <div className="text-xs font-semibold uppercase tracking-wider text-[#16a34a]">
                 Содержание
               </div>
               <ul className="mt-3 space-y-1.5 text-sm">
@@ -64,37 +64,37 @@ export default function PrivacyPage() {
                   <li key={s.id}>
                     <a
                       href={`#${s.id}`}
-                      className="block rounded-lg px-2 py-1 text-slate-300 transition hover:bg-white/5 hover:text-white"
+                      className="block rounded-lg px-2 py-1 text-[#56657d] transition hover:bg-[#16a34a]/[0.07] hover:text-[#16a34a]"
                     >
                       {s.title}
                     </a>
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 grid gap-1 text-xs text-slate-400">
-                <Link href="/offer" className="hover:text-amber-200">→ Публичная оферта</Link>
-                <Link href="/terms" className="hover:text-amber-200">→ Пользовательское соглашение</Link>
-                <Link href="/sla" className="hover:text-amber-200">→ SLA</Link>
-                <Link href="/cookies" className="hover:text-amber-200">→ Cookies</Link>
+              <div className="mt-4 grid gap-1 text-xs text-[#7a8aa3]">
+                <Link href="/offer" className="hover:text-[#16a34a]">→ Публичная оферта</Link>
+                <Link href="/terms" className="hover:text-[#16a34a]">→ Пользовательское соглашение</Link>
+                <Link href="/sla" className="hover:text-[#16a34a]">→ SLA</Link>
+                <Link href="/cookies" className="hover:text-[#16a34a]">→ Cookies</Link>
               </div>
             </div>
           </aside>
 
-          <article className="max-w-3xl space-y-8 text-slate-200">
+          <article className="max-w-3xl space-y-8 text-[#475569]">
             <header>
-              <h1 className="text-3xl font-semibold leading-tight tracking-[-0.02em] text-white sm:text-4xl">
+              <h1 className="text-3xl font-semibold leading-tight tracking-[-0.02em] text-[#0f2038] sm:text-4xl">
                 Политика конфиденциальности
                 <br />
                 и обработки персональных данных
               </h1>
-              <p className="mt-4 text-sm leading-7 text-slate-400">
+              <p className="mt-4 text-sm leading-7 text-[#56657d]">
                 Настоящая Политика разработана в соответствии с Законом Республики
                 Казахстан «О персональных данных и их защите» № 94-V от 21 мая
                 2013 года, Законом Республики Казахстан «Об информатизации»
                 № 418-V от 24 ноября 2015 года и иными нормативными правовыми
                 актами Республики Казахстан.
               </p>
-              <p className="mt-3 text-sm leading-7 text-slate-400">
+              <p className="mt-3 text-sm leading-7 text-[#56657d]">
                 <strong>Дата вступления в силу:</strong> {LEGAL_EFFECTIVE_DATE}
                 <br />
                 <strong>Версия:</strong> {LEGAL_VERSION}
@@ -102,7 +102,7 @@ export default function PrivacyPage() {
             </header>
 
             <section id="overview">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">1. Общие положения</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">1. Общие положения</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>1.1.</strong> Настоящая Политика определяет порядок обработки и защиты персональных данных, получаемых при использовании Сервиса «{PRODUCT_NAME}» (далее — Сервис), доступного по адресу {PRODUCT_SITE} и в виде клиентских приложений Operator Desktop и Kiosk для Windows.</p>
                 <p><strong>1.2.</strong> Использование Сервиса означает выражение согласия пользователя с условиями настоящей Политики.</p>
@@ -111,18 +111,18 @@ export default function PrivacyPage() {
             </section>
 
             <section id="definitions">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">2. Термины и определения</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">2. Термины и определения</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
-                <p><strong className="text-white">Персональные данные</strong> — сведения, относящиеся к определённому или определяемому на их основании субъекту персональных данных, зафиксированные на электронном, бумажном и (или) ином материальном носителе.</p>
-                <p><strong className="text-white">Субъект персональных данных</strong> — физическое лицо, к которому относятся персональные данные: сотрудник, оператор, клиент клуба, посетитель сайта и т.п.</p>
-                <p><strong className="text-white">Собственник (оператор) персональных данных</strong> — лицо, определяющее цели и средства обработки персональных данных. В отношении сотрудников, операторов и клиентов клуба Заказчика собственником является сам Заказчик.</p>
-                <p><strong className="text-white">Уполномоченное лицо (обработчик)</strong> — лицо, осуществляющее обработку персональных данных по поручению собственника. В отношении персональных данных сотрудников, операторов и клиентов клуба Заказчика {LEGAL_ENTITY.shortName} действует как уполномоченное лицо.</p>
-                <p><strong className="text-white">Обработка персональных данных</strong> — действия, направленные на накопление, хранение, изменение, дополнение, использование, распространение, обезличивание, блокирование и уничтожение персональных данных.</p>
+                <p><strong className="text-[#0f2038]">Персональные данные</strong> — сведения, относящиеся к определённому или определяемому на их основании субъекту персональных данных, зафиксированные на электронном, бумажном и (или) ином материальном носителе.</p>
+                <p><strong className="text-[#0f2038]">Субъект персональных данных</strong> — физическое лицо, к которому относятся персональные данные: сотрудник, оператор, клиент клуба, посетитель сайта и т.п.</p>
+                <p><strong className="text-[#0f2038]">Собственник (оператор) персональных данных</strong> — лицо, определяющее цели и средства обработки персональных данных. В отношении сотрудников, операторов и клиентов клуба Заказчика собственником является сам Заказчик.</p>
+                <p><strong className="text-[#0f2038]">Уполномоченное лицо (обработчик)</strong> — лицо, осуществляющее обработку персональных данных по поручению собственника. В отношении персональных данных сотрудников, операторов и клиентов клуба Заказчика {LEGAL_ENTITY.shortName} действует как уполномоченное лицо.</p>
+                <p><strong className="text-[#0f2038]">Обработка персональных данных</strong> — действия, направленные на накопление, хранение, изменение, дополнение, использование, распространение, обезличивание, блокирование и уничтожение персональных данных.</p>
               </div>
             </section>
 
             <section id="operator">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">3. Кто обрабатывает данные</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">3. Кто обрабатывает данные</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>3.1.</strong> Оператором обработки персональных данных в Сервисе является {LEGAL_ENTITY.fullName} (БИН {LEGAL_ENTITY.bin}, адрес: {LEGAL_ENTITY.address}).</p>
                 <p><strong>3.2.</strong> Контакты для обращений по вопросам обработки персональных данных:</p>
@@ -136,7 +136,7 @@ export default function PrivacyPage() {
             </section>
 
             <section id="data-types">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">4. Какие данные собираются</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">4. Какие данные собираются</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>4.1. Данные учётной записи Заказчика и его сотрудников:</strong></p>
                 <ul className="list-disc space-y-1 pl-6">
@@ -152,14 +152,14 @@ export default function PrivacyPage() {
                 <p><strong>4.3. Данные клиентов клуба (CRM):</strong> имя, телефон, email, номер карты лояльности (штрихкод), бонусные баллы, история визитов и покупок, общая сумма покупок, заметки менеджера.</p>
                 <p><strong>4.4. Финансовые и операционные данные бизнеса Заказчика:</strong> продажи, возвраты, долги, доходы, расходы (по категориям и поставщикам), зарплатные правила и выплаты, склад и остатки, чеки, отчёты смен, Z-отчёты, реестры товаров и категорий.</p>
                 <p><strong>4.5. Технические данные:</strong> IP-адрес, тип браузера и устройства, идентификаторы сессий Supabase Auth, токены устройств Operator Desktop и Kiosk, журналы запросов и событий, журналы аудита (audit log).</p>
-                <p><strong>4.6. Cookies и локальное хранилище:</strong> файлы cookies, данные localStorage (настройки оператора, отложенные чеки), очереди операций Operator Desktop. Подробнее — на странице <Link href="/cookies" className="text-amber-200 hover:underline">/cookies</Link>.</p>
+                <p><strong>4.6. Cookies и локальное хранилище:</strong> файлы cookies, данные localStorage (настройки оператора, отложенные чеки), очереди операций Operator Desktop. Подробнее — на странице <Link href="/cookies" className="text-[#16a34a] hover:underline">/cookies</Link>.</p>
                 <p><strong>4.7. Файлы:</strong> вложения чата команды, фотографии чеков, документы расходов и рекламных материалов, фотографии операторов — хранятся в Supabase Storage.</p>
                 <p><strong>4.8.</strong> Сервис НЕ собирает: биометрические данные, специальные категории персональных данных (раса, политические убеждения, состояние здоровья, религиозные убеждения), реквизиты банковских карт пользователей, геолокацию в реальном времени.</p>
               </div>
             </section>
 
             <section id="purposes">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">5. Цели обработки</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">5. Цели обработки</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>Персональные данные обрабатываются для следующих целей:</p>
                 <ul className="list-disc space-y-1 pl-6">
@@ -177,7 +177,7 @@ export default function PrivacyPage() {
             </section>
 
             <section id="legal">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">6. Правовые основания</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">6. Правовые основания</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>Обработка персональных данных осуществляется на следующих основаниях:</p>
                 <ul className="list-disc space-y-1 pl-6">
@@ -190,7 +190,7 @@ export default function PrivacyPage() {
             </section>
 
             <section id="storage">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">7. Хранение и защита</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">7. Хранение и защита</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>7.1.</strong> Персональные данные хранятся в защищённой управляемой базе данных PostgreSQL на инфраструктуре Supabase, файлы — в Supabase Storage. Передача данных между клиентом и сервером осуществляется по защищённому протоколу HTTPS/TLS.</p>
                 <p><strong>7.2.</strong> Доступ к данным каждой организации Заказчика изолирован на уровне базы данных (Row Level Security) и проверяется на каждом запросе к API.</p>
@@ -201,37 +201,37 @@ export default function PrivacyPage() {
             </section>
 
             <section id="processors">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">8. Привлечённые обработчики</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">8. Привлечённые обработчики</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>Для работы Сервиса {LEGAL_ENTITY.shortName} привлекает следующих обработчиков:</p>
                 <div className="space-y-2">
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">Supabase Inc.</div>
-                    <div className="text-xs text-slate-400">Управляемая база данных PostgreSQL, аутентификация, файловое хранилище. Передаётся: вся бизнес-логика и данные Заказчика.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">Supabase Inc.</div>
+                    <div className="text-xs text-[#7a8aa3]">Управляемая база данных PostgreSQL, аутентификация, файловое хранилище. Передаётся: вся бизнес-логика и данные Заказчика.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">Vercel Inc.</div>
-                    <div className="text-xs text-slate-400">Хостинг веб-приложения и веб-аналитика (Vercel Analytics). Передаётся: обезличенные метрики просмотров страниц, технические данные браузера.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">Vercel Inc.</div>
+                    <div className="text-xs text-[#7a8aa3]">Хостинг веб-приложения и веб-аналитика (Vercel Analytics). Передаётся: обезличенные метрики просмотров страниц, технические данные браузера.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">OpenAI, LLC</div>
-                    <div className="text-xs text-slate-400">Модели искусственного интеллекта (GPT). Передаётся: тексты запросов AI-помощника, изображения чеков для распознавания, обезличенные финансовые данные для прогнозов.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">OpenAI, LLC</div>
+                    <div className="text-xs text-[#7a8aa3]">Модели искусственного интеллекта (GPT). Передаётся: тексты запросов AI-помощника, изображения чеков для распознавания, обезличенные финансовые данные для прогнозов.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">Google LLC (Google Gemini)</div>
-                    <div className="text-xs text-slate-400">Резервный поставщик AI-моделей. Передаётся: те же данные, что и OpenAI, при недоступности основного поставщика.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">Google LLC (Google Gemini)</div>
+                    <div className="text-xs text-[#7a8aa3]">Резервный поставщик AI-моделей. Передаётся: те же данные, что и OpenAI, при недоступности основного поставщика.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">Telegram FZ-LLC (Telegram Bot API)</div>
-                    <div className="text-xs text-slate-400">Отправка отчётов и уведомлений сотрудникам Заказчика. Передаётся: текст уведомлений, кассовые отчёты, идентификаторы чатов сотрудников.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">Telegram FZ-LLC (Telegram Bot API)</div>
+                    <div className="text-xs text-[#7a8aa3]">Отправка отчётов и уведомлений сотрудникам Заказчика. Передаётся: текст уведомлений, кассовые отчёты, идентификаторы чатов сотрудников.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">Поставщик SMTP-почты</div>
-                    <div className="text-xs text-slate-400">Отправка системных email (подтверждение регистрации, сброс пароля, заявки с лендинга) через библиотеку nodemailer. Передаётся: email-адрес, текст сообщения.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">Поставщик SMTP-почты</div>
+                    <div className="text-xs text-[#7a8aa3]">Отправка системных email (подтверждение регистрации, сброс пароля, заявки с лендинга) через библиотеку nodemailer. Передаётся: email-адрес, текст сообщения.</div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="font-semibold text-white">АО «Kaspi Bank» и иные банки</div>
-                    <div className="text-xs text-slate-400">Расчёты по выставленным счетам. Реквизиты банковских карт Заказчика в Сервисе не хранятся.</div>
+                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                    <div className="font-semibold text-[#0f2038]">АО «Kaspi Bank» и иные банки</div>
+                    <div className="text-xs text-[#7a8aa3]">Расчёты по выставленным счетам. Реквизиты банковских карт Заказчика в Сервисе не хранятся.</div>
                   </div>
                 </div>
                 <p>Каждый обработчик связан собственными политиками обработки данных и соответствующими договорами.</p>
@@ -239,7 +239,7 @@ export default function PrivacyPage() {
             </section>
 
             <section id="cross-border">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">9. Трансграничная передача</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">9. Трансграничная передача</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>9.1.</strong> Часть привлечённых обработчиков (Supabase, Vercel, OpenAI, Google, Telegram) располагает инфраструктурой за пределами Республики Казахстан, в том числе в США и странах Европейского Союза.</p>
                 <p><strong>9.2.</strong> Регистрируясь в Сервисе и продолжая его использование, пользователь даёт согласие на трансграничную передачу своих персональных данных в указанные страны в объёме, необходимом для оказания услуг Сервиса.</p>
@@ -248,14 +248,14 @@ export default function PrivacyPage() {
             </section>
 
             <section id="cookies">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">10. Cookies и аналитика</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">10. Cookies и аналитика</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
-                <p>Сервис использует файлы cookies и аналогичные технологии для аутентификации, сохранения настроек пользователя и сбора обезличенной статистики посещений через Vercel Analytics. Подробный перечень cookies, их назначение и сроки хранения описаны на отдельной странице <Link href="/cookies" className="text-amber-200 hover:underline">/cookies</Link>.</p>
+                <p>Сервис использует файлы cookies и аналогичные технологии для аутентификации, сохранения настроек пользователя и сбора обезличенной статистики посещений через Vercel Analytics. Подробный перечень cookies, их назначение и сроки хранения описаны на отдельной странице <Link href="/cookies" className="text-[#16a34a] hover:underline">/cookies</Link>.</p>
               </div>
             </section>
 
             <section id="rights">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">11. Права субъекта данных</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">11. Права субъекта данных</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>В соответствии с Законом РК «О персональных данных и их защите» субъект персональных данных имеет право:</p>
                 <ul className="list-disc space-y-1 pl-6">
@@ -271,14 +271,14 @@ export default function PrivacyPage() {
             </section>
 
             <section id="children">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">12. Данные несовершеннолетних</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">12. Данные несовершеннолетних</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>Сервис не предназначен для прямого использования лицами, не достигшими 16 лет. Если Заказчик вносит в Сервис данные о несовершеннолетних клиентах клуба, Заказчик гарантирует наличие согласия их законных представителей в соответствии с законодательством Республики Казахстан.</p>
               </div>
             </section>
 
             <section id="retention">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">13. Сроки хранения</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">13. Сроки хранения</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p><strong>13.1.</strong> Персональные данные хранятся в течение срока действия подписки Заказчика и не менее 30 (тридцати) календарных дней после её прекращения для предоставления Заказчику возможности выгрузки данных.</p>
                 <p><strong>13.2.</strong> После истечения этого срока данные могут быть удалены или обезличены, за исключением данных, обязательных к хранению в силу требований законодательства (журналы аудита, налоговые документы).</p>
@@ -287,38 +287,38 @@ export default function PrivacyPage() {
             </section>
 
             <section id="changes">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">14. Изменения политики</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">14. Изменения политики</h2>
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>{LEGAL_ENTITY.shortName} вправе в одностороннем порядке вносить изменения в настоящую Политику. Новая редакция вступает в силу с момента её публикации по адресу {PRODUCT_SITE}/privacy. О существенных изменениях пользователи уведомляются не менее чем за 30 (тридцать) календарных дней.</p>
               </div>
             </section>
 
             <section id="contacts">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">15. Контакты для запросов</h2>
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm leading-7">
-                <div className="grid gap-2 text-slate-300">
-                  <div><strong className="text-white">Оператор данных:</strong> {LEGAL_ENTITY.fullName}</div>
-                  <div><strong className="text-white">БИН:</strong> {LEGAL_ENTITY.bin}</div>
-                  <div><strong className="text-white">Адрес:</strong> {LEGAL_ENTITY.address}</div>
-                  <div><strong className="text-white">Email для запросов:</strong> {LEGAL_ENTITY.emailSupport}</div>
-                  <div><strong className="text-white">Телефон:</strong> {LEGAL_ENTITY.phone}</div>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">15. Контакты для запросов</h2>
+              <div className="mt-4 rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+                <div className="grid gap-2 text-[#56657d]">
+                  <div><strong className="text-[#0f2038]">Оператор данных:</strong> {LEGAL_ENTITY.fullName}</div>
+                  <div><strong className="text-[#0f2038]">БИН:</strong> {LEGAL_ENTITY.bin}</div>
+                  <div><strong className="text-[#0f2038]">Адрес:</strong> {LEGAL_ENTITY.address}</div>
+                  <div><strong className="text-[#0f2038]">Email для запросов:</strong> {LEGAL_ENTITY.emailSupport}</div>
+                  <div><strong className="text-[#0f2038]">Телефон:</strong> {LEGAL_ENTITY.phone}</div>
                 </div>
               </div>
             </section>
 
             <section id="history">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">16. История редакций</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">16. История редакций</h2>
               <div className="mt-4 space-y-2 text-sm leading-7">
                 {LEGAL_HISTORY.map((entry) => (
                   <div key={entry.date} className="flex gap-3">
-                    <span className="shrink-0 font-mono text-xs text-amber-200">{entry.date}</span>
-                    <span className="text-slate-300">{entry.note}</span>
+                    <span className="shrink-0 font-mono text-xs text-[#16a34a]">{entry.date}</span>
+                    <span className="text-[#56657d]">{entry.note}</span>
                   </div>
                 ))}
               </div>
             </section>
 
-            <footer className="border-t border-white/10 pt-8 text-xs text-slate-500">
+            <footer className="border-t border-[#eef1f6] pt-8 text-xs text-[#8a97ad]">
               <p>
                 Настоящая Политика составлена в соответствии с Законом Республики
                 Казахстан «О персональных данных и их защите» № 94-V от 21.05.2013,
