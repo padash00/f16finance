@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
+import { AmbientGlow, HeroIn, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -48,6 +49,7 @@ const PRODUCT = 'Orda Control'
 // - Палитра: глубокий тёмно-синий + amber/orange основной + teal вторичный
 // - Радиусы: cards 24px, buttons 18px, chips 14px
 // - Воздух: section py 96-120px
+// - Анимации: framer-motion reveal/stagger при скролле + ambient-свечение
 
 const eyebrowClass =
   'inline-flex items-center gap-2 rounded-full border border-[var(--color-accent-gold)]/25 bg-[var(--color-accent-gold)]/10 px-4 py-2 text-[14px] font-semibold uppercase tracking-[0.12em] text-[var(--color-accent-gold)]'
@@ -476,15 +478,16 @@ const faqItems = [
 
 export default async function MarketingHomePage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,156,87,0.10),transparent_28%),linear-gradient(180deg,#050a14_0%,#07101d_55%,#050a14_100%)] text-[var(--color-text-primary)]">
+    <main className="relative min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,156,87,0.10),transparent_28%),linear-gradient(180deg,#050a14_0%,#07101d_55%,#050a14_100%)] text-[var(--color-text-primary)]">
       <WebsiteStructuredData />
       <FaqStructuredData faq={faqItems} />
+      <AmbientGlow />
 
       {/* ────────── Шапка ────────── */}
-      <header className="mx-auto max-w-[1600px] px-6 pb-8 pt-8 sm:px-10 lg:px-12">
-        <div className="flex items-center justify-between rounded-[20px] border border-white/[0.08] bg-[#0d1626]/70 px-6 py-4 backdrop-blur">
+      <header className="sticky top-0 z-50 mx-auto max-w-[1600px] px-6 pb-4 pt-5 sm:px-10 lg:px-12">
+        <div className="flex items-center justify-between rounded-[20px] border border-white/[0.08] bg-[#0d1626]/70 px-6 py-4 backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] text-base font-bold text-[#0a0f18]">
+            <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] text-base font-bold text-[#0a0f18] shadow-[0_6px_18px_rgba(255,140,70,0.30)]">
               ◇
             </div>
             <div>
@@ -522,7 +525,7 @@ export default async function MarketingHomePage() {
       {/* ────────── 1. HERO ────────── */}
       <section className="mx-auto max-w-[1600px] px-6 pb-24 pt-8 sm:px-10 lg:pb-32 lg:pt-12 lg:px-12">
         <div className="grid gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div className="space-y-8 max-w-[680px]">
+          <HeroIn className="space-y-8 max-w-[680px]">
             <div className={eyebrowClass}>
               <Sparkles className="h-3.5 w-3.5" />
               Финансовая управляемость для бизнеса
@@ -587,61 +590,63 @@ export default async function MarketingHomePage() {
                 Помощь с внедрением
               </div>
             </div>
-          </div>
+          </HeroIn>
 
           {/* Визуал справа: финансовый дашборд */}
-          <Card className="overflow-hidden rounded-[24px] border-white/[0.08] bg-[#0d1626]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.40)]">
-            <div className="rounded-[20px] border border-white/[0.06] bg-[#101b2e] p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
-                  Финансовый дашборд
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent-teal)]/30 bg-[var(--color-accent-teal)]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent-teal)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent-teal)]" />
-                  live
-                </span>
-              </div>
+          <HeroIn delay={0.15}>
+            <Card className="overflow-hidden rounded-[24px] border-white/[0.08] bg-[#0d1626]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.40)]">
+              <div className="rounded-[20px] border border-white/[0.06] bg-[#101b2e] p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                    Финансовый дашборд
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent-teal)]/30 bg-[var(--color-accent-teal)]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent-teal)]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent-teal)]" />
+                    live
+                  </span>
+                </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <Metric label="Выручка за день" value="412 800" unit="₸" delta="+8%" trend="up" />
-                <Metric label="Маржа" value="38%" delta="-1.4%" trend="down" />
-                <Metric label="Прибыль за месяц" value="1 960 000" unit="₸" delta="+12%" trend="up" />
-                <Metric label="ФОТ" value="540 000" unit="₸" delta="0%" trend="flat" />
-              </div>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <Metric label="Выручка за день" value="412 800" unit="₸" delta="+8%" trend="up" />
+                  <Metric label="Маржа" value="38%" delta="-1.4%" trend="down" />
+                  <Metric label="Прибыль за месяц" value="1 960 000" unit="₸" delta="+12%" trend="up" />
+                  <Metric label="ФОТ" value="540 000" unit="₸" delta="0%" trend="flat" />
+                </div>
 
-              <div className="mt-4 rounded-[16px] border border-[var(--color-accent-gold)]/25 bg-[var(--color-accent-gold)]/[0.07] p-4">
-                <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-accent-gold)]">
-                  <Bot className="h-4 w-4" />
-                  AI-наблюдение · сейчас
+                <div className="mt-4 rounded-[16px] border border-[var(--color-accent-gold)]/25 bg-[var(--color-accent-gold)]/[0.07] p-4">
+                  <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-accent-gold)]">
+                    <Bot className="h-4 w-4" />
+                    AI-наблюдение · сейчас
+                  </div>
+                  <div className="mt-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]">
+                    Маржа снизилась на 1,4% за неделю. Причина — рост закупочной цены по категории
+                    «напитки» на 14%. Альтернативный поставщик предлагает на 11% ниже —
+                    экономия около 42 000 ₸/мес.
+                  </div>
                 </div>
-                <div className="mt-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]">
-                  Маржа снизилась на 1,4% за неделю. Причина — рост закупочной цены по категории
-                  «напитки» на 14%. Альтернативный поставщик предлагает на 11% ниже —
-                  экономия около 42 000 ₸/мес.
-                </div>
-              </div>
 
-              <div className="mt-3 rounded-[16px] border border-white/[0.06] bg-black/30 p-4">
-                <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-                  Telegram-отчёт после смены
-                </div>
-                <div className="mt-1.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]">
-                  <span className="font-semibold text-[var(--color-text-primary)]">Точка №1 · Дневная смена</span>
-                  <br />
-                  Онлайн: 194 025 ₸ · Наличные: 26 000 ₸ · Возвраты: 600 ₸
-                  <br />
-                  <span className="text-[var(--color-accent-success)]">✓ Расхождений нет</span>
+                <div className="mt-3 rounded-[16px] border border-white/[0.06] bg-black/30 p-4">
+                  <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                    Telegram-отчёт после смены
+                  </div>
+                  <div className="mt-1.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]">
+                    <span className="font-semibold text-[var(--color-text-primary)]">Точка №1 · Дневная смена</span>
+                    <br />
+                    Онлайн: 194 025 ₸ · Наличные: 26 000 ₸ · Возвраты: 600 ₸
+                    <br />
+                    <span className="text-[var(--color-accent-success)]">✓ Расхождений нет</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </HeroIn>
         </div>
       </section>
 
       {/* ────────── 2. ЧТО ТАКОЕ ────────── */}
       <div className={bandDimClass}>
       <section className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Что такое {PRODUCT}</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Система для контроля денег, продаж и операционной работы
@@ -650,36 +655,35 @@ export default async function MarketingHomePage() {
             {PRODUCT} можно использовать тремя способами — выберите тот, что нужен бизнесу.
             Подключаются вместе или по отдельности.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-3">
+        <Stagger className="mt-12 grid gap-5 md:grid-cols-3">
           {usageModes.map((mode) => {
             const Icon = mode.icon
             return (
-              <Card
-                key={mode.title}
-                className="rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)]"
-              >
-                <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
-                  {mode.title}
-                </h3>
-                <p className="mt-3 text-[15px] leading-[1.6] text-[var(--color-text-secondary)]">
-                  {mode.text}
-                </p>
-              </Card>
+              <StaggerItem key={mode.title}>
+                <Card className="h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.34)]">
+                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                    {mode.title}
+                  </h3>
+                  <p className="mt-3 text-[15px] leading-[1.6] text-[var(--color-text-secondary)]">
+                    {mode.text}
+                  </p>
+                </Card>
+              </StaggerItem>
             )
           })}
-        </div>
+        </Stagger>
       </section>
       </div>
 
       {/* ────────── 3. ПРОБЛЕМЫ ────────── */}
       <div className={bandLightClass}>
       <section className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Знакомая ситуация?</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Что чаще всего мешает владельцу бизнеса видеть реальные деньги
@@ -687,34 +691,33 @@ export default async function MarketingHomePage() {
           <p className={`mt-5 ${leadClass}`}>
             Под каждой проблемой — конкретное решение. Без лишнего маркетинга, только по делу.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Stagger className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {painPoints.map((p) => (
-            <Card
-              key={p.pain}
-              className="group rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-7 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:border-[var(--color-accent-gold)]/30 hover:bg-[#101b2e]/80"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--color-accent-negative)]/10 text-[var(--color-accent-negative)]">
-                <AlertTriangle className="h-4 w-4" />
-              </div>
-              <h3 className="mt-4 font-display text-[17px] font-bold leading-[1.3] tracking-[-0.01em] text-[var(--color-text-primary)]">
-                {p.pain}
-              </h3>
-              <div className="mt-5 flex items-start gap-2.5 rounded-[14px] border border-[var(--color-accent-teal)]/20 bg-[var(--color-accent-teal)]/[0.06] p-3.5">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-teal)]" />
-                <div className="text-[13px] leading-[1.55] text-[var(--color-text-secondary)]">{p.solution}</div>
-              </div>
-            </Card>
+            <StaggerItem key={p.pain}>
+              <Card className="group h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-7 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:bg-[#101b2e]/80">
+                <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--color-accent-negative)]/10 text-[var(--color-accent-negative)]">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <h3 className="mt-4 font-display text-[17px] font-bold leading-[1.3] tracking-[-0.01em] text-[var(--color-text-primary)]">
+                  {p.pain}
+                </h3>
+                <div className="mt-5 flex items-start gap-2.5 rounded-[14px] border border-[var(--color-accent-teal)]/20 bg-[var(--color-accent-teal)]/[0.06] p-3.5">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-teal)]" />
+                  <div className="text-[13px] leading-[1.55] text-[var(--color-text-secondary)]">{p.solution}</div>
+                </div>
+              </Card>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </section>
       </div>
 
       {/* ────────── 4. ЧЕТЫРЕ СТОЛПА ────────── */}
       <div className={bandDimClass}>
       <section id="features" className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Что внутри {PRODUCT}</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Финансы. AI. Смены. Продажи.
@@ -722,46 +725,46 @@ export default async function MarketingHomePage() {
           <p className={`mt-5 ${leadClass}`}>
             Не набор функций ради продажи, а четыре ключевых блока, которые меняют управление бизнесом.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <Stagger className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {pillars.map((pillar) => {
             const Icon = pillar.icon
             return (
-              <Card
-                key={pillar.title}
-                className="rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.22)]"
-              >
-                <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
-                  {pillar.title}
-                </h3>
-                <p className="mt-1.5 text-[14px] leading-[1.45] text-[var(--color-text-muted)]">
-                  {pillar.subtitle}
-                </p>
-                <ul className="mt-6 space-y-3 border-t border-white/[0.06] pt-6">
-                  {pillar.points.map((point) => (
-                    <li
-                      key={point}
-                      className="flex items-start gap-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]"
-                    >
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-gold)]" />
-                      <span>{point}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
+              <StaggerItem key={pillar.title}>
+                <Card className="h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.36)]">
+                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                    {pillar.title}
+                  </h3>
+                  <p className="mt-1.5 text-[14px] leading-[1.45] text-[var(--color-text-muted)]">
+                    {pillar.subtitle}
+                  </p>
+                  <ul className="mt-6 space-y-3 border-t border-white/[0.06] pt-6">
+                    {pillar.points.map((point) => (
+                      <li
+                        key={point}
+                        className="flex items-start gap-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]"
+                      >
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-gold)]" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </StaggerItem>
             )
           })}
-        </div>
+        </Stagger>
       </section>
       </div>
 
       {/* ────────── 5. AI ────────── */}
       <div className={bandLightClass}>
       <section className={sectionClass}>
+        <Reveal>
         <Card className="overflow-hidden rounded-[28px] border-[var(--color-accent-gold)]/20 bg-[linear-gradient(135deg,rgba(245,184,75,0.10),rgba(13,22,38,0.6))] p-10 shadow-[0_30px_80px_rgba(0,0,0,0.36)] sm:p-12">
           <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
             <div>
@@ -815,13 +818,14 @@ export default async function MarketingHomePage() {
             </div>
           </div>
         </Card>
+        </Reveal>
       </section>
       </div>
 
       {/* ────────── 6. ДЛЯ КОГО ────────── */}
       <div className={bandDimClass}>
       <section className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Для кого подходит</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Для бизнеса, где есть деньги, касса, сотрудники и товары
@@ -829,50 +833,52 @@ export default async function MarketingHomePage() {
           <p className={`mt-5 ${leadClass}`}>
             {PRODUCT} подстраивается под формат бизнеса — от одной точки до сети филиалов.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Stagger className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {audiences.map((aud) => {
             const Icon = aud.icon
             const Wrapper: any = aud.href ? Link : 'div'
             const wrapperProps = aud.href ? { href: aud.href } : {}
             return (
-              <Wrapper key={aud.title} {...wrapperProps}>
-                <Card
-                  className={`group rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-7 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition ${
-                    aud.href ? 'cursor-pointer hover:border-[var(--color-accent-gold)]/30 hover:bg-[#101b2e]/70' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
-                      <Icon className="h-6 w-6" />
+              <StaggerItem key={aud.title}>
+                <Wrapper {...wrapperProps} className="block h-full">
+                  <Card
+                    className={`group h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-7 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition duration-300 ${
+                      aud.href ? 'cursor-pointer hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:bg-[#101b2e]/70' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-display text-[20px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                          {aud.title}
+                        </h3>
+                        <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">
+                          {aud.text}
+                        </p>
+                        {aud.href ? (
+                          <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-accent-gold)] transition group-hover:gap-2">
+                            Подробнее <ArrowRight className="h-3.5 w-3.5" />
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-display text-[20px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
-                        {aud.title}
-                      </h3>
-                      <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">
-                        {aud.text}
-                      </p>
-                      {aud.href ? (
-                        <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-accent-gold)] transition group-hover:gap-2">
-                          Подробнее <ArrowRight className="h-3.5 w-3.5" />
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </Card>
-              </Wrapper>
+                  </Card>
+                </Wrapper>
+              </StaggerItem>
             )
           })}
-        </div>
+        </Stagger>
       </section>
       </div>
 
       {/* ────────── 7. СРАВНЕНИЕ ────────── */}
       <div className={bandLightClass}>
       <section className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Сравнение</div>
           <h2 className={`mt-5 ${h2Class}`}>
             {PRODUCT} заменяет хаос из разных программ
@@ -881,10 +887,10 @@ export default async function MarketingHomePage() {
             Вместо того чтобы вести бизнес одновременно в Excel, мессенджерах, кассовой программе,
             складской таблице и заметках сотрудника — {PRODUCT} собирает всё в одной системе.
           </p>
-        </div>
+        </Reveal>
 
         {/* Desktop / planshet — таблица */}
-        <div className="mt-12 hidden overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/60 shadow-[0_18px_48px_rgba(0,0,0,0.16)] lg:block">
+        <Reveal className="mt-12 hidden overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/60 shadow-[0_18px_48px_rgba(0,0,0,0.16)] lg:block">
           <div
             className="grid"
             style={{ gridTemplateColumns: `minmax(220px,1.1fr) repeat(${comparisonColumns.length}, minmax(160px,1fr))` }}
@@ -944,57 +950,58 @@ export default async function MarketingHomePage() {
               </Fragment>
             ))}
           </div>
-        </div>
+        </Reveal>
 
         {/* Mobile — стек карточек по инструменту */}
-        <div className="mt-12 grid gap-4 lg:hidden">
+        <Stagger className="mt-12 grid gap-4 lg:hidden">
           {comparisonColumns.map((col) => (
-            <Card
-              key={col.key}
-              className={
-                col.highlight
-                  ? 'rounded-[24px] border-[var(--color-accent-gold)]/40 bg-[linear-gradient(135deg,rgba(245,184,75,0.14),rgba(245,184,75,0.03))] p-6 shadow-[0_18px_48px_rgba(245,184,75,0.14)]'
-                  : 'rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.14)]'
-              }
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <div
-                  className={
-                    'font-display text-[20px] font-bold tracking-[-0.02em] ' +
-                    (col.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-primary)]')
-                  }
-                >
-                  {col.label}
-                </div>
-                <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">{col.subtitle}</div>
-              </div>
-              <dl className="mt-5 grid gap-3 border-t border-white/[0.06] pt-4">
-                {comparisonRows.map((row) => (
-                  <div key={row.criterion} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
-                    <dt className="text-[12px] uppercase tracking-[0.06em] text-[var(--color-text-muted)]">
-                      {row.criterion}
-                    </dt>
-                    <dd
-                      className={
-                        'text-right text-[13px] leading-[1.5] ' +
-                        (col.highlight ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]')
-                      }
-                    >
-                      {row.values[col.key]}
-                    </dd>
+            <StaggerItem key={col.key}>
+              <Card
+                className={
+                  col.highlight
+                    ? 'rounded-[24px] border-[var(--color-accent-gold)]/40 bg-[linear-gradient(135deg,rgba(245,184,75,0.14),rgba(245,184,75,0.03))] p-6 shadow-[0_18px_48px_rgba(245,184,75,0.14)]'
+                    : 'rounded-[24px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.14)]'
+                }
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <div
+                    className={
+                      'font-display text-[20px] font-bold tracking-[-0.02em] ' +
+                      (col.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-primary)]')
+                    }
+                  >
+                    {col.label}
                   </div>
-                ))}
-              </dl>
-            </Card>
+                  <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">{col.subtitle}</div>
+                </div>
+                <dl className="mt-5 grid gap-3 border-t border-white/[0.06] pt-4">
+                  {comparisonRows.map((row) => (
+                    <div key={row.criterion} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
+                      <dt className="text-[12px] uppercase tracking-[0.06em] text-[var(--color-text-muted)]">
+                        {row.criterion}
+                      </dt>
+                      <dd
+                        className={
+                          'text-right text-[13px] leading-[1.5] ' +
+                          (col.highlight ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]')
+                        }
+                      >
+                        {row.values[col.key]}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Card>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </section>
       </div>
 
       {/* ────────── 8. ТАРИФЫ ────────── */}
       <div className={bandDimClass}>
       <section id="pricing" className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Тарифы</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Подключайте только то, что нужно бизнесу
@@ -1003,80 +1010,82 @@ export default async function MarketingHomePage() {
             От базовых финансовых показателей до полноценной системы продаж и сетевого учёта.
             Тариф можно менять по мере роста бизнеса.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <Stagger className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {pricingPlans.map((plan) => (
-            <Card
-              key={plan.name}
-              className={
-                plan.highlight
-                  ? 'relative rounded-[24px] border-[var(--color-accent-gold)]/40 bg-[linear-gradient(180deg,rgba(245,184,75,0.16),rgba(13,22,38,0.6))] p-8 shadow-[0_30px_70px_rgba(245,184,75,0.18)]'
-                  : 'rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)]'
-              }
-            >
-              {plan.highlight && plan.badge ? (
-                <span className="absolute right-5 top-5 rounded-full border border-[var(--color-accent-gold)]/40 bg-[var(--color-accent-gold)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-accent-gold)]">
-                  {plan.badge}
-                </span>
-              ) : null}
-              <div
-                className={
-                  'text-[11px] font-semibold uppercase tracking-[0.14em] ' +
-                  (plan.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-muted)]')
-                }
-              >
-                {plan.levelLabel}
-              </div>
-              <div className="mt-2 font-display text-[26px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
-                {plan.name}
-              </div>
-              <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">
-                {plan.description}
-              </p>
-              <ul className="mt-6 space-y-3 border-t border-white/[0.06] pt-6">
-                {plan.features.map((feature) => (
-                  <li
-                    key={feature}
-                    className="flex items-start gap-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]"
-                  >
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-gold)]" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                asChild
+            <StaggerItem key={plan.name}>
+              <Card
                 className={
                   plan.highlight
-                    ? 'mt-7 w-full rounded-[14px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] py-[14px] text-[15px] font-semibold text-[#0a0f18] shadow-[0_10px_30px_rgba(255,140,70,0.22)] hover:from-[#ffbe6e] hover:to-[#ff8a5c]'
-                    : 'mt-7 w-full rounded-[14px] bg-white/[0.06] py-[14px] text-[15px] font-semibold text-[var(--color-text-primary)] hover:bg-white/[0.10]'
+                    ? 'relative h-full rounded-[24px] border-[var(--color-accent-gold)]/40 bg-[linear-gradient(180deg,rgba(245,184,75,0.16),rgba(13,22,38,0.6))] p-8 shadow-[0_30px_70px_rgba(245,184,75,0.18)] transition duration-300 hover:-translate-y-1.5'
+                    : 'h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30'
                 }
               >
-                <Link href="#contact">{plan.cta}</Link>
-              </Button>
-            </Card>
+                {plan.highlight && plan.badge ? (
+                  <span className="absolute right-5 top-5 rounded-full border border-[var(--color-accent-gold)]/40 bg-[var(--color-accent-gold)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-accent-gold)]">
+                    {plan.badge}
+                  </span>
+                ) : null}
+                <div
+                  className={
+                    'text-[11px] font-semibold uppercase tracking-[0.14em] ' +
+                    (plan.highlight ? 'text-[var(--color-accent-gold)]' : 'text-[var(--color-text-muted)]')
+                  }
+                >
+                  {plan.levelLabel}
+                </div>
+                <div className="mt-2 font-display text-[26px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                  {plan.name}
+                </div>
+                <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">
+                  {plan.description}
+                </p>
+                <ul className="mt-6 space-y-3 border-t border-white/[0.06] pt-6">
+                  {plan.features.map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-start gap-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]"
+                    >
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-gold)]" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  asChild
+                  className={
+                    plan.highlight
+                      ? 'mt-7 w-full rounded-[14px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] py-[14px] text-[15px] font-semibold text-[#0a0f18] shadow-[0_10px_30px_rgba(255,140,70,0.22)] hover:from-[#ffbe6e] hover:to-[#ff8a5c]'
+                      : 'mt-7 w-full rounded-[14px] bg-white/[0.06] py-[14px] text-[15px] font-semibold text-[var(--color-text-primary)] hover:bg-white/[0.10]'
+                  }
+                >
+                  <Link href="#contact">{plan.cta}</Link>
+                </Button>
+              </Card>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
 
         {/* Дополнительные модули */}
         <div className="mt-14">
-          <div className={eyebrowClass}>Дополнительные модули</div>
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <Reveal>
+            <div className={eyebrowClass}>Дополнительные модули</div>
+          </Reveal>
+          <Stagger className="mt-5 grid gap-4 md:grid-cols-3">
             {addOns.map((addon) => (
-              <Card
-                key={addon.title}
-                className="rounded-[20px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
-              >
-                <h3 className="font-display text-[17px] font-bold tracking-[-0.01em] text-[var(--color-text-primary)]">
-                  {addon.title}
-                </h3>
-                <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">
-                  {addon.text}
-                </p>
-              </Card>
+              <StaggerItem key={addon.title}>
+                <Card className="h-full rounded-[20px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.16)]">
+                  <h3 className="font-display text-[17px] font-bold tracking-[-0.01em] text-[var(--color-text-primary)]">
+                    {addon.title}
+                  </h3>
+                  <p className="mt-2.5 text-[14px] leading-[1.6] text-[var(--color-text-secondary)]">
+                    {addon.text}
+                  </p>
+                </Card>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
       </div>
@@ -1084,6 +1093,7 @@ export default async function MarketingHomePage() {
       {/* ────────── 9. ОТДЕЛЬНАЯ СТРАНИЦА ДЛЯ КЛУБОВ ────────── */}
       <div className={bandLightClass}>
       <section className={sectionClass}>
+        <Reveal>
         <Card className="rounded-[28px] border-[var(--color-accent-teal)]/20 bg-[linear-gradient(135deg,rgba(16,214,194,0.08),rgba(13,22,38,0.6))] p-10 shadow-[0_24px_70px_rgba(0,0,0,0.30)] sm:p-12">
           <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
@@ -1112,34 +1122,34 @@ export default async function MarketingHomePage() {
             </Button>
           </div>
         </Card>
+        </Reveal>
       </section>
       </div>
 
       {/* ────────── FAQ ────────── */}
       <div className={bandDimClass}>
       <section className={sectionClass}>
-        <div className="max-w-[760px]">
+        <Reveal className="max-w-[760px]">
           <div className={eyebrowClass}>Частые вопросы</div>
           <h2 className={`mt-5 ${h2Class}`}>
             Что владельцы спрашивают чаще всего
           </h2>
-        </div>
+        </Reveal>
 
-        <div className="mt-10 grid gap-3.5 md:grid-cols-2">
+        <Stagger className="mt-10 grid gap-3.5 md:grid-cols-2">
           {faqItems.map((item) => (
-            <Card
-              key={item.question}
-              className="rounded-[20px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
-            >
-              <h3 className="font-display text-[17px] font-bold leading-[1.35] tracking-[-0.01em] text-[var(--color-text-primary)]">
-                {item.question}
-              </h3>
-              <p className="mt-3 text-[14px] leading-[1.65] text-[var(--color-text-secondary)]">
-                {item.answer}
-              </p>
-            </Card>
+            <StaggerItem key={item.question}>
+              <Card className="h-full rounded-[20px] border-white/[0.08] bg-[#0d1626]/60 p-6 shadow-[0_12px_32px_rgba(0,0,0,0.14)] transition duration-300 hover:border-[var(--color-accent-gold)]/25">
+                <h3 className="font-display text-[17px] font-bold leading-[1.35] tracking-[-0.01em] text-[var(--color-text-primary)]">
+                  {item.question}
+                </h3>
+                <p className="mt-3 text-[14px] leading-[1.65] text-[var(--color-text-secondary)]">
+                  {item.answer}
+                </p>
+              </Card>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </section>
       </div>
 
@@ -1149,6 +1159,7 @@ export default async function MarketingHomePage() {
         id="contact"
         className="mx-auto max-w-[1600px] px-6 pb-28 pt-12 sm:px-10 lg:px-12"
       >
+        <Reveal>
         <Card className="rounded-[28px] border-[var(--color-accent-gold)]/30 bg-[linear-gradient(135deg,rgba(245,184,75,0.18),rgba(13,22,38,0.6))] p-10 shadow-[0_30px_80px_rgba(0,0,0,0.36)] sm:p-14">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
             <div>
@@ -1185,6 +1196,7 @@ export default async function MarketingHomePage() {
             </div>
           </div>
         </Card>
+        </Reveal>
       </section>
       </div>
 
