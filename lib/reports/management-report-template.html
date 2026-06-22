@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Управленческий отчёт — Orda Control (шаблон)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  /* ─────────── A4 landscape ─────────── */
+  @page { size: A4 landscape; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --navy: #0F2038;
+    --navy-2: #1b3357;
+    --ink: #16243d;
+    --mut: #64748b;
+    --line: #e6eaf1;
+    --bg-soft: #f4f6fb;
+    --green: #9AFF00;
+    --green-deep: #4d8a00;
+    --green-bg: #f4ffe0;
+    --blue: #2563eb;     /* ФОТ */
+    --orange: #f97316;   /* операционные */
+    --red: #ef4444;      /* налог / прочее */
+    --purple: #a855f7;   /* POS / эквайринг */
+  }
+  html, body {
+    background: #e9edf4;
+    font-family: 'Inter', -apple-system, 'SF Pro Display', system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: 297mm;
+    height: 210mm;
+    margin: 16px auto;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(15,32,56,.18);
+  }
+  @media print { html, body { background: #fff; } .page { margin: 0; box-shadow: none; } }
+
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  .neg { color: var(--red) !important; }
+
+  /* ─────────── Шапка ─────────── */
+  .head {
+    background: var(--navy);
+    color: #fff;
+    padding: 13px 28px 12px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .head h1 { font-family: 'Manrope'; font-weight: 800; font-size: 26px; letter-spacing: -.01em; line-height: 1; }
+  .head .sub { margin-top: 8px; font-size: 12px; color: #9fb0ca; font-weight: 500; }
+  .head .right { text-align: right; }
+  .head .logo { font-weight: 800; font-size: 14px; letter-spacing: .28em; color: var(--green); }
+  .head .page-n { margin-top: 8px; font-size: 11px; color: #8da0bd; letter-spacing: .04em; }
+
+  /* ─────────── Тело ─────────── */
+  .body { flex: 1; padding: 13px 28px 5px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ─────────── KPI ─────────── */
+  .kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kc {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 15px;
+    background: #fff;
+  }
+  .kc.profit { border: 1.5px solid var(--green); background: var(--green-bg); }
+  .kc-l { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--mut); }
+  .kc.profit .kc-l { color: var(--green-deep); }
+  .kc-v { margin-top: 5px; font-family: 'Manrope'; font-weight: 800; font-size: 24px; line-height: 1.05; letter-spacing: -.02em; color: var(--ink); }
+  .kc-v .cur { font-size: 15px; color: #94a3b8; font-weight: 700; }
+  .kc-s { margin-top: 5px; font-size: 11.5px; color: var(--mut); font-weight: 500; }
+
+  /* ─────────── 2 колонки ─────────── */
+  .cols { display: grid; grid-template-columns: 37% 1fr; gap: 14px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; background: #fff; }
+  .card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+  .card-h .t { font-family: 'Manrope'; font-weight: 800; font-size: 12.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink); }
+  .card-h .m { font-size: 10.5px; color: var(--mut); font-weight: 500; }
+
+  /* Главный вывод */
+  .insight .txt { font-size: 13px; line-height: 1.5; color: #41506b; }
+  .insight b { color: var(--ink); font-weight: 700; }
+  .insight .hl { color: var(--green-deep); }
+
+  /* ФОТ */
+  .fot-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .fc { border: 1px solid #dbe6ff; background: #f5f9ff; border-radius: 11px; padding: 7px 10px; }
+  .fc.total { background: #eaf1ff; border-color: #bcd1ff; grid-column: span 2; display: flex; align-items: baseline; justify-content: space-between; }
+  .fc-l { font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #3b6fc4; white-space: nowrap; }
+  .fc-v { margin-top: 5px; font-family: 'Manrope'; font-weight: 800; font-size: 14px; color: #15315f; white-space: nowrap; }
+  .fc.total .fc-v { margin-top: 0; font-size: 17px; }
+  .fc-v .cur { font-size: 10px; color: #7da0d0; }
+
+  /* Куда ушёл оборот */
+  .bar { display: flex; height: 26px; border-radius: 9px; overflow: hidden; }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #fff; min-width: 0; }
+  .legend { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #45526b; font-weight: 500; }
+  .lg i { width: 9px; height: 9px; border-radius: 3px; }
+
+  /* Формула P&L */
+  .pnl { background: var(--navy); border: none; color: #fff; }
+  .pnl .ph { font-family: 'Manrope'; font-weight: 800; font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); margin-bottom: 11px; }
+  .pnl .line { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .pnl .line b { font-weight: 800; }
+  .pnl .dim { color: #93a6c4; font-size: 11.5px; font-weight: 500; }
+  .pnl .res { font-family: 'Manrope'; font-weight: 800; font-size: 18px; color: var(--green); margin: 9px 0 9px; }
+  .pnl .foot { font-size: 10.5px; color: #8fa3c2; border-top: 1px solid rgba(255,255,255,.13); padding-top: 9px; }
+
+  /* ─────────── Расходы ─────────── */
+  .exp-head, .exp-row { display: grid; grid-template-columns: 1.35fr 1.85fr 56px 112px; gap: 10px; align-items: center; }
+  .exp-head { padding: 0 4px 6px; border-bottom: 1px solid var(--line); }
+  .exp-head span { font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #94a3b8; }
+  .exp-head .r { text-align: right; }
+  .exp-row { padding: 2px 4px 1px; }
+  .exp-cat { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+  .exp-cat i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .exp-cat span { font-weight: 700; font-size: 11.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exp-desc { font-size: 11px; color: #7b8aa3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exp-pct { text-align: right; font-size: 11px; color: #5b6b86; font-weight: 600; }
+  .exp-amt { text-align: right; font-family: 'Manrope'; font-weight: 800; font-size: 12.5px; color: var(--ink); white-space: nowrap; }
+  .exp-bar { grid-column: 1 / -1; height: 2px; border-radius: 3px; background: #eef1f7; overflow: hidden; margin-top: 1px; }
+  .exp-bar i { display: block; height: 100%; border-radius: 3px; }
+  .exp-other { display: grid; grid-template-columns: 1.35fr 1.85fr 56px 112px; gap: 10px; padding: 6px 4px 2px; align-items: center; border-top: 1px dashed var(--line); margin-top: 3px; }
+  .exp-other .lbl { font-weight: 700; font-size: 11.5px; color: #5b6b86; }
+
+  .c-blue i.dot, .c-blue .exp-bar i { background: var(--blue); }
+  .c-orange .dot, .c-orange .exp-bar i { background: var(--orange); }
+  .c-red .dot, .c-red .exp-bar i { background: var(--red); }
+  .c-purple .dot, .c-purple .exp-bar i { background: var(--purple); }
+
+  .grp-legend { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px 16px; padding-top: 6px; border-top: 1px solid var(--line); }
+
+  /* Итого расходов */
+  .total-plate {
+    background: var(--navy); color: #fff; border-radius: 14px; padding: 8px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .total-plate .l { font-family: 'Manrope'; font-weight: 800; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  .total-plate .r { text-align: right; }
+  .total-plate .v { font-family: 'Manrope'; font-weight: 800; font-size: 22px; letter-spacing: -.01em; }
+  .total-plate .s { font-size: 11px; color: #9fb0ca; margin-top: 3px; }
+
+  /* Капвложения */
+  .capex-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px solid #f0f2f7; }
+  .capex-row:last-child { border-bottom: none; }
+  .capex-name { font-size: 11.5px; color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .capex-amt { font-family: 'Manrope'; font-weight: 800; font-size: 12.5px; white-space: nowrap; }
+  .capex-empty { font-size: 11.5px; color: #94a3b8; padding: 10px 0 4px; }
+  .capex-note { font-size: 10px; color: #9aa7bd; margin-top: 5px; }
+
+  /* Футер */
+  .foot { text-align: center; padding: 2px 28px 5px; font-size: 9.5px; color: #aab4c6; letter-spacing: .03em; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ШАПКА -->
+  <header class="head">
+    <div>
+      <h1>УПРАВЛЕНЧЕСКИЙ ОТЧЁТ</h1>
+      <div class="sub">{{company_name}} · {{period}} · сформирован {{created_date}}</div>
+    </div>
+    <div class="right">
+      <div class="logo">ORDA CONTROL</div>
+      <div class="page-n">страница {{page}} / {{pages}}</div>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <!-- KPI -->
+    <section class="kpi">
+      <div class="kc">
+        <div class="kc-l">Оборот</div>
+        <div class="kc-v num">{{turnover}} <span class="cur">₸</span></div>
+        <div class="kc-s">100% входящего оборота</div>
+      </div>
+      <div class="kc">
+        <div class="kc-l">Расходы</div>
+        <div class="kc-v num">{{expenses_total}} <span class="cur">₸</span></div>
+        <div class="kc-s">{{expenses_percent}}% от оборота</div>
+      </div>
+      <div class="kc">
+        <div class="kc-l">Налог {{tax_percent}}%</div>
+        <div class="kc-v num">{{tax_amount}} <span class="cur">₸</span></div>
+        <div class="kc-s">{{tax_percent}}% нагрузка</div>
+      </div>
+      <div class="kc profit">
+        <div class="kc-l">Чистая прибыль</div>
+        <div class="kc-v num">{{net_profit}} <span class="cur">₸</span></div>
+        <div class="kc-s">Рентабельность {{profitability_percent}}%</div>
+      </div>
+    </section>
+
+    <!-- 2 КОЛОНКИ -->
+    <div class="cols">
+
+      <!-- ЛЕВАЯ -->
+      <div class="col">
+
+        <div class="card insight">
+          <div class="card-h"><span class="t">Главный вывод периода</span></div>
+          <div class="txt">
+            За период <b>{{period}}</b> чистая прибыль составила
+            <b class="hl">{{net_profit}} ₸</b> при рентабельности <b class="hl">{{profitability_percent}}%</b>.
+            Основная нагрузка на расходы — <b>{{main_expense_category}}</b>:
+            <b>{{main_expense_amount}} ₸</b>, или {{main_expense_percent}}% всех расходов.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><span class="t">Фонд оплаты труда</span><span class="m">все статьи группы ФОТ</span></div>
+          <div class="fot-grid">
+            <div class="fc"><div class="fc-l">Зарплата</div><div class="fc-v num">{{salary_total}} <span class="cur">₸</span></div></div>
+            <div class="fc"><div class="fc-l">Аванс</div><div class="fc-v num">{{advance_total}} <span class="cur">₸</span></div></div>
+            <div class="fc"><div class="fc-l">Уборщица</div><div class="fc-v num">{{cleaning_salary}} <span class="cur">₸</span></div></div>
+            <div class="fc total"><div class="fc-l">Итого ФОТ</div><div class="fc-v num">{{payroll_total}} <span class="cur">₸</span></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><span class="t">Куда ушёл оборот</span><span class="m num">100% = {{turnover}} ₸</span></div>
+          <div class="bar">
+            <div class="seg" style="width:{{net_profit_percent}}%;background:#16a34a">{{net_profit_percent}}%</div>
+            <div class="seg" style="width:{{expenses_percent}}%;background:var(--orange)">{{expenses_percent}}%</div>
+            <div class="seg" style="width:{{tax_percent}}%;background:var(--red)"></div>
+          </div>
+          <div class="legend">
+            <span class="lg"><i style="background:#16a34a"></i>Прибыль <span class="num">&nbsp;{{net_profit}} ₸</span></span>
+            <span class="lg"><i style="background:var(--orange)"></i>Расходы <span class="num">&nbsp;{{expenses_total}} ₸</span></span>
+            <span class="lg"><i style="background:var(--red)"></i>Налог <span class="num">&nbsp;{{tax_amount}} ₸</span></span>
+          </div>
+        </div>
+
+        <div class="card pnl">
+          <div class="ph">Формула P&amp;L</div>
+          <div class="line">Оборот <b class="num">{{turnover}} ₸</b></div>
+          <div class="line dim num">минус налог {{tax_amount}} ₸ и расходы {{expenses_total}} ₸</div>
+          <div class="res num">= чистая прибыль {{net_profit}} ₸</div>
+          <div class="foot num">Контрольная доля 10% от прибыли: {{control_10_percent}} ₸</div>
+        </div>
+
+      </div>
+
+      <!-- ПРАВАЯ -->
+      <div class="col">
+
+        <div class="card">
+          <div class="card-h"><span class="t">Расходы за период</span><span class="m num">Итого: {{expenses_total}} ₸</span></div>
+
+          <div class="exp-head">
+            <span>Категория</span><span>Описание</span><span class="r">%</span><span class="r">Сумма</span>
+          </div>
+
+          <div class="exp-row c-blue">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_1}}</span></span>
+            <span class="exp-desc">{{expense_description_1}}</span>
+            <span class="exp-pct num">{{expense_percent_1}}%</span>
+            <span class="exp-amt num">{{expense_amount_1}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_1}}%"></i></span>
+          </div>
+          <div class="exp-row c-orange">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_2}}</span></span>
+            <span class="exp-desc">{{expense_description_2}}</span>
+            <span class="exp-pct num">{{expense_percent_2}}%</span>
+            <span class="exp-amt num">{{expense_amount_2}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_2}}%"></i></span>
+          </div>
+          <div class="exp-row c-blue">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_3}}</span></span>
+            <span class="exp-desc">{{expense_description_3}}</span>
+            <span class="exp-pct num">{{expense_percent_3}}%</span>
+            <span class="exp-amt num">{{expense_amount_3}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_3}}%"></i></span>
+          </div>
+          <div class="exp-row c-orange">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_4}}</span></span>
+            <span class="exp-desc">{{expense_description_4}}</span>
+            <span class="exp-pct num">{{expense_percent_4}}%</span>
+            <span class="exp-amt num">{{expense_amount_4}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_4}}%"></i></span>
+          </div>
+          <div class="exp-row c-orange">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_5}}</span></span>
+            <span class="exp-desc">{{expense_description_5}}</span>
+            <span class="exp-pct num">{{expense_percent_5}}%</span>
+            <span class="exp-amt num">{{expense_amount_5}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_5}}%"></i></span>
+          </div>
+          <div class="exp-row c-blue">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_6}}</span></span>
+            <span class="exp-desc">{{expense_description_6}}</span>
+            <span class="exp-pct num">{{expense_percent_6}}%</span>
+            <span class="exp-amt num">{{expense_amount_6}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_6}}%"></i></span>
+          </div>
+          <div class="exp-row c-red">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_7}}</span></span>
+            <span class="exp-desc">{{expense_description_7}}</span>
+            <span class="exp-pct num">{{expense_percent_7}}%</span>
+            <span class="exp-amt num">{{expense_amount_7}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_7}}%"></i></span>
+          </div>
+          <div class="exp-row c-purple">
+            <span class="exp-cat"><i class="dot"></i><span>{{expense_category_8}}</span></span>
+            <span class="exp-desc">{{expense_description_8}}</span>
+            <span class="exp-pct num">{{expense_percent_8}}%</span>
+            <span class="exp-amt num">{{expense_amount_8}} ₸</span>
+            <span class="exp-bar"><i style="width:{{expense_percent_8}}%"></i></span>
+          </div>
+
+          <div class="exp-other">
+            <span class="lbl">Остальные расходы</span>
+            <span class="exp-desc">прочие мелкие статьи</span>
+            <span></span>
+            <span class="exp-amt num">{{other_expenses_total}} ₸</span>
+          </div>
+
+          <div class="grp-legend">
+            <span class="lg"><i style="background:var(--blue)"></i>ФОТ</span>
+            <span class="lg"><i style="background:var(--orange)"></i>Операционные</span>
+            <span class="lg"><i style="background:var(--red)"></i>Прочее</span>
+            <span class="lg"><i style="background:var(--purple)"></i>POS / эквайринг</span>
+          </div>
+        </div>
+
+        <div class="total-plate">
+          <div class="l">Итого расходов</div>
+          <div class="r">
+            <div class="v num">{{expenses_total}} ₸</div>
+            <div class="s num">{{expenses_percent}}% от оборота</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><span class="t">Капитальные вложения</span><span class="m">Сумма</span></div>
+          <div class="capex-row">
+            <span class="capex-name">{{capex_item_1}}</span>
+            <span class="capex-amt num">{{capex_amount_1}} ₸</span>
+          </div>
+          <div class="capex-row">
+            <span class="capex-name">{{capex_item_2}}</span>
+            <span class="capex-amt num">{{capex_amount_2}} ₸</span>
+          </div>
+          <div class="capex-row">
+            <span class="capex-name">{{capex_item_3}}</span>
+            <span class="capex-amt num">{{capex_amount_3}} ₸</span>
+          </div>
+          <!-- Если капвложений нет — оставить вместо строк:
+          <div class="capex-empty">За период капитальные вложения не указаны.</div> -->
+          <div class="capex-note">CAPEX не входит в операционные расходы периода</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">Orda Control · отчёт «{{company_name}}» · {{created_date}}</footer>
+</div>
+</body>
+</html>
