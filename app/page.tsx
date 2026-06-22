@@ -49,11 +49,11 @@ const h2Class =
   'font-display text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-[#0f2038] sm:text-[38px] lg:text-[42px]'
 const leadClass = 'text-[17px] leading-[1.6] text-[#56657d] sm:text-[19px]'
 const sectionClass = 'mx-auto max-w-[1240px] px-6 py-20 sm:px-10 lg:py-24 lg:px-12'
-const cardClass = 'rounded-[20px] border border-[#e7ebf2] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]'
+const cardClass = 'rounded-[20px] border border-[#d6dde8] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]'
 const btnPrimary =
   'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-7 py-[15px] text-[16px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
 const btnGhost =
-  'rounded-[14px] border border-[#dce1ea] bg-white px-7 py-[15px] text-[16px] font-semibold text-[#0f2038] transition hover:border-[#16a34a]/40 hover:text-[#15803d]'
+  'rounded-[14px] border border-[#c8d1de] bg-white px-7 py-[15px] text-[16px] font-semibold text-[#0f2038] transition hover:border-[#16a34a]/40 hover:text-[#15803d]'
 
 // ─────────────── ДАННЫЕ ───────────────
 
@@ -130,13 +130,13 @@ export default async function MarketingHomePage() {
       <FaqStructuredData faq={faqItems} />
 
       {/* Шапка */}
-      <header className="sticky top-0 z-50 border-b border-[#eef1f6] bg-white/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-3.5 sm:px-10 lg:px-12">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
             <div>
               <div className="font-display text-[16px] font-bold tracking-[-0.02em] text-[#0f2038]">{PRODUCT}</div>
-              <div className="text-[11px] font-medium text-[#8a97ad]">Финансы, продажи и смены</div>
+              <div className="text-[11px] font-medium text-[#64748b]">Финансы, продажи и смены</div>
             </div>
           </div>
           <nav className="flex items-center gap-1.5">
@@ -176,7 +176,7 @@ export default async function MarketingHomePage() {
                 <Button asChild size="lg" className={btnPrimary}><Link href="#contact">Начать бесплатно<ArrowRight className="ml-2 h-5 w-5" /></Link></Button>
                 <Button asChild size="lg" variant="outline" className={btnGhost}><Link href="#features">Возможности</Link></Button>
               </div>
-              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-[14px] font-medium text-[#7a8aa3]">
+              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-[14px] font-medium text-[#5b6b82]">
                 <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[#16a34a]" />2 недели бесплатно</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[#16a34a]" />Данные можно забрать</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[#16a34a]" />Помощь с внедрением</span>
@@ -186,10 +186,10 @@ export default async function MarketingHomePage() {
             {/* Светлый дашборд */}
             <HeroIn delay={0.15}>
               <Floating amplitude={9}>
-                <div className="rounded-[22px] border border-[#e7ebf2] bg-white p-5 shadow-[0_30px_70px_-26px_rgba(15,32,56,0.4)]">
-                  <div className="rounded-[18px] border border-[#eef1f6] bg-[#f8fafc] p-5">
+                <div className="rounded-[22px] border border-[#d6dde8] bg-white p-5 shadow-[0_30px_70px_-26px_rgba(15,32,56,0.4)]">
+                  <div className="rounded-[18px] border border-[#e2e8f0] bg-[#eef2f8] p-5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a97ad]">Финансовый дашборд</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748b]">Финансовый дашборд</span>
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#16a34a]/[0.1] px-2.5 py-1 text-[11px] font-semibold uppercase text-[#15803d]">
                         <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />live
                       </span>
@@ -215,7 +215,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ПРОБЛЕМЫ */}
-      <section className="border-y border-[#eef1f6] bg-[#f6f8fb]">
+      <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
             <div className={eyebrowClass}>Знакомая ситуация?</div>
@@ -260,10 +260,10 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* AI */}
-      <section className="border-y border-[#eef1f6] bg-[#f6f8fb]">
+      <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal>
-            <div className="overflow-hidden rounded-[24px] border border-[#e7ebf2] bg-white p-9 shadow-[0_20px_50px_-24px_rgba(15,32,56,0.2)] sm:p-12">
+            <div className="overflow-hidden rounded-[24px] border border-[#d6dde8] bg-white p-9 shadow-[0_20px_50px_-24px_rgba(15,32,56,0.2)] sm:p-12">
               <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
                 <div>
                   <div className={eyebrowClass}><Bot className="h-3.5 w-3.5" />AI-помощник</div>
@@ -274,10 +274,10 @@ export default async function MarketingHomePage() {
                   {aiCapabilities.map((c) => {
                     const Icon = c.icon
                     return (
-                      <div key={c.title} className="rounded-[16px] border border-[#eef1f6] bg-[#f8fafc] p-4">
+                      <div key={c.title} className="rounded-[16px] border border-[#e2e8f0] bg-[#eef2f8] p-4">
                         <Icon className="h-5 w-5 text-[#16a34a]" />
                         <div className="mt-2.5 text-[14px] font-bold text-[#0f2038]">{c.title}</div>
-                        <div className="mt-1 text-[12.5px] leading-[1.5] text-[#7a8aa3]">{c.text}</div>
+                        <div className="mt-1 text-[12.5px] leading-[1.5] text-[#5b6b82]">{c.text}</div>
                       </div>
                     )
                   })}
@@ -318,26 +318,26 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* СРАВНЕНИЕ */}
-      <section className="border-y border-[#eef1f6] bg-[#f6f8fb]">
+      <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
             <div className={eyebrowClass}>Сравнение</div>
             <h2 className={`mt-5 ${h2Class}`}>Вместо пяти программ — одна</h2>
           </Reveal>
-          <Reveal className="mt-10 hidden overflow-hidden rounded-[18px] border border-[#e7ebf2] bg-white lg:block">
+          <Reveal className="mt-10 hidden overflow-hidden rounded-[18px] border border-[#d6dde8] bg-white lg:block">
             <div className="grid" style={{ gridTemplateColumns: `minmax(200px,1.1fr) repeat(${comparisonColumns.length}, minmax(140px,1fr))` }}>
-              <div className="border-b border-[#eef1f6] px-5 py-4"><span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8a97ad]">Критерий</span></div>
+              <div className="border-b border-[#e2e8f0] px-5 py-4"><span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Критерий</span></div>
               {comparisonColumns.map((col) => (
-                <div key={col.key} className={'border-b border-l border-[#eef1f6] px-5 py-4 ' + (col.highlight ? 'bg-[#16a34a]/[0.06]' : '')}>
+                <div key={col.key} className={'border-b border-l border-[#e2e8f0] px-5 py-4 ' + (col.highlight ? 'bg-[#16a34a]/[0.06]' : '')}>
                   <div className={'font-display text-[16px] font-bold ' + (col.highlight ? 'text-[#15803d]' : 'text-[#0f2038]')}>{col.label}</div>
-                  <div className="mt-0.5 text-[11px] text-[#8a97ad]">{col.subtitle}</div>
+                  <div className="mt-0.5 text-[11px] text-[#64748b]">{col.subtitle}</div>
                 </div>
               ))}
               {comparisonRows.map((row, ri) => (
                 <Fragment key={row.criterion}>
-                  <div className={'px-5 py-4 text-[13.5px] font-semibold text-[#0f2038] ' + (ri < comparisonRows.length - 1 ? 'border-b border-[#eef1f6]' : '')}>{row.criterion}</div>
+                  <div className={'px-5 py-4 text-[13.5px] font-semibold text-[#0f2038] ' + (ri < comparisonRows.length - 1 ? 'border-b border-[#e2e8f0]' : '')}>{row.criterion}</div>
                   {comparisonColumns.map((col) => (
-                    <div key={col.key} className={'border-l border-[#eef1f6] px-5 py-4 text-[13px] ' + (ri < comparisonRows.length - 1 ? 'border-b ' : '') + (col.highlight ? 'bg-[#16a34a]/[0.04] font-medium text-[#0f2038]' : 'text-[#56657d]')}>{row.values[col.key]}</div>
+                    <div key={col.key} className={'border-l border-[#e2e8f0] px-5 py-4 text-[13px] ' + (ri < comparisonRows.length - 1 ? 'border-b ' : '') + (col.highlight ? 'bg-[#16a34a]/[0.04] font-medium text-[#0f2038]' : 'text-[#56657d]')}>{row.values[col.key]}</div>
                   ))}
                 </Fragment>
               ))}
@@ -346,12 +346,12 @@ export default async function MarketingHomePage() {
           <Stagger className="mt-10 grid gap-3 lg:hidden">
             {comparisonColumns.map((col) => (
               <StaggerItem key={col.key}>
-                <div className={col.highlight ? 'rounded-[18px] border-2 border-[#16a34a]/40 bg-white p-5' : 'rounded-[18px] border border-[#e7ebf2] bg-white p-5'}>
+                <div className={col.highlight ? 'rounded-[18px] border-2 border-[#16a34a]/40 bg-white p-5' : 'rounded-[18px] border border-[#d6dde8] bg-white p-5'}>
                   <div className={'font-display text-[18px] font-bold ' + (col.highlight ? 'text-[#15803d]' : 'text-[#0f2038]')}>{col.label}</div>
-                  <dl className="mt-3 grid gap-2 border-t border-[#eef1f6] pt-3">
+                  <dl className="mt-3 grid gap-2 border-t border-[#e2e8f0] pt-3">
                     {comparisonRows.map((row) => (
                       <div key={row.criterion} className="grid grid-cols-[1fr_auto] gap-3">
-                        <dt className="text-[12px] text-[#8a97ad]">{row.criterion}</dt>
+                        <dt className="text-[12px] text-[#64748b]">{row.criterion}</dt>
                         <dd className="text-right text-[12.5px] text-[#0f2038]">{row.values[col.key]}</dd>
                       </div>
                     ))}
@@ -376,10 +376,10 @@ export default async function MarketingHomePage() {
                 ? 'relative h-full rounded-[20px] border-2 border-[#16a34a]/45 bg-white p-7 shadow-[0_18px_44px_-18px_rgba(22,163,74,0.4)]'
                 : `h-full ${cardClass} transition duration-300 hover:-translate-y-1`}>
                 {plan.highlight && plan.badge ? <span className="absolute right-5 top-5 rounded-full bg-[#16a34a] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">{plan.badge}</span> : null}
-                <div className={'text-[11px] font-semibold uppercase tracking-[0.12em] ' + (plan.highlight ? 'text-[#15803d]' : 'text-[#8a97ad]')}>{plan.levelLabel}</div>
+                <div className={'text-[11px] font-semibold uppercase tracking-[0.12em] ' + (plan.highlight ? 'text-[#15803d]' : 'text-[#64748b]')}>{plan.levelLabel}</div>
                 <div className="mt-1.5 font-display text-[24px] font-bold text-[#0f2038]">{plan.name}</div>
                 <p className="mt-2 text-[13.5px] leading-[1.5] text-[#56657d]">{plan.description}</p>
-                <ul className="mt-5 space-y-2.5 border-t border-[#eef1f6] pt-5">
+                <ul className="mt-5 space-y-2.5 border-t border-[#e2e8f0] pt-5">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-[13.5px] leading-[1.5] text-[#475569]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]" /><span>{f}</span></li>
                   ))}
@@ -396,7 +396,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* FAQ */}
-      <section className="border-y border-[#eef1f6] bg-[#f6f8fb]">
+      <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
             <div className={eyebrowClass}>Частые вопросы</div>
@@ -431,9 +431,9 @@ export default async function MarketingHomePage() {
                   <CtaFeature icon={ShieldCheck} text="Данные изолированы, журнал аудита, бэкапы" />
                 </div>
               </div>
-              <div className="rounded-[20px] border border-[#e7ebf2] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+              <div className="rounded-[20px] border border-[#d6dde8] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
                 <h3 className="font-display text-[20px] font-bold text-[#0f2038]">Получить консультацию</h3>
-                <p className="mt-1.5 text-[13.5px] text-[#7a8aa3]">Покажем на ваших данных и подскажем тариф.</p>
+                <p className="mt-1.5 text-[13.5px] text-[#5b6b82]">Покажем на ваших данных и подскажем тариф.</p>
                 <div className="mt-5"><ContactLeadForm /></div>
               </div>
             </div>
@@ -442,16 +442,16 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ФУТЕР */}
-      <footer className="border-t border-[#eef1f6] bg-white">
+      <footer className="border-t border-[#e2e8f0] bg-white">
         <div className="mx-auto flex max-w-[1240px] flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-10 lg:px-12">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
             <div>
               <div className="font-display text-[15px] font-bold text-[#0f2038]">{PRODUCT}</div>
-              <div className="text-[11px] text-[#8a97ad]">© 2026 — все права защищены</div>
+              <div className="text-[11px] text-[#64748b]">© 2026 — все права защищены</div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#7a8aa3]">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#5b6b82]">
             <Link href="/offer" className="hover:text-[#16a34a]">Оферта</Link>
             <Link href="/privacy" className="hover:text-[#16a34a]">Политика</Link>
             <Link href="/terms" className="hover:text-[#16a34a]">Соглашение</Link>
@@ -468,11 +468,11 @@ export default async function MarketingHomePage() {
 
 function StatCard({ label, value, unit, suffix, delta, up }: { label: string; value: number; unit?: string; suffix?: string; delta: string; up?: boolean }) {
   return (
-    <div className="rounded-[13px] border border-[#eef1f6] bg-white p-3.5">
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#8a97ad]">{label}</div>
+    <div className="rounded-[13px] border border-[#e2e8f0] bg-white p-3.5">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#64748b]">{label}</div>
       <div className="mt-1.5 flex items-baseline gap-1">
         <span className="font-display text-[23px] font-extrabold tracking-[-0.02em] text-[#0f2038] tabular-nums"><CountUp value={value} suffix={suffix} /></span>
-        {unit ? <span className="text-[12px] text-[#8a97ad]">{unit}</span> : null}
+        {unit ? <span className="text-[12px] text-[#64748b]">{unit}</span> : null}
       </div>
       <div className={'mt-1 text-[11px] font-semibold ' + (up ? 'text-[#16a34a]' : 'text-[#94a3b8]')}>{delta} к среднему</div>
     </div>
@@ -481,7 +481,7 @@ function StatCard({ label, value, unit, suffix, delta, up }: { label: string; va
 
 function CtaFeature({ icon: Icon, text }: { icon: any; text: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-[14px] border border-[#e7ebf2] bg-white px-4 py-3">
+    <div className="flex items-center gap-3 rounded-[14px] border border-[#d6dde8] bg-white px-4 py-3">
       <Icon className="h-5 w-5 shrink-0 text-[#16a34a]" />
       <span className="text-[14px] font-medium text-[#0f2038]">{text}</span>
     </div>

@@ -41,13 +41,13 @@ const sections = [
 export default function OfferPage() {
   return (
     <main className="min-h-screen bg-white text-[#475569]">
-      <header className="border-b border-[#eef1f6] bg-white/80 backdrop-blur">
+      <header className="border-b border-[#e2e8f0] bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
           <Link href="/" className="flex items-center gap-2.5 text-[#56657d] hover:text-[#16a34a]">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">К {SITE_NAME}</span>
           </Link>
-          <span className="text-xs text-[#8a97ad]">
+          <span className="text-xs text-[#64748b]">
             Версия от {LEGAL_VERSION} · обновлено {LEGAL_LAST_UPDATED}
           </span>
         </div>
@@ -56,7 +56,7 @@ export default function OfferPage() {
       <div className="mx-auto max-w-screen-2xl px-6 py-12 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[260px_1fr] lg:items-start">
           <aside className="lg:sticky lg:top-8">
-            <div className="rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+            <div className="rounded-2xl border border-[#d6dde8] bg-[#eef2f8] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
               <div className="text-xs font-semibold uppercase tracking-wider text-[#16a34a]">
                 Содержание
               </div>
@@ -72,7 +72,7 @@ export default function OfferPage() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 grid gap-1 text-xs text-[#7a8aa3]">
+              <div className="mt-4 grid gap-1 text-xs text-[#5b6b82]">
                 <Link href="/privacy" className="hover:text-[#16a34a]">→ Политика конфиденциальности</Link>
                 <Link href="/terms" className="hover:text-[#16a34a]">→ Пользовательское соглашение</Link>
                 <Link href="/sla" className="hover:text-[#16a34a]">→ SLA</Link>
@@ -296,7 +296,7 @@ export default function OfferPage() {
 
             <section id="requisites">
               <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">15. Реквизиты Исполнителя</h2>
-              <div className="mt-4 rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+              <div className="mt-4 rounded-2xl border border-[#d6dde8] bg-[#eef2f8] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
                 <div className="grid gap-2 text-[#56657d]">
                   <div><strong className="text-[#0f2038]">Наименование:</strong> {LEGAL_ENTITY.fullName}</div>
                   <div><strong className="text-[#0f2038]">БИН:</strong> {LEGAL_ENTITY.bin}</div>
@@ -325,7 +325,7 @@ export default function OfferPage() {
               </div>
             </section>
 
-            <footer className="border-t border-[#eef1f6] pt-8 text-xs text-[#8a97ad]">
+            <footer className="border-t border-[#e2e8f0] pt-8 text-xs text-[#64748b]">
               <p>
                 Настоящая оферта составлена в соответствии с Гражданским кодексом
                 Республики Казахстан (ст. 395–397), Законом Республики Казахстан

@@ -75,13 +75,13 @@ const cookieTable: CookieRow[] = [
 export default function CookiesPage() {
   return (
     <main className="min-h-screen bg-white text-[#475569]">
-      <header className="border-b border-[#eef1f6] bg-white/80 backdrop-blur">
+      <header className="border-b border-[#e2e8f0] bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
           <Link href="/" className="flex items-center gap-2.5 text-[#56657d] hover:text-[#16a34a]">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">К {SITE_NAME}</span>
           </Link>
-          <span className="text-xs text-[#8a97ad]">
+          <span className="text-xs text-[#64748b]">
             Версия от {LEGAL_VERSION} · обновлено {LEGAL_LAST_UPDATED}
           </span>
         </div>
@@ -90,7 +90,7 @@ export default function CookiesPage() {
       <div className="mx-auto max-w-screen-2xl px-6 py-12 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[260px_1fr] lg:items-start">
           <aside className="lg:sticky lg:top-8">
-            <div className="rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+            <div className="rounded-2xl border border-[#d6dde8] bg-[#eef2f8] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
               <div className="text-xs font-semibold uppercase tracking-wider text-[#16a34a]">
                 Содержание
               </div>
@@ -106,7 +106,7 @@ export default function CookiesPage() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 grid gap-1 text-xs text-[#7a8aa3]">
+              <div className="mt-4 grid gap-1 text-xs text-[#5b6b82]">
                 <Link href="/offer" className="hover:text-[#16a34a]">→ Публичная оферта</Link>
                 <Link href="/privacy" className="hover:text-[#16a34a]">→ Политика конфиденциальности</Link>
                 <Link href="/terms" className="hover:text-[#16a34a]">→ Пользовательское соглашение</Link>
@@ -146,7 +146,7 @@ export default function CookiesPage() {
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[#e7ebf2] text-left text-xs uppercase tracking-wider text-[#16a34a]">
+                    <tr className="border-b border-[#d6dde8] text-left text-xs uppercase tracking-wider text-[#16a34a]">
                       <th className="py-2 pr-4">Имя / шаблон</th>
                       <th className="py-2 pr-4">Тип</th>
                       <th className="py-2 pr-4">Назначение</th>
@@ -155,7 +155,7 @@ export default function CookiesPage() {
                   </thead>
                   <tbody>
                     {cookieTable.map((row) => (
-                      <tr key={row.name} className="border-b border-[#eef1f6] align-top">
+                      <tr key={row.name} className="border-b border-[#e2e8f0] align-top">
                         <td className="py-3 pr-4 font-mono text-xs text-[#0f2038]">{row.name}</td>
                         <td className="py-3 pr-4 text-[#56657d]">{row.type}</td>
                         <td className="py-3 pr-4 text-[#56657d]">{row.purpose}</td>
@@ -165,7 +165,7 @@ export default function CookiesPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-3 text-xs text-[#8a97ad]">Состав конкретных cookies может незначительно меняться при обновлениях библиотек Supabase Auth и Vercel.</p>
+              <p className="mt-3 text-xs text-[#64748b]">Состав конкретных cookies может незначительно меняться при обновлениях библиотек Supabase Auth и Vercel.</p>
             </section>
 
             <section id="localstorage">
@@ -231,7 +231,7 @@ export default function CookiesPage() {
 
             <section id="contacts">
               <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">9. Контакты</h2>
-              <div className="mt-4 rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+              <div className="mt-4 rounded-2xl border border-[#d6dde8] bg-[#eef2f8] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
                 <div className="grid gap-2 text-[#56657d]">
                   <div><strong className="text-[#0f2038]">Оператор данных:</strong> {LEGAL_ENTITY.fullName}</div>
                   <div><strong className="text-[#0f2038]">Email:</strong> {LEGAL_ENTITY.emailSupport}</div>
@@ -252,7 +252,7 @@ export default function CookiesPage() {
               </div>
             </section>
 
-            <footer className="border-t border-[#eef1f6] pt-8 text-xs text-[#8a97ad]">
+            <footer className="border-t border-[#e2e8f0] pt-8 text-xs text-[#64748b]">
               <p>© 2026 {LEGAL_ENTITY.shortName}. Все права защищены.</p>
             </footer>
           </article>

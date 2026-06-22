@@ -40,13 +40,13 @@ const sections = [
 export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-white text-[#475569]">
-      <header className="border-b border-[#eef1f6] bg-white/80 backdrop-blur">
+      <header className="border-b border-[#e2e8f0] bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
           <Link href="/" className="flex items-center gap-2.5 text-[#56657d] hover:text-[#16a34a]">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">К {SITE_NAME}</span>
           </Link>
-          <span className="text-xs text-[#8a97ad]">
+          <span className="text-xs text-[#64748b]">
             Версия от {LEGAL_VERSION} · обновлено {LEGAL_LAST_UPDATED}
           </span>
         </div>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
       <div className="mx-auto max-w-screen-2xl px-6 py-12 sm:px-8 lg:px-10">
         <div className="grid gap-10 lg:grid-cols-[260px_1fr] lg:items-start">
           <aside className="lg:sticky lg:top-8">
-            <div className="rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+            <div className="rounded-2xl border border-[#d6dde8] bg-[#eef2f8] p-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
               <div className="text-xs font-semibold uppercase tracking-wider text-[#16a34a]">
                 Содержание
               </div>
@@ -71,7 +71,7 @@ export default function PrivacyPage() {
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 grid gap-1 text-xs text-[#7a8aa3]">
+              <div className="mt-4 grid gap-1 text-xs text-[#5b6b82]">
                 <Link href="/offer" className="hover:text-[#16a34a]">→ Публичная оферта</Link>
                 <Link href="/terms" className="hover:text-[#16a34a]">→ Пользовательское соглашение</Link>
                 <Link href="/sla" className="hover:text-[#16a34a]">→ SLA</Link>
@@ -205,33 +205,33 @@ export default function PrivacyPage() {
               <div className="mt-4 space-y-3 text-sm leading-7">
                 <p>Для работы Сервиса {LEGAL_ENTITY.shortName} привлекает следующих обработчиков:</p>
                 <div className="space-y-2">
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">Supabase Inc.</div>
-                    <div className="text-xs text-[#7a8aa3]">Управляемая база данных PostgreSQL, аутентификация, файловое хранилище. Передаётся: вся бизнес-логика и данные Заказчика.</div>
+                    <div className="text-xs text-[#5b6b82]">Управляемая база данных PostgreSQL, аутентификация, файловое хранилище. Передаётся: вся бизнес-логика и данные Заказчика.</div>
                   </div>
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">Vercel Inc.</div>
-                    <div className="text-xs text-[#7a8aa3]">Хостинг веб-приложения и веб-аналитика (Vercel Analytics). Передаётся: обезличенные метрики просмотров страниц, технические данные браузера.</div>
+                    <div className="text-xs text-[#5b6b82]">Хостинг веб-приложения и веб-аналитика (Vercel Analytics). Передаётся: обезличенные метрики просмотров страниц, технические данные браузера.</div>
                   </div>
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">OpenAI, LLC</div>
-                    <div className="text-xs text-[#7a8aa3]">Модели искусственного интеллекта (GPT). Передаётся: тексты запросов AI-помощника, изображения чеков для распознавания, обезличенные финансовые данные для прогнозов.</div>
+                    <div className="text-xs text-[#5b6b82]">Модели искусственного интеллекта (GPT). Передаётся: тексты запросов AI-помощника, изображения чеков для распознавания, обезличенные финансовые данные для прогнозов.</div>
                   </div>
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">Google LLC (Google Gemini)</div>
-                    <div className="text-xs text-[#7a8aa3]">Резервный поставщик AI-моделей. Передаётся: те же данные, что и OpenAI, при недоступности основного поставщика.</div>
+                    <div className="text-xs text-[#5b6b82]">Резервный поставщик AI-моделей. Передаётся: те же данные, что и OpenAI, при недоступности основного поставщика.</div>
                   </div>
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">Telegram FZ-LLC (Telegram Bot API)</div>
-                    <div className="text-xs text-[#7a8aa3]">Отправка отчётов и уведомлений сотрудникам Заказчика. Передаётся: текст уведомлений, кассовые отчёты, идентификаторы чатов сотрудников.</div>
+                    <div className="text-xs text-[#5b6b82]">Отправка отчётов и уведомлений сотрудникам Заказчика. Передаётся: текст уведомлений, кассовые отчёты, идентификаторы чатов сотрудников.</div>
                   </div>
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">Поставщик SMTP-почты</div>
-                    <div className="text-xs text-[#7a8aa3]">Отправка системных email (подтверждение регистрации, сброс пароля, заявки с лендинга) через библиотеку nodemailer. Передаётся: email-адрес, текст сообщения.</div>
+                    <div className="text-xs text-[#5b6b82]">Отправка системных email (подтверждение регистрации, сброс пароля, заявки с лендинга) через библиотеку nodemailer. Передаётся: email-адрес, текст сообщения.</div>
                   </div>
-                  <div className="rounded-xl border border-[#e7ebf2] bg-[#f6f8fb] p-4">
+                  <div className="rounded-xl border border-[#d6dde8] bg-[#eef2f8] p-4">
                     <div className="font-semibold text-[#0f2038]">АО «Kaspi Bank» и иные банки</div>
-                    <div className="text-xs text-[#7a8aa3]">Расчёты по выставленным счетам. Реквизиты банковских карт Заказчика в Сервисе не хранятся.</div>
+                    <div className="text-xs text-[#5b6b82]">Расчёты по выставленным счетам. Реквизиты банковских карт Заказчика в Сервисе не хранятся.</div>
                   </div>
                 </div>
                 <p>Каждый обработчик связан собственными политиками обработки данных и соответствующими договорами.</p>
@@ -295,7 +295,7 @@ export default function PrivacyPage() {
 
             <section id="contacts">
               <h2 className="text-2xl font-semibold tracking-tight text-[#0f2038]">15. Контакты для запросов</h2>
-              <div className="mt-4 rounded-2xl border border-[#e7ebf2] bg-[#f6f8fb] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
+              <div className="mt-4 rounded-2xl border border-[#d6dde8] bg-[#eef2f8] p-5 text-sm leading-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
                 <div className="grid gap-2 text-[#56657d]">
                   <div><strong className="text-[#0f2038]">Оператор данных:</strong> {LEGAL_ENTITY.fullName}</div>
                   <div><strong className="text-[#0f2038]">БИН:</strong> {LEGAL_ENTITY.bin}</div>
@@ -318,7 +318,7 @@ export default function PrivacyPage() {
               </div>
             </section>
 
-            <footer className="border-t border-[#eef1f6] pt-8 text-xs text-[#8a97ad]">
+            <footer className="border-t border-[#e2e8f0] pt-8 text-xs text-[#64748b]">
               <p>
                 Настоящая Политика составлена в соответствии с Законом Республики
                 Казахстан «О персональных данных и их защите» № 94-V от 21.05.2013,

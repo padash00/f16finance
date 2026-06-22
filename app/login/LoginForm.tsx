@@ -53,49 +53,49 @@ function TenantIdentityPanel({ hostOrg }: { hostOrg: NonNullable<HostOrg> }) {
     .join('') || hostOrg.name.slice(0, 2).toUpperCase()
 
   return (
-    <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.18),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-8">
-      <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-amber-200">
+    <div className="rounded-[2rem] border border-[#d6dde8] bg-[radial-gradient(circle_at_top,rgba(22,163,74,0.08),transparent_35%),linear-gradient(180deg,#ffffff,#eef2f8)] p-6 text-[#0f2038] shadow-[0_20px_50px_-24px_rgba(15,32,56,0.25)] sm:p-8">
+      <div className="inline-flex items-center gap-2 rounded-full border border-[#16a34a]/25 bg-[#16a34a]/[0.07] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[#15803d]">
         <Sparkles className="h-3.5 w-3.5" />
         Кабинет организации
       </div>
 
       <div className="mt-6 flex items-center gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-500 text-xl font-bold text-slate-950 shadow-lg shadow-amber-500/25">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-[#1db955] to-[#15803d] text-xl font-bold text-white shadow-lg shadow-[#16a34a]/25">
           {initials}
         </div>
         <div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white">{hostOrg.name}</h1>
-          <p className="mt-1 text-sm text-slate-300">{hostOrg.slug}.ordaops.kz</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#0f2038]">{hostOrg.name}</h1>
+          <p className="mt-1 text-sm text-[#5b6b82]">{hostOrg.slug}.ordaops.kz</p>
         </div>
       </div>
 
       <div className="mt-8 space-y-4">
-        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/10 p-4">
-          <div className="text-sm font-medium text-emerald-200">Доступ только для вашей команды</div>
-          <p className="mt-2 text-sm leading-6 text-slate-200">
+        <div className="rounded-2xl border border-[#16a34a]/20 bg-[#16a34a]/[0.07] p-4">
+          <div className="text-sm font-medium text-[#15803d]">Доступ только для вашей команды</div>
+          <p className="mt-2 text-sm leading-6 text-[#475569]">
             На этом поддомене открывается только рабочий контур организации. После входа вы попадёте прямо в свой кабинет,
             без общего списка клиентов и без доступа к другим организациям.
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-white">
-              <Shield className="h-4 w-4 text-violet-300" />
+          <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#0f2038]">
+              <Shield className="h-4 w-4 text-[#16a34a]" />
               Руководство и staff
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Вход по приглашённому email и личному паролю.</p>
+            <p className="mt-2 text-sm leading-6 text-[#475569]">Вход по приглашённому email и личному паролю.</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-white">
-              <User className="h-4 w-4 text-emerald-300" />
+          <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#0f2038]">
+              <User className="h-4 w-4 text-[#16a34a]" />
               Операторы
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">Вход по операторскому логину и выданному паролю.</p>
+            <p className="mt-2 text-sm leading-6 text-[#475569]">Вход по операторскому логину и выданному паролю.</p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-300">
+        <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4 text-sm leading-6 text-[#475569]">
           Если вы открыли не свой поддомен, система не пустит вас в чужую организацию даже при правильном логине.
         </div>
       </div>
@@ -105,22 +105,22 @@ function TenantIdentityPanel({ hostOrg }: { hostOrg: NonNullable<HostOrg> }) {
 
 function TenantNotFound({ platformUrl }: { platformUrl: string }) {
   return (
-    <div className="min-h-screen bg-[linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4 text-white">
+    <div className="min-h-screen bg-[linear-gradient(135deg,#ffffff_0%,#eef2f8_48%,#ffffff_100%)] p-4 text-[#0f2038]">
       <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center">
-        <div className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-slate-950/75 p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-400/10 text-amber-300">
+        <div className="w-full max-w-xl rounded-[2rem] border border-[#d6dde8] bg-white p-8 text-center shadow-[0_20px_50px_-24px_rgba(15,32,56,0.25)]">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-[#16a34a]/[0.1] text-[#16a34a]">
             <Building2 className="h-8 w-8" />
           </div>
           <h1 className="mt-6 text-3xl font-semibold tracking-[-0.03em]">Организация не найдена</h1>
-          <p className="mt-3 text-sm leading-7 text-slate-300">
+          <p className="mt-3 text-sm leading-7 text-[#475569]">
             Этот поддомен не привязан к рабочему контуру клиента или ещё не настроен. Перейдите на основной домен
             платформы или используйте корректный адрес вашей организации.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button asChild className="bg-amber-500 text-slate-950 hover:bg-amber-400">
+            <Button asChild className="bg-[#16a34a] text-white hover:bg-[#15803d]">
               <Link href={platformUrl}>Перейти на платформу</Link>
             </Button>
-            <Button asChild variant="outline" className="border-white/10 bg-white/5 text-white hover:bg-white/10">
+            <Button asChild variant="outline" className="border-[#c8d1de] bg-white text-[#0f2038] hover:bg-[#eef2f8]">
               <Link href={`${platformUrl.replace(/\/$/, '')}/login`}>Открыть общий вход</Link>
             </Button>
           </div>
@@ -280,23 +280,23 @@ export default function LoginForm({
 
   if (hostOrg) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.12),transparent_24%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4 text-white">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(22,163,74,0.06),transparent_24%),linear-gradient(135deg,#ffffff_0%,#eef2f8_48%,#ffffff_100%)] p-4 text-[#0f2038]">
         <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center">
           <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <TenantIdentityPanel hostOrg={hostOrg} />
 
-            <div className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8">
+            <div className="rounded-[2rem] border border-[#d6dde8] bg-white p-6 shadow-[0_20px_50px_-24px_rgba(15,32,56,0.25)] sm:p-8">
               <div className="mb-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-slate-300">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#e2e8f0] bg-[#eef2f8] px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-[#5b6b82]">
                   Вход в {hostOrg.name}
                 </div>
-                <h2 className="mt-5 text-3xl font-semibold tracking-[-0.03em] text-white">Откройте рабочий кабинет организации</h2>
-                <p className="mt-3 text-sm leading-7 text-slate-300">
+                <h2 className="mt-5 text-3xl font-semibold tracking-[-0.03em] text-[#0f2038]">Откройте рабочий кабинет организации</h2>
+                <p className="mt-3 text-sm leading-7 text-[#475569]">
                   Войдите под своей ролью. После авторизации вы попадёте сразу в контур {hostOrg.name}, без общего лендинга и чужих организаций.
                 </p>
               </div>
 
-              <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+              <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-[#e2e8f0] bg-[#eef2f8] p-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -304,7 +304,7 @@ export default function LoginForm({
                     setError(null)
                   }}
                   className={`rounded-xl px-4 py-3 text-left transition ${
-                    mode === 'email' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20' : 'text-slate-300 hover:bg-white/[0.04]'
+                    mode === 'email' ? 'bg-[#16a34a] text-white shadow-lg shadow-[#16a34a]/20' : 'text-[#475569] hover:bg-white'
                   }`}
                 >
                   <div className="flex items-center gap-2 text-sm font-medium">
@@ -320,7 +320,7 @@ export default function LoginForm({
                     setError(null)
                   }}
                   className={`rounded-xl px-4 py-3 text-left transition ${
-                    mode === 'operator' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/[0.04]'
+                    mode === 'operator' ? 'bg-[#16a34a] text-white shadow-lg shadow-[#16a34a]/20' : 'text-[#475569] hover:bg-white'
                   }`}
                 >
                   <div className="flex items-center gap-2 text-sm font-medium">
@@ -331,25 +331,25 @@ export default function LoginForm({
                 </button>
               </div>
 
-              <div className="mb-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-sm font-medium text-white">{mode === 'email' ? 'Вход по email' : 'Вход по логину оператора'}</div>
-                <p className="mt-2 text-sm leading-6 text-slate-400">{helperText}</p>
+              <div className="mb-5 rounded-2xl border border-[#e2e8f0] bg-[#eef2f8] p-4">
+                <div className="text-sm font-medium text-[#0f2038]">{mode === 'email' ? 'Вход по email' : 'Вход по логину оператора'}</div>
+                <p className="mt-2 text-sm leading-6 text-[#5b6b82]">{helperText}</p>
               </div>
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-400">{mode === 'email' ? 'Email' : 'Логин оператора'}</label>
+                  <label className="text-xs font-medium text-[#5b6b82]">{mode === 'email' ? 'Email' : 'Логин оператора'}</label>
                   <div className="relative">
                     {mode === 'email' ? (
-                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
                     ) : (
-                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
                     )}
                     <Input
                       type={mode === 'email' ? 'email' : 'text'}
                       value={login}
                       onChange={(e) => setLogin(e.target.value)}
-                      className="border-white/10 bg-slate-900/60 pl-10 text-white placeholder:text-slate-600"
+                      className="border-[#c8d1de] bg-white pl-10 text-[#0f2038] placeholder:text-[#64748b] focus-visible:ring-[#16a34a]"
                       placeholder={mode === 'email' ? 'name@example.com' : 'login_operatora'}
                       required
                       autoComplete="username"
@@ -358,14 +358,14 @@ export default function LoginForm({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-400">Пароль</label>
+                  <label className="text-xs font-medium text-[#5b6b82]">Пароль</label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="border-white/10 bg-slate-900/60 pl-10 pr-10 text-white placeholder:text-slate-600"
+                      className="border-[#c8d1de] bg-white pl-10 pr-10 text-[#0f2038] placeholder:text-[#64748b] focus-visible:ring-[#16a34a]"
                       placeholder="Введите пароль"
                       required
                       autoComplete="current-password"
@@ -373,7 +373,7 @@ export default function LoginForm({
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748b] hover:text-[#475569]"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -381,7 +381,7 @@ export default function LoginForm({
                 </div>
 
                 {error && (
-                  <div className="flex items-start gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#dc2626]">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{error}</span>
                   </div>
@@ -390,11 +390,7 @@ export default function LoginForm({
                 <Button
                   type="submit"
                   disabled={loading}
-                  className={`w-full ${
-                    mode === 'email'
-                      ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600'
-                      : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
-                  } text-white`}
+                  className="w-full bg-gradient-to-r from-[#1db955] to-[#15803d] text-white hover:from-[#15803d] hover:to-[#15803d]"
                 >
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
                   Войти в {hostOrg.name}
@@ -402,10 +398,10 @@ export default function LoginForm({
               </form>
 
               <div className="mt-5 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                <Link href="/forgot-password" className="text-violet-400 hover:text-violet-300">
+                <Link href="/forgot-password" className="text-[#16a34a] hover:text-[#15803d]">
                   Забыли пароль?
                 </Link>
-                <span className="text-slate-500">Нет доступа? Обратитесь к администратору вашей организации</span>
+                <span className="text-[#64748b]">Нет доступа? Обратитесь к администратору вашей организации</span>
               </div>
             </div>
           </div>
@@ -415,49 +411,49 @@ export default function LoginForm({
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(217,70,239,0.16),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(22,163,74,0.08),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(22,163,74,0.05),_transparent_28%),linear-gradient(135deg,#ffffff_0%,#eef2f8_48%,#ffffff_100%)] p-4">
       <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center">
         <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="hidden overflow-hidden rounded-2xl border border-white/10 bg-slate-950/55 p-8 text-white backdrop-blur-xl lg:flex lg:flex-col lg:justify-between">
+          <div className="hidden overflow-hidden rounded-2xl border border-[#d6dde8] bg-white p-8 text-[#0f2038] shadow-[0_20px_50px_-24px_rgba(15,32,56,0.25)] lg:flex lg:flex-col lg:justify-between">
             <div>
-              <div className="mb-6 inline-flex rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
+              <div className="mb-6 inline-flex rounded-2xl bg-gradient-to-br from-[#1db955] to-[#15803d] p-4 shadow-lg shadow-[#16a34a]/20">
                 <Brain className="h-8 w-8 text-white" />
               </div>
-              <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
+              <h1 className="max-w-md text-4xl font-semibold leading-tight text-[#0f2038]">
                 {SITE_NAME} для команды, точек и ежедневного ритма работы.
               </h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
+              <p className="mt-4 max-w-xl text-sm leading-6 text-[#475569]">
                 Платформа владельца, tenant-контуры клиентов, роли команды, операторский кабинет и рабочие данные в одном SaaS-слое.
               </p>
             </div>
 
             <div className="grid gap-3">
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm font-medium text-white">Platform owner</p>
-                <p className="mt-1 text-sm text-slate-400">Организации, подписки, лимиты, биллинг и контроль состояния платформы.</p>
+              <div className="rounded-3xl border border-[#e2e8f0] bg-[#eef2f8] p-4">
+                <p className="text-sm font-medium text-[#0f2038]">Platform owner</p>
+                <p className="mt-1 text-sm text-[#5b6b82]">Организации, подписки, лимиты, биллинг и контроль состояния платформы.</p>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm font-medium text-white">Tenant access</p>
-                <p className="mt-1 text-sm text-slate-400">Каждый клиент работает только в своём поддомене и видит только свой контур.</p>
+              <div className="rounded-3xl border border-[#e2e8f0] bg-[#eef2f8] p-4">
+                <p className="text-sm font-medium text-[#0f2038]">Tenant access</p>
+                <p className="mt-1 text-sm text-[#5b6b82]">Каждый клиент работает только в своём поддомене и видит только свой контур.</p>
               </div>
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+              <div className="rounded-3xl border border-[#16a34a]/20 bg-[#16a34a]/[0.07] p-4 text-sm text-[#15803d]">
                 Если пользователь открывает tenant-поддомен, он больше не попадает на общий маркетинг платформы.
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white backdrop-blur-xl sm:p-8">
+          <div className="rounded-2xl border border-[#d6dde8] bg-white p-6 text-[#0f2038] shadow-[0_20px_50px_-24px_rgba(15,32,56,0.25)] sm:p-8">
             <div className="mb-6 flex flex-col items-center text-center">
-              <div className="mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
+              <div className="mb-4 rounded-2xl bg-gradient-to-br from-[#1db955] to-[#15803d] p-4 shadow-lg shadow-[#16a34a]/20">
                 <Brain className="h-7 w-7 text-white" />
               </div>
               <h2 className="text-2xl font-semibold">Вход в {SITE_NAME}</h2>
-              <p className="mt-2 max-w-sm text-sm text-slate-400">
+              <p className="mt-2 max-w-sm text-sm text-[#5b6b82]">
                 Общий вход платформы для владельца системы и административной команды.
               </p>
             </div>
 
-            <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+            <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-[#e2e8f0] bg-[#eef2f8] p-1">
               <button
                 type="button"
                 onClick={() => {
@@ -465,7 +461,7 @@ export default function LoginForm({
                   setError(null)
                 }}
                 className={`rounded-xl px-4 py-3 text-left transition ${
-                  mode === 'email' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20' : 'text-slate-300 hover:bg-white/[0.04]'
+                  mode === 'email' ? 'bg-[#16a34a] text-white shadow-lg shadow-[#16a34a]/20' : 'text-[#475569] hover:bg-white'
                 }`}
               >
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -481,7 +477,7 @@ export default function LoginForm({
                   setError(null)
                 }}
                 className={`rounded-xl px-4 py-3 text-left transition ${
-                  mode === 'operator' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/[0.04]'
+                  mode === 'operator' ? 'bg-[#16a34a] text-white shadow-lg shadow-[#16a34a]/20' : 'text-[#475569] hover:bg-white'
                 }`}
               >
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -494,18 +490,18 @@ export default function LoginForm({
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-400">{mode === 'email' ? 'Email' : 'Логин оператора'}</label>
+                <label className="text-xs font-medium text-[#5b6b82]">{mode === 'email' ? 'Email' : 'Логин оператора'}</label>
                 <div className="relative">
                   {mode === 'email' ? (
-                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
                   ) : (
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
                   )}
                   <Input
                     type={mode === 'email' ? 'email' : 'text'}
                     value={login}
                     onChange={(e) => setLogin(e.target.value)}
-                    className="border-white/10 bg-slate-900/60 pl-10 text-white"
+                    className="border-[#c8d1de] bg-white pl-10 text-[#0f2038] placeholder:text-[#64748b] focus-visible:ring-[#16a34a]"
                     placeholder={mode === 'email' ? 'name@example.com' : 'login_operatora'}
                     required
                     autoComplete="username"
@@ -514,14 +510,14 @@ export default function LoginForm({
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-400">Пароль</label>
+                <label className="text-xs font-medium text-[#5b6b82]">Пароль</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="border-white/10 bg-slate-900/60 pl-10 pr-10 text-white"
+                    className="border-[#c8d1de] bg-white pl-10 pr-10 text-[#0f2038] placeholder:text-[#64748b] focus-visible:ring-[#16a34a]"
                     placeholder="Введите пароль"
                     required
                     autoComplete="current-password"
@@ -529,7 +525,7 @@ export default function LoginForm({
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748b] hover:text-[#475569]"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -537,7 +533,7 @@ export default function LoginForm({
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#dc2626]">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -546,11 +542,7 @@ export default function LoginForm({
               <Button
                 type="submit"
                 disabled={loading}
-                className={`w-full ${
-                  mode === 'email'
-                    ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600'
-                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
-                } text-white`}
+                className="w-full bg-gradient-to-r from-[#1db955] to-[#15803d] text-white hover:from-[#15803d] hover:to-[#15803d]"
               >
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
                 Войти
@@ -558,12 +550,12 @@ export default function LoginForm({
             </form>
 
             <div className="mt-5 flex items-center justify-between text-sm">
-              <Link href="/forgot-password" className="text-violet-400 hover:text-violet-300">
+              <Link href="/forgot-password" className="text-[#16a34a] hover:text-[#15803d]">
                 Забыли пароль?
               </Link>
-              <span className="text-slate-500">Нет доступа? Обратитесь к администратору</span>
+              <span className="text-[#64748b]">Нет доступа? Обратитесь к администратору</span>
             </div>
-            <p className="mt-6 text-center text-[11px] text-slate-600">{SITE_NAME} · Platform access</p>
+            <p className="mt-6 text-center text-[11px] text-[#64748b]">{SITE_NAME} · Platform access</p>
           </div>
         </div>
       </div>
