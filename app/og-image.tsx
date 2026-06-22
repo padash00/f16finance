@@ -18,7 +18,7 @@ export default function OgImage() {
           height: '100%',
           display: 'flex',
           background:
-            'radial-gradient(circle at 20% 10%, rgba(255,244,184,0.2), transparent 22%), radial-gradient(circle at 82% 80%, rgba(245,158,11,0.16), transparent 24%), linear-gradient(180deg, #050816 0%, #0a1020 52%, #050816 100%)',
+            'radial-gradient(circle at 20% 10%, rgba(52,211,153,0.18), transparent 22%), radial-gradient(circle at 82% 80%, rgba(22,163,74,0.20), transparent 24%), linear-gradient(180deg, #050816 0%, #0a1020 52%, #050816 100%)',
           color: '#fff',
           padding: '56px',
           fontFamily: 'Arial, sans-serif',
@@ -43,7 +43,7 @@ export default function OgImage() {
                   width: '70px',
                   height: '70px',
                   borderRadius: '22px',
-                  background: 'linear-gradient(180deg, #f8d24d 0%, #d6a514 48%, #b8800d 100%)',
+                  background: 'linear-gradient(180deg, #34d399 0%, #10b981 48%, #15803d 100%)',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -54,10 +54,10 @@ export default function OgImage() {
                     width: '48px',
                     height: '48px',
                     borderRadius: '999px',
-                    border: '3px solid #fff1a6',
+                    border: '3px solid #ffffff',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#fff1a6',
+                    color: '#ffffff',
                     fontSize: 22,
                     fontWeight: 700,
                   }}
@@ -66,7 +66,7 @@ export default function OgImage() {
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ color: '#fcd34d', fontSize: 24, textTransform: 'uppercase', letterSpacing: '0.22em' }}>Orda Control</div>
+                <div style={{ color: '#34d399', fontSize: 24, textTransform: 'uppercase', letterSpacing: '0.22em' }}>Orda Control</div>
                 <div style={{ color: '#cbd5e1', fontSize: 18 }}>Собственная система для смен, точки и управленки</div>
               </div>
             </div>
@@ -87,8 +87,8 @@ export default function OgImage() {
                     padding: '12px 18px',
                     borderRadius: '999px',
                     border: '1px solid rgba(251,191,36,0.2)',
-                    background: 'rgba(251,191,36,0.1)',
-                    color: '#fde68a',
+                    background: 'rgba(22,163,74,0.14)',
+                    color: '#86efac',
                     fontSize: 20,
                   }}
                 >

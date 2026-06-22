@@ -10,6 +10,7 @@ import {
   Building2,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock4,
   Coffee,
   Cpu,
@@ -27,6 +28,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
+import { FloatingCta } from '@/components/public/floating-cta'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
 import { CountUp, Floating, HeroIn, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
@@ -131,7 +133,7 @@ const faqItems = [
 
 export default async function MarketingHomePage() {
   return (
-    <main className="min-h-screen bg-white text-[#0f2038]">
+    <main className="min-h-screen bg-white pb-[76px] text-[#0f2038] sm:pb-0">
       <WebsiteStructuredData />
       <FaqStructuredData faq={faqItems} />
 
@@ -412,6 +414,7 @@ export default async function MarketingHomePage() {
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Тарифы</div>
           <h2 className={`mt-5 ${h2Class}`}>Подключайте только нужное</h2>
+          <p className={`mt-4 ${leadClass}`}>Цена зависит от числа точек и модулей — посчитаем индивидуально за 5 минут.</p>
         </Reveal>
         <Stagger className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {pricingPlans.map((plan) => (
@@ -449,10 +452,13 @@ export default async function MarketingHomePage() {
           <Stagger className="mt-10 grid gap-3 md:grid-cols-2">
             {faqItems.map((item) => (
               <StaggerItem key={item.question}>
-                <div className={`h-full ${cardClass}`}>
-                  <h3 className="font-display text-[17px] font-bold leading-[1.35] text-[#0f2038]">{item.question}</h3>
-                  <p className="mt-2.5 text-[14.5px] leading-[1.6] text-[#56657d]">{item.answer}</p>
-                </div>
+                <details className="group h-full rounded-[20px] border border-[#d6dde8] bg-white px-6 py-5 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)] transition-colors duration-300 hover:border-[#16a34a]/30 open:border-[#16a34a]/30 [&_summary::-webkit-details-marker]:hidden">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                    <h3 className="font-display text-[17px] font-bold leading-[1.35] text-[#0f2038]">{item.question}</h3>
+                    <ChevronDown className="h-5 w-5 shrink-0 text-[#16a34a] transition-transform duration-300 group-open:rotate-180" />
+                  </summary>
+                  <p className="mt-3 text-[14.5px] leading-[1.6] text-[#56657d]">{item.answer}</p>
+                </details>
               </StaggerItem>
             ))}
           </Stagger>
@@ -487,23 +493,48 @@ export default async function MarketingHomePage() {
 
       {/* ФУТЕР */}
       <footer className="border-t border-[#e2e8f0] bg-white">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-10 lg:px-12">
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
-            <div>
-              <div className="font-display text-[15px] font-bold text-[#0f2038]">{PRODUCT}</div>
-              <div className="text-[11px] text-[#64748b]">© 2026 — все права защищены</div>
+        <div className="mx-auto max-w-[1600px] px-6 py-10 sm:px-10 lg:px-12">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-[340px]">
+              <div className="flex items-center gap-2.5">
+                <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
+                <div className="font-display text-[16px] font-bold text-[#0f2038]">{PRODUCT}</div>
+              </div>
+              <p className="mt-3 text-[14px] leading-[1.5] text-[#5b6b82]">Финансы, продажи и смены бизнеса — в одной системе. Прибыль видна каждый день.</p>
+            </div>
+            <div className="flex flex-wrap gap-x-14 gap-y-7">
+              <div>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Продукт</div>
+                <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
+                  <Link href="#features" className="hover:text-[#16a34a]">Возможности</Link>
+                  <Link href="#pricing" className="hover:text-[#16a34a]">Тарифы</Link>
+                  <Link href="/club-management-system" className="hover:text-[#16a34a]">Для клубов</Link>
+                  <Link href="/login" className="hover:text-[#16a34a]">Войти</Link>
+                </div>
+              </div>
+              <div>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Документы</div>
+                <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
+                  <Link href="/offer" className="hover:text-[#16a34a]">Оферта</Link>
+                  <Link href="/privacy" className="hover:text-[#16a34a]">Политика</Link>
+                  <Link href="/terms" className="hover:text-[#16a34a]">Соглашение</Link>
+                  <Link href="/sla" className="hover:text-[#16a34a]">SLA</Link>
+                </div>
+              </div>
+              <div>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Связь</div>
+                <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
+                  <Link href="#contact" className="hover:text-[#16a34a]">Оставить заявку</Link>
+                  <Link href="/cookies" className="hover:text-[#16a34a]">Cookies</Link>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-[#5b6b82]">
-            <Link href="/offer" className="hover:text-[#16a34a]">Оферта</Link>
-            <Link href="/privacy" className="hover:text-[#16a34a]">Политика</Link>
-            <Link href="/terms" className="hover:text-[#16a34a]">Соглашение</Link>
-            <Link href="/club-management-system" className="hover:text-[#16a34a]">Для клубов</Link>
-            <Link href="/login" className="hover:text-[#16a34a]">Войти</Link>
-          </div>
+          <div className="mt-9 border-t border-[#eef2f8] pt-6 text-[12px] text-[#64748b]">© 2026 {PRODUCT} — все права защищены</div>
         </div>
       </footer>
+
+      <FloatingCta />
     </main>
   )
 }

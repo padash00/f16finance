@@ -11,19 +11,19 @@ export function OgAppBrandIcon({ sizePx }: { sizePx: number }) {
         alignItems: 'center',
         justifyContent: 'center',
         background:
-          'radial-gradient(circle at 30% 20%, rgba(255,244,184,0.35), transparent 28%), linear-gradient(180deg, #f8d24d 0%, #d6a514 48%, #b8800d 100%)',
+          'radial-gradient(circle at 30% 20%, rgba(187,247,208,0.4), transparent 28%), linear-gradient(180deg, #22c55e 0%, #16a34a 48%, #15803d 100%)',
       }}
     >
       <svg width={sizePx} height={sizePx} viewBox="0 0 64 64" fill="none">
         <defs>
           <linearGradient id="strokeGoldPwa" x1="8" y1="4" x2="54" y2="60" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FFF2AA" />
-            <stop offset="0.45" stopColor="#EEC94A" />
-            <stop offset="1" stopColor="#8D6200" />
+            <stop stopColor="#DCFCE7" />
+            <stop offset="0.45" stopColor="#4ade80" />
+            <stop offset="1" stopColor="#166534" />
           </linearGradient>
           <linearGradient id="fillGoldPwa" x1="20" y1="22" x2="45" y2="46" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FCE27A" />
-            <stop offset="1" stopColor="#D39E10" />
+            <stop stopColor="#BBF7D0" />
+            <stop offset="1" stopColor="#15803d" />
           </linearGradient>
         </defs>
 
