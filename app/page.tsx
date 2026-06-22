@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
-import { AmbientGlow, CountUp, HeroIn, LiveDot, Reveal, ShimmerText, Stagger, StaggerItem } from '@/components/public/landing-motion'
+import { AmbientGlow, CountUp, HeroIn, LiveDot, PulseGlow, Reveal, ShimmerText, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -659,8 +659,8 @@ export default async function MarketingHomePage() {
             const Icon = mode.icon
             return (
               <StaggerItem key={mode.title}>
-                <Card className="h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.34)]">
-                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
+                <Card className="group h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.34)]">
+                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110">
                     <Icon className="h-6 w-6" />
                   </div>
                   <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
@@ -729,8 +729,8 @@ export default async function MarketingHomePage() {
             const Icon = pillar.icon
             return (
               <StaggerItem key={pillar.title}>
-                <Card className="h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.36)]">
-                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
+                <Card className="group h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.36)]">
+                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110">
                     <Icon className="h-6 w-6" />
                   </div>
                   <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
@@ -846,7 +846,7 @@ export default async function MarketingHomePage() {
                     }`}
                   >
                     <div className="flex items-start gap-4">
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)]">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110">
                         <Icon className="h-6 w-6" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1012,6 +1012,7 @@ export default async function MarketingHomePage() {
         <Stagger className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {pricingPlans.map((plan) => (
             <StaggerItem key={plan.name}>
+              <PulseGlow active={plan.highlight} className="h-full">
               <Card
                 className={
                   plan.highlight
@@ -1060,6 +1061,7 @@ export default async function MarketingHomePage() {
                   <Link href="#contact">{plan.cta}</Link>
                 </Button>
               </Card>
+              </PulseGlow>
             </StaggerItem>
           ))}
         </Stagger>

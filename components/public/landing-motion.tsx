@@ -146,6 +146,23 @@ export function ShimmerText({ children, className }: { children: ReactNode; clas
   )
 }
 
+/** Мягко пульсирующее свечение вокруг блока (для выделения рекомендованного тарифа).
+ * active=false → обычная обёртка без анимации (чтобы не дублировать контент в map). */
+export function PulseGlow({ children, color = '#f5b84b', active = true, className }: { children: ReactNode; color?: string; active?: boolean; className?: string }) {
+  const rm = useReducedMotion()
+  if (!active || rm) return <div className={className}>{children}</div>
+  return (
+    <motion.div
+      className={className}
+      style={{ borderRadius: 24 }}
+      animate={{ boxShadow: [`0 0 0 0 ${color}00`, `0 0 40px 2px ${color}55`, `0 0 0 0 ${color}00`] }}
+      transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 /** Анимированное ambient-свечение за контентом — кинематографичная атмосфера. */
 export function AmbientGlow() {
   const rm = useReducedMotion()
