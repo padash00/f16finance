@@ -5,7 +5,7 @@
 // на сервере (SEO сохраняется), оживает анимацией при попадании во вьюпорт.
 // Все анимации уважают prefers-reduced-motion.
 
-import { animate, motion, useInView, useReducedMotion } from 'framer-motion'
+import { animate, motion, useInView, useReducedMotion, useScroll, useTransform } from 'framer-motion'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 const EASE = [0.16, 1, 0.3, 1] as const
@@ -26,10 +26,37 @@ export function Reveal({
   return (
     <motion.div
       className={className}
-      initial={rm ? false : { opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={rm ? false : { opacity: 0, y, scale: 0.98 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.6, ease: EASE, delay }}
+      transition={{ duration: 0.65, ease: EASE, delay }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+/** Параллакс по скроллу: элемент плавно сдвигается, создавая глубину. */
+export function Parallax({ children, distance = 60, className }: { children: ReactNode; distance?: number; className?: string }) {
+  const rm = useReducedMotion()
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
+  const y = useTransform(scrollYProgress, [0, 1], [distance, -distance])
+  return (
+    <motion.div ref={ref} style={rm ? undefined : { y }} className={className}>
+      {children}
+    </motion.div>
+  )
+}
+
+/** Непрерывное мягкое «парение» элемента вверх-вниз. */
+export function Floating({ children, amplitude = 9, duration = 5.5, className }: { children: ReactNode; amplitude?: number; duration?: number; className?: string }) {
+  const rm = useReducedMotion()
+  return (
+    <motion.div
+      className={className}
+      animate={rm ? undefined : { y: [0, -amplitude, 0] }}
+      transition={{ duration, repeat: Infinity, ease: 'easeInOut' }}
     >
       {children}
     </motion.div>
@@ -60,7 +87,7 @@ export function StaggerItem({ children, className }: { children: ReactNode; clas
       variants={
         rm
           ? { hidden: {}, show: {} }
-          : { hidden: { opacity: 0, y: 22 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } } }
+          : { hidden: { opacity: 0, y: 22, scale: 0.96 }, show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: EASE } } }
       }
     >
       {children}

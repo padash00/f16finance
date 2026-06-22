@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
-import { AmbientGlow, CountUp, HeroIn, LiveDot, PulseGlow, Reveal, ShimmerText, Stagger, StaggerItem } from '@/components/public/landing-motion'
+import { AmbientGlow, CountUp, Floating, HeroIn, LiveDot, PulseGlow, Reveal, ShimmerText, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -587,6 +587,7 @@ export default async function MarketingHomePage() {
 
           {/* Визуал справа: финансовый дашборд */}
           <HeroIn delay={0.15}>
+            <Floating amplitude={10}>
             <Card className="overflow-hidden rounded-[24px] border-white/[0.08] bg-[#0d1626]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.40)]">
               <div className="rounded-[20px] border border-white/[0.06] bg-[#101b2e] p-5">
                 <div className="flex items-center justify-between">
@@ -632,6 +633,7 @@ export default async function MarketingHomePage() {
                 </div>
               </div>
             </Card>
+            </Floating>
           </HeroIn>
         </div>
       </section>
