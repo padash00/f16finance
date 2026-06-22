@@ -88,20 +88,28 @@ export function AmbientGlow() {
   const rm = useReducedMotion()
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      {/* базовый тёмный градиент (перенесён сюда, чтобы свечение было видно) */}
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,#050a14_0%,#07101d_55%,#050a14_100%)]" />
+      {/* цветные дрейфующие свечения — заметные */}
       <motion.div
-        className="absolute -top-40 left-[-12%] h-[540px] w-[540px] rounded-full bg-[#ff8c46]/20 blur-[120px]"
-        animate={rm ? undefined : { x: [0, 60, 0], y: [0, 40, 0] }}
+        className="absolute -top-32 left-[-8%] h-[560px] w-[560px] rounded-full bg-[#ff8c46]/40 blur-[120px]"
+        animate={rm ? undefined : { x: [0, 70, 0], y: [0, 44, 0] }}
         transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
-        className="absolute top-[28%] right-[-12%] h-[500px] w-[500px] rounded-full bg-[#10d6c2]/14 blur-[120px]"
-        animate={rm ? undefined : { x: [0, -52, 0], y: [0, 60, 0] }}
+        className="absolute top-[24%] right-[-8%] h-[540px] w-[540px] rounded-full bg-[#10d6c2]/28 blur-[120px]"
+        animate={rm ? undefined : { x: [0, -56, 0], y: [0, 64, 0] }}
         transition={{ duration: 23, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
-        className="absolute bottom-[-18%] left-[28%] h-[440px] w-[440px] rounded-full bg-[#ffb25c]/12 blur-[130px]"
-        animate={rm ? undefined : { x: [0, 44, 0], y: [0, -42, 0] }}
+        className="absolute bottom-[-14%] left-[22%] h-[500px] w-[500px] rounded-full bg-[#ffb25c]/26 blur-[130px]"
+        animate={rm ? undefined : { x: [0, 48, 0], y: [0, -46, 0] }}
         transition={{ duration: 27, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute top-[4%] left-[34%] h-[460px] w-[460px] rounded-full bg-[#ff7b4d]/22 blur-[150px]"
+        animate={rm ? undefined : { x: [0, -36, 0], y: [0, 50, 0] }}
+        transition={{ duration: 31, repeat: Infinity, ease: 'easeInOut' }}
       />
     </div>
   )

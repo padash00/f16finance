@@ -478,7 +478,7 @@ const faqItems = [
 
 export default async function MarketingHomePage() {
   return (
-    <main className="relative min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,156,87,0.10),transparent_28%),linear-gradient(180deg,#050a14_0%,#07101d_55%,#050a14_100%)] text-[var(--color-text-primary)]">
+    <main className="relative min-h-screen bg-transparent text-[var(--color-text-primary)]">
       <WebsiteStructuredData />
       <FaqStructuredData faq={faqItems} />
       <AmbientGlow />
