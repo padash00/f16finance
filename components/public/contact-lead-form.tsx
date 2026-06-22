@@ -71,78 +71,78 @@ export function ContactLeadForm() {
     <form onSubmit={handleSubmit} className="grid gap-4">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Имя</label>
+          <label className="text-sm font-medium text-[#475569]">Имя</label>
           <Input
             required
             value={form.name}
             onChange={(event) => updateField('name', event.target.value)}
             placeholder="Как к вам обращаться"
-            className="h-11 border-white/10 bg-slate-950/70 text-white"
+            className="h-11 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Телефон</label>
+          <label className="text-sm font-medium text-[#475569]">Телефон</label>
           <Input
             required
             value={form.phone}
             onChange={(event) => updateField('phone', event.target.value)}
             placeholder="+7 ..."
-            className="h-11 border-white/10 bg-slate-950/70 text-white"
+            className="h-11 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
           />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Ниша</label>
+          <label className="text-sm font-medium text-[#475569]">Ниша</label>
           <Input
             required
             value={form.niche}
             onChange={(event) => updateField('niche', event.target.value)}
             placeholder="Клуб, кофейня, сеть точек..."
-            className="h-11 border-white/10 bg-slate-950/70 text-white"
+            className="h-11 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Название бизнеса</label>
+          <label className="text-sm font-medium text-[#475569]">Название бизнеса</label>
           <Input
             value={form.company}
             onChange={(event) => updateField('company', event.target.value)}
             placeholder="Если хотите, можно указать"
-            className="h-11 border-white/10 bg-slate-950/70 text-white"
+            className="h-11 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
           />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Telegram</label>
+          <label className="text-sm font-medium text-[#475569]">Telegram</label>
           <Input
             value={form.telegram}
             onChange={(event) => updateField('telegram', event.target.value)}
             placeholder="@username"
-            className="h-11 border-white/10 bg-slate-950/70 text-white"
+            className="h-11 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Email</label>
+          <label className="text-sm font-medium text-[#475569]">Email</label>
           <Input
             type="email"
             value={form.email}
             onChange={(event) => updateField('email', event.target.value)}
             placeholder="email@company.com"
-            className="h-11 border-white/10 bg-slate-950/70 text-white"
+            className="h-11 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
           />
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm text-slate-300">Что хотите автоматизировать</label>
+        <label className="text-sm font-medium text-[#475569]">Что хотите автоматизировать</label>
         <Textarea
           value={form.message}
           onChange={(event) => updateField('message', event.target.value)}
           placeholder="Например: смены, точку, Telegram-отчеты, зарплату, ОПиУ..."
-          className="min-h-32 border-white/10 bg-slate-950/70 text-white"
+          className="min-h-32 border-[#c8d1de] bg-white text-[#0f2038] placeholder:text-[#94a3b8] focus-visible:ring-[#16a34a]/30"
         />
       </div>
 
@@ -155,15 +155,15 @@ export function ContactLeadForm() {
         <div
           className={`rounded-2xl border px-4 py-3 text-sm ${
             status.type === 'success'
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
-              : 'border-red-500/20 bg-red-500/10 text-red-300'
+              ? 'border-[#16a34a]/30 bg-[#16a34a]/[0.08] text-[#15803d]'
+              : 'border-red-300 bg-red-50 text-[#dc2626]'
           }`}
         >
           {status.message}
         </div>
       ) : null}
 
-      <Button type="submit" disabled={isPending} size="lg" className="bg-amber-500 text-slate-950 hover:bg-amber-400">
+      <Button type="submit" disabled={isPending} size="lg" className="bg-gradient-to-br from-[#1db955] to-[#15803d] text-white shadow-[0_10px_26px_-8px_rgba(22,163,74,0.5)] hover:from-[#15803d] hover:to-[#15803d]">
         {isPending ? 'Отправляем...' : 'Оставить заявку'}
       </Button>
     </form>
