@@ -74,6 +74,14 @@ const bandDimClass =
 const bandLightClass =
   'relative before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/[0.08] before:to-transparent before:content-[""]'
 
+// ─────────────────────── HERO ───────────────────────
+
+const heroBadges = [
+  'Прибыль каждый день',
+  'AI объясняет цифры',
+  'Отчёты в Telegram',
+]
+
 // ─────────────────────── ЧТО ТАКОЕ ─────────────────────
 
 const usageModes = [
@@ -512,127 +520,119 @@ export default async function MarketingHomePage() {
         </div>
       </header>
 
-      {/* ────────── 1. HERO (bento) ────────── */}
-      <section className="mx-auto max-w-[1500px] px-6 pb-20 pt-4 sm:px-10 lg:pb-28 lg:pt-8 lg:px-12">
-        <HeroIn className="mx-auto max-w-[820px] text-center">
-          <div className={`${eyebrowClass} mx-auto`}>
-            <Sparkles className="h-3.5 w-3.5" />
-            Финансовая управляемость для бизнеса
-          </div>
-          <h1 className={`mt-6 ${h1Class}`}>
-            Финансы бизнеса{' '}
-            <ShimmerText>без Excel и хаоса</ShimmerText>
-          </h1>
-          <p className={`mx-auto mt-5 max-w-[560px] ${leadClass}`}>
-            Продажи, смены, склад, зарплаты и AI-аналитика — в одной системе.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Button
-              asChild
-              size="lg"
-              className="rounded-[18px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] px-8 py-[18px] text-[18px] font-semibold text-[#0a0f18] shadow-[0_10px_30px_rgba(255,140,70,0.22)] transition hover:from-[#ffbe6e] hover:to-[#ff8a5c] hover:shadow-[0_12px_36px_rgba(255,140,70,0.32)]"
-            >
-              <Link href="#contact">
-                Начать бесплатно
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="rounded-[18px] border-white/[0.08] bg-white/[0.03] px-8 py-[18px] text-[18px] font-medium text-[var(--color-text-primary)] hover:bg-white/[0.06]"
-            >
-              <Link href="#features">Возможности</Link>
-            </Button>
-          </div>
-        </HeroIn>
+      {/* ────────── 1. HERO ────────── */}
+      <section className="mx-auto max-w-[1600px] px-6 pb-24 pt-8 sm:px-10 lg:pb-32 lg:pt-12 lg:px-12">
+        <div className="grid gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <HeroIn className="space-y-8 max-w-[680px]">
+            <div className={eyebrowClass}>
+              <Sparkles className="h-3.5 w-3.5" />
+              Финансовая управляемость для бизнеса
+            </div>
 
-        {/* Bento-сетка возможностей */}
-        <Stagger className="mt-14 grid grid-cols-2 gap-3.5 auto-rows-[150px] sm:gap-4 lg:grid-cols-4 lg:auto-rows-[168px]">
-          {/* Чистая прибыль — большая плитка */}
-          <StaggerItem className="col-span-2 row-span-2">
-            <div className="flex h-full flex-col justify-between overflow-hidden rounded-[24px] border border-[var(--color-accent-gold)]/25 bg-[linear-gradient(150deg,rgba(245,184,75,0.16),rgba(13,22,38,0.7))] p-7 shadow-[0_24px_60px_rgba(0,0,0,0.34)]">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">Чистая прибыль · Май</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent-teal)]/30 bg-[var(--color-accent-teal)]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent-teal)]">
-                  <LiveDot />live
-                </span>
+            <h1 className={h1Class}>
+              {PRODUCT} — финансовая управляемость бизнеса{' '}
+              <ShimmerText>без Excel и хаоса</ShimmerText>
+            </h1>
+
+            <p className={`${leadClass} max-w-[540px]`}>
+              Продажи, смены, склад, зарплаты и AI-аналитика — в одной системе.
+            </p>
+
+            <Stagger className="flex flex-wrap gap-2.5">
+              {heroBadges.map((b) => (
+                <StaggerItem key={b}>
+                  <span className="inline-block rounded-[14px] border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[15px] font-medium text-[var(--color-text-soft)]">
+                    {b}
+                  </span>
+                </StaggerItem>
+              ))}
+            </Stagger>
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button
+                asChild
+                size="lg"
+                className="rounded-[18px] bg-gradient-to-br from-[#ffb25c] to-[#ff7b4d] px-7 py-[18px] text-[18px] font-semibold text-[#0a0f18] shadow-[0_10px_30px_rgba(255,140,70,0.22)] transition hover:from-[#ffbe6e] hover:to-[#ff8a5c] hover:shadow-[0_12px_36px_rgba(255,140,70,0.32)]"
+              >
+                <Link href="#contact">
+                  Попробовать {PRODUCT}
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="rounded-[18px] border-white/[0.08] bg-white/[0.03] px-7 py-[18px] text-[18px] font-medium text-[var(--color-text-primary)] hover:bg-white/[0.06]"
+              >
+                <Link href="#features">Посмотреть возможности</Link>
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 text-[14px] font-medium text-[var(--color-text-muted)]">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-[var(--color-accent-teal)]" />
+                Без обязательств
               </div>
-              <div>
-                <div className="font-display text-[46px] font-black leading-none tracking-[-0.03em] text-[var(--color-text-primary)] sm:text-[58px]">
-                  <CountUp value={3469917} /> <span className="text-[24px] font-bold text-[var(--color-text-muted)]">₸</span>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-[var(--color-accent-teal)]" />
+                Данные ваши, можно забрать
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-[var(--color-accent-teal)]" />
+                Помощь с внедрением
+              </div>
+            </div>
+          </HeroIn>
+
+          {/* Визуал справа: финансовый дашборд */}
+          <HeroIn delay={0.15}>
+            <Card className="overflow-hidden rounded-[24px] border-white/[0.08] bg-[#0d1626]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.40)]">
+              <div className="rounded-[20px] border border-white/[0.06] bg-[#101b2e] p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                    Финансовый дашборд
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent-teal)]/30 bg-[var(--color-accent-teal)]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent-teal)]">
+                    <LiveDot />
+                    live
+                  </span>
                 </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full w-[47%] rounded-full bg-gradient-to-r from-[#34f0b6] to-[#10b981]" /></div>
-                  <span className="text-[15px] font-bold text-[var(--color-accent-success)]">47.3%</span>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <Metric label="Выручка за день" value={412800} unit="₸" delta="+8%" trend="up" />
+                  <Metric label="Маржа" value={38} suffix="%" delta="-1.4%" trend="down" />
+                  <Metric label="Прибыль за месяц" value={1960000} unit="₸" delta="+12%" trend="up" />
+                  <Metric label="ФОТ" value={540000} unit="₸" delta="0%" trend="flat" />
                 </div>
-                <div className="mt-2 text-[13px] text-[var(--color-text-muted)]">рентабельность · считается каждый день</div>
+
+                <div className="mt-4 rounded-[16px] border border-[var(--color-accent-gold)]/25 bg-[var(--color-accent-gold)]/[0.07] p-4">
+                  <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-accent-gold)]">
+                    <Bot className="h-4 w-4" />
+                    AI-наблюдение · сейчас
+                  </div>
+                  <div className="mt-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]">
+                    Маржа снизилась на 1,4% за неделю. Причина — рост закупочной цены по категории
+                    «напитки» на 14%. Альтернативный поставщик предлагает на 11% ниже —
+                    экономия около 42 000 ₸/мес.
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-[16px] border border-white/[0.06] bg-black/30 p-4">
+                  <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                    Telegram-отчёт после смены
+                  </div>
+                  <div className="mt-1.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]">
+                    <span className="font-semibold text-[var(--color-text-primary)]">Точка №1 · Дневная смена</span>
+                    <br />
+                    Онлайн: 194 025 ₸ · Наличные: 26 000 ₸ · Возвраты: 600 ₸
+                    <br />
+                    <span className="text-[var(--color-accent-success)]">✓ Расхождений нет</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </StaggerItem>
-
-          {/* AI — широкая */}
-          <StaggerItem className="col-span-2">
-            <div className="group flex h-full flex-col justify-between overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/70 p-6 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30">
-              <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-accent-gold)]"><Bot className="h-4 w-4" />AI объясняет цифры</div>
-              <p className="text-[14px] leading-[1.5] text-[var(--color-text-secondary)]">Маржа ↓ 1.4% — выросла закупка «напитки» на 14%. Альтернатива дешевле на 11% — <span className="font-semibold text-[var(--color-text-primary)]">экономия ~42 000 ₸/мес</span>.</p>
-            </div>
-          </StaggerItem>
-
-          {/* Выручка */}
-          <StaggerItem className="col-span-1">
-            <BentoStat icon={LineChart} label="Выручка за день" value={412800} unit="₸" />
-          </StaggerItem>
-          {/* Маржа */}
-          <StaggerItem className="col-span-1">
-            <BentoStat icon={BarChart3} label="Маржа" value={38} suffix="%" />
-          </StaggerItem>
-
-          {/* Смены — широкая */}
-          <StaggerItem className="col-span-2">
-            <div className="group flex h-full flex-col justify-between overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/70 p-6 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30">
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-9 w-9 place-items-center rounded-[12px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110"><Clock4 className="h-5 w-5" /></span>
-                <span className="font-display text-[18px] font-bold text-[var(--color-text-primary)]">Смены без хаоса</span>
-              </div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="text-[var(--color-text-muted)]">Авто-сверка нал / безнал / онлайн</span>
-                <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-success)]/[0.14] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-accent-success)]">✓ сходится</span>
-              </div>
-            </div>
-          </StaggerItem>
-
-          {/* Зарплаты */}
-          <StaggerItem className="col-span-1">
-            <BentoFeature icon={Users} title="Зарплаты" sub="ставка · % · KPI" />
-          </StaggerItem>
-          {/* Telegram */}
-          <StaggerItem className="col-span-1">
-            <BentoFeature icon={Receipt} title="Telegram-отчёты" sub="после каждой смены" />
-          </StaggerItem>
-
-          {/* Склад — на всю ширину */}
-          <StaggerItem className="col-span-2 lg:col-span-4">
-            <div className="group flex h-full flex-col justify-center gap-3 overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/70 p-6 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110"><Boxes className="h-5 w-5" /></span>
-                <span className="font-display text-[19px] font-bold text-[var(--color-text-primary)]">Склад и витрина</span>
-              </div>
-              <div className="flex flex-wrap gap-2 sm:ml-auto">
-                {['Раздельные балансы', 'Заявки на пополнение', 'Приёмка с AI', 'Ревизия'].map((c) => (
-                  <span key={c} className="rounded-[12px] border border-white/[0.08] bg-white/[0.03] px-3.5 py-1.5 text-[13px] font-medium text-[var(--color-text-soft)]">{c}</span>
-                ))}
-              </div>
-            </div>
-          </StaggerItem>
-        </Stagger>
-
-        {/* Доверие */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-[14px] font-medium text-[var(--color-text-muted)]">
-          <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent-teal)]" />2 недели бесплатно</div>
-          <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent-teal)]" />Данные ваши, можно забрать</div>
-          <div className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent-teal)]" />Помощь с внедрением</div>
+            </Card>
+          </HeroIn>
         </div>
       </section>
 
@@ -1244,27 +1244,42 @@ export default async function MarketingHomePage() {
 
 // ─────────────────────── ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ───────────────────────
 
-function BentoStat({ icon: Icon, label, value, unit, suffix }: { icon: any; label: string; value: number; unit?: string; suffix?: string }) {
+function Metric({
+  label,
+  value,
+  unit,
+  suffix,
+  delta,
+  trend,
+}: {
+  label: string
+  value: number
+  unit?: string
+  suffix?: string
+  delta: string
+  trend: 'up' | 'down' | 'flat'
+}) {
   return (
-    <div className="group flex h-full flex-col justify-between overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/70 p-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30">
-      <span className="grid h-9 w-9 place-items-center rounded-[12px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110"><Icon className="h-5 w-5" /></span>
-      <div>
-        <div className="font-display text-[26px] font-black leading-none tracking-[-0.02em] text-[var(--color-text-primary)]">
-          <CountUp value={value} suffix={suffix} />{unit ? <span className="ml-1 text-[14px] font-bold text-[var(--color-text-muted)]">{unit}</span> : null}
-        </div>
-        <div className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">{label}</div>
+    <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.03] p-3.5">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+        {label}
       </div>
-    </div>
-  )
-}
-
-function BentoFeature({ icon: Icon, title, sub }: { icon: any; title: string; sub: string }) {
-  return (
-    <div className="group flex h-full flex-col justify-between overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0d1626]/70 p-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30">
-      <span className="grid h-9 w-9 place-items-center rounded-[12px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110"><Icon className="h-5 w-5" /></span>
-      <div>
-        <div className="font-display text-[16px] font-bold text-[var(--color-text-primary)]">{title}</div>
-        <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">{sub}</div>
+      <div className="mt-1.5 flex items-baseline gap-1">
+        <span className="font-display text-[26px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--color-text-primary)] tabular-nums">
+          <CountUp value={value} suffix={suffix} />
+        </span>
+        {unit ? <span className="text-[12px] text-[var(--color-text-muted)]">{unit}</span> : null}
+      </div>
+      <div
+        className={`mt-1 text-[11px] font-semibold ${
+          trend === 'up'
+            ? 'text-[var(--color-accent-success)]'
+            : trend === 'down'
+              ? 'text-[var(--color-accent-negative)]'
+              : 'text-[var(--color-text-muted)]'
+        }`}
+      >
+        {delta} к среднему
       </div>
     </div>
   )
