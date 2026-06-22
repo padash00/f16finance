@@ -51,7 +51,7 @@ const leadClass = 'text-[17px] leading-[1.6] text-[#56657d] sm:text-[19px]'
 const sectionClass = 'mx-auto max-w-[1240px] px-6 py-20 sm:px-10 lg:py-24 lg:px-12'
 const cardClass = 'rounded-[20px] border border-[#e7ebf2] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]'
 const btnPrimary =
-  'rounded-[14px] bg-[#16a34a] px-7 py-[15px] text-[16px] font-semibold text-white shadow-[0_10px_26px_-8px_rgba(22,163,74,0.55)] transition hover:bg-[#15803d]'
+  'rounded-[14px] bg-gradient-to-br from-[#1db955] to-[#15803d] px-7 py-[15px] text-[16px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,163,74,0.5)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-8px_rgba(22,163,74,0.6)]'
 const btnGhost =
   'rounded-[14px] border border-[#dce1ea] bg-white px-7 py-[15px] text-[16px] font-semibold text-[#0f2038] transition hover:border-[#16a34a]/40 hover:text-[#15803d]'
 
@@ -158,12 +158,16 @@ export default async function MarketingHomePage() {
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-[radial-gradient(60%_60%_at_50%_0%,rgba(22,163,74,0.06),transparent)]">
-        <div className="mx-auto max-w-[1240px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-24 right-[-6%] h-[440px] w-[440px] rounded-full bg-[#16a34a]/[0.08] blur-[130px]" />
+          <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#38bdf8]/[0.07] blur-[130px]" />
+        </div>
+        <div className="relative mx-auto max-w-[1240px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
           <div className="grid gap-14 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
             <HeroIn className="max-w-[600px]">
               <div className={eyebrowClass}><Sparkles className="h-3.5 w-3.5" />Финансовая управляемость</div>
               <h1 className={`mt-6 ${h1Class}`}>
-                Финансы бизнеса <span className="text-[#16a34a]">под контролем</span>
+                Финансы бизнеса <span className="bg-gradient-to-r from-[#16a34a] to-[#22c55e] bg-clip-text text-transparent">под контролем</span>
               </h1>
               <p className={`mt-5 max-w-[500px] ${leadClass}`}>
                 Продажи, смены, склад, зарплаты и AI-аналитика — в одной системе. Прибыль видна каждый день.
