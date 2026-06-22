@@ -74,15 +74,69 @@ const bandDimClass =
 const bandLightClass =
   'relative before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/[0.08] before:to-transparent before:content-[""]'
 
+// ─────────────────────── ЧТО ТАКОЕ ─────────────────────
+
+const usageModes = [
+  {
+    icon: BarChart3,
+    title: 'Финансовая аналитика',
+    text: 'Видеть выручку, расходы, прибыль, маржу, зарплаты и расхождения каждый день.',
+  },
+  {
+    icon: ShoppingBag,
+    title: 'Программа для продаж',
+    text: 'Продавать товары, вести кассу, закрывать смены и контролировать остатки.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Управленческий контроль',
+    text: 'Понимать что происходит в бизнесе каждый день, а не только после отчёта бухгалтера.',
+  },
+]
+
 // ─────────────────────── ПРОБЛЕМЫ ───────────────────────
 
 const painPoints = [
-  { pain: 'Прибыль видно только после закрытия месяца', solution: 'P&L и маржа считаются автоматически после каждой смены.' },
-  { pain: 'Маржа упала — непонятно почему', solution: 'AI показывает причину: закупка, расходы, наценка или продажи.' },
-  { pain: 'Смена закрылась с расхождением', solution: 'Автосверка нал / безнал / онлайн — расхождение видно сразу.' },
-  { pain: 'Зарплата — споры и ручные пересчёты', solution: 'Авторасчёт: ставка, процент, KPI, бонусы и штрафы.' },
-  { pain: 'Не на месте, но хочу видеть цифры', solution: 'После каждой смены — Telegram-отчёт с итогами.' },
-  { pain: 'Накладные проверять некогда', solution: 'AI распознаёт фото счёта и добавляет товары в приёмку.' },
+  {
+    pain: 'Вижу прибыль только после закрытия месяца бухгалтером',
+    solution:
+      'Отчёт о прибылях и убытках, маржа и ключевые показатели обновляются автоматически после каждой смены, продажи или операции.',
+  },
+  {
+    pain: 'Маржа снизилась, но непонятно почему',
+    solution:
+      'AI анализирует показатели и показывает причину: выросла закупочная цена, увеличились расходы, снизилась наценка или просели продажи по категории.',
+  },
+  {
+    pain: 'Смена закрылась с расхождением, но непонятно где ошибка',
+    solution:
+      'Система сверяет продажи, кассу, Безналичный, наличные и другие способы оплаты. Расхождения подсвечиваются автоматически.',
+  },
+  {
+    pain: 'Зарплата сотрудников превращается в споры и ручные пересчёты',
+    solution:
+      'Гибкие правила расчёта: ставка за смену, процент от выручки, KPI, бонусы и штрафы. Система считает выплаты автоматически.',
+  },
+  {
+    pain: 'Онлайн-платежи и терминал не сходятся с отчётами',
+    solution:
+      'Orda Control разделяет платежи по сменам, датам и способам оплаты — выручка корректно сходится с банковскими выписками.',
+  },
+  {
+    pain: 'Я не на месте, но хочу понимать что происходит сейчас',
+    solution:
+      'После каждой смены приходит Telegram-отчёт: выручка, расходы, расхождения, сотрудники, продажи и ключевые показатели.',
+  },
+  {
+    pain: 'Товар есть на складе, но его нет на витрине — продажи теряются',
+    solution:
+      'Склад и витрина ведутся как отдельные балансы. Заявки на пополнение, история движения товаров и контроль остатков.',
+  },
+  {
+    pain: 'Не успеваю вручную проверять накладные и поступления',
+    solution:
+      'AI распознаёт фото счёта или накладной, находит товары в каталоге и автоматически добавляет их в приёмку.',
+  },
 ]
 
 // ─────────────────────── 4 СТОЛПА ───────────────────────
@@ -171,12 +225,37 @@ const aiExamples = [
 // ─────────────────────── ДЛЯ КОГО ───────────────────────
 
 const audiences = [
-  { icon: ShoppingBag, title: 'Магазины', text: 'Касса, склад, витрина, смены.' },
-  { icon: Cpu, title: 'Компьютерные клубы', text: 'Операторы, зоны, бар, ночные смены.', href: '/club-management-system' },
-  { icon: Coffee, title: 'Кафе и точки еды', text: 'Закуп, списания, маржа, выручка.' },
-  { icon: Wrench, title: 'Сервисные центры', text: 'Клиенты, оплаты, материалы, аналитика.' },
-  { icon: Sparkles, title: 'Студии услуг', text: 'Записи, оплаты, зарплаты, расходы.' },
-  { icon: Truck, title: 'Склады и точки', text: 'Остатки, перемещения, приёмка.' },
+  {
+    icon: ShoppingBag,
+    title: 'Магазины',
+    text: 'Продажи, касса, остатки, склад, витрина, расходы, смены и отчёты.',
+  },
+  {
+    icon: Cpu,
+    title: 'Компьютерные клубы',
+    text: 'Смены, операторы, Безналичный, наличные, бар, склад, зарплаты, отчёты и контроль нескольких зон.',
+    href: '/club-management-system',
+  },
+  {
+    icon: Coffee,
+    title: 'Кафе и точки еды',
+    text: 'Продажи, закуп, списания, расходы, маржа, сотрудники и ежедневная выручка.',
+  },
+  {
+    icon: Wrench,
+    title: 'Сервисные центры',
+    text: 'Клиенты, оплаты, расходы, материалы, сотрудники и управленческая аналитика.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Студии услуг',
+    text: 'Записи, оплаты, зарплаты специалистов, расходы и финансовые показатели.',
+  },
+  {
+    icon: Truck,
+    title: 'Склады и торговые точки',
+    text: 'Остатки, перемещения, заявки, приёмка, продажи и контроль товара.',
+  },
 ]
 
 // ─────────────────────── СРАВНЕНИЕ ───────────────────────
@@ -557,6 +636,43 @@ export default async function MarketingHomePage() {
         </div>
       </section>
 
+      {/* ────────── 2. ЧТО ТАКОЕ ────────── */}
+      <div className={bandDimClass}>
+      <section className={sectionClass}>
+        <Reveal className="max-w-[760px]">
+          <div className={eyebrowClass}>Что такое {PRODUCT}</div>
+          <h2 className={`mt-5 ${h2Class}`}>
+            Система для контроля денег, продаж и операционной работы
+          </h2>
+          <p className={`mt-5 ${leadClass}`}>
+            {PRODUCT} можно использовать тремя способами — выберите тот, что нужен бизнесу.
+            Подключаются вместе или по отдельности.
+          </p>
+        </Reveal>
+
+        <Stagger className="mt-12 grid gap-5 md:grid-cols-3">
+          {usageModes.map((mode) => {
+            const Icon = mode.icon
+            return (
+              <StaggerItem key={mode.title}>
+                <Card className="group h-full rounded-[24px] border-white/[0.08] bg-[#0d1626]/70 p-8 shadow-[0_18px_48px_rgba(0,0,0,0.20)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-accent-gold)]/30 hover:shadow-[0_28px_70px_rgba(0,0,0,0.34)]">
+                  <div className="grid h-12 w-12 place-items-center rounded-[16px] bg-[var(--color-accent-gold)]/10 text-[var(--color-accent-gold)] transition-transform duration-300 group-hover:scale-110">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                    {mode.title}
+                  </h3>
+                  <p className="mt-3 text-[15px] leading-[1.6] text-[var(--color-text-secondary)]">
+                    {mode.text}
+                  </p>
+                </Card>
+              </StaggerItem>
+            )
+          })}
+        </Stagger>
+      </section>
+      </div>
+
       {/* ────────── 3. ПРОБЛЕМЫ ────────── */}
       <div className={bandLightClass}>
       <section className={sectionClass}>
@@ -616,9 +732,20 @@ export default async function MarketingHomePage() {
                   <h3 className="mt-6 font-display text-[22px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">
                     {pillar.title}
                   </h3>
-                  <p className="mt-2 text-[14px] leading-[1.5] text-[var(--color-text-secondary)]">
+                  <p className="mt-1.5 text-[14px] leading-[1.45] text-[var(--color-text-muted)]">
                     {pillar.subtitle}
                   </p>
+                  <ul className="mt-6 space-y-3 border-t border-white/[0.06] pt-6">
+                    {pillar.points.map((point) => (
+                      <li
+                        key={point}
+                        className="flex items-start gap-2.5 text-[14px] leading-[1.55] text-[var(--color-text-secondary)]"
+                      >
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent-gold)]" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </Card>
               </StaggerItem>
             )
