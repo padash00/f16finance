@@ -73,6 +73,12 @@ const pillars = [
   { icon: Boxes, title: 'Склад и продажи', subtitle: 'POS, остатки, приёмка с AI и ревизия.' },
 ]
 
+const steps = [
+  { icon: Cpu, title: 'Подключаете точку', text: 'Настроим кассу и кабинет за день — без своих серверов и баз.', tone: 'green' as const },
+  { icon: LineChart, title: 'Видите финансы каждый день', text: 'Прибыль, маржа, смены и расхождения — в реальном времени.', tone: 'green' as const },
+  { icon: Bot, title: 'Решаете по цифрам', text: 'AI подсказывает, где теряете деньги и где можно заработать.', tone: 'orange' as const },
+]
+
 const aiCapabilities = [
   { icon: LineChart, title: 'Финансовая аналитика', text: 'почему снизилась маржа и где теряются деньги' },
   { icon: Activity, title: 'Прогноз на 90 дней', text: 'с подсветкой аномалий и отклонений' },
@@ -214,8 +220,18 @@ export default async function MarketingHomePage() {
         </div>
       </section>
 
+      {/* СОЦ-ДОКАЗАТЕЛЬСТВО */}
+      <div className="border-y border-[#e2e8f0] bg-white">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 py-5 text-center text-[15px] font-medium text-[#5b6b82] sm:px-10 lg:px-14">
+          <span className="h-2 w-2 rounded-full bg-[#16a34a]" />
+          Уже считает финансы сети <span className="font-bold text-[#0f2038]">F16</span>
+          <span className="text-[#cbd3e0]">·</span>
+          <span className="font-semibold text-[#475569]">Arena · Ramen · Extra</span>
+        </div>
+      </div>
+
       {/* ПРОБЛЕМЫ */}
-      <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
+      <section className="bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
             <div className={eyebrowClass}>Знакомая ситуация?</div>
@@ -237,8 +253,35 @@ export default async function MarketingHomePage() {
         </div>
       </section>
 
+      {/* КАК ЭТО РАБОТАЕТ */}
+      <section className={sectionClass}>
+        <Reveal className="max-w-[640px]">
+          <div className={eyebrowClass}>Как это работает</div>
+          <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3 шага</h2>
+        </Reveal>
+        <Stagger className="mt-10 grid gap-5 md:grid-cols-3">
+          {steps.map((s, i) => {
+            const Icon = s.icon
+            const isOrange = s.tone === 'orange'
+            return (
+              <StaggerItem key={s.title}>
+                <div className={`group relative h-full ${cardClass} transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`grid h-11 w-11 place-items-center rounded-full text-[18px] font-extrabold text-white ${isOrange ? 'bg-gradient-to-br from-[#fb923c] to-[#f97316]' : 'bg-gradient-to-br from-[#1db955] to-[#15803d]'}`}>{i + 1}</span>
+                    <Icon className={`h-7 w-7 ${isOrange ? 'text-[#f97316]' : 'text-[#16a34a]'}`} />
+                  </div>
+                  <h3 className="mt-5 font-display text-[20px] font-bold tracking-[-0.01em] text-[#0f2038]">{s.title}</h3>
+                  <p className="mt-2 text-[15px] leading-[1.5] text-[#56657d]">{s.text}</p>
+                </div>
+              </StaggerItem>
+            )
+          })}
+        </Stagger>
+      </section>
+
       {/* ВОЗМОЖНОСТИ (4 столпа) */}
-      <section id="features" className={sectionClass}>
+      <section id="features" className="scroll-mt-20 border-y border-[#e2e8f0] bg-[#eef2f8]">
+        <div className={sectionClass}>
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Что внутри</div>
           <h2 className={`mt-5 ${h2Class}`}>Финансы. AI. Смены. Продажи.</h2>
@@ -257,6 +300,7 @@ export default async function MarketingHomePage() {
             )
           })}
         </Stagger>
+        </div>
       </section>
 
       {/* AI */}
@@ -364,7 +408,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* ТАРИФЫ */}
-      <section id="pricing" className={sectionClass}>
+      <section id="pricing" className={`${sectionClass} scroll-mt-20`}>
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Тарифы</div>
           <h2 className={`mt-5 ${h2Class}`}>Подключайте только нужное</h2>
@@ -375,7 +419,7 @@ export default async function MarketingHomePage() {
               <div className={plan.highlight
                 ? 'relative h-full rounded-[20px] border-2 border-[#16a34a]/45 bg-white p-7 shadow-[0_18px_44px_-18px_rgba(22,163,74,0.4)]'
                 : `h-full ${cardClass} transition duration-300 hover:-translate-y-1`}>
-                {plan.highlight && plan.badge ? <span className="absolute right-5 top-5 rounded-full bg-[#16a34a] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">{plan.badge}</span> : null}
+                {plan.highlight && plan.badge ? <span className="absolute right-5 top-5 rounded-full bg-gradient-to-br from-[#fb923c] to-[#f97316] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.6)]">{plan.badge}</span> : null}
                 <div className={'text-[11px] font-semibold uppercase tracking-[0.12em] ' + (plan.highlight ? 'text-[#15803d]' : 'text-[#64748b]')}>{plan.levelLabel}</div>
                 <div className="mt-1.5 font-display text-[26px] font-bold text-[#0f2038]">{plan.name}</div>
                 <p className="mt-2 text-[14.5px] leading-[1.5] text-[#56657d]">{plan.description}</p>
@@ -416,9 +460,9 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* CTA + ФОРМА */}
-      <section id="contact" className={sectionClass}>
+      <section id="contact" className={`${sectionClass} scroll-mt-20`}>
         <Reveal>
-          <div className="overflow-hidden rounded-[26px] border border-[#16a34a]/20 bg-[linear-gradient(135deg,rgba(22,163,74,0.08),rgba(255,255,255,1))] p-9 shadow-[0_24px_60px_-28px_rgba(15,32,56,0.3)] sm:p-12">
+          <div className="overflow-hidden rounded-[26px] border border-[#16a34a]/20 bg-[linear-gradient(135deg,rgba(22,163,74,0.10),rgba(249,115,22,0.07)_58%,rgba(255,255,255,1))] p-9 shadow-[0_24px_60px_-28px_rgba(15,32,56,0.3)] sm:p-12">
             <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
               <div>
                 <div className={eyebrowClass}><Sparkles className="h-3.5 w-3.5" />Начните сегодня</div>
