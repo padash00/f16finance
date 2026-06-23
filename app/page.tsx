@@ -254,6 +254,7 @@ export default async function MarketingHomePage() {
           <Reveal className="max-w-[640px]">
             <div className={eyebrowClass}>Знакомая ситуация?</div>
             <h2 className={`mt-5 ${h2Class}`}>Что мешает видеть реальные деньги</h2>
+            <p className={`mt-4 ${leadClass}`}>Шесть ситуаций, в которых прибыль утекает незаметно — и как Orda закрывает каждую.</p>
           </Reveal>
           <Stagger className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {painPoints.map((p) => (
@@ -276,6 +277,7 @@ export default async function MarketingHomePage() {
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Как это работает</div>
           <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
+          <p className={`mt-4 ${leadClass}`}>Без своих серверов и интеграторов — запуск за день, результат уже с первой смены.</p>
         </Reveal>
         <div className="relative mt-10">
           <div aria-hidden className="absolute inset-x-[14%] top-[50px] hidden h-[2px] bg-gradient-to-r from-[#16a34a]/45 via-[#cbd3e0] to-[#f97316]/45 md:block" />
@@ -306,6 +308,7 @@ export default async function MarketingHomePage() {
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Что внутри</div>
           <h2 className={`mt-5 ${h2Class}`}>Финансы. AI. Смены. Продажи.</h2>
+          <p className={`mt-4 ${leadClass}`}>Четыре модуля, которые закрывают весь операционный учёт точки.</p>
         </Reveal>
         <Stagger className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {pillars.map((pillar) => {
@@ -358,6 +361,7 @@ export default async function MarketingHomePage() {
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Для кого</div>
           <h2 className={`mt-5 ${h2Class}`}>Бизнесу с кассой, людьми и товаром</h2>
+          <p className={`mt-4 ${leadClass}`}>Если есть касса, сотрудники и товар — Orda подстраивается под вашу нишу.</p>
         </Reveal>
         <Stagger className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {audiences.map((aud) => {
@@ -388,6 +392,7 @@ export default async function MarketingHomePage() {
           <Reveal className="max-w-[640px]">
             <div className={eyebrowClass}>Сравнение</div>
             <h2 className={`mt-5 ${h2Class}`}>Вместо пяти программ — одна</h2>
+            <p className={`mt-4 ${leadClass}`}>Excel, 1С и кассовые программы решают по куску. Orda собирает всё в одном месте.</p>
           </Reveal>
           <Reveal className="mt-10 hidden overflow-hidden rounded-[18px] border border-[#d6dde8] bg-white lg:block">
             <div className="grid" style={{ gridTemplateColumns: `minmax(200px,1.1fr) repeat(${comparisonColumns.length}, minmax(140px,1fr))` }}>
