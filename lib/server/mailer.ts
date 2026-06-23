@@ -95,17 +95,17 @@ export async function sendLeadRequestEmail(payload: LeadRequestPayload) {
   const text = rows.map(([label, value]) => `${label}: ${value}`).join('\n')
 
   const html = `
-    <div style="font-family:Arial,sans-serif;background:#0b1120;color:#fff;padding:24px">
-      <div style="max-width:640px;margin:0 auto;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:24px;background:#111827">
-        <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#fbbf24;margin-bottom:12px">Новая заявка с сайта</div>
-        <h1 style="margin:0 0 18px;font-size:28px;line-height:1.2">Orda Control</h1>
+    <div style="font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;padding:24px">
+      <div style="max-width:640px;margin:0 auto;border:1px solid #e2e8f0;border-radius:20px;padding:28px;background:#ffffff">
+        <div style="font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#15803d;font-weight:bold;margin-bottom:10px">Новая заявка с сайта</div>
+        <h1 style="margin:0 0 20px;font-size:26px;line-height:1.2;color:#0f2038">Orda Control</h1>
         <table style="width:100%;border-collapse:collapse">
           ${rows
             .map(
               ([label, value]) => `
                 <tr>
-                  <td style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.08);color:#94a3b8;width:180px;vertical-align:top">${escapeHtml(label)}</td>
-                  <td style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.08);color:#fff;vertical-align:top">${escapeHtml(value)}</td>
+                  <td style="padding:10px 0;border-top:1px solid #eef2f8;color:#64748b;width:180px;vertical-align:top">${escapeHtml(label)}</td>
+                  <td style="padding:10px 0;border-top:1px solid #eef2f8;color:#0f2038;vertical-align:top">${escapeHtml(value)}</td>
                 </tr>
               `,
             )
