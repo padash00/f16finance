@@ -10,12 +10,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 const EASE = [0.16, 1, 0.3, 1] as const
 
-/** Появление блока при скролле: плавный fade + подъём. */
+/** Появление блока при скролле: мягкий blur-in + подъём + fade (Notion/Linear-стиль). */
 export function Reveal({
   children,
   className,
   delay = 0,
-  y = 24,
+  y = 26,
 }: {
   children: ReactNode
   className?: string
@@ -26,10 +26,10 @@ export function Reveal({
   return (
     <motion.div
       className={className}
-      initial={rm ? false : { opacity: 0, y, scale: 0.98 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      initial={rm ? false : { opacity: 0, y, scale: 0.985, filter: 'blur(8px)' }}
+      whileInView={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
       viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.65, ease: EASE, delay }}
+      transition={{ duration: 0.72, ease: EASE, delay }}
     >
       {children}
     </motion.div>
@@ -71,14 +71,14 @@ export function Stagger({ children, className }: { children: ReactNode; classNam
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: '-60px' }}
-      variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}
+      variants={{ hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } } }}
     >
       {children}
     </motion.div>
   )
 }
 
-/** Один элемент в Stagger-контейнере. */
+/** Один элемент в Stagger-контейнере: blur-in + подъём + лёгкий зум. */
 export function StaggerItem({ children, className }: { children: ReactNode; className?: string }) {
   const rm = useReducedMotion()
   return (
@@ -87,7 +87,10 @@ export function StaggerItem({ children, className }: { children: ReactNode; clas
       variants={
         rm
           ? { hidden: {}, show: {} }
-          : { hidden: { opacity: 0, y: 22, scale: 0.96 }, show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: EASE } } }
+          : {
+              hidden: { opacity: 0, y: 24, scale: 0.97, filter: 'blur(6px)' },
+              show: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transition: { duration: 0.58, ease: EASE } },
+            }
       }
     >
       {children}
@@ -101,9 +104,9 @@ export function HeroIn({ children, delay = 0, className }: { children: ReactNode
   return (
     <motion.div
       className={className}
-      initial={rm ? false : { opacity: 0, y: 26 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.7, ease: EASE, delay }}
+      initial={rm ? false : { opacity: 0, y: 28, filter: 'blur(10px)' }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      transition={{ duration: 0.82, ease: EASE, delay }}
     >
       {children}
     </motion.div>

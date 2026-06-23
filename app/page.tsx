@@ -35,7 +35,7 @@ import { Button } from '@/components/ui/button'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FloatingCta } from '@/components/public/floating-cta'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
-import { CountUp, Floating, HeroIn, LiveDot, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
+import { CountUp, Floating, HeroIn, LiveDot, Parallax, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -172,8 +172,10 @@ export default async function MarketingHomePage() {
       {/* HERO */}
       <section className="relative overflow-hidden bg-[radial-gradient(60%_60%_at_50%_0%,rgba(22,163,74,0.06),transparent)]">
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 right-[-6%] h-[440px] w-[440px] rounded-full bg-[#16a34a]/[0.08] blur-[130px]" />
-          <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#f97316]/[0.06] blur-[130px]" />
+          <Parallax distance={50} className="absolute inset-0">
+            <div className="absolute -top-24 right-[-6%] h-[440px] w-[440px] rounded-full bg-[#16a34a]/[0.08] blur-[130px]" />
+            <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#f97316]/[0.06] blur-[130px]" />
+          </Parallax>
         </div>
         <div className="relative mx-auto max-w-[1600px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
           <div className="grid gap-14 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
@@ -245,12 +247,12 @@ export default async function MarketingHomePage() {
 
       {/* СОЦ-ДОКАЗАТЕЛЬСТВО */}
       <div className="border-y border-[#e2e8f0] bg-white">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 py-5 text-center text-[15px] font-medium text-[#5b6b82] sm:px-10 lg:px-14">
+        <Reveal className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 py-5 text-center text-[15px] font-medium text-[#5b6b82] sm:px-10 lg:px-14">
           <span className="h-2 w-2 rounded-full bg-[#16a34a]" />
           Уже считает финансы сети <span className="font-bold text-[#0f2038]">F16</span>
           <span className="text-[#cbd3e0]">·</span>
           <span className="font-semibold text-[#475569]">Arena · Ramen · Extra</span>
-        </div>
+        </Reveal>
       </div>
 
       {/* ПРОБЛЕМЫ */}
