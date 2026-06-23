@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FloatingCta } from '@/components/public/floating-cta'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
-import { CountUp, Floating, HeroIn, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
+import { CountUp, Floating, HeroIn, LiveDot, Reveal, Stagger, StaggerItem } from '@/components/public/landing-motion'
 
 export const metadata: Metadata = {
   title: 'Orda Control — финансовая управляемость бизнеса без Excel и хаоса',
@@ -199,7 +199,7 @@ export default async function MarketingHomePage() {
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748b]">Финансовый дашборд</span>
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#16a34a]/[0.1] px-2.5 py-1 text-[11px] font-semibold uppercase text-[#15803d]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />live
+                        <LiveDot className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />live
                       </span>
                     </div>
                     <div className="mt-5 grid grid-cols-2 gap-3">
@@ -216,6 +216,11 @@ export default async function MarketingHomePage() {
                       <div className="mt-3 flex h-12 items-end gap-1.5">
                         {[42, 55, 38, 64, 48, 72, 80].map((h, i) => (
                           <div key={i} className={`flex-1 rounded-t-[3px] bg-gradient-to-t from-[#16a34a]/25 ${i === 6 ? 'to-[#16a34a]' : 'to-[#16a34a]/80'}`} style={{ height: `${h}%` }} />
+                        ))}
+                      </div>
+                      <div className="mt-1.5 flex gap-1.5 text-[9px] font-medium text-[#94a3b8]">
+                        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => (
+                          <span key={d} className="flex-1 text-center">{d}</span>
                         ))}
                       </div>
                     </div>
@@ -334,7 +339,7 @@ export default async function MarketingHomePage() {
                   {aiCapabilities.map((c) => {
                     const Icon = c.icon
                     return (
-                      <div key={c.title} className="rounded-[16px] border border-[#e2e8f0] bg-[#eef2f8] p-4">
+                      <div key={c.title} className="rounded-[16px] border border-[#e2e8f0] bg-[#eef2f8] p-4 transition duration-300 hover:-translate-y-0.5 hover:border-[#16a34a]/30 hover:bg-white">
                         <Icon className="h-5 w-5 text-[#16a34a]" />
                         <div className="mt-2.5 text-[15px] font-bold text-[#0f2038]">{c.title}</div>
                         <div className="mt-1 text-[13.5px] leading-[1.5] text-[#5b6b82]">{c.text}</div>
@@ -362,7 +367,7 @@ export default async function MarketingHomePage() {
             return (
               <StaggerItem key={aud.title}>
                 <Wrapper {...wp} className="block h-full">
-                  <div className={`group flex h-full items-start gap-4 ${cardClass} ${aud.href ? 'cursor-pointer transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30' : ''}`}>
+                  <div className={`group flex h-full items-start gap-4 ${cardClass} ${aud.href ? 'cursor-pointer transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30' : 'transition duration-300 hover:border-[#16a34a]/25'}`}>
                     <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#16a34a]/[0.1] text-[#16a34a]"><Icon className="h-5 w-5" /></div>
                     <div className="min-w-0">
                       <h3 className="font-display text-[19px] font-bold tracking-[-0.01em] text-[#0f2038]">{aud.title}</h3>
