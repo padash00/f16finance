@@ -3,6 +3,7 @@ import { Fragment } from 'react'
 import Link from 'next/link'
 import {
   Activity,
+  AlertCircle,
   ArrowRight,
   Bot,
   Boxes,
@@ -14,12 +15,16 @@ import {
   Clock4,
   Coffee,
   Cpu,
+  HelpCircle,
   LineChart,
   PiggyBank,
   Receipt,
+  Rocket,
+  Scale,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Tag,
   Truck,
   Users,
   Wallet,
@@ -252,7 +257,7 @@ export default async function MarketingHomePage() {
       <section className="bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
-            <div className={eyebrowClass}>Знакомая ситуация?</div>
+            <div className={eyebrowClass}><AlertCircle className="h-3.5 w-3.5" />Знакомая ситуация?</div>
             <h2 className={`mt-5 ${h2Class}`}>Что мешает видеть реальные деньги</h2>
             <p className={`mt-4 ${leadClass}`}>Шесть ситуаций, в которых прибыль утекает незаметно — и как Orda закрывает каждую.</p>
           </Reveal>
@@ -275,7 +280,7 @@ export default async function MarketingHomePage() {
       {/* КАК ЭТО РАБОТАЕТ */}
       <section className={sectionClass}>
         <Reveal className="max-w-[640px]">
-          <div className={eyebrowClass}>Как это работает</div>
+          <div className={eyebrowClass}><Rocket className="h-3.5 w-3.5" />Как это работает</div>
           <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
           <p className={`mt-4 ${leadClass}`}>Без своих серверов и интеграторов — запуск за день, результат уже с первой смены.</p>
         </Reveal>
@@ -306,7 +311,7 @@ export default async function MarketingHomePage() {
       <section id="features" className="scroll-mt-20 border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
         <Reveal className="max-w-[640px]">
-          <div className={eyebrowClass}>Что внутри</div>
+          <div className={eyebrowClass}><Boxes className="h-3.5 w-3.5" />Что внутри</div>
           <h2 className={`mt-5 ${h2Class}`}>Финансы. AI. Смены. Продажи.</h2>
           <p className={`mt-4 ${leadClass}`}>Четыре модуля, которые закрывают весь операционный учёт точки.</p>
         </Reveal>
@@ -359,7 +364,7 @@ export default async function MarketingHomePage() {
       {/* ДЛЯ КОГО */}
       <section className={sectionClass}>
         <Reveal className="max-w-[640px]">
-          <div className={eyebrowClass}>Для кого</div>
+          <div className={eyebrowClass}><Users className="h-3.5 w-3.5" />Для кого</div>
           <h2 className={`mt-5 ${h2Class}`}>Бизнесу с кассой, людьми и товаром</h2>
           <p className={`mt-4 ${leadClass}`}>Если есть касса, сотрудники и товар — Orda подстраивается под вашу нишу.</p>
         </Reveal>
@@ -390,7 +395,7 @@ export default async function MarketingHomePage() {
       <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
-            <div className={eyebrowClass}>Сравнение</div>
+            <div className={eyebrowClass}><Scale className="h-3.5 w-3.5" />Сравнение</div>
             <h2 className={`mt-5 ${h2Class}`}>Вместо пяти программ — одна</h2>
             <p className={`mt-4 ${leadClass}`}>Excel, 1С и кассовые программы решают по куску. Orda собирает всё в одном месте.</p>
           </Reveal>
@@ -438,7 +443,7 @@ export default async function MarketingHomePage() {
       {/* ТАРИФЫ */}
       <section id="pricing" className={`${sectionClass} scroll-mt-20`}>
         <Reveal className="max-w-[640px]">
-          <div className={eyebrowClass}>Тарифы</div>
+          <div className={eyebrowClass}><Tag className="h-3.5 w-3.5" />Тарифы</div>
           <h2 className={`mt-5 ${h2Class}`}>Подключайте только нужное</h2>
           <p className={`mt-4 ${leadClass}`}>Цена зависит от числа точек и модулей — посчитаем индивидуально за 5 минут.</p>
         </Reveal>
@@ -472,7 +477,7 @@ export default async function MarketingHomePage() {
       <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
         <div className={sectionClass}>
           <Reveal className="max-w-[640px]">
-            <div className={eyebrowClass}>Частые вопросы</div>
+            <div className={eyebrowClass}><HelpCircle className="h-3.5 w-3.5" />Частые вопросы</div>
             <h2 className={`mt-5 ${h2Class}`}>Что спрашивают чаще всего</h2>
           </Reveal>
           <Stagger className="mt-10 grid gap-3 md:grid-cols-2">
