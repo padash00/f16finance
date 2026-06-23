@@ -281,32 +281,36 @@ export default async function MarketingHomePage() {
 
       {/* КАК ЭТО РАБОТАЕТ */}
       <section className={sectionClass}>
-        <Reveal className="max-w-[640px]">
-          <div className={eyebrowClass}><Rocket className="h-3.5 w-3.5" />Как это работает</div>
-          <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
-          <p className={`mt-4 ${leadClass}`}>Без своих серверов и интеграторов — запуск за день, результат уже с первой смены.</p>
+        <Reveal>
+          <div className="overflow-hidden rounded-[28px] border border-[#d6dde8] bg-[linear-gradient(160deg,#f1f8f3,#f5f7fb)] p-8 shadow-[0_24px_60px_-28px_rgba(15,32,56,0.22)] sm:p-12 lg:p-14">
+            <div className="max-w-[640px]">
+              <div className={eyebrowClass}><Rocket className="h-3.5 w-3.5" />Как это работает</div>
+              <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
+              <p className={`mt-4 ${leadClass}`}>Без своих серверов и интеграторов — запуск за день, результат уже с первой смены.</p>
+            </div>
+            <div className="relative mt-10">
+              <div aria-hidden className="absolute inset-x-[14%] top-[50px] hidden h-[2px] bg-gradient-to-r from-[#16a34a]/45 via-[#cbd3e0] to-[#f97316]/45 md:block" />
+              <Stagger className="relative z-10 grid gap-5 md:grid-cols-3">
+                {steps.map((s, i) => {
+                  const Icon = s.icon
+                  const isOrange = s.tone === 'orange'
+                  return (
+                    <StaggerItem key={s.title}>
+                      <div className={`group relative h-full ${cardClass} transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`grid h-11 w-11 place-items-center rounded-full text-[18px] font-extrabold text-white ${isOrange ? 'bg-gradient-to-br from-[#fb923c] to-[#f97316]' : 'bg-gradient-to-br from-[#1db955] to-[#15803d]'}`}>{i + 1}</span>
+                          <Icon className={`h-7 w-7 ${isOrange ? 'text-[#f97316]' : 'text-[#16a34a]'}`} />
+                        </div>
+                        <h3 className="mt-5 font-display text-[20px] font-bold tracking-[-0.01em] text-[#0f2038]">{s.title}</h3>
+                        <p className="mt-2 text-[15px] leading-[1.5] text-[#56657d]">{s.text}</p>
+                      </div>
+                    </StaggerItem>
+                  )
+                })}
+              </Stagger>
+            </div>
+          </div>
         </Reveal>
-        <div className="relative mt-10">
-          <div aria-hidden className="absolute inset-x-[14%] top-[50px] hidden h-[2px] bg-gradient-to-r from-[#16a34a]/45 via-[#cbd3e0] to-[#f97316]/45 md:block" />
-        <Stagger className="relative z-10 grid gap-5 md:grid-cols-3">
-          {steps.map((s, i) => {
-            const Icon = s.icon
-            const isOrange = s.tone === 'orange'
-            return (
-              <StaggerItem key={s.title}>
-                <div className={`group relative h-full ${cardClass} transition duration-300 hover:-translate-y-1 hover:border-[#16a34a]/30`}>
-                  <div className="flex items-center justify-between">
-                    <span className={`grid h-11 w-11 place-items-center rounded-full text-[18px] font-extrabold text-white ${isOrange ? 'bg-gradient-to-br from-[#fb923c] to-[#f97316]' : 'bg-gradient-to-br from-[#1db955] to-[#15803d]'}`}>{i + 1}</span>
-                    <Icon className={`h-7 w-7 ${isOrange ? 'text-[#f97316]' : 'text-[#16a34a]'}`} />
-                  </div>
-                  <h3 className="mt-5 font-display text-[20px] font-bold tracking-[-0.01em] text-[#0f2038]">{s.title}</h3>
-                  <p className="mt-2 text-[15px] leading-[1.5] text-[#56657d]">{s.text}</p>
-                </div>
-              </StaggerItem>
-            )
-          })}
-        </Stagger>
-        </div>
       </section>
 
       {/* ВОЗМОЖНОСТИ (4 столпа) */}
