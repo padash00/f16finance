@@ -157,7 +157,7 @@ export default async function MarketingHomePage() {
             <Button asChild variant="ghost" className="rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038]">
               <Link href="/login">Войти</Link>
             </Button>
-            <Button asChild className="rounded-[12px] bg-[#16a34a] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#15803d]">
+            <Button asChild className="rounded-[12px] bg-none bg-[#16a34a] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#15803d]">
               <Link href="#contact">Попробовать<ArrowRight className="ml-1.5 h-4 w-4" /></Link>
             </Button>
           </nav>
@@ -275,7 +275,7 @@ export default async function MarketingHomePage() {
       <section className={sectionClass}>
         <Reveal className="max-w-[640px]">
           <div className={eyebrowClass}>Как это работает</div>
-          <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3 шага</h2>
+          <h2 className={`mt-5 ${h2Class}`}>От хаоса к цифрам — за 3&nbsp;шага</h2>
         </Reveal>
         <div className="relative mt-10">
           <div aria-hidden className="absolute inset-x-[14%] top-[50px] hidden h-[2px] bg-gradient-to-r from-[#16a34a]/45 via-[#cbd3e0] to-[#f97316]/45 md:block" />
@@ -453,8 +453,8 @@ export default async function MarketingHomePage() {
                   ))}
                 </ul>
                 <Button asChild className={plan.highlight
-                  ? 'mt-6 w-full rounded-[12px] bg-[#16a34a] py-3 text-[14px] font-semibold text-white hover:bg-[#15803d]'
-                  : 'mt-6 w-full rounded-[12px] bg-[#f3f6fa] py-3 text-[14px] font-semibold text-[#0f2038] hover:bg-[#e9eef4]'}>
+                  ? 'mt-6 w-full rounded-[12px] bg-none bg-[#16a34a] py-3 text-[14px] font-semibold text-white hover:bg-[#15803d]'
+                  : 'mt-6 w-full rounded-[12px] bg-none bg-[#f3f6fa] py-3 text-[14px] font-semibold text-[#0f2038] hover:bg-[#e9eef4]'}>
                   <Link href="#contact">{plan.cta}</Link>
                 </Button>
               </div>
