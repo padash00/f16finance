@@ -1291,7 +1291,7 @@ function AICard({ insight }: { insight: AIInsight }) {
         <div>
           <div className="flex justify-between text-xs mb-1">
             <span className="text-slate-400">Маржа</span>
-            <span className="text-amber-300 font-medium">{insight.margin.toFixed(1)}%</span>
+            <span className="text-amber-600 dark:text-amber-300 font-medium">{insight.margin.toFixed(1)}%</span>
           </div>
           <div className="h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, insight.margin * 2)}%` }} />
@@ -1301,7 +1301,7 @@ function AICard({ insight }: { insight: AIInsight }) {
         <div>
           <div className="flex justify-between text-xs mb-1">
             <span className="text-slate-400">Эффективность</span>
-            <span className="text-green-300 font-medium">{insight.efficiency.toFixed(2)}x</span>
+            <span className="text-green-600 dark:text-green-300 font-medium">{insight.efficiency.toFixed(2)}x</span>
           </div>
           <div className="h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-green-400 rounded-full" style={{ width: `${Math.min(100, insight.efficiency * 30)}%` }} />
@@ -1338,7 +1338,7 @@ function MetricCard(props: {
       </div>
       <div className="text-2xl font-bold text-slate-900 dark:text-white mb-2 break-all">{Formatters.moneyDetailed(props.value)}</div>
       <div className="flex items-center gap-2 text-xs">
-        <span className={ch.positive ? 'text-green-300' : 'text-red-300'}>{ch.text}</span>
+        <span className={ch.positive ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'}>{ch.text}</span>
         <span className="text-slate-500">к прошлому периоду</span>
       </div>
       {props.selected && (
@@ -1501,9 +1501,9 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
 
 function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
   const severityStyle: Record<'low' | 'medium' | 'high', string> = {
-    low: 'bg-yellow-500/10 border-yellow-500/25 text-yellow-200',
-    medium: 'bg-orange-500/10 border-orange-500/25 text-orange-200',
-    high: 'bg-red-500/10 border-red-500/25 text-red-200',
+    low: 'bg-yellow-500/10 border-yellow-500/25 text-yellow-700 dark:text-yellow-200',
+    medium: 'bg-orange-500/10 border-orange-500/25 text-orange-700 dark:text-orange-200',
+    high: 'bg-red-500/10 border-red-500/25 text-red-700 dark:text-red-200',
   }
 
   return (
@@ -1513,7 +1513,7 @@ function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
           <AlertTriangle className="w-5 h-5 text-yellow-300" />
         </div>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Аномалии</h3>
-        {!!anomalies.length && <span className="px-2 py-0.5 bg-red-500/20 text-red-200 text-xs rounded-full">{anomalies.length}</span>}
+        {!!anomalies.length && <span className="px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-200 text-xs rounded-full">{anomalies.length}</span>}
       </div>
 
       {!anomalies.length ? (
@@ -1559,7 +1559,7 @@ function FeedCard(props: {
             <p className="text-xs text-slate-500">Последние операции</p>
           </div>
           {!!props.feed.length && (
-            <span className="ml-auto px-2 py-0.5 bg-amber-500/20 text-amber-200 text-xs rounded-full">
+            <span className="ml-auto px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-200 text-xs rounded-full">
               {props.feed.length}
             </span>
           )}
@@ -1622,7 +1622,7 @@ function PredictionWide({ insight, currentProfit }: { insight: AIInsight; curren
         </div>
 
         <div className="flex items-center gap-3">
-          <div className={`px-3 py-1 rounded-lg text-sm font-medium ${diff >= 0 ? 'bg-green-500/20 text-green-200' : 'bg-red-500/20 text-red-200'}`}>
+          <div className={`px-3 py-1 rounded-lg text-sm font-medium ${diff >= 0 ? 'bg-green-500/20 text-green-700 dark:text-green-200' : 'bg-red-500/20 text-red-700 dark:text-red-200'}`}>
             {diff >= 0 ? '↗' : '↘'} {Math.abs(pct).toFixed(1)}%
           </div>
           <div className="text-xs text-slate-400">
@@ -1714,7 +1714,7 @@ function MiniStat(props: { label: string; value: number; prev: number; icon: Rea
         {props.money ? Formatters.moneyDetailed(props.value) : props.value.toLocaleString('ru-RU')}
       </div>
       <div className="flex items-center gap-2 text-xs mt-1">
-        <span className={ch.positive ? 'text-green-300' : 'text-red-300'}>{ch.text}</span>
+        <span className={ch.positive ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'}>{ch.text}</span>
         <span className="text-slate-500">к прошлому</span>
       </div>
     </Card>
