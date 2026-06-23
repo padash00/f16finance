@@ -279,7 +279,7 @@ function OrganizationMenu({
       </button>
 
       {open && editable ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[300px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[300px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
           <div className="mb-1 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Доступные организации</div>
           <div className="space-y-1">
             {organizations.map((organization) => {
@@ -297,13 +297,13 @@ function OrganizationMenu({
                     'flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition',
                     isActive
                       ? 'border-emerald-500/20 bg-emerald-500/10'
-                      : 'border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]',
+                      : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100 dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]',
                     (disabled || isActive) && 'cursor-default',
                   )}
                 >
-                  <div className={cn('mt-0.5 h-2.5 w-2.5 rounded-full', isActive ? 'bg-emerald-400' : 'bg-slate-600')} />
+                  <div className={cn('mt-0.5 h-2.5 w-2.5 rounded-full', isActive ? 'bg-emerald-400' : 'bg-slate-400 dark:bg-slate-600')} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">{organization.name}</p>
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{organization.name}</p>
                     <p className="truncate text-xs text-slate-500">
                       {organization.slug} · {organization.accessRole}
                     </p>
@@ -359,30 +359,30 @@ function UserMenu({
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-700">
-              <User className="h-5 w-5 text-amber-300" />
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[280px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-white/[0.02] p-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-amber-50 dark:border-white/10 dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-700">
+              <User className="h-5 w-5 text-amber-500 dark:text-amber-300" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
+              <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{displayName || 'Панель управления'}</p>
               <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
-              <LifeBuoy className="h-3 w-3 text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-400">online</span>
+              <LifeBuoy className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">online</span>
             </div>
-            <div className="flex items-center gap-1 rounded-lg border border-white/5 bg-slate-800 px-2 py-1">
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 dark:border-white/5 dark:bg-slate-800 px-2 py-1">
               <Shield className="h-3 w-3 text-slate-400" />
-              <span className="text-xs font-medium text-slate-300">{roleLabel || 'control'}</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{roleLabel || 'control'}</span>
             </div>
           </div>
           <Link
             href="/profile"
             onClick={() => setOpen(false)}
-            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-sm text-slate-300 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-300"
+            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-slate-800/50 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-300"
           >
             <User className="h-4 w-4" />
             Мой профиль
@@ -394,7 +394,7 @@ function UserMenu({
               setOpen(false)
               await onLogout()
             }}
-            className="mt-2 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
+            className="mt-2 w-full justify-between rounded-xl border border-slate-200 bg-slate-50 dark:border-white/5 dark:bg-slate-800/50 px-3 py-2 text-slate-600 dark:text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
           >
             <span className="flex items-center gap-2 text-sm">
               <LogOut className="h-4 w-4" />
