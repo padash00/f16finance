@@ -944,9 +944,9 @@ export default function ProfitabilityPage() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
               <CalendarDays className="h-4 w-4 text-emerald-400" />
-              <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
+              <input type="month" value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} className="cursor-pointer rounded bg-slate-100 dark:bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-slate-200 dark:focus:bg-white/[0.1]" />
               <span className="text-muted-foreground">—</span>
-              <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="cursor-pointer rounded bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-white/[0.1]" />
+              <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="cursor-pointer rounded bg-slate-100 dark:bg-white/[0.05] px-1.5 py-0.5 outline-none focus:bg-slate-200 dark:focus:bg-white/[0.1]" />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <Button variant="outline" size="sm" onClick={() => { const c = closedMonthDefaults(); setMonthFrom(c.from); setMonthTo(c.to) }}>4 мес</Button>
@@ -958,8 +958,8 @@ export default function ProfitabilityPage() {
         }
       />
 
-      {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
-      {success ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div> : null}
+      {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-200">{success}</div> : null}
 
       {/* ═══ MONTH PILLS ═══ */}
       {months.length > 1 && (
@@ -974,7 +974,7 @@ export default function ProfitabilityPage() {
                 onClick={() => setSelectedMonth(month)}
                 className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all ${
                   isActive
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
                     : 'border-border bg-card text-muted-foreground hover:border-emerald-500/30 hover:text-foreground'
                 }`}
               >
@@ -1002,7 +1002,7 @@ export default function ProfitabilityPage() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === key ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}
+            className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === key ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-foreground'}`}
           >
             {label}
           </button>
@@ -1018,10 +1018,10 @@ export default function ProfitabilityPage() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {(() => {
               const cards: Array<{ label: string; value: number; prev: number; icon: any; accent: string; sub?: string }> = [
-                { label: 'Выручка', value: selected.revenue, prev: prevSelected?.revenue || 0, icon: TrendingUp, accent: 'text-blue-300', sub: selected.hasRevenueOverride ? 'ручной ввод' : 'из журнала' },
-                { label: 'EBITDA', value: selected.ebitda, prev: prevSelected?.ebitda || 0, icon: Calculator, accent: 'text-cyan-300', sub: `маржа ${ebitdaMargin.toFixed(1)}%` },
-                { label: 'Опер. прибыль (EBIT)', value: selected.operatingProfit, prev: prevSelected?.operatingProfit || 0, icon: Wallet, accent: 'text-amber-300' },
-                { label: 'Чистая прибыль', value: selected.netProfit, prev: prevSelected?.netProfit || 0, icon: Target, accent: selected.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300', sub: `маржа ${netMargin.toFixed(1)}%` },
+                { label: 'Выручка', value: selected.revenue, prev: prevSelected?.revenue || 0, icon: TrendingUp, accent: 'text-blue-600 dark:text-blue-300', sub: selected.hasRevenueOverride ? 'ручной ввод' : 'из журнала' },
+                { label: 'EBITDA', value: selected.ebitda, prev: prevSelected?.ebitda || 0, icon: Calculator, accent: 'text-cyan-600 dark:text-cyan-300', sub: `маржа ${ebitdaMargin.toFixed(1)}%` },
+                { label: 'Опер. прибыль (EBIT)', value: selected.operatingProfit, prev: prevSelected?.operatingProfit || 0, icon: Wallet, accent: 'text-amber-600 dark:text-amber-300' },
+                { label: 'Чистая прибыль', value: selected.netProfit, prev: prevSelected?.netProfit || 0, icon: Target, accent: selected.netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300', sub: `маржа ${netMargin.toFixed(1)}%` },
               ]
               return cards.map(({ label, value, prev, icon: Icon, accent, sub }) => {
                 const d = delta(value, prev)
@@ -1031,7 +1031,7 @@ export default function ProfitabilityPage() {
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
                       <Icon className={`h-4 w-4 ${accent}`} />
                     </div>
-                    <p className={`mt-2 text-2xl font-semibold ${value < 0 ? 'text-rose-300' : 'text-foreground'}`}>{money(value)}</p>
+                    <p className={`mt-2 text-2xl font-semibold ${value < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-foreground'}`}>{money(value)}</p>
                     <div className="mt-1 flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">{sub || ' '}</span>
                       {d !== null ? (
@@ -1050,8 +1050,8 @@ export default function ProfitabilityPage() {
           {/* ═══ INSIGHT (если есть прошлый месяц) ═══ */}
           {insightText ? (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
-              <div className="shrink-0 rounded-lg bg-amber-500/15 p-1.5 text-amber-300"><Lightbulb className="h-4 w-4" /></div>
-              <p className="text-sm text-amber-100/90">{insightText}</p>
+              <div className="shrink-0 rounded-lg bg-amber-500/15 p-1.5 text-amber-700 dark:text-amber-300"><Lightbulb className="h-4 w-4" /></div>
+              <p className="text-sm text-amber-800 dark:text-amber-100/90">{insightText}</p>
             </div>
           ) : null}
 
@@ -1101,11 +1101,11 @@ export default function ProfitabilityPage() {
                             <div className="flex min-w-0 items-baseline gap-2">
                               <span className="shrink-0 text-xs text-muted-foreground">#{i + 1}</span>
                               <span className="truncate text-sm text-foreground">{cat.name}</span>
-                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-white/10 bg-white/[0.03] text-muted-foreground">{groupLabel}</span>
+                              <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-muted-foreground">{groupLabel}</span>
                             </div>
                             <span className="shrink-0 text-sm font-medium text-foreground">{money(cat.total)}</span>
                           </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
                             <div className={`h-full ${groupColor} transition-all`} style={{ width: `${pct}%` }} />
                           </div>
                         </div>
@@ -1128,21 +1128,21 @@ export default function ProfitabilityPage() {
                 <span className="text-xs text-muted-foreground">{selected.label}</span>
               </div>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 mb-4">
-                <div className="rounded-lg border border-border bg-white/[0.02] p-3">
+                <div className="rounded-lg border border-border bg-white dark:bg-white/[0.02] p-3">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Наличка</div>
                   <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{money(selected.cashRevenue)}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-white/[0.02] p-3">
+                <div className="rounded-lg border border-border bg-white dark:bg-white/[0.02] p-3">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Безнал</div>
                   <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{money(selected.cashlessRevenue)}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-white/[0.02] p-3">
+                <div className="rounded-lg border border-border bg-white dark:bg-white/[0.02] p-3">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Оборот POS (ручной)</div>
                   <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{money(selected.posTurnover)}</div>
                 </div>
                 <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-cyan-300">Итого комиссия POS</div>
-                  <div className="mt-1 text-base font-semibold text-cyan-200 tabular-nums">{money(selected.posCommission)}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-cyan-700 dark:text-cyan-300">Итого комиссия POS</div>
+                  <div className="mt-1 text-base font-semibold text-cyan-700 dark:text-cyan-200 tabular-nums">{money(selected.posCommission)}</div>
                 </div>
               </div>
               {selected.posTurnover > 0 ? (
@@ -1155,19 +1155,19 @@ export default function ProfitabilityPage() {
                     [cashLabels.red, selected.kaspiRedTurnover, selected.kaspiRedRate, selected.kaspiRedCommission],
                     [cashLabels.kredit, selected.kaspiKreditTurnover, selected.kaspiKreditRate, selected.kaspiKreditCommission],
                   ].filter(([, turnover]) => Number(turnover) > 0).map(([label, turnover, rate, commission]) => (
-                    <div key={String(label)} className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-3 rounded-md bg-white/[0.02] px-3 py-1.5 text-sm">
+                    <div key={String(label)} className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-3 rounded-md bg-white dark:bg-white/[0.02] px-3 py-1.5 text-sm">
                       <span className="text-foreground">{label}</span>
                       <span className="text-xs text-muted-foreground tabular-nums">{money(Number(turnover))}</span>
                       <span className="text-xs text-muted-foreground tabular-nums">× {Number(rate).toFixed(2)}%</span>
-                      <span className="text-cyan-300 font-medium tabular-nums">= {money(Number(commission))}</span>
+                      <span className="text-cyan-700 dark:text-cyan-300 font-medium tabular-nums">= {money(Number(commission))}</span>
                     </div>
                   ))}
                   {selected.legacyQrGoldTurnover > 0 ? (
                     <div className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-3 rounded-md bg-amber-500/5 border border-amber-500/15 px-3 py-1.5 text-sm">
-                      <span className="text-amber-200">Старый общий QR/Gold</span>
-                      <span className="text-xs text-amber-300/80 tabular-nums">{money(selected.legacyQrGoldTurnover)}</span>
-                      <span className="text-xs text-amber-300/80 tabular-nums">× {Number(selected.legacyQrGoldRate).toFixed(2)}%</span>
-                      <span className="text-amber-300 font-medium tabular-nums">= {money(selected.legacyQrGoldCommission)}</span>
+                      <span className="text-amber-700 dark:text-amber-200">Старый общий QR/Gold</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-300/80 tabular-nums">{money(selected.legacyQrGoldTurnover)}</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-300/80 tabular-nums">× {Number(selected.legacyQrGoldRate).toFixed(2)}%</span>
+                      <span className="text-amber-700 dark:text-amber-300 font-medium tabular-nums">= {money(selected.legacyQrGoldCommission)}</span>
                     </div>
                   ) : null}
                 </div>
@@ -1177,7 +1177,7 @@ export default function ProfitabilityPage() {
                   Комиссия взята из журнала расходов (категории с группой «Комиссия POS / эквайринг»: {money(selected.journalPosCommission)}). Для детальной разбивки по типам — заполни обороты ниже в «Ручных корректировках».
                 </div>
               ) : (
-                <div className="rounded-lg border border-border bg-white/[0.02] p-3 text-xs text-muted-foreground">
+                <div className="rounded-lg border border-border bg-white dark:bg-white/[0.02] p-3 text-xs text-muted-foreground">
                   Комиссия POS не заполнена ни в журнале, ни вручную.
                 </div>
               )}
@@ -1186,7 +1186,7 @@ export default function ProfitabilityPage() {
 
           {/* ═══ DETAILED P&L TABLE (collapsed by default) ═══ */}
           <details className="group">
-            <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-white/5">
+            <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-slate-50 dark:hover:bg-white/5">
               <span className="flex items-center gap-2">
                 <BarChart2 className="h-4 w-4 text-emerald-400" />
                 Детальная ОПиУ цепочка
@@ -1217,30 +1217,30 @@ export default function ProfitabilityPage() {
                     { label: 'Неоперационные / разовые', value: -selected.nonOperatingJournalExpenses, kind: 'neg' as const },
                     { label: 'Чистая прибыль', value: selected.netProfit, kind: 'final' as const },
                   ].map(({ label, value, kind, big }) => (
-                    <tr key={label} className={`border-b border-border last:border-b-0 ${kind === 'subtotal' ? 'bg-white/[0.02]' : ''} ${kind === 'final' ? 'bg-emerald-500/5 border-t-2 border-emerald-500/20' : ''}`}>
-                      <td className={`px-4 py-2.5 ${kind === 'subtotal' ? 'font-medium text-foreground' : kind === 'final' ? 'font-semibold text-emerald-200' : big ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{label}</td>
-                      <td className={`px-4 py-2.5 text-right tabular-nums ${kind === 'final' ? 'font-bold text-emerald-200' : kind === 'subtotal' ? 'font-semibold text-foreground' : value >= 0 ? 'text-foreground' : 'text-rose-300'}`}>{money(value)}</td>
+                    <tr key={label} className={`border-b border-border last:border-b-0 ${kind === 'subtotal' ? 'bg-slate-50 dark:bg-white/[0.02]' : ''} ${kind === 'final' ? 'bg-emerald-500/5 border-t-2 border-emerald-500/20' : ''}`}>
+                      <td className={`px-4 py-2.5 ${kind === 'subtotal' ? 'font-medium text-foreground' : kind === 'final' ? 'font-semibold text-emerald-700 dark:text-emerald-200' : big ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{label}</td>
+                      <td className={`px-4 py-2.5 text-right tabular-nums ${kind === 'final' ? 'font-bold text-emerald-700 dark:text-emerald-200' : kind === 'subtotal' ? 'font-semibold text-foreground' : value >= 0 ? 'text-foreground' : 'text-rose-600 dark:text-rose-300'}`}>{money(value)}</td>
                     </tr>
                   ))}
                   {(selected.journalCapex > 0 || selected.profitDistributionJournal > 0) && (
                     <>
-                      <tr className="border-t-2 border-amber-500/20 bg-amber-500/[0.04]"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wider text-amber-400/70">Справочно — вне P&L</td></tr>
+                      <tr className="border-t-2 border-amber-500/20 bg-amber-500/[0.04]"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400/70">Справочно — вне P&L</td></tr>
                       {selected.journalCapex > 0 && (
-                        <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">CAPEX (покупка активов)</td><td className="px-4 py-2.5 text-right text-amber-300 tabular-nums">−{money(selected.journalCapex)}</td></tr>
+                        <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">CAPEX (покупка активов)</td><td className="px-4 py-2.5 text-right text-amber-700 dark:text-amber-300 tabular-nums">−{money(selected.journalCapex)}</td></tr>
                       )}
                       {selected.profitDistributionJournal > 0 && (
-                        <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">Распределение прибыли</td><td className="px-4 py-2.5 text-right text-violet-300 tabular-nums">−{money(selected.profitDistributionJournal)}</td></tr>
+                        <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">Распределение прибыли</td><td className="px-4 py-2.5 text-right text-violet-700 dark:text-violet-300 tabular-nums">−{money(selected.profitDistributionJournal)}</td></tr>
                       )}
                       <tr className="bg-amber-500/[0.04]">
                         <td className="px-4 py-2.5 font-medium text-foreground">FCF (после CAPEX + распределения)</td>
-                        <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal) >= 0 ? 'text-amber-200' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal)}</td>
+                        <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal) >= 0 ? 'text-amber-700 dark:text-amber-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex - selected.profitDistributionJournal)}</td>
                       </tr>
                     </>
                   )}
                 </tbody>
               </table>
               {selected.notes ? (
-                <div className="border-t border-border bg-white/[0.02] px-4 py-3 text-xs text-muted-foreground">
+                <div className="border-t border-border bg-slate-50 dark:bg-white/[0.02] px-4 py-3 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">Комментарий: </span>{selected.notes}
                 </div>
               ) : null}
@@ -1273,14 +1273,14 @@ export default function ProfitabilityPage() {
                     {rows.map((row) => {
                       const margin = row.revenue ? (row.netProfit / row.revenue) * 100 : 0
                       return (
-                        <tr key={row.month} onClick={() => setSelectedMonth(row.month)} className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-white/[0.03] ${row.month === selectedMonth ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20' : ''}`}>
+                        <tr key={row.month} onClick={() => setSelectedMonth(row.month)} className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03] ${row.month === selectedMonth ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20' : ''}`}>
                           <td className="px-3 py-2.5 font-medium text-foreground capitalize">{row.label}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums">{money(row.revenue)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(row.journalOperatingExpenses)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(row.posCommission)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${row.ebitda >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${row.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.netProfit)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${row.ebitda >= 0 ? 'text-cyan-700 dark:text-cyan-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(row.ebitda)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${row.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(row.netProfit)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
                         </tr>
                       )
                     })}
@@ -1289,8 +1289,8 @@ export default function ProfitabilityPage() {
                       <td className="px-3 py-2.5 text-right tabular-nums text-foreground">{money(totals.revenue)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">—</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">—</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${totals.ebitda >= 0 ? 'text-cyan-200' : 'text-rose-300'}`}>{money(totals.ebitda)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${totals.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-300'}`}>{money(totals.netProfit)}</td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${totals.ebitda >= 0 ? 'text-cyan-700 dark:text-cyan-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(totals.ebitda)}</td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${totals.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(totals.netProfit)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{totals.revenue ? `${((totals.netProfit / totals.revenue) * 100).toFixed(1)}%` : '—'}</td>
                     </tr>
                   </tbody>
@@ -1305,11 +1305,11 @@ export default function ProfitabilityPage() {
           <Card className="border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-rose-500/[0.03] p-5">
             <div className="space-y-4">
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-200 flex items-center gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-200 flex items-center gap-2">
                   <Download className="h-4 w-4" />
                   Управленческий отчёт по точке (PDF)
                 </h2>
-                <p className="mt-1 text-xs text-amber-100/70">
+                <p className="mt-1 text-xs text-amber-800 dark:text-amber-100/70">
                   Чистая P&L одной точки за {periodLabel}: оборот, 2% налог, расходы по категориям,
                   чистая прибыль и распределение по партнёрам. Без сводки по другим точкам.
                 </p>
@@ -1317,7 +1317,7 @@ export default function ProfitabilityPage() {
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-medium text-amber-100/80 mb-1.5">Точка</label>
+                  <label className="block text-xs font-medium text-amber-800 dark:text-amber-100/80 mb-1.5">Точка</label>
                   <select
                     className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
                     value={branchReportCompanyId}
@@ -1330,7 +1330,7 @@ export default function ProfitabilityPage() {
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <label className="inline-flex items-center gap-2 text-xs text-amber-100/80">
+                  <label className="inline-flex items-center gap-2 text-xs text-amber-800 dark:text-amber-100/80">
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-amber-400"
@@ -1344,7 +1344,7 @@ export default function ProfitabilityPage() {
 
               <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
                 <div>
-                  <label className="block text-xs font-medium text-amber-100/80 mb-1.5">С месяца</label>
+                  <label className="block text-xs font-medium text-amber-800 dark:text-amber-100/80 mb-1.5">С месяца</label>
                   <input
                     type="month"
                     className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
@@ -1353,7 +1353,7 @@ export default function ProfitabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-amber-100/80 mb-1.5">По месяц</label>
+                  <label className="block text-xs font-medium text-amber-800 dark:text-amber-100/80 mb-1.5">По месяц</label>
                   <input
                     type="month"
                     className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
@@ -1370,7 +1370,7 @@ export default function ProfitabilityPage() {
                         setBranchReportTo(monthTo)
                       }
                     }}
-                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 hover:bg-amber-500/20"
+                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-100 hover:bg-amber-500/20"
                   >
                     Только последний месяц
                   </button>
@@ -1379,13 +1379,13 @@ export default function ProfitabilityPage() {
 
               {/* Ручной override ФОТ — если расчёт по БД для прошлых месяцев неточный */}
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-                <div className="mb-2 text-xs font-medium text-amber-100/80">
+                <div className="mb-2 text-xs font-medium text-amber-800 dark:text-amber-100/80">
                   ФОТ для отчёта (вручную)
-                  <span className="ml-2 text-[10px] text-amber-100/50">пусто = считать автоматически</span>
+                  <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-100/50">пусто = считать автоматически</span>
                 </div>
                 <div className="grid gap-2 md:grid-cols-2">
                   <div>
-                    <label className="block text-[11px] text-amber-100/70 mb-1">Адм. сотрудники, ₸</label>
+                    <label className="block text-[11px] text-amber-800 dark:text-amber-100/70 mb-1">Адм. сотрудники, ₸</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -1396,7 +1396,7 @@ export default function ProfitabilityPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-amber-100/70 mb-1">Операторы по сменам, ₸</label>
+                    <label className="block text-[11px] text-amber-800 dark:text-amber-100/70 mb-1">Операторы по сменам, ₸</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -1411,9 +1411,9 @@ export default function ProfitabilityPage() {
 
               {/* Комментарий к отчёту — попадает в PDF (например, «в апреле провели ремонт зоны PS5») */}
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-                <div className="mb-2 text-xs font-medium text-amber-100/80">
+                <div className="mb-2 text-xs font-medium text-amber-800 dark:text-amber-100/80">
                   Пояснение к отчёту
-                  <span className="ml-2 text-[10px] text-amber-100/50">появится в PDF внизу страницы</span>
+                  <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-100/50">появится в PDF внизу страницы</span>
                 </div>
                 <textarea
                   value={branchNote}
@@ -1423,7 +1423,7 @@ export default function ProfitabilityPage() {
                   maxLength={2000}
                   className="w-full resize-y rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-amber-500/40"
                 />
-                <div className="mt-1 flex justify-between text-[10px] text-amber-100/50">
+                <div className="mt-1 flex justify-between text-[10px] text-amber-700 dark:text-amber-100/50">
                   <span>Сохраняется автоматически в браузере</span>
                   <span>{branchNote.length}/2000</span>
                 </div>
@@ -1431,19 +1431,19 @@ export default function ProfitabilityPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-medium text-amber-100/80">Распределение чистой прибыли (партнёры)</div>
+                  <div className="text-xs font-medium text-amber-800 dark:text-amber-100/80">Распределение чистой прибыли (партнёры)</div>
                   <button
                     type="button"
                     onClick={() =>
                       setBranchReportPartners((prev) => [...prev, { name: '', percent: '10' }])
                     }
-                    className="text-xs text-amber-300 hover:text-amber-100 underline-offset-2 hover:underline"
+                    className="text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 underline-offset-2 hover:underline"
                   >
                     + Добавить партнёра
                   </button>
                 </div>
                 {branchReportPartners.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-amber-500/20 bg-amber-500/[0.03] px-3 py-2 text-xs text-amber-100/60">
+                  <div className="rounded-lg border border-dashed border-amber-500/20 bg-amber-500/[0.03] px-3 py-2 text-xs text-amber-800 dark:text-amber-100/60">
                     Нет партнёров. Чистая прибыль целиком останется владельцу.
                   </div>
                 ) : (
@@ -1476,7 +1476,7 @@ export default function ProfitabilityPage() {
                             )
                           }
                         />
-                        <span className="text-sm text-amber-100/60">%</span>
+                        <span className="text-sm text-amber-800 dark:text-amber-100/60">%</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -1489,7 +1489,7 @@ export default function ProfitabilityPage() {
                         </button>
                       </div>
                     ))}
-                    <div className="text-[10px] text-amber-100/50">
+                    <div className="text-[10px] text-amber-700 dark:text-amber-100/50">
                       Сумма долей:{' '}
                       {branchReportPartners
                         .reduce((sum, p) => sum + (Number(p.percent) || 0), 0)
@@ -1519,7 +1519,7 @@ export default function ProfitabilityPage() {
                 >
                   Открыть в браузере
                 </Button>
-                <span className="text-[11px] text-amber-100/60">
+                <span className="text-[11px] text-amber-800 dark:text-amber-100/60">
                   «Скачать PDF» — сразу .pdf файл. «Открыть в браузере» — для предпросмотра.
                 </span>
               </div>
@@ -1530,11 +1530,11 @@ export default function ProfitabilityPage() {
           <Card className="border-emerald-500/25 bg-gradient-to-br from-emerald-500/[0.06] to-cyan-500/[0.03] p-5">
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[240px]">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-emerald-200 flex items-center gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-200 flex items-center gap-2">
                   <Download className="h-4 w-4" />
                   Отчёт для инвестора (PDF)
                 </h2>
-                <p className="mt-1 text-xs text-emerald-100/70">
+                <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-100/70">
                   Детальная P&L выбранной точки за период {periodLabel} + общая сводка по всем точкам для сравнения.
                 </p>
               </div>
@@ -1597,7 +1597,7 @@ export default function ProfitabilityPage() {
                   </thead>
                   <tbody>
                     {byCompanyPeriod.map((c) => (
-                      <tr key={c.company_id} className="border-b border-border/50 hover:bg-white/[0.03]">
+                      <tr key={c.company_id} className="border-b border-border/50 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
                         <td className="px-3 py-2.5 font-medium text-foreground">{c.name}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{money(c.revenue)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.cashRevenue)}</td>
@@ -1605,9 +1605,9 @@ export default function ProfitabilityPage() {
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.cogs)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.operating)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.payroll + c.payrollTaxes)}</td>
-                        <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${c.ebitda >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(c.ebitda)}</td>
-                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${c.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(c.netProfit)}</td>
-                        <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${c.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{c.margin >= 0 ? '+' : ''}{c.margin.toFixed(1)}%</td>
+                        <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${c.ebitda >= 0 ? 'text-amber-700 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(c.ebitda)}</td>
+                        <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${c.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(c.netProfit)}</td>
+                        <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${c.margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{c.margin >= 0 ? '+' : ''}{c.margin.toFixed(1)}%</td>
                         <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">{(c.share * 100).toFixed(1)}%</td>
                       </tr>
                     ))}
@@ -1628,9 +1628,9 @@ export default function ProfitabilityPage() {
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.cogs)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.operating)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.payroll + t.payrollTaxes)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums ${t.ebitda >= 0 ? 'text-amber-200' : 'text-rose-300'}`}>{money(t.ebitda)}</td>
-                          <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${t.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-300'}`}>{money(t.netProfit)}</td>
-                          <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums ${t.ebitda >= 0 ? 'text-amber-700 dark:text-amber-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(t.ebitda)}</td>
+                          <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${t.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(t.netProfit)}</td>
+                          <td className={`px-3 py-2.5 text-right text-xs tabular-nums ${margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
                           <td className="px-3 py-2.5 text-right text-xs tabular-nums text-muted-foreground">100%</td>
                         </tr>
                       )
@@ -1652,7 +1652,7 @@ export default function ProfitabilityPage() {
                 const fcf = c.netProfit - (c.capex || 0) - (c.profitDistribution || 0)
                 return (
                   <details key={c.company_id || 'none'} className="group">
-                    <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-white/5">
+                    <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-slate-50 dark:hover:bg-white/5">
                       <span className="flex items-center gap-2">
                         <Landmark className="h-4 w-4 text-amber-400" />
                         {c.name}
@@ -1684,23 +1684,23 @@ export default function ProfitabilityPage() {
                             { label: 'Неоперационные / разовые', value: -c.nonOperating, kind: 'neg' as const },
                             { label: 'Чистая прибыль', value: c.netProfit, kind: 'final' as const },
                           ].map(({ label, value, kind, big }) => (
-                            <tr key={label} className={`border-b border-border last:border-b-0 ${kind === 'subtotal' ? 'bg-white/[0.02]' : ''} ${kind === 'final' ? 'border-t-2 border-emerald-500/20 bg-emerald-500/5' : ''}`}>
-                              <td className={`px-4 py-2.5 ${kind === 'subtotal' ? 'font-medium text-foreground' : kind === 'final' ? 'font-semibold text-emerald-200' : big ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{label}</td>
-                              <td className={`px-4 py-2.5 text-right tabular-nums ${kind === 'final' ? 'font-bold text-emerald-200' : kind === 'subtotal' ? 'font-semibold text-foreground' : value >= 0 ? 'text-foreground' : 'text-rose-300'}`}>{money(value)}</td>
+                            <tr key={label} className={`border-b border-border last:border-b-0 ${kind === 'subtotal' ? 'bg-slate-50 dark:bg-white/[0.02]' : ''} ${kind === 'final' ? 'border-t-2 border-emerald-500/20 bg-emerald-500/5' : ''}`}>
+                              <td className={`px-4 py-2.5 ${kind === 'subtotal' ? 'font-medium text-foreground' : kind === 'final' ? 'font-semibold text-emerald-700 dark:text-emerald-200' : big ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{label}</td>
+                              <td className={`px-4 py-2.5 text-right tabular-nums ${kind === 'final' ? 'font-bold text-emerald-700 dark:text-emerald-200' : kind === 'subtotal' ? 'font-semibold text-foreground' : value >= 0 ? 'text-foreground' : 'text-rose-600 dark:text-rose-300'}`}>{money(value)}</td>
                             </tr>
                           ))}
                           {(c.capex > 0 || c.profitDistribution > 0) && (
                             <>
-                              <tr className="border-t-2 border-amber-500/20 bg-amber-500/[0.04]"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wider text-amber-400/70">Справочно — вне P&L</td></tr>
+                              <tr className="border-t-2 border-amber-500/20 bg-amber-500/[0.04]"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400/70">Справочно — вне P&L</td></tr>
                               {c.capex > 0 && (
-                                <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">CAPEX (покупка активов)</td><td className="px-4 py-2.5 text-right tabular-nums text-amber-300">−{money(c.capex)}</td></tr>
+                                <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">CAPEX (покупка активов)</td><td className="px-4 py-2.5 text-right tabular-nums text-amber-700 dark:text-amber-300">−{money(c.capex)}</td></tr>
                               )}
                               {c.profitDistribution > 0 && (
-                                <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">Распределение прибыли</td><td className="px-4 py-2.5 text-right tabular-nums text-violet-300">−{money(c.profitDistribution)}</td></tr>
+                                <tr className="border-b border-border"><td className="px-4 py-2.5 text-muted-foreground">Распределение прибыли</td><td className="px-4 py-2.5 text-right tabular-nums text-violet-700 dark:text-violet-300">−{money(c.profitDistribution)}</td></tr>
                               )}
                               <tr className="bg-amber-500/[0.04]">
                                 <td className="px-4 py-2.5 font-medium text-foreground">FCF (после CAPEX + распределения)</td>
-                                <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${fcf >= 0 ? 'text-amber-200' : 'text-rose-300'}`}>{money(fcf)}</td>
+                                <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${fcf >= 0 ? 'text-amber-700 dark:text-amber-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(fcf)}</td>
                               </tr>
                             </>
                           )}
@@ -1743,7 +1743,7 @@ export default function ProfitabilityPage() {
                   </thead>
                   <tbody>
                     {byCompany.map((c) => (
-                      <tr key={c.company_id} className="border-b border-border/50 hover:bg-white/[0.03]">
+                      <tr key={c.company_id} className="border-b border-border/50 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
                         <td className="px-3 py-2.5 font-medium text-foreground">{c.name}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{money(c.revenue)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{(c.share * 100).toFixed(1)}%</td>
@@ -1751,9 +1751,9 @@ export default function ProfitabilityPage() {
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.operating)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.posCom)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(c.payroll + c.payrollTaxes)}</td>
-                        <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${c.ebitda >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{money(c.ebitda)}</td>
-                        <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${c.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(c.netProfit)}</td>
-                        <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${c.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{c.margin >= 0 ? '+' : ''}{c.margin.toFixed(1)}%</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${c.ebitda >= 0 ? 'text-cyan-700 dark:text-cyan-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(c.ebitda)}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${c.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(c.netProfit)}</td>
+                        <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${c.margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{c.margin >= 0 ? '+' : ''}{c.margin.toFixed(1)}%</td>
                       </tr>
                     ))}
                     {(() => {
@@ -1777,9 +1777,9 @@ export default function ProfitabilityPage() {
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.operating)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.posCom)}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{money(t.payroll + t.payrollTaxes)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums ${t.ebitda >= 0 ? 'text-cyan-200' : 'text-rose-300'}`}>{money(t.ebitda)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${t.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-300'}`}>{money(t.netProfit)}</td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums ${t.ebitda >= 0 ? 'text-cyan-700 dark:text-cyan-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(t.ebitda)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${t.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(t.netProfit)}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums text-xs ${margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(1)}%</td>
                         </tr>
                       )
                     })()}
@@ -1797,17 +1797,17 @@ export default function ProfitabilityPage() {
           {tab === 'settings' && (<>
           {/* ═══ ALERTS (kaspi daily corrections) ═══ */}
           {selected.hasRevenueOverride ? (
-            <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-100">
+            <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-100">
               <Info className="inline h-4 w-4 mr-1" /> Выручка взята из ручных верхних вводов (наличка {money(selected.cashRevenueOverride)} + POS {money(selected.posRevenueOverride)}). Очисти эти поля чтобы вернуть данные из журнала.
             </div>
           ) : null}
           {selected.hasKaspiDailyAdjustment && !selected.hasRevenueOverride ? (
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100">
+            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-100">
               <Info className="inline h-4 w-4 mr-1" /> Безналичный за месяц пересчитан по календарным суткам ({selected.kaspiDailyAdjustment > 0 ? '+' : ''}{money(selected.kaspiDailyAdjustment)}).
             </div>
           ) : null}
           {selected.hasKaspiDailyWarnings && !selected.hasRevenueOverride ? (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-100">
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-100">
               <Info className="inline h-4 w-4 mr-1" /> Для части ночных смен нет разделения {cashLabels.providerName} до и после полуночи — суточная сверка неполная.
             </div>
           ) : null}
@@ -1816,7 +1816,7 @@ export default function ProfitabilityPage() {
           <Card className="border-border bg-card overflow-hidden">
             <button
               onClick={() => setShowManualInputs((v) => !v)}
-              className="flex w-full items-center justify-between px-5 py-4 text-sm font-medium text-foreground hover:bg-white/[0.03]"
+              className="flex w-full items-center justify-between px-5 py-4 text-sm font-medium text-foreground hover:bg-slate-50 dark:hover:bg-white/[0.03]"
             >
               <span className="flex items-center gap-2">
                 <Settings2 className="h-4 w-4 text-amber-400" />
@@ -1836,12 +1836,12 @@ export default function ProfitabilityPage() {
                 />
                 {selected && draftPreview ? (
                   <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                    <div className="mb-3 text-xs uppercase tracking-wider text-emerald-300 flex items-center gap-2">
+                    <div className="mb-3 text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
                       <Calculator className="h-3.5 w-3.5" />
                       Превью для {monthLabel(selectedMonth)}
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mb-4">
-                      <div className="rounded-lg border border-border bg-white/[0.02] p-3 text-sm space-y-1.5">
+                      <div className="rounded-lg border border-border bg-white dark:bg-white/[0.02] p-3 text-sm space-y-1.5">
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Сейчас сохранено</div>
                         <div className="flex justify-between text-muted-foreground"><span>Выручка</span><span className="tabular-nums">{money(selected.revenue)}</span></div>
                         <div className="flex justify-between text-muted-foreground"><span>Комиссия POS</span><span className="tabular-nums">{money(selected.posCommission)}</span></div>
@@ -1850,12 +1850,12 @@ export default function ProfitabilityPage() {
                         <div className="flex justify-between text-foreground font-medium pt-1 border-t border-border"><span>Чистая</span><span className="tabular-nums">{money(selected.netProfit)}</span></div>
                       </div>
                       <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.04] p-3 text-sm space-y-1.5">
-                        <div className="text-[10px] uppercase tracking-wider text-emerald-300 mb-1.5">После сохранения</div>
-                        <div className="flex justify-between text-foreground"><span>Выручка</span><span className={`tabular-nums ${draftPreview.revenue !== selected.revenue ? 'text-cyan-300' : ''}`}>{money(draftPreview.revenue)}</span></div>
-                        <div className="flex justify-between text-foreground"><span>Комиссия POS</span><span className={`tabular-nums ${Math.round(draftPreview.posCommission) !== Math.round(selected.posCommission) ? 'text-cyan-300' : ''}`}>{money(draftPreview.posCommission)}</span></div>
-                        <div className="flex justify-between text-foreground"><span>EBITDA</span><span className={`tabular-nums ${draftPreview.ebitda >= selected.ebitda ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.ebitda)}</span></div>
-                        <div className="flex justify-between text-foreground"><span>Опер. прибыль</span><span className={`tabular-nums ${draftPreview.operatingProfit >= selected.operatingProfit ? 'text-emerald-300' : 'text-rose-300'}`}>{money(draftPreview.operatingProfit)}</span></div>
-                        <div className="flex justify-between font-medium pt-1 border-t border-emerald-500/20"><span className="text-foreground">Чистая</span><span className={`tabular-nums ${draftPreview.netProfit >= selected.netProfit ? 'text-emerald-200' : 'text-rose-300'}`}>{money(draftPreview.netProfit)}</span></div>
+                        <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 mb-1.5">После сохранения</div>
+                        <div className="flex justify-between text-foreground"><span>Выручка</span><span className={`tabular-nums ${draftPreview.revenue !== selected.revenue ? 'text-cyan-700 dark:text-cyan-300' : ''}`}>{money(draftPreview.revenue)}</span></div>
+                        <div className="flex justify-between text-foreground"><span>Комиссия POS</span><span className={`tabular-nums ${Math.round(draftPreview.posCommission) !== Math.round(selected.posCommission) ? 'text-cyan-700 dark:text-cyan-300' : ''}`}>{money(draftPreview.posCommission)}</span></div>
+                        <div className="flex justify-between text-foreground"><span>EBITDA</span><span className={`tabular-nums ${draftPreview.ebitda >= selected.ebitda ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(draftPreview.ebitda)}</span></div>
+                        <div className="flex justify-between text-foreground"><span>Опер. прибыль</span><span className={`tabular-nums ${draftPreview.operatingProfit >= selected.operatingProfit ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{money(draftPreview.operatingProfit)}</span></div>
+                        <div className="flex justify-between font-medium pt-1 border-t border-emerald-500/20"><span className="text-foreground">Чистая</span><span className={`tabular-nums ${draftPreview.netProfit >= selected.netProfit ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-600 dark:text-rose-300'}`}>{money(draftPreview.netProfit)}</span></div>
                       </div>
                     </div>
                     {canEdit && (
@@ -1912,12 +1912,12 @@ function Waterfall({ selected, cashLabels }: { selected: SelectedRow; cashLabels
               : item.kind === 'positive' ? 'bg-blue-500/70'
                 : 'bg-rose-500/50'
         const textColor =
-          item.kind === 'final' ? (isPos ? 'text-emerald-200' : 'text-rose-200')
-            : item.kind === 'subtotal' ? 'text-cyan-200'
+          item.kind === 'final' ? (isPos ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-600 dark:text-rose-200')
+            : item.kind === 'subtotal' ? 'text-cyan-700 dark:text-cyan-200'
               : 'text-foreground'
         const rowBg =
           item.kind === 'final' ? 'bg-emerald-500/[0.06] border border-emerald-500/20 rounded-lg px-3 py-2'
-            : item.kind === 'subtotal' ? 'bg-white/[0.03] rounded-lg px-3 py-2'
+            : item.kind === 'subtotal' ? 'bg-slate-50 dark:bg-white/[0.03] rounded-lg px-3 py-2'
               : 'px-3 py-1.5'
         return (
           <div key={item.label} className={rowBg}>
@@ -1928,7 +1928,7 @@ function Waterfall({ selected, cashLabels }: { selected: SelectedRow; cashLabels
               </div>
               <span className={`shrink-0 text-sm tabular-nums ${item.kind === 'final' ? 'font-bold' : 'font-medium'} ${textColor}`}>{isPos ? '' : '−'}{fmt(abs)}</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
               <div className={`h-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
@@ -1941,7 +1941,7 @@ function Waterfall({ selected, cashLabels }: { selected: SelectedRow; cashLabels
 function ManualInputTabs({ cashLabels, draft, setDraft, inputTab, setInputTab }: any) {
   return (
     <>
-      <div className="flex gap-1 rounded-xl border border-border bg-white/[0.02] p-1">
+      <div className="flex gap-1 rounded-xl border border-border bg-white dark:bg-white/[0.02] p-1">
         {INPUT_TABS.map((tab) => (
           <button key={tab.id} onClick={() => setInputTab(tab.id)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${inputTab === tab.id ? 'bg-emerald-600 text-white shadow' : 'text-muted-foreground hover:text-foreground'}`}>
             {tab.label}
@@ -1970,7 +1970,7 @@ function ManualInputTabs({ cashLabels, draft, setDraft, inputTab, setInputTab }:
               ['kaspi_red_turnover', 'kaspi_red_rate', cashLabels.red],
               ['kaspi_kredit_turnover', 'kaspi_kredit_rate', cashLabels.kredit],
             ].map(([turnoverKey, rateKey, label]) => (
-              <div key={String(label)} className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-white/[0.02] p-3 md:grid-cols-[1fr_140px_100px] md:items-center">
+              <div key={String(label)} className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-white dark:bg-white/[0.02] p-3 md:grid-cols-[1fr_140px_100px] md:items-center">
                 <div className="text-xs font-medium text-foreground">{label}</div>
                 <Input type="number" min="0" step="100" value={draft[turnoverKey]} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, [turnoverKey]: e.target.value }))} placeholder="Оборот, ₸" className="h-8 border-border bg-input text-xs text-foreground" />
                 <Input type="number" min="0" step="0.01" value={draft[rateKey]} onChange={(e: any) => setDraft((prev: any) => ({ ...prev, [rateKey]: e.target.value }))} placeholder="%" className="h-8 border-border bg-input text-xs text-foreground" />
@@ -2032,7 +2032,7 @@ function WhatIfPanel({ selected, whatIf, setWhatIf }: any) {
   const adjNetProfit = adjOperatingProfit - base.nonOperatingJournalExpenses - base.incomeTax
   const fmt = (v: number) => `${(Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
   return (
-    <div className="rounded-xl border border-border bg-white/[0.02] p-4 space-y-3">
+    <div className="rounded-xl border border-border bg-white dark:bg-white/[0.02] p-4 space-y-3">
       <h3 className="text-sm font-medium text-foreground flex items-center gap-2"><BarChart2 className="w-4 h-4 text-emerald-400" />What-if моделирование</h3>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -2052,8 +2052,8 @@ function WhatIfPanel({ selected, whatIf, setWhatIf }: any) {
       </div>
       <div className="grid grid-cols-1 gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs md:grid-cols-3">
         <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">Выручка</span><span className="font-medium text-foreground tabular-nums">{fmt(adjRevenue)}</span></div>
-        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">EBITDA</span><span className={`font-medium tabular-nums ${adjEbitda >= 0 ? 'text-cyan-300' : 'text-rose-300'}`}>{fmt(adjEbitda)} <span className="text-[10px] text-muted-foreground">({adjEbitda - base.ebitda >= 0 ? '+' : ''}{fmt(adjEbitda - base.ebitda)})</span></span></div>
-        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">Чистая</span><span className={`font-semibold tabular-nums ${adjNetProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{fmt(adjNetProfit)} <span className="text-[10px] text-muted-foreground">({adjNetProfit - base.netProfit >= 0 ? '+' : ''}{fmt(adjNetProfit - base.netProfit)})</span></span></div>
+        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">EBITDA</span><span className={`font-medium tabular-nums ${adjEbitda >= 0 ? 'text-cyan-700 dark:text-cyan-300' : 'text-rose-600 dark:text-rose-300'}`}>{fmt(adjEbitda)} <span className="text-[10px] text-muted-foreground">({adjEbitda - base.ebitda >= 0 ? '+' : ''}{fmt(adjEbitda - base.ebitda)})</span></span></div>
+        <div className="flex justify-between md:flex-col"><span className="text-muted-foreground">Чистая</span><span className={`font-semibold tabular-nums ${adjNetProfit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{fmt(adjNetProfit)} <span className="text-[10px] text-muted-foreground">({adjNetProfit - base.netProfit >= 0 ? '+' : ''}{fmt(adjNetProfit - base.netProfit)})</span></span></div>
       </div>
       {(whatIf.revenueAdj !== 0 || whatIf.expenseAdj !== 0) && (
         <button onClick={() => setWhatIf({ revenueAdj: 0, expenseAdj: 0 })} className="text-xs text-muted-foreground hover:text-foreground">Сбросить</button>

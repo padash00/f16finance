@@ -243,13 +243,13 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       <div className="app-page-wide space-y-6">
         <Card className="border-rose-500/30 bg-rose-500/5">
           <CardContent className="p-6 flex items-start gap-3">
-            <ShieldAlert className="h-6 w-6 text-rose-300 shrink-0" />
+            <ShieldAlert className="h-6 w-6 text-rose-700 dark:text-rose-300 shrink-0" />
             <div>
-              <h2 className="text-base font-semibold text-rose-200">Доступ ограничен</h2>
-              <p className="mt-1 text-sm text-rose-200/80">
+              <h2 className="text-base font-semibold text-rose-700 dark:text-rose-200">Доступ ограничен</h2>
+              <p className="mt-1 text-sm text-rose-700/80 dark:text-rose-200/80">
                 У вашей роли нет доступа к оприходованию. Текущая роль: <strong>{role?.roleLabel || '—'}</strong>.
               </p>
-              <p className="mt-2 text-xs text-rose-300/70">
+              <p className="mt-2 text-xs text-rose-700/70 dark:text-rose-300/70">
                 Доступ выдаётся на странице «Доступы»: включите путь «Оприходование» для нужной роли.
               </p>
             </div>
@@ -263,7 +263,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
     <div className={embedded ? 'space-y-6' : 'app-page-wide space-y-6'}>
       {embedded ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
             {role?.roleLabel || 'Владелец'}
           </Badge>
         </div>
@@ -275,7 +275,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           accent="emerald"
           backHref="/"
           actions={(
-            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
               {role?.roleLabel || 'Владелец'}
             </Badge>
           )}
@@ -284,10 +284,10 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
 
       <Card className="border-amber-500/20 bg-amber-500/5">
         <CardContent className="p-4 flex items-start gap-3">
-          <ShieldAlert className="h-5 w-5 text-amber-300 shrink-0 mt-0.5" />
-          <div className="text-sm text-amber-100">
+          <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
+          <div className="text-sm text-slate-700 dark:text-amber-100">
             <p className="font-medium">Ответственная операция</p>
-            <p className="mt-1 text-xs text-amber-200/80">
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-200/80">
               Оприходование изменяет фактический остаток без документа от поставщика. Каждое действие записывается в журнал движений и аудит.
               Перед проведением потребуется подтверждение.
             </p>
@@ -295,7 +295,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         </CardContent>
       </Card>
 
-      <Card className="border-white/10 bg-card/70 p-0">
+      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5 space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
@@ -313,7 +313,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                     .map((l) => (
                       <SelectItem key={l.id} value={l.id}>
                         <div className="flex items-center gap-2">
-                          <Warehouse className="h-3.5 w-3.5 text-blue-300" />
+                          <Warehouse className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
                           <span>{l.name}</span>
                           <span className="text-[10px] text-muted-foreground">склад</span>
                         </div>
@@ -324,7 +324,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                     .map((l) => (
                       <SelectItem key={l.id} value={l.id}>
                         <div className="flex items-center gap-2">
-                          <Store className="h-3.5 w-3.5 text-emerald-300" />
+                          <Store className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" />
                           <span>{l.name}</span>
                           <span className="text-[10px] text-muted-foreground">витрина</span>
                         </div>
@@ -358,7 +358,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
               {lines.map((line) => {
                 const it = itemById.get(line.item_id)
                 return (
-                  <div key={line.key} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 space-y-2">
+                  <div key={line.key} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 space-y-2">
                     <div className="grid gap-2 sm:grid-cols-12">
                       <div className="sm:col-span-6">
                         <Input
@@ -372,12 +372,12 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                           }}
                         />
                         {!line.item_id && (search[line.key] || '').length > 0 && (
-                          <div className="mt-1 max-h-44 overflow-auto rounded-md border border-white/10 bg-background">
+                          <div className="mt-1 max-h-44 overflow-auto rounded-md border border-slate-200 dark:border-white/10 bg-background">
                             {filteredItemsFor(line.key).map((opt) => (
                               <button
                                 key={opt.id}
                                 type="button"
-                                className="block w-full truncate px-2 py-1.5 text-left text-xs hover:bg-white/5"
+                                className="block w-full truncate px-2 py-1.5 text-left text-xs hover:bg-slate-100 dark:hover:bg-white/5"
                                 onClick={() => {
                                   setLines((prev) => prev.map((l) => l.key === line.key ? {
                                     ...l,
@@ -426,7 +426,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="text-rose-300 hover:bg-rose-500/10"
+                          className="text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
                           onClick={() => setLines((prev) => prev.length === 1 ? [newLine()] : prev.filter((l) => l.key !== line.key))}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -458,7 +458,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           </div>
 
           {error && <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">{error}</div>}
-          {success && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm text-emerald-300">{success}</div>}
+          {success && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
           <div className="flex justify-end">
             <Button type="button" onClick={openConfirm} disabled={saving || loading}>
@@ -475,19 +475,19 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
           <Card className="w-full max-w-md border-amber-500/30 bg-card">
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-amber-300" />
+                <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-300" />
                 <h3 className="font-semibold">Подтверждение оприходования</h3>
               </div>
               <p className="text-sm text-muted-foreground">
                 Будет проведено оприходование на <strong className="text-foreground">{selectedLocation?.name || '—'}</strong> ({targetLabel}).
                 Позиций: <strong className="text-foreground">{lines.filter((l) => l.item_id && parseNum(l.quantity) > 0).length}</strong>.
               </p>
-              <p className="text-xs text-amber-200/80">
+              <p className="text-xs text-amber-700 dark:text-amber-200/80">
                 Действие будет записано в журнал движений и аудит. Откатить можно через «Отмену приёмки».
               </p>
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  Введите фразу <code className="bg-white/10 px-1 rounded text-xs">{CONFIRM_PHRASE}</code> для подтверждения:
+                  Введите фразу <code className="bg-slate-100 dark:bg-white/10 px-1 rounded text-xs">{CONFIRM_PHRASE}</code> для подтверждения:
                 </Label>
                 <Input
                   value={confirmPhrase}
@@ -511,10 +511,10 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
         </div>
       )}
 
-      <Card className="border-white/10 bg-card/70 p-0">
+      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-            <Package className="h-4 w-4 text-emerald-300" /> Последние оприходования
+            <Package className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> Последние оприходования
           </div>
           {loading && recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">Загрузка…</p>
@@ -524,7 +524,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
             <div className="overflow-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
-                  <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="py-2 pl-2 pr-2 font-normal">Дата</th>
                     <th className="py-2 px-2 font-normal">Куда</th>
                     <th className="py-2 px-2 font-normal">Тип</th>
@@ -534,18 +534,18 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                     <th className="py-2 px-2 font-normal">Статус</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                   {recent.map((r) => (
                     <tr key={r.id} className={r.status === 'cancelled' ? 'opacity-50 line-through' : ''}>
                       <td className="py-2 pl-2 pr-2 text-xs text-muted-foreground">{r.received_at}</td>
                       <td className="py-2 px-2 text-xs">{r.location?.name || '—'}</td>
                       <td className="py-2 px-2 text-xs">
                         {r.location?.location_type === 'point_display' ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-300">
+                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
                             <Store className="h-3 w-3" /> витрина
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-blue-300">
+                          <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300">
                             <Warehouse className="h-3 w-3" /> склад
                           </span>
                         )}
@@ -555,9 +555,9 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                       <td className="py-2 px-2 text-right text-xs">{Number(r.total_amount || 0).toLocaleString('ru-RU')}</td>
                       <td className="py-2 px-2 text-xs">
                         {r.status === 'cancelled' ? (
-                          <Badge variant="outline" className="border-rose-500/40 bg-rose-500/15 text-rose-200">Отменён</Badge>
+                          <Badge variant="outline" className="border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-200">Отменён</Badge>
                         ) : (
-                          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">Проведён</Badge>
+                          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">Проведён</Badge>
                         )}
                       </td>
                     </tr>

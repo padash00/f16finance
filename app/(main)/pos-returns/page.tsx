@@ -291,7 +291,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
             </form>
 
             {searchError && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              <div className="mt-3 flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {searchError}
               </div>
@@ -315,38 +315,38 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm mb-4">
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Дата</p>
                   <p className="mt-1 font-medium">
                     {formatDate(sale.sold_at || sale.sale_date)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Сумма чека</p>
                   <p className="mt-1 font-bold text-emerald-400">
                     {formatMoney(sale.total_amount)}
                   </p>
                 </div>
                 {sale.cash_amount > 0 && (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                     <p className="text-xs text-muted-foreground">Наличные</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.cash_amount)}</p>
                   </div>
                 )}
                 {sale.kaspi_amount > 0 && (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                     <p className="text-xs text-muted-foreground">Безналичный</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.kaspi_amount)}</p>
                   </div>
                 )}
                 {sale.card_amount > 0 && (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                     <p className="text-xs text-muted-foreground">Карта</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.card_amount)}</p>
                   </div>
                 )}
                 {sale.online_amount > 0 && (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                     <p className="text-xs text-muted-foreground">Онлайн</p>
                     <p className="mt-1 font-medium">{formatMoney(sale.online_amount)}</p>
                   </div>
@@ -375,7 +375,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
                       className={`flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer ${
                         item.selected
                           ? 'border-amber-500/40 bg-amber-500/5'
-                          : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04]'
+                          : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                       }`}
                       onClick={() => toggleItem(index)}
                     >
@@ -384,7 +384,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
                         className={`h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
                           item.selected
                             ? 'border-amber-400 bg-amber-400'
-                            : 'border-white/30'
+                            : 'border-slate-300 dark:border-white/30'
                         }`}
                       >
                         {item.selected && (
@@ -466,7 +466,7 @@ export default function PosReturnsPage({ embedded = false }: { embedded?: boolea
                 </div>
 
                 {submitError && (
-                  <div className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                  <div className="flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     {submitError}
                   </div>

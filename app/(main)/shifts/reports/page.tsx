@@ -116,8 +116,8 @@ export default function ShiftReportsPage() {
                 onClick={() => setStatus(value)}
                 className={`rounded-full border px-3 py-1 text-xs transition ${
                   status === value
-                    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
-                    : 'border-white/10 text-slate-400 hover:text-white'
+                    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                    : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {value === 'closed' ? 'Закрытые' : value === 'open' ? 'Открытые' : 'Все'}
@@ -128,12 +128,12 @@ export default function ShiftReportsPage() {
       />
 
       {error && (
-        <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+        <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">
           {error}
         </Card>
       )}
 
-      <Card className="overflow-hidden border-white/10">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10">
         <AdminTableViewport>
           <table className="w-full min-w-[1100px] text-sm">
             <thead className={adminTableStickyTheadClass}>
@@ -151,7 +151,7 @@ export default function ShiftReportsPage() {
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-slate-200 dark:divide-white/5">
               {loading && rows.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-3 py-8 text-center text-slate-400">
@@ -168,36 +168,36 @@ export default function ShiftReportsPage() {
                 rows.map((row) => {
                   const totals = (row.totals_json || {}) as Record<string, any>
                   return (
-                    <tr key={row.id} className="hover:bg-white/5">
-                      <td className="px-3 py-2 text-white">{row.company?.name || '—'}</td>
-                      <td className="px-3 py-2 text-slate-200">
+                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                      <td className="px-3 py-2 text-slate-900 dark:text-white">{row.company?.name || '—'}</td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">
                         {row.operator?.short_name || row.operator?.full_name || '—'}
                       </td>
-                      <td className="px-3 py-2 text-slate-300">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                         {SHIFT_TYPE_LABEL[row.shift_type] || row.shift_type}
                       </td>
-                      <td className="px-3 py-2 text-slate-300">{fmtDateTime(row.opened_at)}</td>
-                      <td className="px-3 py-2 text-slate-300">{fmtDateTime(row.closed_at)}</td>
-                      <td className="px-3 py-2 text-slate-400">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.opened_at)}</td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.closed_at)}</td>
+                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
                         {fmtDuration(row.opened_at, row.closed_at)}
                       </td>
-                      <td className="px-3 py-2 text-right text-emerald-300">
+                      <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-300">
                         {fmtMoney(Number(totals.sales_total || 0))}
                       </td>
-                      <td className="px-3 py-2 text-right text-rose-300">
+                      <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-300">
                         {fmtMoney(Number(totals.returns_total || 0))}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-200">
+                      <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
                         {fmtMoney(Number(row.closing_cash || 0))}
                       </td>
                       <td className="px-3 py-2">
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs ${
                             row.status === 'open'
-                              ? 'bg-amber-500/15 text-amber-200'
+                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
                               : row.status === 'closed'
-                                ? 'bg-emerald-500/15 text-emerald-200'
-                                : 'bg-slate-500/15 text-slate-300'
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                                : 'bg-slate-500/15 text-slate-600 dark:text-slate-300'
                           }`}
                         >
                           {STATUS_LABEL[row.status] || row.status}
@@ -206,7 +206,7 @@ export default function ShiftReportsPage() {
                       <td className="px-3 py-2 text-right">
                         <Link
                           href={`/shifts/reports/${row.id}`}
-                          className="inline-flex items-center gap-1 text-xs text-emerald-300 hover:text-emerald-200"
+                          className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200"
                         >
                           Открыть <ChevronRight className="h-3 w-3" />
                         </Link>

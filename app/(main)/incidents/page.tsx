@@ -64,16 +64,16 @@ function kindIcon(kind: IncidentRow['kind']) {
 }
 
 function kindBadgeClass(kind: IncidentRow['kind']) {
-  if (kind === 'violation') return 'bg-rose-500/15 text-rose-200'
-  if (kind === 'bonus') return 'bg-emerald-500/15 text-emerald-200'
-  return 'bg-slate-500/15 text-slate-200'
+  if (kind === 'violation') return 'bg-rose-500/15 text-rose-700 dark:text-rose-200'
+  if (kind === 'bonus') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+  return 'bg-slate-500/15 text-slate-700 dark:text-slate-200'
 }
 
 function statusBadgeClass(status: IncidentRow['status']) {
-  if (status === 'confirmed') return 'bg-emerald-500/15 text-emerald-200'
-  if (status === 'disputed') return 'bg-amber-500/15 text-amber-200'
-  if (status === 'voided') return 'bg-slate-500/15 text-slate-300'
-  return 'bg-sky-500/15 text-sky-200'
+  if (status === 'confirmed') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+  if (status === 'disputed') return 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
+  if (status === 'voided') return 'bg-slate-500/15 text-slate-600 dark:text-slate-300'
+  return 'bg-sky-500/15 text-sky-700 dark:text-sky-200'
 }
 
 export default function IncidentsPage() {
@@ -155,8 +155,8 @@ export default function IncidentsPage() {
                   onClick={() => setKind(value)}
                   className={`rounded-full border px-3 py-1 text-xs transition ${
                     kind === value
-                      ? 'border-amber-400/50 bg-amber-500/15 text-amber-200'
-                      : 'border-white/10 text-slate-400 hover:text-white'
+                      ? 'border-amber-400/50 bg-amber-500/15 text-amber-700 dark:text-amber-200'
+                      : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {value === 'all' ? 'Все' : KIND_LABEL[value]}
@@ -171,8 +171,8 @@ export default function IncidentsPage() {
                   onClick={() => setStatus(value)}
                   className={`rounded-full border px-3 py-1 text-xs transition ${
                     status === value
-                      ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
-                      : 'border-white/10 text-slate-400 hover:text-white'
+                      ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                      : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {value === 'all' ? 'Все статусы' : STATUS_LABEL[value]}
@@ -185,24 +185,24 @@ export default function IncidentsPage() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <Card className="border-rose-500/30 bg-rose-500/5 p-4">
-          <div className="text-xs text-rose-300/70">Штрафы (подтв.)</div>
-          <div className="mt-1 text-xl font-semibold text-rose-200">{fmtMoney(summary.fines)}</div>
+          <div className="text-xs text-rose-600/70 dark:text-rose-300/70">Штрафы (подтв.)</div>
+          <div className="mt-1 text-xl font-semibold text-rose-700 dark:text-rose-200">{fmtMoney(summary.fines)}</div>
           <div className="text-xs text-slate-400">{summary.violations} нарушений</div>
         </Card>
         <Card className="border-emerald-500/30 bg-emerald-500/5 p-4">
-          <div className="text-xs text-emerald-300/70">Бонусы (подтв.)</div>
-          <div className="mt-1 text-xl font-semibold text-emerald-200">{fmtMoney(summary.bonuses)}</div>
+          <div className="text-xs text-emerald-600/70 dark:text-emerald-300/70">Бонусы (подтв.)</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-200">{fmtMoney(summary.bonuses)}</div>
           <div className="text-xs text-slate-400">{summary.bonusCount} бонусов</div>
         </Card>
-        <Card className="border-white/10 p-4">
+        <Card className="border-slate-200 dark:border-white/10 p-4">
           <div className="text-xs text-slate-400">Всего записей</div>
-          <div className="mt-1 text-xl font-semibold text-white">{rows.length}</div>
+          <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{rows.length}</div>
         </Card>
-        <Card className="border-white/10 p-4">
+        <Card className="border-slate-200 dark:border-white/10 p-4">
           <div className="text-xs text-slate-400">Чистый эффект</div>
           <div
             className={`mt-1 text-xl font-semibold ${
-              summary.bonuses - summary.fines >= 0 ? 'text-emerald-200' : 'text-rose-200'
+              summary.bonuses - summary.fines >= 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-rose-700 dark:text-rose-200'
             }`}
           >
             {fmtMoney(summary.bonuses - summary.fines)}
@@ -211,10 +211,10 @@ export default function IncidentsPage() {
       </div>
 
       {error && (
-        <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</Card>
+        <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">{error}</Card>
       )}
 
-      <Card className="overflow-hidden border-white/10">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10">
         <AdminTableViewport>
           <table className="w-full text-sm">
             <thead className={adminTableStickyTheadClass}>
@@ -230,7 +230,7 @@ export default function IncidentsPage() {
                 <th className="px-3 py-2">Статус</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-slate-200 dark:divide-white/5">
               {loading && rows.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
@@ -245,7 +245,7 @@ export default function IncidentsPage() {
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-white/5">
+                  <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td className="px-3 py-2">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${kindBadgeClass(
@@ -255,7 +255,7 @@ export default function IncidentsPage() {
                         {kindIcon(row.kind)} {KIND_LABEL[row.kind]}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-white">
+                    <td className="px-3 py-2 text-slate-900 dark:text-white">
                       <div className="font-medium">{row.title}</div>
                       {row.description && (
                         <div className="text-xs text-slate-400">{row.description}</div>
@@ -265,14 +265,14 @@ export default function IncidentsPage() {
                         {row.article ? ` · ${row.article.title}` : ''}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-slate-300">{row.company?.name || '—'}</td>
-                    <td className="px-3 py-2 text-slate-300">
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{row.company?.name || '—'}</td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                       {row.subject?.short_name || row.subject?.full_name || '—'}
                     </td>
                     <td className="px-3 py-2 text-slate-400">{row.source}</td>
-                    <td className="px-3 py-2 text-right text-rose-300">{fmtMoney(row.fine_amount)}</td>
-                    <td className="px-3 py-2 text-right text-emerald-300">{fmtMoney(row.bonus_amount)}</td>
-                    <td className="px-3 py-2 text-slate-300">{fmtDateTime(row.occurred_at)}</td>
+                    <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-300">{fmtMoney(row.fine_amount)}</td>
+                    <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-300">{fmtMoney(row.bonus_amount)}</td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{fmtDateTime(row.occurred_at)}</td>
                     <td className="px-3 py-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs ${statusBadgeClass(row.status)}`}

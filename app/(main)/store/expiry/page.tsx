@@ -66,14 +66,14 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
       <div className="grid grid-cols-3 gap-2">
         {([
           { key: 'all', label: 'Всего партий', value: data?.summary.total ?? 0, cls: 'text-foreground' },
-          { key: 'soon', label: 'Истекают (≤14 дн.)', value: data?.summary.soon ?? 0, cls: 'text-amber-300' },
-          { key: 'expired', label: 'Просрочено', value: data?.summary.expired ?? 0, cls: 'text-rose-300' },
+          { key: 'soon', label: 'Истекают (≤14 дн.)', value: data?.summary.soon ?? 0, cls: 'text-amber-700 dark:text-amber-300' },
+          { key: 'expired', label: 'Просрочено', value: data?.summary.expired ?? 0, cls: 'text-rose-600 dark:text-rose-300' },
         ] as const).map((c) => (
           <button
             key={c.key}
             type="button"
             onClick={() => setFilter(c.key as any)}
-            className={`rounded-xl border p-3 text-left transition ${filter === c.key ? 'border-emerald-400/40 bg-emerald-500/[0.06]' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}
+            className={`rounded-xl border p-3 text-left transition ${filter === c.key ? 'border-emerald-400/40 bg-emerald-500/[0.06]' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:border-slate-300 dark:hover:border-white/20'}`}
           >
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.label}</div>
             <div className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${c.cls}`}>{c.value}</div>
@@ -81,9 +81,9 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
         ))}
       </div>
 
-      {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</Card> : null}
+      {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</Card> : null}
 
-      <Card className="border-white/10 bg-card/70 p-0">
+      <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-0">
         <CardContent className="p-4 sm:p-5">
           {loading ? (
             <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</div>
@@ -95,7 +95,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
             <div className="overflow-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
-                  <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="py-2 pl-2 pr-2 font-normal">Товар</th>
                     <th className="py-2 px-2 font-normal">Где</th>
                     <th className="py-2 px-2 text-right font-normal">Кол-во</th>
@@ -104,7 +104,7 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
                     <th className="py-2 px-2 font-normal">Осталось</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                   {rows.map((r) => (
                     <tr key={r.id} className={r.status === 'expired' ? 'bg-rose-500/[0.04]' : ''}>
                       <td className="py-2 pl-2 pr-2">
@@ -117,9 +117,9 @@ export default function StoreExpiryPage({ embedded = false }: { embedded?: boole
                       <td className="py-2 px-2 text-xs tabular-nums">{fmtDate(r.expiry_date)}</td>
                       <td className="py-2 px-2">
                         {r.status === 'expired' ? (
-                          <Badge variant="outline" className="border-rose-500/40 bg-rose-500/15 text-rose-200"><AlertTriangle className="mr-1 h-3 w-3" />{daysLabel(r.days_left)}</Badge>
+                          <Badge variant="outline" className="border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-200"><AlertTriangle className="mr-1 h-3 w-3" />{daysLabel(r.days_left)}</Badge>
                         ) : r.status === 'soon' ? (
-                          <Badge variant="outline" className="border-amber-500/40 bg-amber-500/15 text-amber-200">{daysLabel(r.days_left)}</Badge>
+                          <Badge variant="outline" className="border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-200">{daysLabel(r.days_left)}</Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">{daysLabel(r.days_left)}</span>
                         )}

@@ -138,18 +138,18 @@ function moneyShort(n: number): string {
 }
 
 function piColor(pi: number): { text: string; bg: string; border: string; label: string } {
-  if (pi >= 1.15) return { text: 'text-emerald-300', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', label: 'Превосходно' }
-  if (pi >= 1.05) return { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: 'Хорошо' }
-  if (pi >= 0.95) return { text: 'text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20', label: 'Норма' }
-  if (pi >= 0.85) return { text: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Ниже нормы' }
-  return { text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/20', label: 'Слабо' }
+  if (pi >= 1.15) return { text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', label: 'Превосходно' }
+  if (pi >= 1.05) return { text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: 'Хорошо' }
+  if (pi >= 0.95) return { text: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20', label: 'Норма' }
+  if (pi >= 0.85) return { text: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Ниже нормы' }
+  return { text: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/20', label: 'Слабо' }
 }
 
 function rankBadge(rank: number) {
-  if (rank === 1) return <Crown className="w-5 h-5 text-amber-300" />
-  if (rank === 2) return <Trophy className="w-5 h-5 text-slate-300" />
-  if (rank === 3) return <Medal className="w-5 h-5 text-orange-300" />
-  return <span className="text-xs font-mono text-slate-400">#{rank}</span>
+  if (rank === 1) return <Crown className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+  if (rank === 2) return <Trophy className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+  if (rank === 3) return <Medal className="w-5 h-5 text-orange-600 dark:text-orange-300" />
+  return <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{rank}</span>
 }
 
 export default function PerformancePage() {
@@ -246,14 +246,14 @@ export default function PerformancePage() {
         backHref="/"
         actions={
           <>
-            <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-slate-200 dark:border-white/10">
               {(Object.keys(PERIOD_PRESETS) as PeriodPreset[]).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPeriod(p)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                    period === p ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                    period === p ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {PERIOD_PRESETS[p].label}
@@ -265,7 +265,7 @@ export default function PerformancePage() {
               size="sm"
               onClick={() => load(true)}
               disabled={loading || refreshing}
-              className="rounded-xl border border-white/10"
+              className="rounded-xl border border-slate-200 dark:border-white/10"
               title="Обновить"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -278,23 +278,23 @@ export default function PerformancePage() {
               <select
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="bg-zinc-900/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-white outline-none hover:bg-zinc-900/70 cursor-pointer"
+                className="bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 dark:text-white outline-none hover:bg-slate-200 dark:hover:bg-zinc-900/70 cursor-pointer"
               >
-                <option value="" className="bg-zinc-900">📍 Все точки</option>
+                <option value="" className="bg-white dark:bg-zinc-900">📍 Все точки</option>
                 {companies.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-zinc-900">
+                  <option key={c.id} value={c.id} className="bg-white dark:bg-zinc-900">
                     📍 {c.name}
                   </option>
                 ))}
               </select>
-              <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-white/10">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-900/50 p-1 rounded-xl border border-slate-200 dark:border-white/10">
                 {(['all', 'day', 'night'] as ShiftFilter[]).map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => setShiftFilter(s)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                      shiftFilter === s ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                      shiftFilter === s ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {s === 'all' ? 'Все смены' : s === 'day' ? '☀️ День' : '🌙 Ночь'}
@@ -303,16 +303,16 @@ export default function PerformancePage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-300">
+              <span className="rounded-md border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-300">
                 {PERIOD_PRESETS[period].label}
               </span>
               {selectedCompany && (
-                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                   📍 {selectedCompany.name}
                 </span>
               )}
               {shiftFilter !== 'all' && (
-                <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-medium text-violet-300">
+                <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">
                   {shiftFilter === 'day' ? '☀️ Только дневные смены' : '🌙 Только ночные смены'}
                 </span>
               )}
@@ -322,7 +322,7 @@ export default function PerformancePage() {
       />
 
       {error && (
-        <Card className="p-4 border-rose-500/30 bg-rose-500/10 text-sm text-rose-300">
+        <Card className="p-4 border-rose-500/30 bg-rose-500/10 text-sm text-rose-700 dark:text-rose-300">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>{error}</div>
@@ -331,57 +331,57 @@ export default function PerformancePage() {
       )}
 
       {/* Объяснение метода */}
-      <Card className="bg-gray-900/40 border-white/8 overflow-hidden">
-        <div className="border-b border-white/5 bg-blue-500/[0.04] px-5 py-3 flex items-center gap-2">
+      <Card className="bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/8 overflow-hidden">
+        <div className="border-b border-slate-200 dark:border-white/5 bg-blue-500/[0.04] px-5 py-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-semibold text-blue-300">Как формируется рейтинг</span>
+          <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Как формируется рейтинг</span>
         </div>
         <div className="p-5 space-y-5 text-sm">
           {/* Шаг 1 */}
           <div className="flex gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">1</div>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">1</div>
             <div className="flex-1">
-              <div className="font-semibold text-white mb-1">Считаем «ожидание» для каждой смены</div>
+              <div className="font-semibold text-slate-900 dark:text-white mb-1">Считаем «ожидание» для каждой смены</div>
               <p className="text-slate-400 leading-relaxed">
-                Берём <strong className="text-slate-200">всю историю проекта</strong>
+                Берём <strong className="text-slate-700 dark:text-slate-200">всю историю проекта</strong>
                 {data?.baseline.from && (
-                  <> с <strong className="text-slate-200">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
+                  <> с <strong className="text-slate-700 dark:text-slate-200">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
                 )}
                 {' '}и для каждого слота считаем
-                <strong className="text-slate-200"> медианную выручку</strong>. Слот — это уникальная комбинация
-                «<strong className="text-emerald-300">точка</strong> × <strong className="text-emerald-300">день недели</strong> × <strong className="text-emerald-300">день/ночь</strong>».
+                <strong className="text-slate-700 dark:text-slate-200"> медианную выручку</strong>. Слот — это уникальная комбинация
+                «<strong className="text-emerald-700 dark:text-emerald-300">точка</strong> × <strong className="text-emerald-700 dark:text-emerald-300">день недели</strong> × <strong className="text-emerald-700 dark:text-emerald-300">день/ночь</strong>».
                 Окно автоматически расширяется по мере накопления данных — мы не теряем ранние смены и точно знаем,
                 сколько в среднем делается в каждый понедельник, пятницу, ночь и т.д.
               </p>
               <p className="text-slate-400 leading-relaxed mt-2">
-                <strong className="text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-300">не входят в медиану</strong>.
+                <strong className="text-amber-700 dark:text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-700 dark:text-amber-300">не входят в медиану</strong>.
                 Это убирает «само-смещение»: если оператор работал почти все пятничные ночи, его прошлые результаты не должны формировать его же норму. Сравниваем его только с тем что делали <strong>другие</strong> в таком же слоте.
               </p>
-              <div className="mt-2 rounded-lg border border-white/8 bg-black/20 p-3 text-xs text-slate-400">
-                Пример: «Arena × пятница × ночь» — за период базы было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-white font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
+              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
+                Пример: «Arena × пятница × ночь» — за период базы было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-slate-900 dark:text-white font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
               </div>
             </div>
           </div>
 
           {/* Шаг 2 */}
           <div className="flex gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">2</div>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">2</div>
             <div className="flex-1">
-              <div className="font-semibold text-white mb-1">Считаем PI каждой смены оператора</div>
+              <div className="font-semibold text-slate-900 dark:text-white mb-1">Считаем PI каждой смены оператора</div>
               <p className="text-slate-400 leading-relaxed">
                 Для каждой смены берём фактическую выручку и делим на ожидание этого слота:
               </p>
-              <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3 font-mono text-sm text-emerald-200">
+              <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3 font-mono text-sm text-emerald-700 dark:text-emerald-200">
                 PI смены = факт / ожидание
               </div>
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
-                  <div className="text-emerald-300 font-semibold">PI = 1.20</div>
-                  <div className="text-slate-400 mt-1">Сделал 336k вместо ожидаемых 280k. Это <strong className="text-emerald-300">+20% к норме</strong>.</div>
+                  <div className="text-emerald-700 dark:text-emerald-300 font-semibold">PI = 1.20</div>
+                  <div className="text-slate-500 dark:text-slate-400 mt-1">Сделал 336k вместо ожидаемых 280k. Это <strong className="text-emerald-700 dark:text-emerald-300">+20% к норме</strong>.</div>
                 </div>
                 <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.05] p-3">
-                  <div className="text-rose-300 font-semibold">PI = 0.85</div>
-                  <div className="text-slate-400 mt-1">Сделал 238k при ожидании 280k. <strong className="text-rose-300">−15% к норме</strong>.</div>
+                  <div className="text-rose-700 dark:text-rose-300 font-semibold">PI = 0.85</div>
+                  <div className="text-slate-500 dark:text-slate-400 mt-1">Сделал 238k при ожидании 280k. <strong className="text-rose-700 dark:text-rose-300">−15% к норме</strong>.</div>
                 </div>
               </div>
             </div>
@@ -389,66 +389,66 @@ export default function PerformancePage() {
 
           {/* Шаг 3 */}
           <div className="flex gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">3</div>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">3</div>
             <div className="flex-1">
-              <div className="font-semibold text-white mb-1">Берём среднее PI по всем сменам — это балл оператора</div>
+              <div className="font-semibold text-slate-900 dark:text-white mb-1">Берём среднее PI по всем сменам — это балл оператора</div>
               <p className="text-slate-400 leading-relaxed">
                 У оператора 8 смен за месяц → 8 PI. Их среднее и есть его рейтинговый балл.
               </p>
-              <div className="mt-2 rounded-lg border border-white/8 bg-black/20 p-3 text-xs text-slate-400">
-                <span className="text-white font-semibold">Айгерим:</span> 8 смен. PI = [1.05, 1.18, 0.92, 1.30, 1.12, 0.95, 1.20, 1.08]. Среднее = <span className="text-emerald-300 font-semibold">1.10</span> — на <strong>10% выше нормы</strong> в среднем по всем своим сменам.
+              <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-slate-900 dark:text-white font-semibold">Айгерим:</span> 8 смен. PI = [1.05, 1.18, 0.92, 1.30, 1.12, 0.95, 1.20, 1.08]. Среднее = <span className="text-emerald-700 dark:text-emerald-300 font-semibold">1.10</span> — на <strong>10% выше нормы</strong> в среднем по всем своим сменам.
               </div>
             </div>
           </div>
 
           {/* Цветовые метки */}
           <div className="flex gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-xs font-semibold">4</div>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">4</div>
             <div className="flex-1">
-              <div className="font-semibold text-white mb-2">Цветовые метки</div>
+              <div className="font-semibold text-slate-900 dark:text-white mb-2">Цветовые метки</div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
                 <div className="rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-1.5 text-center">
-                  <div className="text-emerald-300 font-bold">≥ 1.15</div>
-                  <div className="text-emerald-200 text-[10px]">Превосходно</div>
+                  <div className="text-emerald-700 dark:text-emerald-300 font-bold">≥ 1.15</div>
+                  <div className="text-emerald-700 dark:text-emerald-200 text-[10px]">Превосходно</div>
                 </div>
                 <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1.5 text-center">
-                  <div className="text-emerald-300 font-bold">1.05–1.14</div>
-                  <div className="text-emerald-200 text-[10px]">Хорошо</div>
+                  <div className="text-emerald-700 dark:text-emerald-300 font-bold">1.05–1.14</div>
+                  <div className="text-emerald-700 dark:text-emerald-200 text-[10px]">Хорошо</div>
                 </div>
                 <div className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1.5 text-center">
-                  <div className="text-slate-300 font-bold">0.95–1.04</div>
-                  <div className="text-slate-300 text-[10px]">Норма</div>
+                  <div className="text-slate-700 dark:text-slate-300 font-bold">0.95–1.04</div>
+                  <div className="text-slate-700 dark:text-slate-300 text-[10px]">Норма</div>
                 </div>
                 <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-center">
-                  <div className="text-amber-300 font-bold">0.85–0.94</div>
-                  <div className="text-amber-200 text-[10px]">Ниже нормы</div>
+                  <div className="text-amber-700 dark:text-amber-300 font-bold">0.85–0.94</div>
+                  <div className="text-amber-700 dark:text-amber-200 text-[10px]">Ниже нормы</div>
                 </div>
                 <div className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1.5 text-center">
-                  <div className="text-rose-300 font-bold">{'< 0.85'}</div>
-                  <div className="text-rose-200 text-[10px]">Слабо</div>
+                  <div className="text-rose-700 dark:text-rose-300 font-bold">{'< 0.85'}</div>
+                  <div className="text-rose-700 dark:text-rose-200 text-[10px]">Слабо</div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Защиты */}
-          <div className="flex gap-3 pt-2 border-t border-white/5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 text-xs font-semibold">!</div>
+          <div className="flex gap-3 pt-2 border-t border-slate-200 dark:border-white/5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-semibold">!</div>
             <div className="flex-1">
-              <div className="font-semibold text-white mb-1">Защита от случайных всплесков</div>
-              <ul className="text-slate-400 leading-relaxed space-y-1 list-disc pl-4">
+              <div className="font-semibold text-slate-900 dark:text-white mb-1">Защита от случайных всплесков</div>
+              <ul className="text-slate-500 dark:text-slate-400 leading-relaxed space-y-1 list-disc pl-4">
                 <li>
-                  <strong className="text-slate-200">Минимум 3 смены</strong> для попадания в основной рейтинг.
+                  <strong className="text-slate-700 dark:text-slate-200">Минимум 3 смены</strong> для попадания в основной рейтинг.
                   Меньше — оператор в секции «Накапливают данные».
                 </li>
                 <li>
-                  <strong className="text-slate-200">PI ограничен от 0.5 до 2.0</strong> — лотерейный день с одним крупным заказом не возносит и не валит надолго.
+                  <strong className="text-slate-700 dark:text-slate-200">PI ограничен от 0.5 до 2.0</strong> — лотерейный день с одним крупным заказом не возносит и не валит надолго.
                 </li>
                 <li>
                   Если в слоте {'<'} 3 наблюдений (редкий случай) — берём fallback: медиана по точке-смене, потом по точке, потом глобально.
                 </li>
                 <li>
-                  <strong className="text-slate-200">Сравнение справедливое</strong> — пятница сравнивается с пятницей, ночь с ночью, Arena с Arena. Не зависит от того сколько смен у оператора.
+                  <strong className="text-slate-700 dark:text-slate-200">Сравнение справедливое</strong> — пятница сравнивается с пятницей, ночь с ночью, Arena с Arena. Не зависит от того сколько смен у оператора.
                 </li>
               </ul>
             </div>
@@ -456,19 +456,19 @@ export default function PerformancePage() {
 
           {/* Stats */}
           {data?.baseline && (
-            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
-              <span><strong className="text-slate-300">База расчёта:</strong> {data.baseline.shifts_count} смен в {data.baseline.slots_count} уникальных слотах</span>
-              <span><strong className="text-slate-300">Период базы:</strong> {data.baseline.from} — {data.baseline.to}</span>
-              <span><strong className="text-slate-300">Медиана глобально:</strong> {moneyShort(data.baseline.global_median)}</span>
+            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.02] p-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
+              <span><strong className="text-slate-700 dark:text-slate-300">База расчёта:</strong> {data.baseline.shifts_count} смен в {data.baseline.slots_count} уникальных слотах</span>
+              <span><strong className="text-slate-700 dark:text-slate-300">Период базы:</strong> {data.baseline.from} — {data.baseline.to}</span>
+              <span><strong className="text-slate-700 dark:text-slate-300">Медиана глобально:</strong> {moneyShort(data.baseline.global_median)}</span>
             </div>
           )}
         </div>
       </Card>
 
       {/* Основной рейтинг */}
-      <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+      <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <Award className="w-4 h-4 text-emerald-400" />
             Основной рейтинг ({qualifying.length})
           </h3>
@@ -493,15 +493,15 @@ export default function PerformancePage() {
                   key={op.operator_id}
                   type="button"
                   onClick={() => setSelected(op)}
-                  className="w-full text-left rounded-xl border border-white/10 bg-gray-900/60 p-4 transition hover:border-emerald-400/30 hover:bg-gray-900/80"
+                  className="w-full text-left rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-900/60 p-4 transition hover:border-emerald-400/30 hover:bg-slate-100 dark:hover:bg-gray-900/80"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center">
                       {rankBadge(i + 1)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-white">{op.operator_short_name || op.operator_name}</div>
-                      <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
+                      <div className="font-semibold text-slate-900 dark:text-white">{op.operator_short_name || op.operator_name}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3">
                         <span className="inline-flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {op.shifts} смен
@@ -532,8 +532,8 @@ export default function PerformancePage() {
 
       {/* Cold start */}
       {coldStart.length > 0 && (
-        <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+        <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-400" />
             Накапливают данные ({coldStart.length})
             <span className="text-xs font-normal text-slate-500">— меньше {data?.config.min_qualifying_shifts || 3} смен</span>
@@ -544,9 +544,9 @@ export default function PerformancePage() {
                 key={op.operator_id}
                 type="button"
                 onClick={() => setSelected(op)}
-                className="text-left rounded-xl border border-white/8 bg-gray-900/40 px-3 py-2.5 transition hover:border-white/15"
+                className="text-left rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-gray-900/40 px-3 py-2.5 transition hover:border-slate-300 dark:hover:border-white/15"
               >
-                <div className="font-medium text-slate-200 text-sm truncate">{op.operator_short_name || op.operator_name}</div>
+                <div className="font-medium text-slate-700 dark:text-slate-200 text-sm truncate">{op.operator_short_name || op.operator_name}</div>
                 <div className="text-xs text-slate-500 mt-0.5">
                   {op.shifts} смен · {moneyShort(op.total_revenue)}
                 </div>
@@ -589,16 +589,16 @@ function OperatorDetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-white/10 rounded-2xl w-full max-w-3xl my-8 animate-in fade-in zoom-in duration-200"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-gray-900 border-b border-white/5 rounded-t-2xl z-10 p-5">
+        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10 p-5">
           <div className="flex items-center gap-4">
             <div className="min-w-0 flex-1">
-              <div className="text-lg font-semibold text-white truncate">
+              <div className="text-lg font-semibold text-slate-900 dark:text-white truncate">
                 {item.operator_short_name || item.operator_name}
               </div>
-              <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
+              <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
                 <Calendar className="h-3.5 w-3.5" />
                 {periodLabel}
               </div>
@@ -610,7 +610,7 @@ function OperatorDetailModal({
             <button
               onClick={onClose}
               type="button"
-              className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+              className="rounded-lg p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
@@ -627,13 +627,13 @@ function OperatorDetailModal({
 
         {/* Shift table */}
         <div className="p-5">
-          <h4 className="text-xs uppercase tracking-[0.14em] text-slate-400 font-semibold mb-3">
+          <h4 className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 font-semibold mb-3">
             Разбор по сменам
           </h4>
-          <div className="overflow-hidden rounded-xl border border-white/8">
+          <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/8">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/8 bg-white/[0.03] text-[11px] uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <th className="px-3 py-2 text-left font-medium">Дата</th>
                   <th className="px-3 py-2 text-left font-medium">Смена</th>
                   <th className="px-3 py-2 text-right font-medium">Ожидалось</th>
@@ -646,13 +646,13 @@ function OperatorDetailModal({
                   const piC = piColor(sh.pi)
                   const diff = sh.actual - sh.expected
                   return (
-                    <tr key={idx} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                      <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{sh.date}</td>
-                      <td className="px-3 py-2 text-slate-400">
+                    <tr key={idx} className="border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{sh.date}</td>
+                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
                         {sh.shift === 'night' ? '🌙 ночь' : '☀️ день'}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-400 tabular-nums">{moneyShort(sh.expected)}</td>
-                      <td className="px-3 py-2 text-right text-white tabular-nums">
+                      <td className="px-3 py-2 text-right text-slate-500 dark:text-slate-400 tabular-nums">{moneyShort(sh.expected)}</td>
+                      <td className="px-3 py-2 text-right text-slate-900 dark:text-white tabular-nums">
                         {moneyShort(sh.actual)}
                         <span className={`ml-2 text-[10px] ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {diff >= 0 ? <TrendingUp className="inline w-3 h-3" /> : <TrendingDown className="inline w-3 h-3" />}
@@ -672,8 +672,8 @@ function OperatorDetailModal({
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-gray-900 border-t border-white/5 rounded-b-2xl p-4 flex justify-end">
-          <Button variant="outline" size="sm" onClick={onClose} className="border-white/10">
+        <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} className="border-slate-200 dark:border-white/10">
             Закрыть
           </Button>
         </div>
@@ -685,9 +685,9 @@ function OperatorDetailModal({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+    <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{value}</div>
     </div>
   )
 }

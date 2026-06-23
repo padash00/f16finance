@@ -63,7 +63,7 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <div className="app-page-wide space-y-6 text-white">
+    <div className="app-page-wide space-y-6 text-slate-900 dark:text-white">
       <AdminPageHeader
         title="Подписка"
         description="Ваш тариф, модули и счета."
@@ -79,7 +79,7 @@ export default function SubscriptionPage() {
       ) : (
         <>
           {/* Текущий тариф */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.02]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <Package className="h-4 w-4 text-violet-400" /> Тариф
             </h2>
@@ -97,14 +97,14 @@ export default function SubscriptionPage() {
                 <p className="font-medium">{fmtDate(data.subscription?.endsAt || null)}</p>
               </div>
             </div>
-            <div className="mt-3 border-t border-white/5 pt-3 text-sm">
-              <span className="text-slate-400">К оплате в месяц: </span>
-              <b className="text-white">{fmt(data.monthlyTotal)} ₸</b>
+            <div className="mt-3 border-t border-slate-200 pt-3 text-sm dark:border-white/5">
+              <span className="text-slate-500 dark:text-slate-400">К оплате в месяц: </span>
+              <b className="text-slate-900 dark:text-white">{fmt(data.monthlyTotal)} ₸</b>
             </div>
           </div>
 
           {/* Модули */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.02]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-violet-400" /> Подключённые модули
             </h2>
@@ -113,9 +113,9 @@ export default function SubscriptionPage() {
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {data.addons.map((a) => (
-                  <div key={a.code} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm">
+                  <div key={a.code} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-white/5 dark:bg-white/[0.02]">
                     <span>{a.name}</span>
-                    <span className="text-slate-400">{fmt(a.priceKzt)} ₸</span>
+                    <span className="text-slate-500 dark:text-slate-400">{fmt(a.priceKzt)} ₸</span>
                   </div>
                 ))}
               </div>
@@ -123,7 +123,7 @@ export default function SubscriptionPage() {
           </div>
 
           {/* Счета */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.02]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <CreditCard className="h-4 w-4 text-violet-400" /> Счета
             </h2>
@@ -132,7 +132,7 @@ export default function SubscriptionPage() {
             ) : (
               <div className="space-y-1.5">
                 {data.invoices.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm">
+                  <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-white/5 dark:bg-white/[0.02]">
                     <div>
                       <p className={inv.status === 'void' ? 'text-slate-500 line-through' : ''}>
                         {fmt(inv.amount)} {inv.currency || '₸'} · {INV_STATUS_LABELS[inv.status] || inv.status}

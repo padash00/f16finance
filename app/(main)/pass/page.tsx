@@ -465,7 +465,7 @@ export default function AccessPage() {
                   <Button
                     onClick={copyAllData}
                     variant="outline"
-                    className="border-white/10 bg-white/5 hover:bg-white/10"
+                    className="border-slate-200 dark:border-white/10 bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     <Copy className="w-4 h-4 mr-2" />
                     Копировать все данные
@@ -476,7 +476,7 @@ export default function AccessPage() {
                   <Button
                     onClick={exportToCSV}
                     variant="outline"
-                    className="border-white/10 bg-white/5 hover:bg-white/10"
+                    className="border-slate-200 dark:border-white/10 bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать PDF
@@ -501,7 +501,7 @@ export default function AccessPage() {
                 <Button
                   onClick={loadOperators}
                   variant="outline"
-                  className="border-white/10 bg-white/5 hover:bg-white/10"
+                  className="border-slate-200 dark:border-white/10 bg-transparent dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Обновить
@@ -512,17 +512,17 @@ export default function AccessPage() {
 
           {/* Статистика */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-violet-500/20 rounded-lg">
                   <Users className="w-4 h-4 text-violet-400" />
                 </div>
                 <p className="text-xs text-gray-500 uppercase">Всего активных</p>
               </div>
-              <p className="text-2xl font-bold text-white">{operators.length}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{operators.length}</p>
             </Card>
 
-            <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-amber-500/20 rounded-lg">
                   <Shield className="w-4 h-4 text-amber-400" />
@@ -534,7 +534,7 @@ export default function AccessPage() {
               </p>
             </Card>
 
-            <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-emerald-500/20 rounded-lg">
                   <Key className="w-4 h-4 text-emerald-400" />
@@ -548,11 +548,11 @@ export default function AccessPage() {
           </div>
 
           {/* Таблица операторов */}
-          <Card className="overflow-hidden bg-gray-900/40 backdrop-blur-xl border-white/5">
+          <Card className="overflow-hidden bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/5 bg-white/5">
+                  <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5">
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Оператор</th>
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Логин</th>
                     <th className="py-4 px-4 text-left font-medium text-gray-400">Новый пароль</th>
@@ -566,7 +566,7 @@ export default function AccessPage() {
                     const newPassword = newPasswords[op.id]
                     
                     return (
-                      <tr key={op.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <tr key={op.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-violet-500 to-fuchsia-500 flex-shrink-0">
@@ -579,13 +579,13 @@ export default function AccessPage() {
                                   className="object-cover w-full h-full"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">
+                                <div className="w-full h-full flex items-center justify-center text-slate-900 dark:text-white text-xs font-bold">
                                   {op.name.charAt(0).toUpperCase()}
                                 </div>
                               )}
                             </div>
                             <div>
-                              <span className="font-medium text-white block">
+                              <span className="font-medium text-slate-900 dark:text-white block">
                                 {op.short_name || op.name}
                               </span>
                               <span className="text-xs text-gray-500">{op.role}</span>
@@ -609,7 +609,7 @@ export default function AccessPage() {
                                 value={editingLoginValue}
                                 onChange={e => setEditingLoginValue(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') saveLogin(op.id); if (e.key === 'Escape') setEditingLoginId(null) }}
-                                className="font-mono text-sm bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white w-36 focus:outline-none focus:border-blue-500"
+                                className="font-mono text-sm bg-white dark:bg-gray-800 border border-slate-300 dark:border-gray-600 rounded-lg px-2 py-1 text-slate-900 dark:text-white w-36 focus:outline-none focus:border-blue-500"
                               />
                               <button
                                 onClick={() => saveLogin(op.id)}
@@ -626,13 +626,13 @@ export default function AccessPage() {
                             <button
                               type="button"
                               onClick={() => { setEditingLoginId(op.id); setEditingLoginValue(op.username || '') }}
-                              className="flex items-center gap-1.5 font-mono text-sm text-gray-300 hover:text-white group text-left"
+                              className="flex items-center gap-1.5 font-mono text-sm text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white group text-left"
                             >
                               <span>{op.username || '—'}</span>
                               <Pencil className="w-3 h-3 text-gray-600 group-hover:text-gray-400 transition-colors shrink-0" />
                             </button>
                           ) : (
-                            <span className="font-mono text-sm text-gray-300">{op.username || '—'}</span>
+                            <span className="font-mono text-sm text-slate-700 dark:text-gray-300">{op.username || '—'}</span>
                           )}
                         </td>
 
@@ -647,7 +647,7 @@ export default function AccessPage() {
                                   ...prev,
                                   [op.id]: !prev[op.id]
                                 }))}
-                                className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
                               >
                                 {showPasswords[op.id] ? (
                                   <EyeOff className="w-4 h-4 text-gray-400" />
@@ -660,7 +660,7 @@ export default function AccessPage() {
                                   onClick={() => sendToTelegram(op, newPassword)}
                                   disabled={sendingTgId === op.id || !op.telegram_chat_id}
                                   title={op.telegram_chat_id ? 'Отправить в Telegram' : 'Telegram ID не указан'}
-                                  className="p-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-40"
+                                  className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-40"
                                 >
                                   {sendingTgId === op.id ? (
                                     <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
@@ -692,7 +692,7 @@ export default function AccessPage() {
                           )}
                         </td>
 
-                        <td className="py-4 px-4 text-gray-400">
+                        <td className="py-4 px-4 text-slate-700 dark:text-gray-400">
                           {op.phone || '—'}
                         </td>
 
@@ -712,7 +712,7 @@ export default function AccessPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 px-2 border-white/10 hover:bg-white/10"
+                                className="h-8 px-2 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10"
                                 onClick={() => copyOperatorData(op)}
                                 disabled={!newPassword}
                               >
@@ -750,8 +750,8 @@ export default function AccessPage() {
                 <FileText className="w-5 h-5 text-blue-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white mb-2">Как пользоваться:</h3>
-                <ul className="text-sm text-gray-400 space-y-1 list-disc list-inside">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Как пользоваться:</h3>
+                <ul className="text-sm text-slate-700 dark:text-gray-400 space-y-1 list-disc list-inside">
                   <li>Показываются только активные операторы</li>
                   <li>Нажмите "Сгенерировать всем пароли" для массовой смены паролей</li>
                   <li>Или меняйте пароли индивидуально кнопкой "Сменить пароль"</li>

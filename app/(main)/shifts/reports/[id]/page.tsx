@@ -398,7 +398,7 @@ export default function ShiftReportDetailPage({
                 variant="outline"
                 size="sm"
                 onClick={() => setAdminAction('closeForce')}
-                className="border-amber-500/40 text-amber-200 hover:bg-amber-500/10"
+                className="border-amber-500/40 text-amber-700 dark:text-amber-200 hover:bg-amber-500/10"
               >
                 Закрыть смену
               </Button>
@@ -408,7 +408,7 @@ export default function ShiftReportDetailPage({
                 variant="outline"
                 size="sm"
                 onClick={() => { setAdminAction('purge'); setPurgeConfirm('') }}
-                className="border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
+                className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10"
               >
                 Удалить смену
               </Button>
@@ -422,22 +422,22 @@ export default function ShiftReportDetailPage({
       />
 
       {error && (
-        <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+        <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">
           {error}
         </Card>
       )}
 
       {loading && !shift ? (
-        <Card className="border-white/10 p-6 text-center text-slate-400">
+        <Card className="border-slate-200 dark:border-white/10 p-6 text-center text-slate-400">
           <Loader2 className="mx-auto h-5 w-5 animate-spin" />
         </Card>
       ) : !shift ? (
-        <Card className="border-white/10 p-6 text-center text-slate-400">
+        <Card className="border-slate-200 dark:border-white/10 p-6 text-center text-slate-400">
           Смена не найдена
           <div className="mt-2">
             <Link
               href="/shifts/reports"
-              className="inline-flex items-center gap-1 text-xs text-emerald-300"
+              className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300"
             >
               <ArrowLeft className="h-3 w-3" /> К списку
             </Link>
@@ -452,13 +452,13 @@ export default function ShiftReportDetailPage({
             <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-slate-500">
               {shift.closer && (
                 <span>
-                  Закрыл: <span className="text-slate-300">{shift.closer.short_name || shift.closer.full_name}</span>
+                  Закрыл: <span className="text-slate-700 dark:text-slate-300">{shift.closer.short_name || shift.closer.full_name}</span>
                 </span>
               )}
               {shift.handover_from_shift_id && (
                 <Link
                   href={`/shifts/reports/${shift.handover_from_shift_id}`}
-                  className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200"
+                  className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200"
                 >
                   ← предыдущая смена (handover)
                 </Link>
@@ -467,7 +467,7 @@ export default function ShiftReportDetailPage({
           )}
 
           {(shift.z_report_url || shift.x_report_url || shift.opening_notes || shift.closing_notes) && (
-            <Card className="border-white/10 p-4">
+            <Card className="border-slate-200 dark:border-white/10 p-4">
               <div className="text-xs uppercase tracking-wide text-slate-400">Отчёты и заметки</div>
               <div className="mt-2 flex flex-wrap gap-3 text-sm">
                 {shift.z_report_url && (
@@ -475,7 +475,7 @@ export default function ShiftReportDetailPage({
                     href={shift.z_report_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200"
+                    className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200"
                   >
                     Z-отчёт <ExternalLink className="h-3 w-3" />
                   </a>
@@ -485,20 +485,20 @@ export default function ShiftReportDetailPage({
                     href={shift.x_report_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200"
+                    className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200"
                   >
                     X-отчёт <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>
               {shift.opening_notes && (
-                <div className="mt-3 text-sm text-slate-300">
+                <div className="mt-3 text-sm text-slate-700 dark:text-slate-300">
                   <div className="text-xs text-slate-500">Заметка при открытии:</div>
                   <div className="whitespace-pre-wrap">{shift.opening_notes}</div>
                 </div>
               )}
               {shift.closing_notes && (
-                <div className="mt-3 text-sm text-slate-300">
+                <div className="mt-3 text-sm text-slate-700 dark:text-slate-300">
                   <div className="text-xs text-slate-500">Заметка при закрытии:</div>
                   <div className="whitespace-pre-wrap">{shift.closing_notes}</div>
                 </div>
@@ -507,11 +507,11 @@ export default function ShiftReportDetailPage({
           )}
 
           <div className="grid gap-4 md:grid-cols-2">
-          <Card className="overflow-hidden border-white/10">
-            <div className="border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+            <div className="border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
               Чек-листы • {runs.length}
             </div>
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-slate-100 dark:divide-white/5">
               {runs.length === 0 ? (
                 <div className="px-4 py-4 text-sm text-slate-400">Чек-листы за смену не запускались</div>
               ) : (
@@ -531,16 +531,16 @@ export default function ShiftReportDetailPage({
                         ) : (
                           <Circle className="h-4 w-4 text-amber-400" />
                         )}
-                        <span className="text-sm text-white">
+                        <span className="text-sm text-slate-900 dark:text-white">
                           {run.template?.title || 'Без названия'}
                         </span>
-                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
+                        <span className="rounded-full border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
                           {SCHEDULE_LABEL[run.template?.schedule_type || ''] ||
                             run.template?.schedule_type ||
                             ''}
                         </span>
                         {run.template?.blocks_shift && (
-                          <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase text-rose-300">
+                          <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase text-rose-700 dark:text-rose-300">
                             blocks
                           </span>
                         )}
@@ -566,10 +566,10 @@ export default function ShiftReportDetailPage({
                           </span>
                         )}
                         {Number(run.fines_total) > 0 && (
-                          <span className="text-rose-300">−{fmtMoney(run.fines_total)}</span>
+                          <span className="text-rose-600 dark:text-rose-300">−{fmtMoney(run.fines_total)}</span>
                         )}
                         {Number(run.bonuses_total) > 0 && (
-                          <span className="text-emerald-300">+{fmtMoney(run.bonuses_total)}</span>
+                          <span className="text-emerald-700 dark:text-emerald-300">+{fmtMoney(run.bonuses_total)}</span>
                         )}
                       </div>
                     </div>
@@ -579,22 +579,22 @@ export default function ShiftReportDetailPage({
             </div>
           </Card>
 
-          <Card className="overflow-hidden border-white/10">
-            <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
               <AlertTriangle className="h-4 w-4 text-amber-400" />
               <span>Инциденты • {incidents.length}</span>
               {incidentsSummary && incidentsSummary.fines_total > 0 && (
-                <span className="ml-auto text-xs text-rose-300">
+                <span className="ml-auto text-xs text-rose-600 dark:text-rose-300">
                   −{fmtMoney(incidentsSummary.fines_total)}
                 </span>
               )}
               {incidentsSummary && incidentsSummary.bonuses_total > 0 && (
-                <span className={`text-xs text-emerald-300 ${incidentsSummary.fines_total > 0 ? '' : 'ml-auto'}`}>
+                <span className={`text-xs text-emerald-700 dark:text-emerald-300 ${incidentsSummary.fines_total > 0 ? '' : 'ml-auto'}`}>
                   +{fmtMoney(incidentsSummary.bonuses_total)}
                 </span>
               )}
             </div>
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-slate-100 dark:divide-white/5">
               {incidents.length === 0 ? (
                 <div className="px-4 py-4 text-sm text-slate-400">
                   За эту смену инцидентов нет
@@ -610,12 +610,12 @@ export default function ShiftReportDetailPage({
                       ) : (
                         <StickyNote className="h-4 w-4 text-slate-400" />
                       )}
-                      <span className="text-sm text-white">{inc.title}</span>
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
+                      <span className="text-sm text-slate-900 dark:text-white">{inc.title}</span>
+                      <span className="rounded-full border border-slate-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
                         {inc.source}
                       </span>
                       {inc.status !== 'confirmed' && (
-                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase text-amber-300">
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase text-amber-700 dark:text-amber-300">
                           {inc.status}
                         </span>
                       )}
@@ -634,10 +634,10 @@ export default function ShiftReportDetailPage({
                         <span>Кто записал: {inc.reporter.short_name || inc.reporter.full_name}</span>
                       )}
                       {Number(inc.fine_amount) > 0 && (
-                        <span className="text-rose-300">−{fmtMoney(inc.fine_amount)}</span>
+                        <span className="text-rose-600 dark:text-rose-300">−{fmtMoney(inc.fine_amount)}</span>
                       )}
                       {Number(inc.bonus_amount) > 0 && (
-                        <span className="text-emerald-300">+{fmtMoney(inc.bonus_amount)}</span>
+                        <span className="text-emerald-700 dark:text-emerald-300">+{fmtMoney(inc.bonus_amount)}</span>
                       )}
                     </div>
                   </div>
@@ -648,22 +648,22 @@ export default function ShiftReportDetailPage({
           </div>
 
           {topItems.length > 0 && (
-            <Card className="overflow-hidden border-white/10">
-              <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+            <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
                 <Package className="h-4 w-4 text-emerald-400" />
                 Топ товаров за смену
                 <span className="ml-auto text-xs text-slate-400">по выручке</span>
               </div>
-              <div className="grid gap-px bg-white/5 sm:grid-cols-2">
+              <div className="grid gap-px bg-slate-100 dark:bg-white/5 sm:grid-cols-2">
                 {topItems.map((t, i) => (
                   <div
                     key={t.name}
-                    className="flex items-center gap-3 bg-slate-950 px-4 py-2 text-sm"
+                    className="flex items-center gap-3 bg-white dark:bg-slate-950 px-4 py-2 text-sm"
                   >
                     <span className="w-5 text-right text-xs text-slate-500">{i + 1}</span>
-                    <span className="flex-1 truncate text-slate-200">{t.name}</span>
+                    <span className="flex-1 truncate text-slate-700 dark:text-slate-200">{t.name}</span>
                     <span className="text-xs text-slate-400 tabular-nums">×{t.qty}</span>
-                    <span className="w-24 text-right text-emerald-300 tabular-nums">
+                    <span className="w-24 text-right text-emerald-700 dark:text-emerald-300 tabular-nums">
                       {fmtMoney(t.amount)}
                     </span>
                   </div>
@@ -672,8 +672,8 @@ export default function ShiftReportDetailPage({
             </Card>
           )}
 
-          <Card className="overflow-hidden border-white/10">
-            <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
               <span>
                 Продажи • {filteredSales.length}
                 {filteredSales.length !== sales.length && (
@@ -686,13 +686,13 @@ export default function ShiftReportDetailPage({
                   value={salesSearch}
                   onChange={(e) => setSalesSearch(e.target.value)}
                   placeholder="Поиск по товару, клиенту, оператору…"
-                  className="h-8 w-72 rounded-md border border-white/10 bg-white/[0.03] pl-7 pr-2 text-xs text-slate-200 outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
+                  className="h-8 w-72 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] pl-7 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-emerald-500/40"
                 />
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-sm">
-                <thead className="bg-white/5">
+                <thead className="bg-slate-50 dark:bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="w-6 px-2 py-2"></th>
                     <th className="px-3 py-2">Время</th>
@@ -707,7 +707,7 @@ export default function ShiftReportDetailPage({
                     <th className="px-3 py-2">Комментарий</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                   {filteredSales.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="px-3 py-4 text-center text-slate-400">
@@ -731,7 +731,7 @@ export default function ShiftReportDetailPage({
                       return (
                         <Fragment key={s.id}>
                           <tr
-                            className={`hover:bg-white/5 ${hasItems ? 'cursor-pointer' : ''}`}
+                            className={`hover:bg-slate-50 dark:hover:bg-white/5 ${hasItems ? 'cursor-pointer' : ''}`}
                             onClick={() => hasItems && toggleSaleExpand(s.id)}
                           >
                             <td className="px-2 py-2 text-slate-500">
@@ -743,8 +743,8 @@ export default function ShiftReportDetailPage({
                                 )
                               ) : null}
                             </td>
-                            <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
-                            <td className="px-3 py-2 text-slate-300 max-w-[280px] truncate">
+                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{fmtDateTime(s.sold_at)}</td>
+                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300 max-w-[280px] truncate">
                               {composition || <span className="text-slate-500">—</span>}
                             </td>
                             <td className="px-3 py-2 text-slate-400">
@@ -753,14 +753,14 @@ export default function ShiftReportDetailPage({
                             <td className="px-3 py-2 text-slate-400">
                               {s.customer?.name || '—'}
                             </td>
-                            <td className="px-3 py-2 text-slate-300">{paymentLabel(s.payment_method)}</td>
-                            <td className="px-3 py-2 text-right text-slate-200">
+                            <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{paymentLabel(s.payment_method)}</td>
+                            <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
                               {fmtMoney(s.cash_amount)}
                             </td>
-                            <td className="px-3 py-2 text-right text-slate-200">
+                            <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
                               {fmtMoney(s.kaspi_amount)}
                             </td>
-                            <td className="px-3 py-2 text-right text-amber-300">
+                            <td className="px-3 py-2 text-right text-amber-700 dark:text-amber-300">
                               {discount > 0 ? fmtMoney(discount) : '—'}
                               {Number(s.loyalty_points_spent || 0) > 0 && (
                                 <div className="text-[10px] text-slate-500">
@@ -773,16 +773,16 @@ export default function ShiftReportDetailPage({
                                 </div>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-right text-emerald-300">
+                            <td className="px-3 py-2 text-right text-emerald-700 dark:text-emerald-300">
                               {fmtMoney(s.total_amount)}
                             </td>
                             <td className="px-3 py-2 text-slate-400">{s.comment || '—'}</td>
                           </tr>
                           {isExpanded && hasItems && (
-                            <tr className="bg-white/[0.02]">
+                            <tr className="bg-slate-50 dark:bg-white/[0.02]">
                               <td></td>
                               <td colSpan={10} className="px-4 py-3">
-                                <div className="rounded-md border border-white/10 bg-slate-950/40 p-3">
+                                <div className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/40 p-3">
                                   <div className="mb-2 text-[10px] uppercase tracking-wider text-slate-500">
                                     Позиции чека ({items.length})
                                   </div>
@@ -794,16 +794,16 @@ export default function ShiftReportDetailPage({
                                       return (
                                         <div
                                           key={it.id}
-                                          className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-white/5 py-1 last:border-0"
+                                          className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-slate-100 dark:border-white/5 py-1 last:border-0"
                                         >
-                                          <span className="text-slate-200">{itemName(it)}</span>
+                                          <span className="text-slate-700 dark:text-slate-200">{itemName(it)}</span>
                                           <span className="text-slate-500 tabular-nums">
                                             ×{qty}
                                           </span>
                                           <span className="text-slate-500 tabular-nums">
                                             {fmtMoney(unit)}
                                           </span>
-                                          <span className="w-24 text-right text-emerald-300 tabular-nums">
+                                          <span className="w-24 text-right text-emerald-700 dark:text-emerald-300 tabular-nums">
                                             {fmtMoney(total)}
                                           </span>
                                         </div>
@@ -823,13 +823,13 @@ export default function ShiftReportDetailPage({
             </div>
           </Card>
 
-          <Card className="overflow-hidden border-white/10">
-            <div className="border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+          <Card className="overflow-hidden border-slate-200 dark:border-white/10">
+            <div className="border-b border-slate-100 dark:border-white/5 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white">
               Возвраты • {returns.length}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-white/5">
+                <thead className="bg-slate-50 dark:bg-white/5">
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-3 py-2">Время</th>
                     <th className="px-3 py-2">Состав</th>
@@ -840,7 +840,7 @@ export default function ShiftReportDetailPage({
                     <th className="px-3 py-2">Комментарий</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                   {returns.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-3 py-4 text-center text-slate-400">
@@ -857,19 +857,19 @@ export default function ShiftReportDetailPage({
                         })
                         .join(', ')
                       return (
-                        <tr key={r.id} className="hover:bg-white/5">
-                          <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtDateTime(r.returned_at)}</td>
-                          <td className="px-3 py-2 text-slate-300 max-w-[280px]">
+                        <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{fmtDateTime(r.returned_at)}</td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 max-w-[280px]">
                             {composition || <span className="text-slate-500">—</span>}
                           </td>
-                          <td className="px-3 py-2 text-slate-300">{paymentLabel(r.payment_method)}</td>
-                          <td className="px-3 py-2 text-right text-slate-200">
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{paymentLabel(r.payment_method)}</td>
+                          <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
                             {fmtMoney(r.cash_amount)}
                           </td>
-                          <td className="px-3 py-2 text-right text-slate-200">
+                          <td className="px-3 py-2 text-right text-slate-700 dark:text-slate-200">
                             {fmtMoney(r.kaspi_amount)}
                           </td>
-                          <td className="px-3 py-2 text-right text-rose-300">
+                          <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-300">
                             {fmtMoney(r.total_amount)}
                           </td>
                           <td className="px-3 py-2 text-slate-400">{r.comment || '—'}</td>
@@ -928,12 +928,12 @@ export default function ShiftReportDetailPage({
       {/* Полное удаление смены (только super-admin) */}
       {adminAction === 'purge' && shift && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[200] grid place-items-center bg-black/70 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
-          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-rose-500/40 bg-rose-950/30 p-5">
+          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-rose-500/40 bg-rose-50 dark:bg-rose-950/30 p-5">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="h-6 w-6 shrink-0 text-rose-300" />
+              <AlertTriangle className="h-6 w-6 shrink-0 text-rose-600 dark:text-rose-300" />
               <div>
-                <h3 className="text-base font-semibold text-rose-100">Полное удаление смены</h3>
-                <p className="mt-1 text-xs text-rose-200/80">
+                <h3 className="text-base font-semibold text-rose-900 dark:text-rose-100">Полное удаление смены</h3>
+                <p className="mt-1 text-xs text-rose-700 dark:text-rose-200/80">
                   Удалится сама смена + все продажи + возвраты + чек-листы + инциденты + связанные движения.
                   Остатки витрины откатятся (вернутся к состоянию до начала смены).
                   Это <strong>нельзя отменить</strong>.
@@ -941,14 +941,14 @@ export default function ShiftReportDetailPage({
               </div>
             </div>
             <div className="mt-4">
-              <p className="mb-1.5 text-xs text-rose-200">
+              <p className="mb-1.5 text-xs text-rose-700 dark:text-rose-200">
                 Введите фразу <code className="rounded bg-rose-500/20 px-1.5 py-0.5">УДАЛИТЬ СМЕНУ</code> для подтверждения:
               </p>
               <input
                 value={purgeConfirm}
                 onChange={(e) => setPurgeConfirm(e.target.value)}
                 placeholder="УДАЛИТЬ СМЕНУ"
-                className="h-10 w-full rounded-lg border border-rose-500/40 bg-black/30 px-3 text-sm outline-none focus:border-rose-400"
+                className="h-10 w-full rounded-lg border border-rose-500/40 bg-white dark:bg-black/30 px-3 text-sm outline-none focus:border-rose-400"
                 autoFocus
               />
             </div>
@@ -1038,7 +1038,7 @@ function ZReportModal({
 
   return createPortal(
     <div id="z-print-root" className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4 print:static print:bg-transparent print:p-0 print:block" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none print:overflow-visible dark:bg-slate-50" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl print:max-h-none print:rounded-none print:shadow-none print:overflow-visible" onClick={(e) => e.stopPropagation()}>
         {/* Шапка диалога — скрыта при печати */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 print:hidden">
           <h3 className="text-sm font-semibold text-slate-900">Z-отчёт смены</h3>
@@ -1262,27 +1262,27 @@ function ZReport({
   return (
     <Card className={`p-6 print:bg-white print:text-black ${
       isOpen
-        ? 'border-amber-500/30 bg-gradient-to-br from-slate-950 via-slate-950 to-amber-950/10'
-        : 'border-emerald-500/20 bg-gradient-to-br from-slate-950 via-slate-950 to-emerald-950/10'
+        ? 'border-amber-500/30 bg-gradient-to-br from-amber-50 via-white to-amber-50 dark:from-slate-950 dark:via-slate-950 dark:to-amber-950/10'
+        : 'border-emerald-500/20 bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-emerald-950/10'
     }`}>
-      <div className="flex items-start justify-between flex-wrap gap-4 mb-5 pb-4 border-b border-white/10">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-5 pb-4 border-b border-slate-200 dark:border-white/10">
         <div>
           <div className={`text-[11px] uppercase tracking-[0.2em] ${
-            isOpen ? 'text-amber-300/80' : 'text-emerald-300/70'
+            isOpen ? 'text-amber-700 dark:text-amber-300/80' : 'text-emerald-700 dark:text-emerald-300/70'
           }`}>
             {isOpen ? '📊 X-отчёт · СМЕНА ОТКРЫТА' : '✓ Z-отчёт смены'}
           </div>
-          <h2 className="text-2xl font-semibold text-white mt-1">
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mt-1">
             {shift.company?.name || '—'} · {SHIFT_TYPE_LABEL[shift.shift_type]}
           </h2>
           <div className="text-xs text-slate-400 mt-1">
             {fmtDateTime(shift.opened_at)}
             {' → '}
-            {isOpen ? <span className="text-amber-300">сейчас (в работе)</span> : fmtDateTime(shift.closed_at)}
+            {isOpen ? <span className="text-amber-700 dark:text-amber-300">сейчас (в работе)</span> : fmtDateTime(shift.closed_at)}
             {shift.operator && <> · 👤 {shift.operator.short_name || shift.operator.full_name}</>}
           </div>
           {isOpen && (
-            <div className="mt-2 text-xs text-amber-300/80">
+            <div className="mt-2 text-xs text-amber-700 dark:text-amber-300/80">
               Отчёт промежуточный — данные обновляются по мере продаж. Z-отчёт сформируется при закрытии смены.
             </div>
           )}
@@ -1290,7 +1290,7 @@ function ZReport({
         <Button
           variant="outline"
           size="sm"
-          className="border-white/10 bg-white/5"
+          className="border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5"
           onClick={() => window.print()}
         >
           🖨 Печать
@@ -1300,26 +1300,26 @@ function ZReport({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Касса */}
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-wider text-emerald-300/80 font-semibold">📦 Касса (купюры)</div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 space-y-1.5 text-sm">
+          <div className="text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300/80 font-semibold">📦 Касса (купюры)</div>
+          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 space-y-1.5 text-sm">
             <ZRow label="Старт смены" value={startCashFromMeta} />
             <ZRow label="Продаж за смену (нал)" value={salesCash} positive />
             <ZRow label="Возвратов (нал)" value={-returnsCash} negative={returnsCash > 0} />
             {debtsCash > 0 && <ZRow label="Долги получены (нал)" value={debtsCash} positive />}
             {wipon > 0 && <ZRow label="Выплаты wipon / прочее" value={-wipon} negative />}
-            <div className="border-t border-white/10 my-2" />
+            <div className="border-t border-slate-200 dark:border-white/10 my-2" />
             <ZRow label={isOpen ? 'Должно быть в кассе сейчас' : 'Должно быть в кассе'} value={expectedCash} bold />
             {!isOpen && (
               <>
                 <ZRow label="Фактически в кассе" value={closingCash} bold />
-                <div className="border-t border-white/10 my-2" />
+                <div className="border-t border-slate-200 dark:border-white/10 my-2" />
                 <div
                   className={`flex justify-between items-center py-1 px-2 rounded ${
                     Math.abs(cashDiff) < 1
-                      ? 'bg-emerald-500/10 text-emerald-300'
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                       : cashDiff < 0
-                        ? 'bg-rose-500/10 text-rose-300'
-                        : 'bg-amber-500/10 text-amber-300'
+                        ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
                   }`}
                 >
                   <span className="font-semibold">
@@ -1337,8 +1337,8 @@ function ZReport({
 
         {/* Безнал */}
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-wider text-blue-300/80 font-semibold">💳 Безнал</div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 space-y-1.5 text-sm">
+          <div className="text-xs uppercase tracking-wider text-blue-700 dark:text-blue-300/80 font-semibold">💳 Безнал</div>
+          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 space-y-1.5 text-sm">
             <ZRow label="Продажи безнал (всего)" value={salesKaspi} positive />
             {Number(shift.closing_kaspi_before_midnight || 0) > 0 && (
               <ZRow label="  до 00:00" value={Number(shift.closing_kaspi_before_midnight || 0)} muted />
@@ -1347,7 +1347,7 @@ function ZReport({
               <ZRow label="  после 00:00" value={Number(shift.closing_kaspi_after_midnight || 0)} muted />
             )}
             <ZRow label="Возвраты безнал" value={-returnsKaspi} negative={returnsKaspi > 0} />
-            <div className="border-t border-white/10 my-2" />
+            <div className="border-t border-slate-200 dark:border-white/10 my-2" />
             <ZRow label={isOpen ? 'Сейчас на безнале' : 'Должно быть'} value={expectedKaspi} bold />
             {!isOpen && (
               <>
@@ -1355,7 +1355,7 @@ function ZReport({
                 {Math.abs(kaspiDiff) >= 1 && (
                   <div
                     className={`flex justify-between items-center py-1 px-2 mt-2 rounded ${
-                      kaspiDiff < 0 ? 'bg-rose-500/10 text-rose-300' : 'bg-amber-500/10 text-amber-300'
+                      kaspiDiff < 0 ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
                     }`}
                   >
                     <span className="font-semibold">{kaspiDiff < 0 ? '⚠ Недостача' : '⚠ Излишек'}</span>
@@ -1368,24 +1368,24 @@ function ZReport({
 
           {/* Итого */}
           <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-1.5 text-sm">
-            <div className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">
+            <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300/80 font-semibold mb-1">
               💰 {isOpen ? 'Выручка на сейчас' : 'Итого выручка'}
             </div>
             <ZRow label="Нал (купюры)" value={isOpen ? salesCash - returnsCash : income?.cash_amount || 0} />
             <ZRow label="Безнал" value={isOpen ? salesKaspi - returnsKaspi : income?.kaspi_amount || 0} />
             <div className="border-t border-emerald-500/20 my-2" />
-            <div className="flex justify-between items-center py-1 px-2 rounded bg-emerald-500/15 text-emerald-200">
+            <div className="flex justify-between items-center py-1 px-2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-200">
               <span className="font-semibold">{isOpen ? 'СЕЙЧАС' : 'ВСЕГО за смену'}</span>
               <span className="font-bold text-lg">{fmtMoney(totalRevenue)}</span>
             </div>
             <div className="text-xs text-slate-400 mt-2 flex justify-between">
-              <span>Чеков: <span className="text-white font-semibold">{checkCount}</span></span>
-              <span>Средний: <span className="text-white font-semibold">{fmtMoney(avgCheck)}</span></span>
+              <span>Чеков: <span className="text-slate-900 dark:text-white font-semibold">{checkCount}</span></span>
+              <span>Средний: <span className="text-slate-900 dark:text-white font-semibold">{fmtMoney(avgCheck)}</span></span>
             </div>
             {!isOpen && income && (
               <Link
                 href={`/income`}
-                className="block mt-2 text-xs text-emerald-300 hover:text-emerald-200"
+                className="block mt-2 text-xs text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-200"
               >
                 📎 Открыть запись /income →
               </Link>
@@ -1397,15 +1397,15 @@ function ZReport({
       {/* Долги клиентов */}
       {clientDebts.length > 0 && (
         <div className="mt-4">
-          <div className="text-xs uppercase tracking-wider text-rose-300/80 font-semibold mb-2">📋 Долги клиентов на смене ({clientDebts.length})</div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 space-y-1 text-sm">
+          <div className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300/80 font-semibold mb-2">📋 Долги клиентов на смене ({clientDebts.length})</div>
+          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 space-y-1 text-sm">
             {clientDebts.slice(0, 10).map((d) => (
-              <div key={d.id} className="flex justify-between items-center text-slate-300 text-xs">
+              <div key={d.id} className="flex justify-between items-center text-slate-700 dark:text-slate-300 text-xs">
                 <span className="truncate">
                   • {d.client_name || '—'} · {d.item_name || '—'}
                   {d.quantity > 1 && <span className="text-slate-500"> ×{d.quantity}</span>}
                 </span>
-                <span className="font-mono text-rose-300 shrink-0 ml-2">{fmtMoney(d.total_amount)}</span>
+                <span className="font-mono text-rose-600 dark:text-rose-300 shrink-0 ml-2">{fmtMoney(d.total_amount)}</span>
               </div>
             ))}
             {clientDebts.length > 10 && (
@@ -1418,19 +1418,19 @@ function ZReport({
       {/* Инциденты */}
       {incidentsSummary && incidentsSummary.count > 0 && (
         <div className="mt-4">
-          <div className="text-xs uppercase tracking-wider text-amber-300/80 font-semibold mb-2">⚠ Инциденты</div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm grid grid-cols-3 gap-3">
+          <div className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-300/80 font-semibold mb-2">⚠ Инциденты</div>
+          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 text-sm grid grid-cols-3 gap-3">
             <div>
               <div className="text-[10px] text-slate-500 uppercase">Всего</div>
-              <div className="text-white font-semibold">{incidentsSummary.count}</div>
+              <div className="text-slate-900 dark:text-white font-semibold">{incidentsSummary.count}</div>
             </div>
             <div>
               <div className="text-[10px] text-slate-500 uppercase">Штрафы</div>
-              <div className="text-rose-300 font-semibold">{fmtMoney(incidentsSummary.fines_total)}</div>
+              <div className="text-rose-600 dark:text-rose-300 font-semibold">{fmtMoney(incidentsSummary.fines_total)}</div>
             </div>
             <div>
               <div className="text-[10px] text-slate-500 uppercase">Бонусы</div>
-              <div className="text-emerald-300 font-semibold">{fmtMoney(incidentsSummary.bonuses_total)}</div>
+              <div className="text-emerald-700 dark:text-emerald-300 font-semibold">{fmtMoney(incidentsSummary.bonuses_total)}</div>
             </div>
           </div>
         </div>
@@ -1440,15 +1440,15 @@ function ZReport({
       {(shift.opening_notes || shift.closing_notes) && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {shift.opening_notes && (
-            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+            <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
               <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При открытии</div>
-              <div className="text-slate-300 italic">«{shift.opening_notes}»</div>
+              <div className="text-slate-700 dark:text-slate-300 italic">«{shift.opening_notes}»</div>
             </div>
           )}
           {shift.closing_notes && (
-            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+            <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 text-sm">
               <div className="text-[10px] text-slate-500 uppercase mb-1">📝 При закрытии</div>
-              <div className="text-slate-300 italic">«{shift.closing_notes}»</div>
+              <div className="text-slate-700 dark:text-slate-300 italic">«{shift.closing_notes}»</div>
             </div>
           )}
         </div>
@@ -1475,14 +1475,14 @@ function ZRow({
   const color = muted
     ? 'text-slate-500'
     : positive
-      ? 'text-emerald-300'
+      ? 'text-emerald-700 dark:text-emerald-300'
       : negative
-        ? 'text-rose-300'
-        : 'text-slate-200'
+        ? 'text-rose-600 dark:text-rose-300'
+        : 'text-slate-700 dark:text-slate-200'
   return (
     <div className="flex justify-between items-center">
       <span className={`text-slate-400 ${muted ? 'text-xs' : ''}`}>{label}</span>
-      <span className={`${color} ${bold ? 'font-bold text-white' : ''} font-mono tabular-nums`}>
+      <span className={`${color} ${bold ? 'font-bold text-slate-900 dark:text-white' : ''} font-mono tabular-nums`}>
         {fmtMoney(value)}
       </span>
     </div>

@@ -308,12 +308,12 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
 
   return (
     <div className="space-y-4">
-      <Card className="p-4 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 border-white/5">
+      <Card className="p-4 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 border-slate-200 dark:border-white/5">
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-violet-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1 text-sm">
-            <p className="text-white font-medium">Варианты оклада по выручке</p>
-            <p className="text-gray-400">
+            <p className="text-slate-900 dark:text-white font-medium">Варианты оклада по выручке</p>
+            <p className="text-slate-500 dark:text-gray-400">
               Несколько правил для одной точки и смены с разными диапазонами выручки. Напр.: «если выручка ≥ 500к → оклад 8000», «если &lt; 500к → оклад 5000». Выполняются по приоритету. <b>Stop</b> останавливает проверку следующих.
             </p>
           </div>
@@ -322,22 +322,22 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
 
       {error && (
         <Card className="p-3 border border-red-500/30 bg-red-500/10">
-          <div className="flex items-center gap-2 text-red-300 text-sm">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-300 text-sm">
             <AlertTriangle className="w-4 h-4" /> {error}
           </div>
         </Card>
       )}
       {success && (
         <Card className="p-3 border border-emerald-500/30 bg-emerald-500/10">
-          <div className="flex items-center gap-2 text-emerald-300 text-sm">
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4" /> {success}
           </div>
         </Card>
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-gray-400">
-          Всего вариантов: <span className="text-white font-semibold">{rules.length}</span>
+        <div className="text-sm text-slate-500 dark:text-gray-400">
+          Всего вариантов: <span className="text-slate-900 dark:text-white font-semibold">{rules.length}</span>
         </div>
         <Button
           size="sm"
@@ -349,14 +349,14 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
       </div>
 
       {showForm && (
-        <Card className="p-5 bg-gray-900/60 border-white/10 space-y-4">
+        <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-white/10 space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Компания</label>
+              <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Компания</label>
               <select
                 value={form.company_id || ''}
                 onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value || null }))}
-                className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
               >
                 <option value="">Все точки (глобально)</option>
                 {companies.map((c) => (
@@ -365,111 +365,111 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Смена</label>
+              <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Смена</label>
               <select
                 value={form.shift_type}
                 onChange={(e) => setForm((f) => ({ ...f, shift_type: e.target.value as ShiftType }))}
-                className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
               >
                 <option value="day">Дневная</option>
                 <option value="night">Ночная</option>
               </select>
             </div>
             <div className="md:col-span-2">
-              <label className="text-xs text-gray-400 block mb-1">Название (для истории)</label>
+              <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Название (для истории)</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Напр.: День <500к → 5000"
-                className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
               />
             </div>
           </div>
 
-          <div className="border-t border-white/5 pt-4">
+          <div className="border-t border-slate-200 dark:border-white/5 pt-4">
             <p className="text-xs uppercase tracking-wider text-gray-500 mb-3">Условия по выручке</p>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Выручка ≥ (оставить пустым если не важно)</label>
+                <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Выручка ≥ (оставить пустым если не важно)</label>
                 <input
                   type="number"
                   value={form.turnover_gte}
                   onChange={(e) => setForm((f) => ({ ...f, turnover_gte: e.target.value }))}
                   placeholder="500000"
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Выручка &lt; (оставить пустым если не важно)</label>
+                <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Выручка &lt; (оставить пустым если не важно)</label>
                 <input
                   type="number"
                   value={form.turnover_lt}
                   onChange={(e) => setForm((f) => ({ ...f, turnover_lt: e.target.value }))}
                   placeholder="1000000"
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
                 />
               </div>
             </div>
           </div>
 
-          <div className="border-t border-white/5 pt-4">
+          <div className="border-t border-slate-200 dark:border-white/5 pt-4">
             <p className="text-xs uppercase tracking-wider text-gray-500 mb-3">Что переопределить</p>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Оклад за смену</label>
+                <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Оклад за смену</label>
                 <input
                   type="number"
                   value={form.base_per_shift}
                   onChange={(e) => setForm((f) => ({ ...f, base_per_shift: e.target.value }))}
                   placeholder="8000"
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Доп. бонус (к порогам)</label>
+                <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Доп. бонус (к порогам)</label>
                 <input
                   type="number"
                   value={form.threshold_bonus}
                   onChange={(e) => setForm((f) => ({ ...f, threshold_bonus: e.target.value }))}
                   placeholder="0"
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Бонус старшего оператора</label>
+                <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Бонус старшего оператора</label>
                 <input
                   type="number"
                   value={form.senior_operator_bonus}
                   onChange={(e) => setForm((f) => ({ ...f, senior_operator_bonus: e.target.value }))}
                   placeholder=""
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Бонус старшего кассира</label>
+                <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Бонус старшего кассира</label>
                 <input
                   type="number"
                   value={form.senior_cashier_bonus}
                   onChange={(e) => setForm((f) => ({ ...f, senior_cashier_bonus: e.target.value }))}
                   placeholder=""
-                  className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
                 />
               </div>
             </div>
           </div>
 
-          <div className="border-t border-white/5 pt-4 grid gap-3 md:grid-cols-3">
+          <div className="border-t border-slate-200 dark:border-white/5 pt-4 grid gap-3 md:grid-cols-3">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Приоритет (меньше = раньше)</label>
+              <label className="text-xs text-slate-500 dark:text-gray-400 block mb-1">Приоритет (меньше = раньше)</label>
               <input
                 type="number"
                 value={form.priority}
                 onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) || 100 }))}
-                className="w-full px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.is_active}
@@ -477,7 +477,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
               />
               Активно
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.stop_processing}
@@ -487,7 +487,7 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
             </label>
           </div>
 
-          <div className="border-t border-white/5 pt-4">
+          <div className="border-t border-slate-200 dark:border-white/5 pt-4">
             <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">Проверить сценарий</p>
             <div className="flex items-center gap-2">
               <input
@@ -495,26 +495,26 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                 value={testTurnover}
                 onChange={(e) => setTestTurnover(e.target.value)}
                 placeholder="Введите выручку для симуляции"
-                className="flex-1 px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white"
               />
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => void handleTest()}
-                className="gap-2 rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+                className="gap-2 rounded-xl border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10"
               >
                 <FlaskConical className="h-4 w-4" /> Проверить
               </Button>
             </div>
             {testResult && (
-              <pre className="mt-2 whitespace-pre-wrap text-xs text-emerald-300 bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
+              <pre className="mt-2 whitespace-pre-wrap text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
                 {testResult}
               </pre>
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-white/5 pt-4">
-            <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="rounded-xl border-white/10">
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200 dark:border-white/5 pt-4">
+            <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="rounded-xl border-slate-200 dark:border-white/10">
               Отмена
             </Button>
             <Button
@@ -532,8 +532,8 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
       {loading && <div className="text-center text-gray-500 py-8">Загрузка...</div>}
 
       {!loading && rules.length === 0 && !showForm && (
-        <Card className="p-8 text-center border-dashed border-white/10 bg-white/[0.02]">
-          <p className="text-gray-400 text-sm">
+        <Card className="p-8 text-center border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
+          <p className="text-slate-500 dark:text-gray-400 text-sm">
             Вариантов пока нет. Базовые правила работают без тиров по выручке. Нажмите «Добавить вариант» чтобы создать гибкое правило.
           </p>
         </Card>
@@ -548,12 +548,12 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
             : 'Все точки'
           const ShiftIcon = p.shiftType === 'night' ? Moon : Sun
           return (
-            <Card key={key} className="p-4 bg-gray-900/40 border-white/5">
+            <Card key={key} className="p-4 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
               <div className="flex items-center gap-2 mb-3">
                 <ShiftIcon className={`w-4 h-4 ${p.shiftType === 'night' ? 'text-indigo-400' : 'text-amber-400'}`} />
-                <span className="text-sm font-medium text-white">{companyName}</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white">{companyName}</span>
                 <span className="text-xs text-gray-500">·</span>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-slate-500 dark:text-gray-400">
                   {p.shiftType === 'night' ? 'Ночная' : p.shiftType === 'day' ? 'Дневная' : 'Любая'} смена
                 </span>
                 <span className="ml-auto text-xs text-gray-500">{list.length} вариант(ов)</span>
@@ -573,15 +573,15 @@ export function SalaryVariantsTab({ companies }: { companies: CompanyRow[] }) {
                     <div
                       key={rule.id}
                       className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-                        rule.is_active ? 'border-white/10 bg-white/[0.03]' : 'border-white/5 bg-white/[0.01] opacity-60'
+                        rule.is_active ? 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]' : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/[0.01] opacity-60'
                       }`}
                     >
                       <span className="text-xs font-mono text-gray-500 w-10">#{rule.priority}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{rule.name}</p>
+                        <p className="text-sm text-slate-900 dark:text-white truncate">{rule.name}</p>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {range}
-                          {rp.basePerShift != null && <> · оклад <b className="text-violet-300">{formatMoney(rp.basePerShift)}</b></>}
+                          {rp.basePerShift != null && <> · оклад <b className="text-violet-600 dark:text-violet-300">{formatMoney(rp.basePerShift)}</b></>}
                           {rp.thresholdBonus != null && <> · +бонус {formatMoney(rp.thresholdBonus)}</>}
                           {rule.stop_processing && <> · <span className="text-amber-400">stop</span></>}
                         </p>

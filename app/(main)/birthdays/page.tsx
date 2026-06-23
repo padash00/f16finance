@@ -53,9 +53,9 @@ function formatUpcomingLabel(daysUntil: number) {
 }
 
 function getUpcomingTone(daysUntil: number) {
-  if (daysUntil === 0) return 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-  if (daysUntil <= 7) return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-  return 'border-white/10 bg-white/[0.04] text-slate-200'
+  if (daysUntil === 0) return 'border-amber-400/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  if (daysUntil <= 7) return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  return 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-200'
 }
 
 function getZodiacSign(value: string) {
@@ -136,7 +136,7 @@ export default function BirthdaysPage() {
             accent="blue"
             backHref="/"
             toolbar={
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-black/20 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                 Сейчас учитываются даты рождения только операторов. Для staff можно расширить экран после добавления поля в их профиль.
               </div>
             }
@@ -151,13 +151,13 @@ export default function BirthdaysPage() {
             ].map((stat) => {
               const Icon = stat.icon
               return (
-                <Card key={stat.label} className="border-white/10 bg-slate-950/65 p-5 text-white">
+                <Card key={stat.label} className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/65 p-5 text-slate-900 dark:text-white">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="text-sm text-slate-400">{stat.label}</p>
                       <p className="mt-2 text-3xl font-semibold">{stat.value}</p>
                     </div>
-                    <div className="rounded-2xl bg-white/6 p-3">
+                    <div className="rounded-2xl bg-slate-100 dark:bg-white/6 p-3">
                       <Icon className="h-5 w-5 text-amber-300" />
                     </div>
                   </div>
@@ -168,8 +168,8 @@ export default function BirthdaysPage() {
 
           {/* Полноэкранный лоадер только при первой загрузке. При refetch контент остаётся. */}
           {loading && items.length === 0 ? (
-            <Card className="border-white/10 bg-slate-950/65 p-8 text-white">
-              <div className="flex items-center gap-3 text-slate-300">
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/65 p-8 text-slate-900 dark:text-white">
+              <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
                 <Loader2 className="h-5 w-5 animate-spin text-amber-300" />
                 Загружаем ближайшие дни рождения...
               </div>
@@ -179,13 +179,13 @@ export default function BirthdaysPage() {
           ) : (
             <>
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-white">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
                   <Gift className="h-5 w-5 text-amber-300" />
                   <h2 className="text-xl font-semibold">Сегодня и на этой неделе</h2>
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-2">
-                  <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
+                  <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-5 text-slate-900 dark:text-white">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-5 w-5 text-amber-300" />
                       <h3 className="text-lg font-semibold">Сегодня</h3>
@@ -199,7 +199,7 @@ export default function BirthdaysPage() {
                               <>
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-base font-semibold text-white">{item.name}</div>
+                              <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
                               <div className="mt-1 text-sm text-amber-100/80">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
                               </div>
@@ -208,11 +208,11 @@ export default function BirthdaysPage() {
                                 <span>{zodiac.name}</span>
                               </div>
                             </div>
-                            <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-amber-200">
+                            <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
                               сегодня
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-200">
+                          <div className="mt-3 text-sm text-slate-700 dark:text-slate-200">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • ${item.age} лет` : ''}
                           </div>
                           <div className="mt-2 text-xs text-amber-100/75">{zodiac.joke}</div>
@@ -226,37 +226,37 @@ export default function BirthdaysPage() {
                     </div>
                   </Card>
 
-                  <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
+                  <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-5 text-slate-900 dark:text-white">
                     <div className="flex items-center gap-2">
                       <CalendarDays className="h-5 w-5 text-emerald-300" />
                       <h3 className="text-lg font-semibold">Ближайшие 7 дней</h3>
                     </div>
                     <div className="mt-4 space-y-3">
                       {weekItems.length > 0 ? weekItems.map((item) => (
-                        <div key={item.id} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                        <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-4">
                           {(() => {
                             const zodiac = getZodiacSign(item.birth_date)
                             return (
                               <>
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-base font-semibold text-white">{item.name}</div>
-                              <div className="mt-1 text-sm text-slate-400">
+                              <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
+                              <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
                               </div>
-                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200">
+                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
                                 <span>{zodiac.emoji}</span>
                                 <span>{zodiac.name}</span>
                               </div>
                             </div>
-                            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-emerald-200">
+                            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">
                               {formatUpcomingLabel(item.daysUntil)}
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-200">
+                          <div className="mt-3 text-sm text-slate-700 dark:text-slate-200">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • исполнится ${item.age}` : ''}
                           </div>
-                          <div className="mt-2 text-xs text-slate-400">{zodiac.joke}</div>
+                          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{zodiac.joke}</div>
                               </>
                             )
                           })()}
@@ -270,25 +270,25 @@ export default function BirthdaysPage() {
               </section>
 
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-white">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
                   <CalendarRange className="h-5 w-5 text-cyan-300" />
                   <h2 className="text-xl font-semibold">Ближайшие 30 дней</h2>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                   {monthItems.length > 0 ? monthItems.map((item) => (
-                    <Card key={`month-${item.id}`} className="border-white/10 bg-slate-950/60 p-4 text-white">
+                    <Card key={`month-${item.id}`} className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-4 text-slate-900 dark:text-white">
                       {(() => {
                         const zodiac = getZodiacSign(item.birth_date)
                         return (
                           <>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-base font-semibold text-white">{item.name}</div>
-                          <div className="mt-1 text-sm text-slate-400">
+                          <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
+                          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                             {item.company_name || 'Точка не назначена'}{item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
                           </div>
-                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200">
+                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
                             <span>{zodiac.emoji}</span>
                             <span>{zodiac.name}</span>
                           </div>
@@ -298,22 +298,22 @@ export default function BirthdaysPage() {
                         </span>
                       </div>
                       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                        <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Дата</div>
-                          <div className="mt-1 text-sm text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
+                          <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
                         </div>
-                        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                        <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Возраст</div>
-                          <div className="mt-1 text-sm text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
+                          <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                         </div>
                       </div>
-                      <div className="mt-3 text-xs text-slate-400">{zodiac.joke}</div>
+                      <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">{zodiac.joke}</div>
                           </>
                         )
                       })()}
                     </Card>
                   )) : (
-                    <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-500">
+                    <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-5 text-sm text-slate-500">
                       В ближайшие 30 дней дней рождения не найдено.
                     </Card>
                   )}
@@ -321,37 +321,37 @@ export default function BirthdaysPage() {
               </section>
 
               <section className="space-y-4">
-                <div className="flex items-center gap-2 text-white">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
                   <CalendarDays className="h-5 w-5 text-amber-300" />
                   <h2 className="text-xl font-semibold">Все ближайшие дни рождения по порядку</h2>
                 </div>
 
-                <Card className="border-white/10 bg-slate-950/60 p-0 text-white overflow-hidden">
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 p-0 text-slate-900 dark:text-white overflow-hidden">
                   {items.length > 0 ? (
-                    <div className="divide-y divide-white/6">
+                    <div className="divide-y divide-slate-200 dark:divide-white/6">
                       {items.map((item, index) => (
                         <div
                           key={`sorted-${item.id}`}
-                          className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-white/[0.03] lg:flex-row lg:items-center lg:justify-between"
+                          className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03] lg:flex-row lg:items-center lg:justify-between"
                         >
                           {(() => {
                             const zodiac = getZodiacSign(item.birth_date)
                             return (
                               <>
                           <div className="flex items-start gap-4">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-slate-200">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] text-sm font-semibold text-slate-700 dark:text-slate-200">
                               {index + 1}
                             </div>
 
                             <div>
-                              <div className="text-base font-semibold text-white">{item.name}</div>
-                              <div className="mt-1 text-sm text-slate-400">
+                              <div className="text-base font-semibold text-slate-900 dark:text-white">{item.name}</div>
+                              <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 {item.company_name || 'Точка не назначена'}
                                 {item.position ? ` • ${item.position}` : ''}
                                 {item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
                               </div>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
                                   <span>{zodiac.emoji}</span>
                                   <span>{zodiac.name}</span>
                                 </span>
@@ -361,17 +361,17 @@ export default function BirthdaysPage() {
                           </div>
 
                           <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
-                            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Когда</div>
-                              <div className="mt-1 text-sm text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
+                              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
                             </div>
-                            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Скоро</div>
-                              <div className="mt-1 text-sm text-slate-200">{formatUpcomingLabel(item.daysUntil)}</div>
+                              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{formatUpcomingLabel(item.daysUntil)}</div>
                             </div>
-                            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                            <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Возраст</div>
-                              <div className="mt-1 text-sm text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
+                              <div className="mt-1 text-sm text-slate-700 dark:text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                             </div>
                           </div>
                               </>

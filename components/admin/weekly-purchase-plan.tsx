@@ -107,7 +107,7 @@ type PlanItem = {
 const fmtMoney = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n || 0))
 
 const fieldInput =
-  'h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 text-sm text-white placeholder:text-slate-600'
+  'h-9 w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-sm text-slate-900 dark:text-white placeholder:text-slate-600'
 
 // ── Комбобокс с поиском и добавлением нового значения ────────────────────
 function ComboBox({
@@ -135,7 +135,7 @@ function ComboBox({
           type="button"
           className={cn(fieldInput, 'flex items-center justify-between gap-2 px-3 text-left')}
         >
-          <span className={cn('truncate', value ? 'text-white' : 'text-slate-500')}>
+          <span className={cn('truncate', value ? 'text-slate-900 dark:text-white' : 'text-slate-500')}>
             {value || placeholder}
           </span>
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -155,7 +155,7 @@ function ComboBox({
                 <CommandItem
                   value="__clear__"
                   onSelect={() => { onChange(''); setOpen(false); setQuery('') }}
-                  className="text-slate-400"
+                  className="text-slate-500 dark:text-slate-400"
                 >
                   Очистить
                 </CommandItem>
@@ -367,7 +367,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
   }, [items])
 
   return (
-    <Card className="border-white/5 bg-slate-900/40 p-4 backdrop-blur-xl sm:p-5">
+    <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 p-4 backdrop-blur-xl sm:p-5">
       {/* Заголовок + навигация по неделям */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
@@ -375,29 +375,29 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
             <ShoppingCart className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">План закупок</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">План закупок</h3>
             <p className="text-xs text-slate-500">На неделю после отчётной · войдёт отдельной страницей в PDF</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 rounded-xl border border-white/5 bg-black/20 p-1">
+        <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-black/20 p-1">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => shiftWeek(-1)}
-            className="h-8 w-8 rounded-lg hover:bg-white/10"
+            className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10"
             title="Предыдущая неделя"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-[150px] px-1 text-center">
-            <div className="text-sm font-medium text-white">{planWeekLabel(weekStart)}</div>
-            {isPlanWeek ? <div className="text-[11px] text-violet-300/70">следующая неделя</div> : null}
+            <div className="text-sm font-medium text-slate-900 dark:text-white">{planWeekLabel(weekStart)}</div>
+            {isPlanWeek ? <div className="text-[11px] text-violet-700 dark:text-violet-300/70">следующая неделя</div> : null}
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => shiftWeek(1)}
-            className="h-8 w-8 rounded-lg hover:bg-white/10"
+            className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10"
             title="Следующая неделя"
           >
             <ChevronRight className="h-4 w-4" />
@@ -406,7 +406,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
       </div>
 
       {/* Форма добавления */}
-      <div className="mb-5 rounded-2xl border border-white/5 bg-black/20 p-3 sm:p-4">
+      <div className="mb-5 rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 p-3 sm:p-4">
         <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           Добавить позицию
         </div>
@@ -507,7 +507,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
           {grouped.map(({ day, list, sum }) => (
             <div key={day.value}>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-violet-300/80">
+                <span className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300/80">
                   {day.label}
                 </span>
                 {sum ? <span className="text-xs text-slate-500">{fmtMoney(sum)} ₸</span> : null}
@@ -520,7 +520,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
                       'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
                       it.status === 'bought'
                         ? 'border-emerald-500/20 bg-emerald-500/5'
-                        : 'border-white/5 bg-white/[0.02]',
+                        : 'border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02]',
                     )}
                   >
                     <button
@@ -529,20 +529,20 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
                       className={cn(
                         'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition',
                         it.status === 'bought'
-                          ? 'border-emerald-500 bg-emerald-500 text-white'
-                          : 'border-slate-600 text-transparent hover:border-slate-400',
+                          ? 'border-emerald-500 bg-emerald-500 text-white dark:text-white'
+                          : 'border-slate-300 dark:border-slate-600 text-transparent hover:border-slate-400',
                       )}
                       title={it.status === 'bought' ? 'Отметить как план' : 'Отметить куплено'}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </button>
-                    <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-0.5 text-xs text-slate-400">
+                    <span className="shrink-0 rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-xs text-slate-500 dark:text-slate-400">
                       {companyName(it.company_id)}
                     </span>
                     <span
                       className={cn(
                         'flex-1 truncate',
-                        it.status === 'bought' ? 'text-slate-500 line-through' : 'text-white',
+                        it.status === 'bought' ? 'text-slate-500 line-through' : 'text-slate-900 dark:text-white',
                       )}
                     >
                       {it.title}
@@ -550,7 +550,7 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
                       {it.supplier ? <span className="text-slate-500"> · {it.supplier}</span> : null}
                     </span>
                     {it.amount ? (
-                      <span className="shrink-0 font-medium text-slate-200">{fmtMoney(it.amount)} ₸</span>
+                      <span className="shrink-0 font-medium text-slate-700 dark:text-slate-200">{fmtMoney(it.amount)} ₸</span>
                     ) : null}
                     <button
                       type="button"
@@ -565,9 +565,9 @@ export function WeeklyPurchasePlan({ reportEndDate }: { reportEndDate?: string }
               </div>
             </div>
           ))}
-          <div className="flex justify-end border-t border-white/5 pt-3 text-sm">
-            <span className="text-slate-400">
-              Итого по плану: <b className="text-white">{fmtMoney(total)} ₸</b>
+          <div className="flex justify-end border-t border-slate-200 dark:border-white/5 pt-3 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">
+              Итого по плану: <b className="text-slate-900 dark:text-white">{fmtMoney(total)} ₸</b>
             </span>
           </div>
         </div>

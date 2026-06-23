@@ -498,7 +498,7 @@ export default function AIAnalysisPage() {
                   onClick={() => loadData()}
                   disabled={loading}
                   variant="outline"
-                  className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                  className="border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300"
                 >
                   <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
                   Обновить данные
@@ -510,21 +510,21 @@ export default function AIAnalysisPage() {
                   onClick={handleExport}
                   disabled={!analysis}
                   variant="outline"
-                  className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                  className="border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   PDF
                 </Button>
               )}
 
-              <div className="flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-200/90">
+              <div className="flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-700/90 dark:text-indigo-200/90">
                 {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 AI-разбор
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-[11px] text-indigo-200 hover:text-white"
+                  className="h-7 text-[11px] text-indigo-700 dark:text-indigo-200 hover:text-slate-900 dark:hover:text-white"
                   onClick={handleManualRefreshAi}
                   disabled={!dataForAi || aiLoading}
                 >
@@ -535,7 +535,7 @@ export default function AIAnalysisPage() {
           }
         />
 
-        <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-4 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
           <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">{dataSource}</p>
           <div className="flex flex-col lg:flex-row gap-4 lg:items-end lg:justify-between">
             <div className="flex flex-wrap gap-4 items-center">
@@ -545,10 +545,10 @@ export default function AIAnalysisPage() {
               </div>
 
               <Select value={rangePreset} onValueChange={(v) => setRangePreset(v as RangePreset)}>
-                <SelectTrigger className="w-[160px] bg-gray-900 border-gray-700 text-gray-300">
+                <SelectTrigger className="w-[160px] bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300">
                   <SelectValue placeholder="Период" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-900 border-gray-700">
+                <SelectContent className="bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700">
                   <SelectItem value="30">30 дней</SelectItem>
                   <SelectItem value="90">90 дней</SelectItem>
                   <SelectItem value="180">180 дней</SelectItem>
@@ -563,24 +563,24 @@ export default function AIAnalysisPage() {
                   type="date"
                   value={customStart}
                   onChange={(e) => setCustomStart(e.target.value)}
-                  className="w-[160px] bg-gray-900 border-gray-700 text-gray-300"
+                  className="w-[160px] bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300"
                 />
                 <div className="text-xs text-gray-500">по</div>
                 <Input
                   type="date"
                   value={customEnd}
                   onChange={(e) => setCustomEnd(e.target.value)}
-                  className="w-[160px] bg-gray-900 border-gray-700 text-gray-300"
+                  className="w-[160px] bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300"
                 />
               </div>
 
               <div className="flex items-center gap-2">
                 <div className="text-xs text-gray-500">Компания</div>
                 <Select value={companyId} onValueChange={setCompanyId}>
-                  <SelectTrigger className="w-[220px] bg-gray-900 border-gray-700 text-gray-300">
+                  <SelectTrigger className="w-[220px] bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300">
                     <SelectValue placeholder="Компания" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-gray-700">
+                  <SelectContent className="bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700">
                     <SelectItem value="all">Все</SelectItem>
                     {companies.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
@@ -594,10 +594,10 @@ export default function AIAnalysisPage() {
               <div className="flex items-center gap-2">
                 <div className="text-xs text-gray-500">Ось графика</div>
                 <Select value={granularity} onValueChange={(v) => setGranularity(v as Granularity)}>
-                  <SelectTrigger className="w-[140px] bg-gray-900 border-gray-700 text-gray-300">
+                  <SelectTrigger className="w-[140px] bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-gray-700">
+                  <SelectContent className="bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700">
                     <SelectItem value="daily">По дням</SelectItem>
                     <SelectItem value="weekly">По неделям</SelectItem>
                   </SelectContent>
@@ -622,7 +622,7 @@ export default function AIAnalysisPage() {
           </div>
 
           {longPeriodHint && (
-            <div className="mt-3 p-2 rounded-lg border border-indigo-500/15 bg-indigo-500/5 text-indigo-100/90 text-xs flex flex-wrap items-center gap-2">
+            <div className="mt-3 p-2 rounded-lg border border-indigo-500/15 bg-indigo-500/5 text-indigo-700/90 dark:text-indigo-100/90 text-xs flex flex-wrap items-center gap-2">
               <span>Долгий ряд: удобнее смотреть ось графика «по неделям».</span>
               {granularity === "daily" && (
                 <Button
@@ -639,7 +639,7 @@ export default function AIAnalysisPage() {
           )}
 
           {plansWarning && (
-            <div className="mt-3 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-yellow-200 text-xs">
+            <div className="mt-3 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-yellow-700 dark:text-yellow-200 text-xs">
               <AlertTriangle className="w-4 h-4 inline mr-2" />
               {plansWarning}
             </div>
@@ -647,20 +647,20 @@ export default function AIAnalysisPage() {
 
           {analysis && (
             <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-              <div className="px-2 py-1 rounded-lg border border-gray-700 bg-gray-900/50 text-gray-400">
+              <div className="px-2 py-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-slate-500 dark:text-gray-400">
                 <History className="w-3 h-3 inline mr-1" />
                 {formatDateRu(analysis.dataRangeStart)} — {formatDateRu(analysis.dataRangeEnd)}
               </div>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="px-2 py-1 rounded-lg border border-gray-700 bg-gray-900/50 text-gray-400 cursor-help inline-flex items-center gap-1">
+                    <div className="px-2 py-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-slate-500 dark:text-gray-400 cursor-help inline-flex items-center gap-1">
                       Достоверность:{" "}
-                      <span className="text-indigo-300 font-bold">{analysis.confidenceScore}%</span>
+                      <span className="text-indigo-700 dark:text-indigo-300 font-bold">{analysis.confidenceScore}%</span>
                       <Info className="w-3 h-3 text-gray-500" />
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs bg-gray-900 border border-gray-700 p-2">
+                  <TooltipContent className="max-w-xs text-xs bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 p-2">
                     {CONFIDENCE_FORMULA_RU}
                   </TooltipContent>
                 </Tooltip>
@@ -692,7 +692,7 @@ export default function AIAnalysisPage() {
                 Риск: {analysis.riskLevel === "low" ? "Низкий" : analysis.riskLevel === "medium" ? "Средний" : "Высокий"}
               </div>
               {analysis.totalPlanIncome > 0 && (
-                <div className="px-2 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
+                <div className="px-2 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300">
                   <Target className="w-3 h-3 inline mr-1" />
                   План: {analysis.planIncomeAchievementPct.toFixed(0)}%
                 </div>
@@ -711,24 +711,24 @@ export default function AIAnalysisPage() {
             ].map((row) => (
               <Card
                 key={row.label}
-                className="p-4 border border-gray-800 bg-gray-900/40"
+                className="p-4 border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900/40"
               >
                 <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">{row.label}</div>
-                <div className="text-lg font-semibold text-white tabular-nums">{row.v}</div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-white tabular-nums">{row.v}</div>
               </Card>
             ))}
           </div>
         )}
 
         {(aiLoading || aiAdvice || aiError) && (
-          <Card className="p-6 border-0 bg-gradient-to-br from-indigo-900/20 via-gray-900 to-slate-900/40 backdrop-blur-sm border border-indigo-500/10">
+          <Card className="p-6 border-0 bg-gradient-to-br from-indigo-50 via-white to-slate-50 dark:from-indigo-900/20 dark:via-gray-900 dark:to-slate-900/40 backdrop-blur-sm border border-indigo-500/10">
             <div className="flex items-start gap-4">
               <div className="p-2 bg-indigo-500/20 rounded-xl shrink-0">
-                <Sparkles className="w-6 h-6 text-indigo-300" />
+                <Sparkles className="w-6 h-6 text-indigo-700 dark:text-indigo-300" />
               </div>
               <div className="space-y-2 w-full">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <h3 className="font-bold text-white text-lg">AI-разбор (управленческий текст)</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-lg">AI-разбор (управленческий текст)</h3>
                   {aiUpdatedAt ? (
                     <div className="text-xs text-gray-500">
                       {new Date(aiUpdatedAt).toLocaleString("ru-RU")}
@@ -736,8 +736,8 @@ export default function AIAnalysisPage() {
                   ) : null}
                 </div>
                 {aiLoading ? (
-                  <div className="flex items-center gap-3 text-sm text-gray-300">
-                    <Loader2 className="h-4 w-4 animate-spin text-indigo-300" />
+                  <div className="flex items-center gap-3 text-sm text-slate-700 dark:text-gray-300">
+                    <Loader2 className="h-4 w-4 animate-spin text-indigo-700 dark:text-indigo-300" />
                     Сбор текста…
                   </div>
                 ) : aiError ? (
@@ -745,7 +745,7 @@ export default function AIAnalysisPage() {
                     {aiError}
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
+                  <div className="text-sm text-slate-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
                 )}
               </div>
             </div>
@@ -766,17 +766,17 @@ export default function AIAnalysisPage() {
         {/* Скелетон только при первой загрузке. Refetch — silent, старая аналитика остаётся. */}
         {loading && !analysis && (
           <div className="space-y-6">
-            <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+            <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
               <Skeleton className="h-6 w-64" />
               <Skeleton className="mt-2 h-4 w-72" />
               <Skeleton className="mt-6 h-80 w-full" />
             </Card>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm lg:col-span-2">
+              <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm lg:col-span-2">
                 <Skeleton className="h-5 w-56" />
                 <Skeleton className="mt-4 h-64 w-full" />
               </Card>
-              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
                 <Skeleton className="h-5 w-40" />
                 <div className="mt-4 space-y-3">
                   {Array.from({ length: 5 }).map((_, idx) => (
@@ -798,21 +798,21 @@ export default function AIAnalysisPage() {
         {analysis && (
           <div className="space-y-6">
             <div className="space-y-2">
-              <h2 className="text-sm font-medium text-gray-300">Основной график</h2>
+              <h2 className="text-sm font-medium text-slate-700 dark:text-gray-300">Основной график</h2>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                  <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm h-full">
+                  <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm h-full">
                     <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
                       <div>
-                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                          <CalendarDays className="w-5 h-5 text-indigo-300" />
+                        <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <CalendarDays className="w-5 h-5 text-indigo-700 dark:text-indigo-300" />
                           Факт + прогноз {FORECAST_DAYS} дн.
                         </h2>
-                        <p className="text-sm text-gray-400 mt-1">
+                        <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">
                           Прогн. прибыль:{" "}
                           <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span>{" "}
                           · Прогн. доход:{" "}
-                          <span className="text-indigo-300 font-bold">
+                          <span className="text-indigo-700 dark:text-indigo-300 font-bold">
                             {formatMoney(analysis.totalForecastIncome)}
                           </span>
                         </p>
@@ -823,13 +823,13 @@ export default function AIAnalysisPage() {
                       <div className="text-right">
                         <span className="text-[10px] uppercase text-gray-500 tracking-wider">достоверность</span>
                         <div className="flex items-center gap-2 justify-end">
-                          <div className="h-2 w-24 bg-gray-700 rounded-full overflow-hidden">
+                          <div className="h-2 w-24 bg-slate-200 dark:bg-gray-700 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-gradient-to-r from-indigo-500 to-slate-400"
                               style={{ width: `${analysis.confidenceScore}%` }}
                             />
                           </div>
-                          <span className="text-sm font-bold text-indigo-200">{analysis.confidenceScore}%</span>
+                          <span className="text-sm font-bold text-indigo-700 dark:text-indigo-200">{analysis.confidenceScore}%</span>
                         </div>
                         <p className="text-[10px] text-gray-500 mt-1 max-w-[200px] ml-auto opacity-80">
                           Оценка полноты ряда, не гарантия
@@ -962,9 +962,9 @@ export default function AIAnalysisPage() {
                   </Card>
                 </div>
                 <div className="space-y-6">
-                  <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
-                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                      <Wallet className="w-4 h-4 text-indigo-300" />
+                  <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-indigo-700 dark:text-indigo-300" />
                       Оплаты
                     </h3>
                     <div className="h-48 mb-4">
@@ -1003,11 +1003,11 @@ export default function AIAnalysisPage() {
                       {analysis.paymentTrends.map((trend) => (
                         <div
                           key={trend.method}
-                          className="flex items-center justify-between p-2 rounded-lg bg-gray-900/50"
+                          className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-gray-900/50"
                         >
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: trend.color }} />
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-slate-500 dark:text-gray-400">
                               {trend.method === "cash"
                                 ? "Нал"
                                 : trend.method === "kaspi"
@@ -1018,7 +1018,7 @@ export default function AIAnalysisPage() {
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-white font-medium">{trend.percentage.toFixed(1)}%</span>
+                            <span className="text-xs text-slate-900 dark:text-white font-medium">{trend.percentage.toFixed(1)}%</span>
                             {trend.trend === "up" ? (
                               <TrendingUp className="w-3 h-3 text-green-400" />
                             ) : trend.trend === "down" ? (
@@ -1030,7 +1030,7 @@ export default function AIAnalysisPage() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-700">
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
                       <div className="flex justify-between text-xs mb-2">
                         <span className="text-gray-500">Онлайн</span>
                         <span className={analysis.onlineShare < 15 ? "text-yellow-400" : "text-green-400"}>
@@ -1039,20 +1039,20 @@ export default function AIAnalysisPage() {
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Безнал</span>
-                        <span className="text-indigo-200">{analysis.cashlessShare.toFixed(1)}%</span>
+                        <span className="text-indigo-700 dark:text-indigo-200">{analysis.cashlessShare.toFixed(1)}%</span>
                       </div>
                     </div>
                   </Card>
-                  <Card className="p-6 border-0 bg-gradient-to-br from-slate-900/40 to-indigo-900/20 backdrop-blur-sm border border-indigo-500/10">
-                    <h3 className="text-sm font-bold text-white mb-1">Сезонность / рост</h3>
+                  <Card className="p-6 border-0 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900/40 dark:to-indigo-900/20 backdrop-blur-sm border border-indigo-500/10">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Сезонность / рост</h3>
                     <p className="text-[10px] text-gray-500 mb-3">по дням недели и краям ряда</p>
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-400">Сезонность</span>
-                          <span className="text-indigo-200">{analysis.seasonalityStrength.toFixed(0)}%</span>
+                          <span className="text-slate-500 dark:text-gray-400">Сезонность</span>
+                          <span className="text-indigo-700 dark:text-indigo-200">{analysis.seasonalityStrength.toFixed(0)}%</span>
                         </div>
-                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-slate-200 dark:bg-gray-700 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-indigo-500"
                             style={{ width: `${analysis.seasonalityStrength}%` }}
@@ -1061,13 +1061,13 @@ export default function AIAnalysisPage() {
                       </div>
                       <div>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-400">Рост (груб.)</span>
+                          <span className="text-slate-500 dark:text-gray-400">Рост (груб.)</span>
                           <span className={analysis.growthRate >= 0 ? "text-green-400" : "text-red-400"}>
                             {analysis.growthRate >= 0 ? "+" : ""}
                             {analysis.growthRate.toFixed(1)}%
                           </span>
                         </div>
-                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-slate-200 dark:bg-gray-700 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${analysis.growthRate >= 0 ? "bg-green-500" : "bg-red-500"}`}
                             style={{ width: `${clamp(Math.abs(analysis.growthRate), 0, 100)}%` }}
@@ -1080,12 +1080,12 @@ export default function AIAnalysisPage() {
               </div>
             </div>
 
-            <h2 className="text-sm font-medium text-gray-300 pt-2">Недельный и расходы</h2>
+            <h2 className="text-sm font-medium text-slate-700 dark:text-gray-300 pt-2">Недельный и расходы</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4 text-indigo-300" />
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-indigo-700 dark:text-indigo-300" />
                     Типичная неделя
                   </h3>
                 </div>
@@ -1115,9 +1115,9 @@ export default function AIAnalysisPage() {
                   </ResponsiveContainer>
                 </div>
               </Card>
-              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                  <PieChart className="w-4 h-4 text-indigo-300" />
+              <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <PieChart className="w-4 h-4 text-indigo-700 dark:text-indigo-300" />
                   Категории расходов
                 </h3>
                 {topExpenseCats.length === 0 ? (
@@ -1130,13 +1130,13 @@ export default function AIAnalysisPage() {
                     {topExpenseCats.map((c, idx) => (
                       <div
                         key={c.name}
-                        className="flex items-center justify-between p-3 rounded-xl bg-gray-900/50 border border-gray-800"
+                        className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-gray-900/50 border border-slate-200 dark:border-gray-800"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded-lg bg-gray-800 flex items-center justify-center text-xs text-gray-500">
+                          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-gray-800 flex items-center justify-center text-xs text-gray-500">
                             {idx + 1}
                           </div>
-                          <span className="text-sm text-gray-300">{c.name}</span>
+                          <span className="text-sm text-slate-700 dark:text-gray-300">{c.name}</span>
                         </div>
                         <div className="text-sm text-red-400 font-semibold">{formatMoney(c.value)}</div>
                       </div>
@@ -1146,20 +1146,20 @@ export default function AIAnalysisPage() {
               </Card>
             </div>
 
-            <h2 className="text-sm font-medium text-gray-300 pt-2">Выводы</h2>
+            <h2 className="text-sm font-medium text-slate-700 dark:text-gray-300 pt-2">Выводы</h2>
             <p className="text-[11px] text-gray-500 -mt-2">
               Краткие эвристики; AI-блок — отдельный сгенерированный текст, не налоговая консультация.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="p-6 border-0 bg-slate-900/30 border border-slate-700/40">
-                <h3 className="text-sm font-bold text-indigo-200 mb-4 flex items-center gap-2">
+              <Card className="p-6 border-0 bg-white dark:bg-slate-900/30 border border-slate-200 dark:border-slate-700/40">
+                <h3 className="text-sm font-bold text-indigo-700 dark:text-indigo-200 mb-4 flex items-center gap-2">
                   <Zap className="w-4 h-4" />
                   Сигналы
                 </h3>
                 {smartInsights && (
                   <div className="space-y-3 text-xs">
                     {smartInsights.warnings.length > 0 && (
-                      <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 text-yellow-200">
+                      <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 text-yellow-700 dark:text-yellow-200">
                         <div className="font-semibold mb-2 flex items-center gap-2">
                           <AlertTriangle className="w-4 h-4" />
                           Внимание
@@ -1174,15 +1174,15 @@ export default function AIAnalysisPage() {
                         </ul>
                       </div>
                     )}
-                    <div className="p-3 rounded-xl border border-gray-700 bg-gray-900/50">
-                      <div className="font-semibold text-white mb-2 flex items-center gap-2">
+                    <div className="p-3 rounded-xl border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900/50">
+                      <div className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-green-400" />
                         Эвристики
                       </div>
                       <ul className="space-y-2">
                         {smartInsights.tips.map((t, i) => (
-                          <li key={i} className="flex items-start gap-2 text-gray-400">
-                            <span className="text-indigo-300 mt-0.5">·</span>
+                          <li key={i} className="flex items-start gap-2 text-slate-500 dark:text-gray-400">
+                            <span className="text-indigo-700 dark:text-indigo-300 mt-0.5">·</span>
                             {t}
                           </li>
                         ))}
@@ -1191,23 +1191,23 @@ export default function AIAnalysisPage() {
                   </div>
                 )}
               </Card>
-              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
-                <h3 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
-                  <Search className="w-4 h-4 text-amber-300" />
+              <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                  <Search className="w-4 h-4 text-amber-700 dark:text-amber-300" />
                   Аномалии
                 </h3>
                 <p className="text-[10px] text-gray-500 mb-3">топ сигналов за последние 90 дней</p>
                 {analysis.anomalies.length === 0 ? (
                   <div className="text-center py-8">
                     <CheckCircle2 className="w-12 h-12 text-green-500/50 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">Нет выбранных всплесков</p>
+                    <p className="text-sm text-slate-500 dark:text-gray-400">Нет выбранных всплесков</p>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-auto">
                     {analysis.anomalies.map((a, idx) => (
-                      <div key={idx} className="p-3 rounded-xl bg-gray-900/50 border border-gray-800">
+                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-gray-900/50 border border-slate-200 dark:border-gray-800">
                         <div className="flex justify-between items-start mb-1">
-                          <span className="font-bold text-gray-300">{formatDateRu(a.date)}</span>
+                          <span className="font-bold text-slate-700 dark:text-gray-300">{formatDateRu(a.date)}</span>
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full ${
                               a.type === "income_low"
@@ -1240,22 +1240,22 @@ export default function AIAnalysisPage() {
                   </div>
                 )}
               </Card>
-              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
-                <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
+              <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
                   <HelpCircle className="w-4 h-4" />
                   Как считаем
                 </h3>
-                <div className="space-y-3 text-xs text-gray-400 leading-relaxed">
-                  <div className="p-3 rounded-lg bg-gray-900/50 border-l-2 border-indigo-500">
-                    <span className="text-indigo-300 font-semibold">1. Статистика</span>
+                <div className="space-y-3 text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                  <div className="p-3 rounded-lg bg-white dark:bg-gray-900/50 border-l-2 border-indigo-500">
+                    <span className="text-indigo-700 dark:text-indigo-300 font-semibold">1. Статистика</span>
                     <p className="mt-1">Медиана и MAD, робаст к выбросам</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-gray-900/50 border-l-2 border-slate-500">
-                    <span className="text-slate-300 font-semibold">2. Тренд</span>
+                  <div className="p-3 rounded-lg bg-white dark:bg-gray-900/50 border-l-2 border-slate-500">
+                    <span className="text-slate-700 dark:text-slate-300 font-semibold">2. Тренд</span>
                     <p className="mt-1">Winsorize + наклон по дням</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-gray-900/50 border-l-2 border-emerald-600/80">
-                    <span className="text-emerald-300 font-semibold">3. AI</span>
+                  <div className="p-3 rounded-lg bg-white dark:bg-gray-900/50 border-l-2 border-emerald-600/80">
+                    <span className="text-emerald-700 dark:text-emerald-300 font-semibold">3. AI</span>
                     <p className="mt-1">По сжатому срезу в OpenAI</p>
                   </div>
                 </div>
@@ -1267,7 +1267,7 @@ export default function AIAnalysisPage() {
         {!loading && !analysis && (
           <div className="text-center py-20">
             <Info className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-            <p className="text-gray-400">Нет данных</p>
+            <p className="text-slate-500 dark:text-gray-400">Нет данных</p>
             <p className="text-sm text-gray-600 mt-2">Проверьте период и наличие операций</p>
           </div>
         )}

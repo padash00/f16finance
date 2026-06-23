@@ -739,7 +739,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 <select
                   value={selectedCompanyId || ''}
                   onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                  className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+                  className="h-9 appearance-none rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
                 >
                   {companies.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -782,25 +782,25 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
       {/* Stats strip */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Итого</p>
-          <p className="mt-1 text-xl font-semibold text-amber-200">{totalCatalogQty}</p>
+          <p className="text-[10px] uppercase tracking-widest text-amber-700 dark:text-amber-300/70">Итого</p>
+          <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{totalCatalogQty}</p>
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Подсобка</p>
-          <p className="mt-1 text-xl font-semibold text-amber-300">{totalWarehouseQty}</p>
+          <p className="text-[10px] uppercase tracking-widest text-amber-700 dark:text-amber-300/70">Подсобка</p>
+          <p className="mt-1 text-xl font-semibold text-amber-600 dark:text-amber-300">{totalWarehouseQty}</p>
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Витрина</p>
-          <p className="mt-1 text-xl font-semibold text-emerald-300">{totalShowcaseQty}</p>
+          <p className="text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/70">Витрина</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-300">{totalShowcaseQty}</p>
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Стоимость (закуп / продажа)</p>
-          <p className="mt-1 truncate text-sm font-semibold text-amber-200" title={`${fmtMoney(totalPurchase)} / ${fmtMoney(totalSale)} ₸`}>
+          <p className="text-[10px] uppercase tracking-widest text-amber-700 dark:text-amber-300/70">Стоимость (закуп / продажа)</p>
+          <p className="mt-1 truncate text-sm font-semibold text-amber-700 dark:text-amber-200" title={`${fmtMoney(totalPurchase)} / ${fmtMoney(totalSale)} ₸`}>
             {fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸
           </p>
         </Card>
@@ -818,7 +818,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
           />
         </div>
         {selectedIds.size > 0 && (
-          <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-1 text-xs text-rose-300">
+          <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-1 text-xs text-rose-700 dark:text-rose-300">
             Выбрано: {selectedIds.size}
           </span>
         )}
@@ -862,7 +862,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
         {loading && balances.length === 0 ? (
           <div className="p-4">
             <TableSkeleton rows={8} cols={5} />
@@ -880,8 +880,8 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
         ) : (
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
-                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-10 py-2.5 pl-4 pr-2">
                     <input
                       type="checkbox"
@@ -903,16 +903,16 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                   <th className="py-2.5 px-2 font-normal">Товар</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
-                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-300/70">Итого</th>
-                  <th className="w-28 py-2.5 px-2 text-right font-normal text-amber-300/70">Подсобка</th>
-                  <th className="w-20 py-2.5 px-2 pr-4 text-right font-normal text-emerald-300/70">Витрина</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-700 dark:text-amber-300/70">Итого</th>
+                  <th className="w-28 py-2.5 px-2 text-right font-normal text-amber-700 dark:text-amber-300/70">Подсобка</th>
+                  <th className="w-20 py-2.5 px-2 pr-4 text-right font-normal text-emerald-700 dark:text-emerald-300/70">Витрина</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {filteredBalances.map((b) => (
                   <tr
                     key={b.item_id}
-                    className={`transition hover:bg-white/[0.02] ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.05]' : ''}`}
+                    className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.05]' : ''}`}
                   >
                     <td className="w-10 py-2.5 pl-4 pr-2 align-middle">
                       <input
@@ -945,7 +945,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       <span className="line-clamp-1 text-xs text-muted-foreground">{b.item?.category?.name || '—'}</span>
                     </td>
                     <td className="w-20 py-2.5 px-2 text-right align-middle">
-                      <span className="text-sm font-semibold text-amber-200">{b.catalog_quantity}</span>
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-200">{b.catalog_quantity}</span>
                     </td>
                     <td className="w-28 py-2.5 px-2 text-right align-middle">
                       {editingWh === b.item_id ? (
@@ -963,7 +963,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                           <button
                             onClick={() => void handleSetWarehouse(b.item_id)}
                             disabled={savingWh}
-                            className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 disabled:opacity-50"
                           >
                             {savingWh ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                           </button>
@@ -977,7 +977,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       ) : (
                         <button
                           onClick={() => { setEditingWh(b.item_id); setEditWhVal(String(b.warehouse_quantity)) }}
-                          className="inline-flex items-center justify-end gap-1 text-sm font-semibold text-amber-300 hover:text-amber-200"
+                          className="inline-flex items-center justify-end gap-1 text-sm font-semibold text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200"
                         >
                           {b.warehouse_quantity}
                           <Pencil className="h-3 w-3 opacity-40" />
@@ -985,7 +985,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       )}
                     </td>
                     <td className="w-20 py-2.5 px-2 pr-4 text-right align-middle">
-                      <span className="text-sm font-semibold text-emerald-300">{b.showcase_quantity}</span>
+                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-300">{b.showcase_quantity}</span>
                     </td>
                   </tr>
                 ))}
@@ -998,9 +998,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {/* Add Sheet */}
       <Sheet open={addSheetOpen} onOpenChange={setAddSheetOpen}>
         <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
+          <SheetHeader className="border-b border-slate-200 dark:border-white/10 p-5">
             <SheetTitle className="flex items-center gap-2">
-              <PackagePlus className="h-5 w-5 text-emerald-300" />
+              <PackagePlus className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               Добавить товары в подсобку
             </SheetTitle>
             <SheetDescription>
@@ -1008,7 +1008,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
+            <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1 text-xs">
               {([
                 ['barcode', 'Штрихкод', Barcode],
                 ['items', 'Каталог', Search],
@@ -1017,7 +1017,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 <button
                   key={mode}
                   onClick={() => { setAddMode(mode); setLines([]); setExcelRows([]) }}
-                  className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}
+                  className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-slate-100 dark:bg-white/10 text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-foreground'}`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{label}</span>
@@ -1057,7 +1057,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
                 {newItemDialog && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
-                    <p className="text-xs font-medium text-amber-200">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-200">
                       Штрихкод <span className="font-mono">{newItemDialog.barcode}</span> не найден — создать новый товар?
                     </p>
                     <div className="grid grid-cols-[1fr_80px] gap-2">
@@ -1122,7 +1122,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                     </select>
                   )}
                 </div>
-                <div className="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-white/10 bg-black/20 p-1">
+                <div className="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 p-1">
                   {itemSearchLoading ? (
                     <div className="flex h-20 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
                   ) : itemSearchResults.length === 0 ? (
@@ -1132,7 +1132,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                       <button
                         key={item.id}
                         onClick={() => addCatalogItem(item)}
-                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs hover:bg-white/[0.06] transition"
+                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-medium">{item.name}</p>
@@ -1150,7 +1150,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
               <div className="space-y-2">
                 <div
                   onClick={() => fileRef.current?.click()}
-                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/20 bg-white dark:bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-slate-50 dark:hover:bg-white/[0.04]"
                 >
                   <FileSpreadsheet className="h-8 w-8 text-amber-400" />
                   <p className="text-xs font-medium text-foreground">Нажмите чтобы загрузить файл</p>
@@ -1162,10 +1162,10 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             )}
 
             {pendingLines.length > 0 && (
-              <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
+              <div className="space-y-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">К добавлению ({pendingLines.length})</p>
                 {pendingLines.map((line) => (
-                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-2.5 py-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{line.name || line.barcode}</p>
                       {line.barcode && <p className="text-[10px] text-muted-foreground font-mono">{line.barcode}</p>}
@@ -1196,20 +1196,20 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
             {pendingLines.length > 0 && (
               <div className="space-y-2">
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-1.5">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Режим сохранения</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       onClick={() => setStockMode('add')}
-                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'add' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300' : 'border border-white/10 text-muted-foreground hover:bg-white/[0.04]'}`}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'add' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300' : 'border border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                     >
                       + Добавить к остатку
                     </button>
                     <button
                       type="button"
                       onClick={() => setStockMode('set')}
-                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300' : 'border border-white/10 text-muted-foreground hover:bg-white/[0.04]'}`}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-700 dark:text-amber-300' : 'border border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}
                     >
                       = Установить остаток
                     </button>
@@ -1245,9 +1245,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {/* Backroom file Sheet */}
       <Sheet open={backroomSheetOpen} onOpenChange={(o) => { setBackroomSheetOpen(o); if (!o) resetBackroom() }}>
         <SheetContent className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
+          <SheetHeader className="border-b border-slate-200 dark:border-white/10 p-5">
             <SheetTitle className="flex items-center gap-2">
-              <Boxes className="h-5 w-5 text-amber-300" />
+              <Boxes className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               Загрузка файла подсобки
             </SheetTitle>
             <SheetDescription>
@@ -1257,9 +1257,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
           <div className="flex-1 space-y-3 overflow-y-auto p-5">
             <div
               onClick={() => warehouseFileRef.current?.click()}
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/20 bg-white dark:bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-slate-50 dark:hover:bg-white/[0.04]"
             >
-              <Boxes className="h-8 w-8 text-amber-300" />
+              <Boxes className="h-8 w-8 text-amber-600 dark:text-amber-300" />
               <p className="max-w-full break-all px-3 text-xs font-medium text-foreground">
                 {warehouseFileName ? `Файл: ${warehouseFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
               </p>
@@ -1290,10 +1290,10 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             {(warehouseFileMatched.length > 0 || warehouseFileUnmatched.length > 0) && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider">
-                  <span className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-emerald-300/90">
+                  <span className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-emerald-700 dark:text-emerald-300/90">
                     Найдено: {warehouseFileMatched.length}
                   </span>
-                  <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.08] px-2 py-1 text-rose-300/90">
+                  <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.08] px-2 py-1 text-rose-700 dark:text-rose-300/90">
                     Не найдено: {warehouseFileUnmatched.length}
                   </span>
                   <button
@@ -1308,7 +1308,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 {warehouseFileMatched.length > 0 && (
                   <div className="max-h-[50vh] overflow-auto rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04]">
                     <table className="w-full min-w-[480px] text-[11px]">
-                      <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
+                      <thead className="sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
                         <tr className="text-left text-muted-foreground">
                           <th className="px-2 py-1.5 font-normal">Товар</th>
                           <th className="w-20 px-2 py-1.5 font-normal text-right">Итого</th>
@@ -1316,33 +1316,33 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                           <th className="w-20 px-2 py-1.5 font-normal text-right">Витрина</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/[0.05]">
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05]">
                         {warehouseFileMatched.map((m) => {
                           const nameMismatch = m.excel_name && m.excel_name.trim().toLowerCase() !== m.catalog_name.trim().toLowerCase()
                           return (
-                            <tr key={m.item_id} className="hover:bg-white/[0.03]">
+                            <tr key={m.item_id} className="hover:bg-slate-50 dark:hover:bg-white/[0.03]">
                               <td className="min-w-0 max-w-0 px-2 py-1.5 align-top">
                                 <div className="truncate font-medium" title={m.catalog_name}>{m.catalog_name}</div>
                                 <div className="truncate text-[10px] font-mono text-muted-foreground">{m.barcode}</div>
                                 {nameMismatch && (
-                                  <div className="truncate text-[10px] text-amber-300/80" title={m.excel_name || ''}>
+                                  <div className="truncate text-[10px] text-amber-600 dark:text-amber-300/80" title={m.excel_name || ''}>
                                     В файле: «{m.excel_name}»
                                   </div>
                                 )}
                               </td>
                               <td className="w-20 px-2 py-1.5 text-right align-top">
-                                <div className="text-amber-200 font-semibold">{m.new_catalog}</div>
+                                <div className="text-amber-700 dark:text-amber-200 font-semibold">{m.new_catalog}</div>
                                 <div className="text-[10px] text-muted-foreground">
                                   было {m.current_catalog}
-                                  {m.catalog_changed && <span className="text-amber-300/80"> ↑</span>}
+                                  {m.catalog_changed && <span className="text-amber-600 dark:text-amber-300/80"> ↑</span>}
                                 </div>
                               </td>
                               <td className="w-24 px-2 py-1.5 text-right align-top">
-                                <div className="text-amber-300 font-semibold">{m.new_warehouse}</div>
+                                <div className="text-amber-600 dark:text-amber-300 font-semibold">{m.new_warehouse}</div>
                                 <div className="text-[10px] text-muted-foreground">было {m.current_warehouse}</div>
                               </td>
                               <td className="w-20 px-2 py-1.5 text-right align-top">
-                                <div className="text-emerald-300 font-semibold">{m.new_showcase}</div>
+                                <div className="text-emerald-600 dark:text-emerald-300 font-semibold">{m.new_showcase}</div>
                                 <div className="text-[10px] text-muted-foreground">было {m.current_showcase}</div>
                               </td>
                             </tr>
@@ -1355,7 +1355,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
 
                 {warehouseFileUnmatched.length > 0 && (
                   <details className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-2">
-                    <summary className="cursor-pointer text-xs font-medium text-rose-200">
+                    <summary className="cursor-pointer text-xs font-medium text-rose-700 dark:text-rose-200">
                       Не найдены по штрихкоду ({warehouseFileUnmatched.length}) — будут пропущены
                     </summary>
                     <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px]">
@@ -1363,7 +1363,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                         <li key={`${u.barcode}-${i}`} className="grid grid-cols-[1fr,2fr,auto] items-start gap-2 text-muted-foreground">
                           <span className="truncate font-mono" title={u.barcode}>{u.barcode}</span>
                           <span className="truncate" title={u.name}>{u.name}</span>
-                          <span className="text-rose-300">{u.quantity}</span>
+                          <span className="text-rose-600 dark:text-rose-300">{u.quantity}</span>
                         </li>
                       ))}
                     </ul>
@@ -1389,7 +1389,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
       {deleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111827] p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111827] p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/15">
                 <Trash2 className="h-5 w-5 text-rose-400" />

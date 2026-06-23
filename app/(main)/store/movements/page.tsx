@@ -91,19 +91,19 @@ function movementTypeLabel(type: string) {
 }
 
 function movementTypeClass(type: string) {
-  if (type === 'receipt') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-  if (type === 'receipt_cancel') return 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-  if (type === 'transfer_to_point' || type === 'transfer_warehouse_to_showcase') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
-  if (type === 'transfer_cancel' || type === 'transfer_showcase_to_warehouse') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
-  if (type === 'reservation') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200'
-  if (type === 'reservation_release') return 'border-yellow-500/20 bg-yellow-500/5 text-yellow-300'
-  if (type === 'sale') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (type === 'debt') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (type === 'return') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-200'
-  if (type === 'posting') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-  if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-slate-300'
-  return 'border-white/10 bg-white/[0.05] text-muted-foreground'
+  if (type === 'receipt') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  if (type === 'receipt_cancel') return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
+  if (type === 'transfer_to_point' || type === 'transfer_warehouse_to_showcase') return 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-200'
+  if (type === 'transfer_cancel' || type === 'transfer_showcase_to_warehouse') return 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-200'
+  if (type === 'reservation') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-200'
+  if (type === 'reservation_release') return 'border-yellow-500/20 bg-yellow-500/5 text-yellow-600 dark:text-yellow-300'
+  if (type === 'sale') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  if (type === 'debt') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  if (type === 'return') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
+  if (type === 'posting') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  if (type === 'migration_initial') return 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
+  return 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] text-muted-foreground'
 }
 
 function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } = {}) {
@@ -250,19 +250,19 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего движений</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{stats.count}</p>}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Приёмок</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.receipts}</p>}
+          <p className="text-[10px] uppercase tracking-widest text-emerald-700/70 dark:text-emerald-300/70">Приёмок</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-200">{stats.receipts}</p>}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Выдач на точку</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.transfers}</p>}
+          <p className="text-[10px] uppercase tracking-widest text-amber-700/70 dark:text-amber-300/70">Выдач на точку</p>
+          {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{stats.transfers}</p>}
         </Card>
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Сумма</p>
           {loading ? <Skeleton className="mt-1 h-7 w-24" /> : (
             <p className="mt-1 truncate text-xl font-semibold" title={formatMoney(stats.total)}>{formatMoney(stats.total)}</p>
@@ -305,7 +305,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
         {loading && filteredMovements.length === 0 ? (
           <StoreDataTableSkeleton columns={6} />
         ) : filteredMovements.length === 0 ? (
@@ -317,7 +317,7 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
           <div className="relative max-h-[calc(100vh-340px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -325,8 +325,8 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
-                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-slate-200/80 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-36 py-2.5 pl-4 pr-2 font-normal">Дата</th>
                   <th className="w-40 py-2.5 px-2 font-normal">Тип</th>
                   <th className="py-2.5 px-2 font-normal">Товар</th>
@@ -335,12 +335,12 @@ function StoreMovementsPageContent({ embedded = false }: { embedded?: boolean } 
                   <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal">Сумма</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-slate-200/60 dark:divide-white/[0.04]">
                 {filteredMovements.map((movement) => {
                   const from = movement.from_location?.company?.name || movement.from_location?.name || '—'
                   const to = movement.to_location?.company?.name || movement.to_location?.name || '—'
                   return (
-                    <tr key={movement.id} className="transition hover:bg-white/[0.02]">
+                    <tr key={movement.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                       <td className="w-36 py-2.5 pl-4 pr-2 align-middle">
                         <span className="text-xs text-muted-foreground">{formatDateTime(movement.created_at)}</span>
                       </td>

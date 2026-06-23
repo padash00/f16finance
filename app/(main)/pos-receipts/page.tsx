@@ -118,10 +118,10 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
           </div>
 
           {/* Items */}
-          <div className="rounded-xl border border-white/10 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-white/10 bg-white/[0.03]">
+                <tr className="border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]">
                   <th className="px-3 py-2 text-left font-medium text-muted-foreground">Товар</th>
                   <th className="px-3 py-2 text-center font-medium text-muted-foreground">Кол.</th>
                   <th className="px-3 py-2 text-right font-medium text-muted-foreground">Цена</th>
@@ -130,7 +130,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
               </thead>
               <tbody>
                 {sale.items.map((item) => (
-                  <tr key={item.id} className="border-b border-white/5">
+                  <tr key={item.id} className="border-b border-slate-100 dark:border-white/5">
                     <td className="px-3 py-2 font-medium">{item.inventory_items?.name || '—'}</td>
                     <td className="px-3 py-2 text-center text-muted-foreground">{item.quantity}</td>
                     <td className="px-3 py-2 text-right text-muted-foreground">{fmt(item.unit_price)} ₸</td>
@@ -155,7 +155,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
                 <span className="text-amber-400">−{fmt(sale.loyalty_discount_amount)} ₸</span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-base border-t border-white/10 pt-2">
+            <div className="flex justify-between font-bold text-base border-t border-slate-200 dark:border-white/10 pt-2">
               <span>Итого</span>
               <span className="text-emerald-400">{fmt(sale.total_amount)} ₸</span>
             </div>
@@ -163,7 +163,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
           {/* Payment breakdown */}
           {paymentBreakdown.length > 0 && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-1">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 space-y-1">
               <p className="text-xs font-medium text-muted-foreground mb-2">Оплата</p>
               {paymentBreakdown.map((p) => (
                 <div key={p.label} className="flex justify-between text-xs">
@@ -195,14 +195,14 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
           {/* Comment */}
           {sale.comment && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
               <p className="text-xs text-muted-foreground">Комментарий</p>
               <p className="mt-1 text-sm">{sale.comment}</p>
             </div>
           )}
 
           {/* Footer */}
-          <div className="text-center text-xs text-muted-foreground pt-2 border-t border-white/10">
+          <div className="text-center text-xs text-muted-foreground pt-2 border-t border-slate-200 dark:border-white/10">
             ID: {sale.id}
           </div>
         </div>
@@ -439,7 +439,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
 
         {/* Error */}
         {error && (
-          <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+          <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
             {error}
           </div>
         )}
@@ -460,7 +460,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-slate-200 dark:border-white/10">
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Номер</th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Дата</th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Время</th>
@@ -477,7 +477,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                       return (
                         <tr
                           key={sale.id}
-                          className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer"
+                          className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] cursor-pointer"
                           onClick={() => setSelectedSale(sale)}
                         >
                           <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
@@ -485,7 +485,7 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
                           </td>
                           <td className="px-4 py-3">{fmtDate(sale.sold_at)}</td>
                           <td className="px-4 py-3 text-muted-foreground">{fmtTime(sale.sold_at)}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-emerald-400">
+                          <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
                             {fmt(sale.total_amount)} ₸
                           </td>
                           <td className="px-4 py-3">

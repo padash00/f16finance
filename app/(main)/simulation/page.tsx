@@ -229,7 +229,7 @@ export default function SimulationPage() {
             ) : null}
             <button
               onClick={() => void load(companyId)}
-              className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-200 dark:hover:bg-white/[0.08] hover:text-foreground"
               title="Обновить"
             >
               <RefreshCw className="h-4 w-4" />
@@ -238,27 +238,27 @@ export default function SimulationPage() {
         }
       />
 
-      {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</Card> : null}
-      {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{success}</Card> : null}
+      {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">{error}</Card> : null}
+      {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card> : null}
 
       {/* ── РЕЗУЛЬТАТ ───────────────────────────────────────────────────────── */}
       <Card className="relative overflow-hidden border-blue-500/30 bg-gradient-to-br from-blue-500/[0.08] to-indigo-500/[0.03] p-6">
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-blue-300/80">Потенциал клуба / мес</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-blue-200">{formatMoney(Math.round(totalPotentialMonth))} ₸</p>
+            <p className="text-[11px] uppercase tracking-widest text-blue-700 dark:text-blue-300/80">Потенциал клуба / мес</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-blue-700 dark:text-blue-200">{formatMoney(Math.round(totalPotentialMonth))} ₸</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{formatMoney(Math.round(calc.totalPotentialPerDay))} ₸ / день · только время устройств</p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-emerald-300/80">Факт / мес</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-200">{formatMoney(factMonth)} ₸</p>
+            <p className="text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/80">Факт / мес</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(factMonth)} ₸</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               {fact ? `${formatMoney(fact.revenue_per_day)} ₸ / день · по факту за ${fact.window_days} дн (вся выручка)` : 'нет данных'}
             </p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-amber-300/80">Разрыв / мес</p>
-            <p className={`mt-1 text-3xl font-bold tabular-nums ${gapMonth > 0 ? 'text-amber-200' : 'text-emerald-200'}`}>
+            <p className="text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300/80">Разрыв / мес</p>
+            <p className={`mt-1 text-3xl font-bold tabular-nums ${gapMonth > 0 ? 'text-amber-700 dark:text-amber-200' : 'text-emerald-700 dark:text-emerald-200'}`}>
               {gapMonth > 0 ? formatMoney(Math.round(gapMonth)) : `+${formatMoney(Math.round(-gapMonth))}`} ₸
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -269,10 +269,10 @@ export default function SimulationPage() {
 
         {/* Обратный расчёт загрузки */}
         {calc.impliedOccupancy != null && calc.capacityRatePerHour > 0 ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
+          <div className="mt-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-4 py-3 text-sm">
             <span className="text-muted-foreground">Обратный расчёт: </span>
             чтобы выйти на текущую выручку, средняя загрузка должна быть{' '}
-            <span className="font-bold text-blue-200">{calc.impliedOccupancy.toFixed(1)} ч/устройство в сутки</span>.
+            <span className="font-bold text-blue-700 dark:text-blue-200">{calc.impliedOccupancy.toFixed(1)} ч/устройство в сутки</span>.
             {(() => {
               const assumedAvg = calc.totalDevices > 0
                 ? zones.reduce((s, z) => s + n(z.device_count) * n(z.assumed_occupancy_hours), 0) / calc.totalDevices
@@ -296,7 +296,7 @@ export default function SimulationPage() {
 
       {/* ── ПО ЗОНАМ ────────────────────────────────────────────────────────── */}
       {calc.perZone.length > 0 ? (
-        <Card className="border-white/10 bg-white/[0.02] p-5">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
           <h2 className="text-sm font-semibold">Потенциал по зонам</h2>
           <div className="mt-3 h-52">
             <ResponsiveContainer width="100%" height="100%">
@@ -314,7 +314,7 @@ export default function SimulationPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 overflow-auto rounded-xl border border-white/10">
+          <div className="mt-3 overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
             <table className="w-full text-sm">
               <thead className="bg-white/[0.03] text-xs text-muted-foreground">
                 <tr className="text-left">
@@ -329,11 +329,11 @@ export default function SimulationPage() {
               </thead>
               <tbody>
                 {calc.perZone.map((r) => (
-                  <tr key={r.zone.id} className="border-t border-white/[0.06]">
+                  <tr key={r.zone.id} className="border-t border-slate-100 dark:border-white/[0.06]">
                     <td className="px-3 py-2">
                       {r.zone.name || '—'}
                       {r.shareSum > 0 && Math.abs(r.shareSum - 100) > 1 ? (
-                        <span className="ml-1 text-[10px] text-amber-300">микс {Math.round(r.shareSum)}%</span>
+                        <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-300">микс {Math.round(r.shareSum)}%</span>
                       ) : null}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.zone.device_count}</td>
@@ -341,7 +341,7 @@ export default function SimulationPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.blendedRate))}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.perDevicePerDay))}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Math.round(r.potentialPerDay))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-blue-200">{formatMoney(Math.round(r.potentialPerMonth))}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-200">{formatMoney(Math.round(r.potentialPerMonth))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -351,7 +351,7 @@ export default function SimulationPage() {
       ) : null}
 
       {/* ── ТАРИФЫ ──────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Тарифы</h2>
@@ -389,7 +389,7 @@ export default function SimulationPage() {
                 </div>
                 <div className="space-y-1">
                   {idx === 0 ? <Label className="text-[10px]">₸/час</Label> : null}
-                  <div className="grid h-10 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-sm tabular-nums">
+                  <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
                     {formatMoney(Math.round(tariffRate(t)))}
                   </div>
                 </div>
@@ -403,7 +403,7 @@ export default function SimulationPage() {
       </Card>
 
       {/* ── ЗОНЫ ────────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Зоны</h2>
@@ -422,7 +422,7 @@ export default function SimulationPage() {
         ) : (
           <div className="mt-3 space-y-3">
             {zones.map((z) => (
-              <div key={z.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
+              <div key={z.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_130px_100px_120px_auto] gap-2 items-end">
                   <div className="space-y-1">
                     <Label className="text-[10px]">Название зоны</Label>
@@ -480,7 +480,7 @@ export default function SimulationPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-amber-300/80">Сначала добавьте тарифы выше — без них зона не считается.</p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300/80">Сначала добавьте тарифы выше — без них зона не считается.</p>
                 )}
               </div>
             ))}
@@ -495,7 +495,7 @@ export default function SimulationPage() {
         </Button>
       </div>
 
-      <Card className="border-white/10 bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
         <p className="font-medium text-foreground/80">Как это работает</p>
         <p className="mt-1">
           Ты задаёшь структуру (зоны, устройства, тарифы) и грубую загрузку — система считает потенциал выручки.

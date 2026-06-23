@@ -280,7 +280,7 @@ export function AbcAnalysisPageContent() {
           </>
         }
         toolbar={
-          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1 self-start">
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1 self-start">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -380,7 +380,7 @@ export function AbcAnalysisPageContent() {
             </div>
 
             {/* ABC class filter */}
-            <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-1">
               {(['all', 'A', 'B', 'C'] as const).map((cls) => (
                 <button
                   key={cls}
@@ -407,7 +407,7 @@ export function AbcAnalysisPageContent() {
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
               >
                 <option value="">Все категории</option>
                 {categories.map((cat) => (
@@ -423,7 +423,7 @@ export function AbcAnalysisPageContent() {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+        <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
           {error}
         </div>
       )}
@@ -436,7 +436,7 @@ export function AbcAnalysisPageContent() {
               {Array.from({ length: 8 }).map((_, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-4 px-4 py-3 border-b border-white/5"
+                  className="flex items-center gap-4 px-4 py-3 border-b border-slate-200 dark:border-white/5"
                 >
                   <Skeleton className="h-4 w-6" />
                   <Skeleton className="h-5 w-8" />
@@ -454,7 +454,7 @@ export function AbcAnalysisPageContent() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10">
+                  <tr className="border-b border-slate-200 dark:border-white/10">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground w-10">#</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground w-16">
                       ABC класс
@@ -492,7 +492,7 @@ export function AbcAnalysisPageContent() {
                   {filtered.map((item, idx) => (
                     <tr
                       key={item.item_id}
-                      className={`border-b border-white/5 hover:bg-white/[0.02] ${CLASS_ROW[item.abc_class]}`}
+                      className={`border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] ${CLASS_ROW[item.abc_class]}`}
                     >
                       <td className="px-4 py-3 text-muted-foreground text-xs">{idx + 1}</td>
                       <td className="px-4 py-3">
@@ -616,7 +616,7 @@ export function AbcAnalysisPageContent() {
           </DialogHeader>
           {editItem && (
             <form onSubmit={(e) => void handleSavePrice(e)} className="space-y-4">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm">
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
                 <p className="font-medium">{editItem.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Текущая цена: <span className="text-foreground font-semibold">{formatMoney(editItem.sale_price)}</span>

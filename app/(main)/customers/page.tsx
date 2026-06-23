@@ -392,7 +392,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
 
       {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+        <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
           {error}
         </div>
       )}
@@ -414,7 +414,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
               <div ref={tableContainerRef} className="max-h-[min(70vh,40rem)] overflow-auto">
               <table className="w-full min-w-[820px] text-sm">
                 <thead className={adminTableStickyTheadClass}>
-                  <tr className="border-b border-white/10">
+                  <tr className="border-b border-slate-200 dark:border-white/10">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Клиент</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Телефон</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Карта</th>
@@ -437,7 +437,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                     return (
                     <tr
                       key={customer.id}
-                      className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer"
+                      className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] cursor-pointer"
                       onClick={() => setDetailCustomer(customer)}
                     >
                       <td className="px-4 py-3">
@@ -452,7 +452,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                       </td>
                       <td className="px-4 py-3 text-right">
                         {customer.loyalty_points > 0 ? (
-                          <span className="text-amber-400 font-semibold">{customer.loyalty_points.toLocaleString('ru-RU')}</span>
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold">{customer.loyalty_points.toLocaleString('ru-RU')}</span>
                         ) : (
                           <span className="text-muted-foreground">0</span>
                         )}
@@ -470,7 +470,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                               title="История покупок"
                               onClick={() => void openHistory(customer)}
                             >
-                              <Clock className="h-4 w-4 text-sky-400" />
+                              <Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                             </Button>
                           )}
                           {canAdjustPoints && (
@@ -481,7 +481,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                               title="Баллы"
                               onClick={() => { setAdjustCustomer(customer); setPointsDelta(''); setPointsReason(''); setFormError(null) }}
                             >
-                              <Star className="h-4 w-4 text-amber-400" />
+                              <Star className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                             </Button>
                           )}
                           {canEdit && (
@@ -499,7 +499,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-rose-400 hover:text-rose-300"
+                            className="h-8 w-8 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
                             title="Деактивировать"
                             onClick={() => void handleDelete(customer.id)}
                           >
@@ -604,9 +604,9 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
           </DialogHeader>
           {adjustCustomer && (
             <form onSubmit={handleAdjustPoints} className="space-y-4">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm">
+              <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
                 <p className="font-medium">{adjustCustomer.name}</p>
-                <p className="text-muted-foreground">Текущий баланс: <span className="text-amber-400 font-semibold">{adjustCustomer.loyalty_points} баллов</span></p>
+                <p className="text-muted-foreground">Текущий баланс: <span className="text-amber-600 dark:text-amber-400 font-semibold">{adjustCustomer.loyalty_points} баллов</span></p>
               </div>
               <div className="space-y-1.5">
                 <Label>Количество баллов (+ добавить, − снять)</Label>
@@ -647,7 +647,7 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
               Загрузка...
             </div>
           ) : historyError ? (
-            <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
               {historyError}
             </div>
           ) : historyData.length === 0 ? (
@@ -661,10 +661,10 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                 if (sale.card_amount > 0) paymentParts.push(`Карта: ${formatMoney(sale.card_amount)}`)
                 if (sale.online_amount > 0) paymentParts.push(`Онлайн: ${formatMoney(sale.online_amount)}`)
                 return (
-                  <div key={sale.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm">
+                  <div key={sale.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium">{formatDate(sale.created_at)}</span>
-                      <span className="font-bold text-emerald-400">{formatMoney(sale.total_amount)}</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(sale.total_amount)}</span>
                     </div>
                     <div className="space-y-0.5 mb-2">
                       {sale.items.map((item, idx) => (
@@ -676,16 +676,16 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {paymentParts.map((p) => (
-                        <span key={p} className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{p}</span>
+                        <span key={p} className="rounded-full bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[11px]">{p}</span>
                       ))}
                       {sale.discount_amount > 0 && (
-                        <span className="rounded-full bg-rose-500/20 text-rose-300 px-2 py-0.5 text-[11px]">Скидка: {formatMoney(sale.discount_amount)}</span>
+                        <span className="rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 px-2 py-0.5 text-[11px]">Скидка: {formatMoney(sale.discount_amount)}</span>
                       )}
                       {sale.loyalty_points_earned > 0 && (
-                        <span className="rounded-full bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[11px]">+{sale.loyalty_points_earned} баллов</span>
+                        <span className="rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[11px]">+{sale.loyalty_points_earned} баллов</span>
                       )}
                       {sale.loyalty_points_spent > 0 && (
-                        <span className="rounded-full bg-amber-500/10 text-amber-400 px-2 py-0.5 text-[11px]">−{sale.loyalty_points_spent} баллов</span>
+                        <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[11px]">−{sale.loyalty_points_spent} баллов</span>
                       )}
                     </div>
                   </div>
@@ -705,39 +705,39 @@ export default function CustomersPage({ embedded = false }: { embedded?: boolean
           {detailCustomer && (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Телефон</p>
                   <p className="mt-1 font-medium">{detailCustomer.phone || '—'}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Карта</p>
                   <p className="mt-1 font-mono">{detailCustomer.card_number || '—'}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Баллы</p>
-                  <p className="mt-1 font-bold text-amber-400">{detailCustomer.loyalty_points.toLocaleString('ru-RU')}</p>
+                  <p className="mt-1 font-bold text-amber-600 dark:text-amber-400">{detailCustomer.loyalty_points.toLocaleString('ru-RU')}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Потрачено</p>
                   <p className="mt-1 font-bold">{formatMoney(detailCustomer.total_spent)}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Визиты</p>
                   <p className="mt-1 font-medium">{detailCustomer.visits_count}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Добавлен</p>
                   <p className="mt-1 font-medium">{formatDate(detailCustomer.created_at)}</p>
                 </div>
               </div>
               {detailCustomer.email && (
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Email</p>
                   <p className="mt-1">{detailCustomer.email}</p>
                 </div>
               )}
               {detailCustomer.notes && (
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3">
                   <p className="text-xs text-muted-foreground">Заметки</p>
                   <p className="mt-1">{detailCustomer.notes}</p>
                 </div>

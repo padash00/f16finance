@@ -57,15 +57,15 @@ type ProdData = {
 type Company = { id: string; name: string }
 type Tab = 'monitor' | 'best' | 'profit' | 'stock' | 'abc' | 'forecast' | 'points'
 
-const card = 'rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/20'
-const inputCls = 'rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder-slate-500 [color-scheme:dark] focus:border-emerald-400/50 focus:outline-none'
+const card = 'rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
+const inputCls = 'rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-500 [color-scheme:dark] focus:border-emerald-400/50 focus:outline-none'
 const PAY_LABEL: Record<string, string> = { cash: 'Нал', kaspi: 'Безнал', card: 'Карта', online: 'Онлайн', mixed: 'Смеш.' }
 const PAY_CHIP: Record<string, string> = {
-  cash: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
-  kaspi: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
-  card: 'bg-sky-500/15 text-sky-300 border-sky-400/30',
-  online: 'bg-violet-500/15 text-violet-300 border-violet-400/30',
-  mixed: 'bg-slate-500/15 text-slate-300 border-slate-400/30',
+  cash: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-400/30',
+  kaspi: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-400/30',
+  card: 'bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-400/30',
+  online: 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-400/30',
+  mixed: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-400/30',
 }
 const fmt = (n: number) => Number(n || 0).toLocaleString('ru-RU')
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -183,22 +183,22 @@ export default function SalesMonitorPage() {
             {tab === 'monitor' && isToday && (
               <button
                 onClick={() => setLive((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${live ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${live ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-200' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'}`}
               >
                 {live ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                 {live ? 'Авто' : 'Пауза'}
               </button>
             )}
-            <button onClick={() => (tab === 'monitor' ? loadMonitor() : loadProducts())} className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10">
+            <button onClick={() => (tab === 'monitor' ? loadMonitor() : loadProducts())} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/10">
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Обновить
             </button>
           </>
         }
         toolbar={
-          <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-white/10 bg-slate-950/50 p-1">
+          <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950/50 p-1">
             {TABS.map(({ key, label }) => (
-              <button key={key} onClick={() => setTab(key)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${tab === key ? 'bg-white/10 text-white shadow-sm ring-1 ring-white/10' : 'text-slate-400 hover:text-white'}`}>
+              <button key={key} onClick={() => setTab(key)} className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${tab === key ? 'bg-white/10 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
                 {label}
               </button>
             ))}
@@ -213,7 +213,7 @@ export default function SalesMonitorPage() {
           <button
             key={k}
             onClick={() => applyPreset(k)}
-            className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${preset === k ? 'border-sky-400/40 bg-sky-500/15 text-sky-200' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
+            className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${preset === k ? 'border-sky-400/40 bg-sky-500/15 text-sky-700 dark:text-sky-200' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'}`}
           >
             {lbl}
           </button>
@@ -243,7 +243,7 @@ export default function SalesMonitorPage() {
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           {isToday ? (
             <>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${live ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/5'}`}>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${live ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5'}`}>
                 <span className={`h-2 w-2 rounded-full ${live ? 'animate-pulse bg-emerald-400' : 'bg-slate-500'}`} />
                 {live ? 'В реальном времени' : 'На паузе'}
               </span>
@@ -289,7 +289,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
       {/* График по часам + сетка KPI */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className={`${card} p-4 lg:col-span-2`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи {useDaily ? 'по дням' : 'по часам'}</div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи {useDaily ? 'по дням' : 'по часам'}</div>
           {(t!.amount === 0) ? (
             <div className="flex h-44 items-center justify-center text-sm text-slate-500">Нет данных для отображения</div>
           ) : useDaily ? (
@@ -320,7 +320,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
         <div className="grid grid-cols-2 gap-3">
           <Kpi label="Выручка" value={`${fmt(t!.amount)} ₸`} icon={<TrendingUp className="h-4 w-4" />} accent="text-emerald-300" />
           <Kpi label="Чистая прибыль" value={`${fmt(t!.net_profit)} ₸`} icon={<Coins className="h-4 w-4" />} accent={t!.net_profit >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
-          <Kpi label="Средний чек" value={`${fmt(t!.avg_check)} ₸`} icon={<Activity className="h-4 w-4" />} accent="text-white" />
+          <Kpi label="Средний чек" value={`${fmt(t!.avg_check)} ₸`} icon={<Activity className="h-4 w-4" />} accent="text-slate-900 dark:text-white" />
           <Kpi label="За последний час" value={`${fmt(data.last_hour.amount)} ₸`} sub={`${data.last_hour.count} продаж`} icon={<Clock className="h-4 w-4" />} accent="text-amber-300" />
         </div>
       </div>
@@ -328,21 +328,21 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
       {/* Информация о сотрудниках + товары по категориям */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white"><Users className="h-4 w-4 text-violet-300" /> Информация о сотрудниках</div>
+          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white"><Users className="h-4 w-4 text-violet-300" /> Информация о сотрудниках</div>
           {data.by_operator.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+                <thead><tr className="border-b border-slate-200 dark:border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-2 font-medium">ФИО</th>
                   <th className="px-4 py-2 text-right font-medium">Продаж</th>
                   <th className="px-4 py-2 text-right font-medium">Ср. чек</th>
                   <th className="px-4 py-2 text-right font-medium">Сумма</th>
                 </tr></thead>
-                <tbody className="divide-y divide-white/5">{data.by_operator.map((o) => (
-                  <tr key={o.name} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="px-4 py-2.5 text-white">{o.name}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">{o.count}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-400">{fmt(o.avg_check)} ₸</td>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">{data.by_operator.map((o) => (
+                  <tr key={o.name} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                    <td className="px-4 py-2.5 text-slate-900 dark:text-white">{o.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{o.count}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{fmt(o.avg_check)} ₸</td>
                     <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-300">{fmt(o.amount)} ₸</td>
                   </tr>
                 ))}</tbody>
@@ -351,19 +351,19 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
           )}
         </div>
         <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white"><Tags className="h-4 w-4 text-amber-300" /> Товары по категориям</div>
+          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white"><Tags className="h-4 w-4 text-amber-300" /> Товары по категориям</div>
           {data.by_category.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+                <thead><tr className="border-b border-slate-200 dark:border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-2 font-medium">Категория</th>
                   <th className="px-4 py-2 text-right font-medium">Количество</th>
                   <th className="px-4 py-2 text-right font-medium">Сумма</th>
                 </tr></thead>
-                <tbody className="divide-y divide-white/5">{data.by_category.map((c) => (
-                  <tr key={c.name} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="px-4 py-2.5 text-white">{c.name}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">{fmt(c.qty)}</td>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">{data.by_category.map((c) => (
+                  <tr key={c.name} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                    <td className="px-4 py-2.5 text-slate-900 dark:text-white">{c.name}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmt(c.qty)}</td>
                     <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-300">{fmt(c.revenue)} ₸</td>
                   </tr>
                 ))}</tbody>
@@ -375,24 +375,24 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
 
       {/* Способы оплаты */}
       <div className={`${card} overflow-hidden`}>
-        <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">Способы оплаты</div>
+        <div className="border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">Способы оплаты</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+            <thead><tr className="border-b border-slate-200 dark:border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
               <th className="px-4 py-2 font-medium">Способ оплаты</th>
               <th className="px-4 py-2 text-right font-medium">Сумма продаж</th>
               <th className="px-4 py-2 text-right font-medium">Доля</th>
             </tr></thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
               {[
                 { label: 'Наличные', amount: data.payment.cash },
                 { label: 'Безнал (Kaspi)', amount: data.payment.kaspi },
                 { label: 'Карта', amount: data.payment.card },
                 { label: 'Онлайн', amount: data.payment.online },
               ].map((p) => (
-                <tr key={p.label} className="transition-colors hover:bg-white/[0.02]">
-                  <td className="px-4 py-2.5 text-slate-200">{p.label}</td>
-                  <td className="px-4 py-2.5 text-right font-medium tabular-nums text-white">{fmt(p.amount)} ₸</td>
+                <tr key={p.label} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                  <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{p.label}</td>
+                  <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-900 dark:text-white">{fmt(p.amount)} ₸</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{t!.amount > 0 ? Math.round((p.amount / t!.amount) * 100) : 0}%</td>
                 </tr>
               ))}
@@ -404,37 +404,37 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
       {/* Лента продаж + Топ товары */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-white"><Activity className="h-4 w-4 text-emerald-300" /> Лента продаж</span>
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Activity className="h-4 w-4 text-emerald-300" /> Лента продаж</span>
             <span className="text-xs text-slate-500">последние {data.recent.length}</span>
           </div>
-          <div className="max-h-[420px] divide-y divide-white/5 overflow-y-auto">
+          <div className="max-h-[420px] divide-y divide-slate-100 dark:divide-white/5 overflow-y-auto">
             {data.recent.length === 0 ? <div className="px-4 py-12 text-center text-sm text-slate-400">Продаж нет</div> : data.recent.map((s) => {
               const time = new Date(s.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
               const chip = PAY_CHIP[s.payment_method] || PAY_CHIP.mixed
               const isNew = flashIds.has(s.id)
               return (
-                <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isNew ? 'bg-emerald-500/10' : 'hover:bg-white/[0.02]'}`}>
-                  <div className="w-11 shrink-0 text-xs tabular-nums text-slate-400">{time}</div>
+                <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isNew ? 'bg-emerald-500/10' : 'hover:bg-slate-50 dark:hover:bg-white/[0.02]'}`}>
+                  <div className="w-11 shrink-0 text-xs tabular-nums text-slate-500 dark:text-slate-400">{time}</div>
                   <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${chip}`}>{PAY_LABEL[s.payment_method] || s.payment_method}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-white">{s.items.length > 0 ? s.items.join(', ') : `${s.items_count} позиц.`}</div>
+                    <div className="truncate text-sm text-slate-900 dark:text-white">{s.items.length > 0 ? s.items.join(', ') : `${s.items_count} позиц.`}</div>
                     {s.operator_name !== '—' && <div className="text-[11px] text-slate-500">{s.operator_name}</div>}
                   </div>
-                  <div className="shrink-0 text-sm font-semibold tabular-nums text-white">{fmt(s.total_amount)} ₸</div>
+                  <div className="shrink-0 text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{fmt(s.total_amount)} ₸</div>
                 </div>
               )
             })}
           </div>
         </div>
         <div className={`${card} p-4`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Trophy className="h-4 w-4 text-amber-300" /> Топ товары</div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Trophy className="h-4 w-4 text-amber-300" /> Топ товары</div>
           {data.top_items.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="space-y-1.5">{data.top_items.map((it, i) => (
               <div key={it.name} className="flex items-center gap-3 text-sm">
                 <span className="w-5 shrink-0 text-center text-xs text-slate-500">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-slate-200">{it.name}</span>
-                <span className="shrink-0 text-xs text-slate-400">{it.qty} шт</span>
+                <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{it.name}</span>
+                <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{it.qty} шт</span>
                 <span className="w-24 shrink-0 text-right font-medium tabular-nums text-emerald-300">{fmt(it.revenue)} ₸</span>
               </div>
             ))}</div>
@@ -449,9 +449,9 @@ function StatCard({ label, icon, color, amount, count, delta }: { label: string;
   return (
     <div className={`${card} p-4`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-white"><span className={color}>{icon}</span> {label}</div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><span className={color}>{icon}</span> {label}</div>
         {delta != null && (
-          <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium ${delta >= 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
+          <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium ${delta >= 0 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'}`}>
             {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}%
           </span>
         )}
@@ -459,11 +459,11 @@ function StatCard({ label, icon, color, amount, count, delta }: { label: string;
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div>
           <div className="text-[11px] uppercase tracking-wider text-slate-500">Сумма</div>
-          <div className="mt-0.5 text-xl font-bold tabular-nums text-white">{fmt(amount)} ₸</div>
+          <div className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{fmt(amount)} ₸</div>
         </div>
         <div>
           <div className="text-[11px] uppercase tracking-wider text-slate-500">Количество</div>
-          <div className="mt-0.5 text-xl font-bold tabular-nums text-white">{fmt(count)}</div>
+          <div className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{fmt(count)}</div>
         </div>
       </div>
     </div>
@@ -498,13 +498,13 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
           <Kpi label="Возможные продажи" value={`${fmt(data.stock_totals.possible_sales)} ₸`} accent="text-sky-300" icon={<TrendingUp className="h-4 w-4" />} />
           <Kpi label="Возможная прибыль" value={`${fmt(data.stock_totals.possible_profit)} ₸`} accent="text-emerald-300" icon={<Coins className="h-4 w-4" />} />
           <Kpi label="Сумма закупки" value={`${fmt(data.stock_totals.purchase_sum)} ₸`} accent="text-amber-300" icon={<Coins className="h-4 w-4" />} />
-          <Kpi label="Количество товаров" value={`${fmt(data.stock_totals.total_qty)} шт`} accent="text-white" icon={<Package className="h-4 w-4" />} />
+          <Kpi label="Количество товаров" value={`${fmt(data.stock_totals.total_qty)} шт`} accent="text-slate-900 dark:text-white" icon={<Package className="h-4 w-4" />} />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Kpi label="Выручка" value={`${fmt(data.sales_totals.revenue)} ₸`} accent="text-sky-300" icon={<TrendingUp className="h-4 w-4" />} big />
           <Kpi label="Чистая прибыль" value={`${fmt(data.sales_totals.profit)} ₸`} accent="text-emerald-300" icon={<Coins className="h-4 w-4" />} big />
-          <Kpi label="Количество продаж" value={`${fmt(data.sales_totals.qty)} шт`} accent="text-white" icon={<Receipt className="h-4 w-4" />} big />
+          <Kpi label="Количество продаж" value={`${fmt(data.sales_totals.qty)} шт`} accent="text-slate-900 dark:text-white" icon={<Receipt className="h-4 w-4" />} big />
         </div>
       )}
 
@@ -529,15 +529,15 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
       </div>
 
       <div className={`${card} overflow-hidden`}>
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-          <span className="text-sm font-semibold text-white">{TABS.find((x) => x.key === tab)?.label} товары</span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-400">{rows.length}</span>
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-4 py-3">
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{TABS.find((x) => x.key === tab)?.label} товары</span>
+          <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">{rows.length}</span>
         </div>
         {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-slate-400">Нет данных за период</div> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-slate-200 dark:border-white/10 text-left text-[11px] uppercase tracking-wider text-slate-500">
                   {tab === 'stock' ? (
                     <><th className="px-4 py-2.5 font-medium">Артикул</th><th className="px-4 py-2.5 font-medium">Название</th><th className="px-4 py-2.5 font-medium">Категория</th><th className="px-4 py-2.5 text-right font-medium">Остаток</th><th className="px-4 py-2.5 text-right font-medium">Закупка</th><th className="px-4 py-2.5 text-right font-medium">Продажа</th></>
                   ) : (
@@ -545,24 +545,24 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {rows.map((it) => (
-                  <tr key={it.item_id} className="transition-colors hover:bg-white/[0.02]">
+                  <tr key={it.item_id} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     {tab === 'stock' ? (
                       <>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{it.barcode || '—'}</td>
-                        <td className="px-4 py-2.5 text-white">{it.name}</td>
-                        <td className="px-4 py-2.5 text-slate-400">{it.category || '—'}</td>
-                        <td className={`px-4 py-2.5 text-right tabular-nums ${it.stock > 0 ? 'text-emerald-300' : 'text-slate-500'}`}>{fmt(it.stock)} {it.unit}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-300">{fmt(it.purchase_price)} ₸</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-white">{fmt(it.sale_price)} ₸</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{it.barcode || '—'}</td>
+                        <td className="px-4 py-2.5 text-slate-900 dark:text-white">{it.name}</td>
+                        <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.category || '—'}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${it.stock > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500'}`}>{fmt(it.stock)} {it.unit}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmt(it.purchase_price)} ₸</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-900 dark:text-white">{fmt(it.sale_price)} ₸</td>
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-2.5 text-white">{it.name}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{it.barcode || '—'}</td>
-                        <td className="px-4 py-2.5 text-slate-400">{it.category || '—'}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-200">{fmt(it.qty)} {it.unit}</td>
+                        <td className="px-4 py-2.5 text-slate-900 dark:text-white">{it.name}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{it.barcode || '—'}</td>
+                        <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.category || '—'}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">{fmt(it.qty)} {it.unit}</td>
                         <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${tab === 'profit' ? 'text-emerald-300' : 'text-sky-300'}`}>{fmt(tab === 'profit' ? it.profit : it.revenue)} ₸{tab === 'profit' && <span className="ml-1 text-[11px] text-slate-500">{it.margin_percent}%</span>}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-slate-400">{fmt(it.stock)}</td>
                       </>
@@ -585,7 +585,7 @@ function Loading() {
 function Kpi({ label, value, sub, icon, accent, big }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent: string; big?: boolean }) {
   return (
     <div className={`${card} p-4`}>
-      <div className="flex items-center justify-between text-xs uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-slate-400">{icon}</span></div>
+      <div className="flex items-center justify-between text-xs uppercase tracking-wider text-slate-500"><span>{label}</span><span className="text-slate-500 dark:text-slate-400">{icon}</span></div>
       <div className={`mt-1.5 font-bold tabular-nums ${accent} ${big ? 'text-2xl' : 'text-xl'}`}>{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
     </div>

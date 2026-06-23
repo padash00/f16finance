@@ -382,10 +382,10 @@ export default function AddIncomePage() {
         className={`relative cursor-pointer rounded-xl border p-4 flex flex-col items-center justify-center gap-3 transition-all duration-300 ${
           active
             ? `bg-gradient-to-br ${color} border-transparent text-white shadow-lg shadow-purple-500/25 scale-105`
-            : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50 hover:border-gray-600'
+            : 'bg-white dark:bg-gray-800/50 border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-700/50 hover:border-slate-300 dark:hover:border-gray-600'
         }`}
       >
-        <div className={`p-3 rounded-xl ${active ? 'bg-white/20' : 'bg-gray-700/50'}`}>
+        <div className={`p-3 rounded-xl ${active ? 'bg-white/20' : 'bg-slate-100 dark:bg-gray-700/50'}`}>
           <Icon className={`w-6 h-6 ${active ? 'text-white' : ''}`} />
         </div>
         <span className="text-xs font-semibold text-center">{c.name}</span>
@@ -408,8 +408,8 @@ export default function AddIncomePage() {
               </div>
               <Sparkles className="w-6 h-6 text-yellow-400 absolute top-0 right-1/3 animate-bounce" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Успешно сохранено!</h2>
-            <p className="text-gray-400">Перенаправляем в журнал доходов...</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Успешно сохранено!</h2>
+            <p className="text-slate-500 dark:text-gray-400">Перенаправляем в журнал доходов...</p>
           </div>
       </>
     )
@@ -443,12 +443,12 @@ export default function AddIncomePage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 1. Настройки смены */}
-            <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+            <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-blue-500/20 rounded-xl">
                   <Calendar className="w-5 h-5 text-blue-400" />
                 </div>
-                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Настройки смены</h3>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider">Настройки смены</h3>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -460,21 +460,21 @@ export default function AddIncomePage() {
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 rounded-xl py-3 pl-10 pr-4 text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                      className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 pl-10 pr-4 text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="text-xs text-gray-500 uppercase mb-2 block">Смена</label>
-                  <div className="grid grid-cols-2 bg-gray-900 p-1 rounded-xl border border-gray-700">
+                  <div className="grid grid-cols-2 bg-white dark:bg-gray-900 p-1 rounded-xl border border-slate-200 dark:border-gray-700">
                     <button
                       type="button"
                       onClick={() => setShift('day')}
                       className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all ${
-                        shift === 'day' 
-                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg' 
-                          : 'text-gray-400 hover:text-white'
+                        shift === 'day'
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg'
+                          : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <Sun className="w-4 h-4" /> День
@@ -483,9 +483,9 @@ export default function AddIncomePage() {
                       type="button"
                       onClick={() => setShift('night')}
                       className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all ${
-                        shift === 'night' 
-                          ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg' 
-                          : 'text-gray-400 hover:text-white'
+                        shift === 'night'
+                          ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg'
+                          : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <Moon className="w-4 h-4" /> Ночь
@@ -498,7 +498,7 @@ export default function AddIncomePage() {
               <div className="mt-6">
                 <label className="text-xs text-gray-500 uppercase mb-3 block">Точка (Компания)</label>
                 {loadingMeta ? (
-                  <div className="text-sm text-gray-400 animate-pulse">Загрузка списка...</div>
+                  <div className="text-sm text-slate-500 dark:text-gray-400 animate-pulse">Загрузка списка...</div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {companies.map((c) => (
@@ -512,7 +512,7 @@ export default function AddIncomePage() {
               <div className="mt-6">
                 <label className="text-xs text-gray-500 uppercase mb-3 block">Оператор смены</label>
                 {loadingMeta ? (
-                  <div className="text-xs text-gray-400">Загрузка операторов...</div>
+                  <div className="text-xs text-slate-500 dark:text-gray-400">Загрузка операторов...</div>
                 ) : operators.length === 0 ? (
                   <p className="text-xs text-yellow-500">Операторов нет. Добавьте их в разделе «Операторы».</p>
                 ) : (
@@ -527,7 +527,7 @@ export default function AddIncomePage() {
                           className={`px-4 py-2.5 rounded-xl text-sm font-medium border flex items-center gap-2 transition-all ${
                             active
                               ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white border-transparent shadow-lg shadow-green-500/25'
-                              : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white'
+                              : 'bg-white dark:bg-gray-900 border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600 hover:text-slate-900 dark:hover:text-white'
                           }`}
                         >
                           <UserCircle2 className="w-4 h-4" />
@@ -541,7 +541,7 @@ export default function AddIncomePage() {
             </Card>
 
             {/* 2. Суммы */}
-            <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm relative overflow-hidden">
+            <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm relative overflow-hidden">
               <div className="absolute -right-20 -top-20 opacity-[0.03] pointer-events-none">
                 {isExtra ? <Gamepad2 className="w-64 h-64" /> : <Wallet className="w-64 h-64" />}
               </div>
@@ -551,11 +551,11 @@ export default function AddIncomePage() {
                   {isExtra ? <Gamepad2 className="w-5 h-5 text-pink-400" /> : <Wallet className="w-5 h-5 text-green-400" />}
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider">
                     {isExtra ? 'Выручка по зонам (Extra)' : 'Суммы выручки'}
                   </h3>
                   {previewTotal > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
                       Предварительная сумма: <span className="text-purple-400 font-bold">{formatMoney(previewTotal)}</span>
                     </p>
                   )}
@@ -565,17 +565,17 @@ export default function AddIncomePage() {
               {isExtra ? (
                 <div className="space-y-6">
                   {/* PS5 */}
-                  <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-900/20 to-gray-900/50 p-5">
+                  <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-50 to-slate-50 dark:from-purple-900/20 dark:to-gray-900/50 p-5">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="p-2 bg-purple-500/20 rounded-xl">
                         <Gamepad2 className="w-5 h-5 text-purple-400" />
                       </div>
-                      <span className="font-semibold text-white">PlayStation 5</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">PlayStation 5</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs text-gray-400 flex items-center gap-2">
+                        <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                           <Wallet className="w-4 h-4 text-amber-400" /> Наличные
                         </label>
                         <div className="relative">
@@ -586,14 +586,14 @@ export default function AddIncomePage() {
                             min="0"
                             value={ps5Cash}
                             onChange={(e) => setPs5Cash(e.target.value)}
-                            className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-xs text-gray-400 flex items-center gap-2">
+                        <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                           <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный QR / POS
                         </label>
                         <div className="relative">
@@ -604,7 +604,7 @@ export default function AddIncomePage() {
                             min="0"
                             value={ps5Безналичный}
                             onChange={(e) => setPs5Безналичный(e.target.value)}
-                            className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -613,17 +613,17 @@ export default function AddIncomePage() {
                   </div>
 
                   {/* VR */}
-                  <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-900/20 to-gray-900/50 p-5">
+                  <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-50 to-slate-50 dark:from-cyan-900/20 dark:to-gray-900/50 p-5">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="p-2 bg-cyan-500/20 rounded-xl">
                         <Eye className="w-5 h-5 text-cyan-400" />
                       </div>
-                      <span className="font-semibold text-white">VR Зона</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">VR Зона</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs text-gray-400 flex items-center gap-2">
+                        <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                           <Wallet className="w-4 h-4 text-amber-400" /> Наличные
                         </label>
                         <div className="relative">
@@ -634,14 +634,14 @@ export default function AddIncomePage() {
                             min="0"
                             value={vrCash}
                             onChange={(e) => setVrCash(e.target.value)}
-                            className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-xs text-gray-400 flex items-center gap-2">
+                        <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                           <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный QR / POS
                         </label>
                         <div className="relative">
@@ -652,7 +652,7 @@ export default function AddIncomePage() {
                             min="0"
                             value={vrKaspi}
                             onChange={(e) => setVrKaspi(e.target.value)}
-                            className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                         </div>
@@ -663,7 +663,7 @@ export default function AddIncomePage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-400 flex items-center gap-2">
+                    <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                       <Wallet className="w-4 h-4 text-amber-400" /> Наличные (Cash)
                     </label>
                     <div className="relative">
@@ -674,14 +674,14 @@ export default function AddIncomePage() {
                         min="0"
                         value={cash}
                         onChange={(e) => setCash(e.target.value)}
-                        className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-400 flex items-center gap-2">
+                    <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-blue-400" /> Безналичный POS / переводы
                     </label>
                     <div className="relative">
@@ -692,7 +692,7 @@ export default function AddIncomePage() {
                         min="0"
                         value={kaspi}
                         onChange={(e) => setKaspi(e.target.value)}
-                        className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                        className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -700,7 +700,7 @@ export default function AddIncomePage() {
 
                   {showOnline && (
                     <div className="sm:col-span-2 space-y-2">
-                      <label className="text-xs text-gray-400 flex items-center gap-2">
+                      <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                         <Smartphone className="w-4 h-4 text-pink-400" /> Безналичный Online (Senet)
                       </label>
                       <div className="relative">
@@ -711,7 +711,7 @@ export default function AddIncomePage() {
                           min="0"
                           value={online}
                           onChange={(e) => setOnline(e.target.value)}
-                          className="w-full text-lg bg-gray-900 border border-gray-700 rounded-xl py-4 px-4 text-white focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all"
+                          className="w-full text-lg bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-4 px-4 text-slate-900 dark:text-white focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                       </div>
@@ -719,7 +719,7 @@ export default function AddIncomePage() {
                   )}
 
                   <div className="sm:col-span-2 space-y-2">
-                    <label className="text-xs text-gray-400 flex items-center gap-2">
+                    <label className="text-xs text-slate-500 dark:text-gray-400 flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-purple-400" /> Карта (если используется)
                     </label>
                     <div className="relative">
@@ -730,7 +730,7 @@ export default function AddIncomePage() {
                         min="0"
                         value={card}
                         onChange={(e) => setCard(e.target.value)}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-xl py-3 px-4 text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                        className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₸</span>
                     </div>
@@ -745,7 +745,7 @@ export default function AddIncomePage() {
                   rows={3}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl py-3 px-4 text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all resize-none"
+                  className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 px-4 text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all resize-none"
                   placeholder="Например: предоплата за бронь, акция, скидка..."
                 />
               </div>
@@ -753,14 +753,14 @@ export default function AddIncomePage() {
 
             {/* Итоговая карточка */}
             {previewTotal > 0 && (
-              <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 backdrop-blur-sm">
+              <Card className="p-6 border-0 bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-purple-900/30 dark:via-gray-900 dark:to-blue-900/30 backdrop-blur-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-3 bg-purple-500/20 rounded-xl">
                       <TrendingUp className="w-6 h-6 text-purple-400" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-400">Итого к сохранению</p>
+                      <p className="text-sm text-slate-500 dark:text-gray-400">Итого к сохранению</p>
                       <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
                         {formatMoney(previewTotal)}
                       </p>
@@ -768,7 +768,7 @@ export default function AddIncomePage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-gray-500">{isExtra ? '2 записи (PS5 + VR)' : '1 запись'}</p>
-                    <p className="text-xs text-gray-400">{date} • {shift === 'day' ? 'День' : 'Ночь'}</p>
+                    <p className="text-xs text-slate-500 dark:text-gray-400">{date} • {shift === 'day' ? 'День' : 'Ночь'}</p>
                   </div>
                 </div>
               </Card>
@@ -777,10 +777,10 @@ export default function AddIncomePage() {
             {/* Кнопки */}
             <div className="flex gap-4 pt-4">
               <Link href="/income" className="flex-1">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="w-full h-14 border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300 rounded-xl"
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-14 border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300 rounded-xl"
                 >
                   Отмена
                 </Button>

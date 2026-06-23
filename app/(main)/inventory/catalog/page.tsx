@@ -338,14 +338,14 @@ function ItemForm({
 
         {/* Результат распознавания по штрихкоду */}
         {recog.error ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{recog.error}</div>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">{recog.error}</div>
         ) : null}
         {recog.data?.found === 'local' ? (
-          <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-300">
+          <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
             Такой штрихкод уже есть в каталоге: <span className="font-medium">{recog.data.name}</span>{recog.data.category_name ? ` · ${recog.data.category_name}` : ''}.
           </div>
         ) : recog.data?.found === 'none' ? (
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
             Не нашли в открытых базах{recog.data.country ? ` (код: ${recog.data.country})` : ''}. Заполните вручную — товар сохранится в каталоге.
           </div>
         ) : recog.data?.found === 'external' || recog.data?.found === 'applied' ? (
@@ -355,14 +355,14 @@ function ItemForm({
               <img src={recog.data.image_url} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
             ) : null}
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-emerald-200">{recog.data.name}</div>
-              <div className="mt-0.5 text-[11px] text-emerald-300/80">
+              <div className="text-sm font-medium text-emerald-700 dark:text-emerald-200">{recog.data.name}</div>
+              <div className="mt-0.5 text-[11px] text-emerald-600/80 dark:text-emerald-300/80">
                 {[recog.data.brand, recog.data.category_name, recog.data.country].filter(Boolean).join(' · ') || '—'}
               </div>
               {recog.data.description ? <div className="mt-1 text-[11px] text-muted-foreground">{recog.data.description}</div> : null}
             </div>
             {recog.data.found === 'applied' ? (
-              <span className="shrink-0 self-center text-[11px] text-emerald-300">подставлено ✓</span>
+              <span className="shrink-0 self-center text-[11px] text-emerald-600 dark:text-emerald-300">подставлено ✓</span>
             ) : (
               <Button type="button" size="sm" variant="outline" className="shrink-0 self-center" onClick={applySuggestion}>Подставить</Button>
             )}
@@ -841,9 +841,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       {!loading && items.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {/* Позиций */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <Tag className="w-3.5 h-3.5 text-slate-400" />
+              <Tag className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               Позиций
             </div>
             <div className="text-xl font-bold text-foreground">{items.length.toLocaleString('ru-RU')}</div>
@@ -854,11 +854,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
 
           {/* Склад — закуп */}
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-blue-300/70 mb-1">
+            <div className="flex items-center gap-2 text-xs text-blue-700/70 dark:text-blue-300/70 mb-1">
               <Warehouse className="w-3.5 h-3.5" />
               Склад по закупу
             </div>
-            <div className="text-xl font-bold text-blue-300">
+            <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
               {Math.round(totals.warehousePurchase).toLocaleString('ru-RU')} ₸
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">{totals.warehouseQty.toLocaleString('ru-RU')} ед.</div>
@@ -866,11 +866,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
 
           {/* Склад — продажа */}
           <div className="rounded-2xl border border-blue-400/20 bg-blue-400/[0.04] px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-blue-200/70 mb-1">
+            <div className="flex items-center gap-2 text-xs text-blue-700/70 dark:text-blue-200/70 mb-1">
               <TrendingUp className="w-3.5 h-3.5" />
               Склад по продаже
             </div>
-            <div className="text-xl font-bold text-blue-200">
+            <div className="text-xl font-bold text-blue-700 dark:text-blue-200">
               {Math.round(totals.warehouseSale).toLocaleString('ru-RU')} ₸
             </div>
             <div className="text-[11px] text-emerald-400/80 mt-0.5">
@@ -880,11 +880,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
 
           {/* Витрина — закуп */}
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-amber-300/70 mb-1">
+            <div className="flex items-center gap-2 text-xs text-amber-700/70 dark:text-amber-300/70 mb-1">
               <Store className="w-3.5 h-3.5" />
               Витрина по закупу
             </div>
-            <div className="text-xl font-bold text-amber-300">
+            <div className="text-xl font-bold text-amber-700 dark:text-amber-300">
               {Math.round(totals.showcasePurchase).toLocaleString('ru-RU')} ₸
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">{totals.showcaseQty.toLocaleString('ru-RU')} ед.</div>
@@ -892,11 +892,11 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
 
           {/* Всего — продажа */}
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-emerald-300/70 mb-1">
+            <div className="flex items-center gap-2 text-xs text-emerald-700/70 dark:text-emerald-300/70 mb-1">
               <ShoppingCart className="w-3.5 h-3.5" />
               Итого по продаже
             </div>
-            <div className="text-xl font-bold text-emerald-300">
+            <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
               {Math.round(totals.totalSale).toLocaleString('ru-RU')} ₸
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">

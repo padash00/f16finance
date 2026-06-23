@@ -84,17 +84,17 @@ function SectionToggle({
   badge?: string
 }) {
   return (
-    <Card className="bg-slate-900/80 border-slate-800 overflow-hidden">
+    <Card className="bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-800/30 transition-colors"
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-slate-800 rounded-lg">
-            <Icon className="w-4 h-4 text-slate-400" />
+          <div className="p-2 bg-white dark:bg-slate-800 rounded-lg">
+            <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </div>
-          <span className="text-sm font-semibold text-white">{title}</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{title}</span>
           {badge && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
               {badge}
@@ -107,7 +107,7 @@ function SectionToggle({
           <ChevronDown className="w-4 h-4 text-slate-500" />
         )}
       </button>
-      {open && <div className="px-5 pb-5 border-t border-slate-800/60 pt-4">{children}</div>}
+      {open && <div className="px-5 pb-5 border-t border-slate-200/60 dark:border-slate-800/60 pt-4">{children}</div>}
     </Card>
   )
 }
@@ -321,7 +321,7 @@ create table if not exists telegram_allowed_users (
               <button
                 onClick={() => { loadStatus(); loadUsers(); loadStaff() }}
                 disabled={statusLoading}
-                className="p-2 rounded-xl border border-slate-700 bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <RefreshCw className={`w-4 h-4 ${statusLoading ? 'animate-spin' : ''}`} />
               </button>
@@ -344,16 +344,16 @@ create table if not exists telegram_allowed_users (
                 </div>
 
                 {status?.botInfo && (
-                  <div className="flex items-center gap-2 text-sm text-slate-300">
+                  <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                     Бот:{' '}
-                    <span className="text-white font-medium">@{status.botInfo.username}</span>
+                    <span className="text-slate-900 dark:text-white font-medium">@{status.botInfo.username}</span>
                     <span className="text-slate-500">({status.botInfo.first_name})</span>
                   </div>
                 )}
 
                 {status?.webhookInfo?.url && (
-                  <div className="text-xs text-slate-500 bg-slate-800/50 rounded-lg p-3 font-mono break-all">
+                  <div className="text-xs text-slate-500 bg-white dark:bg-slate-800/50 rounded-lg p-3 font-mono break-all">
                     {status.webhookInfo.url}
                   </div>
                 )}
@@ -367,12 +367,12 @@ create table if not exists telegram_allowed_users (
 
                 {!status?.hasToken && (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-slate-400 space-y-1">
-                    <p className="text-amber-300 font-semibold text-sm mb-2">Как настроить:</p>
-                    <p>1. Создайте бота через <strong className="text-white">@BotFather</strong> → получите токен</p>
-                    <p>2. Добавьте в Vercel env: <code className="bg-slate-800 px-1 rounded text-slate-300">TELEGRAM_BOT_TOKEN</code></p>
+                    <p className="text-amber-700 dark:text-amber-300 font-semibold text-sm mb-2">Как настроить:</p>
+                    <p>1. Создайте бота через <strong className="text-slate-900 dark:text-white">@BotFather</strong> → получите токен</p>
+                    <p>2. Добавьте в Vercel env: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-700 dark:text-slate-300">TELEGRAM_BOT_TOKEN</code></p>
                     <p>3. Создайте канал/группу, добавьте бота как админа</p>
-                    <p>4. Добавьте в Vercel env: <code className="bg-slate-800 px-1 rounded text-slate-300">TELEGRAM_CHAT_ID</code></p>
-                    <p>5. Опционально: <code className="bg-slate-800 px-1 rounded text-slate-300">TELEGRAM_WEBHOOK_SECRET</code> — любая строка</p>
+                    <p>4. Добавьте в Vercel env: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-700 dark:text-slate-300">TELEGRAM_CHAT_ID</code></p>
+                    <p>5. Опционально: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-700 dark:text-slate-300">TELEGRAM_WEBHOOK_SECRET</code> — любая строка</p>
                     <p>6. Зарегистрируйте вебхук в разделе ниже</p>
                   </div>
                 )}
@@ -408,22 +408,22 @@ create table if not exists telegram_allowed_users (
 
             {/* Add user form */}
             {can('telegram.add_user') && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-4 mb-4 space-y-3">
-              <p className="text-xs font-medium text-slate-300">Добавить пользователя</p>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-4 mb-4 space-y-3">
+              <p className="text-xs font-medium text-slate-700 dark:text-slate-300">Добавить пользователя</p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={newUserId}
                   onChange={(e) => setNewUserId(e.target.value)}
                   placeholder="Telegram User ID (числовой)"
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-amber-500/50"
+                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
                 />
                 <input
                   type="text"
                   value={newUserLabel}
                   onChange={(e) => setNewUserLabel(e.target.value)}
                   placeholder="Имя (необязательно)"
-                  className="w-40 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-amber-500/50"
+                  className="w-40 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -469,9 +469,9 @@ create table if not exists telegram_allowed_users (
                 {users.map((user) => (
                   <div
                     key={user.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/50"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50"
                   >
-                    <div className={`p-1.5 rounded-lg ${user.can_finance ? 'bg-emerald-500/10' : 'bg-slate-700'}`}>
+                    <div className={`p-1.5 rounded-lg ${user.can_finance ? 'bg-emerald-500/10' : 'bg-slate-100 dark:bg-slate-700'}`}>
                       {user.can_finance ? (
                         <UserCheck className="w-4 h-4 text-emerald-400" />
                       ) : (
@@ -479,7 +479,7 @@ create table if not exists telegram_allowed_users (
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white font-medium truncate">
+                      <p className="text-sm text-slate-900 dark:text-white font-medium truncate">
                         {user.label || `ID: ${user.telegram_user_id}`}
                       </p>
                       <p className="text-xs text-slate-500 font-mono">{user.telegram_user_id}</p>
@@ -489,7 +489,7 @@ create table if not exists telegram_allowed_users (
                         className={`text-xs px-2 py-0.5 rounded-full border ${
                           user.can_finance
                             ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                            : 'bg-slate-700 border-slate-600 text-slate-500'
+                            : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500'
                         }`}
                       >
                         {user.can_finance ? 'Финансы' : 'Нет доступа'}
@@ -497,7 +497,7 @@ create table if not exists telegram_allowed_users (
                       {can('telegram.toggle_finance') && (
                         <button
                           onClick={() => handleToggleFinance(user)}
-                          className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
                           title={user.can_finance ? 'Отключить доступ' : 'Включить доступ'}
                         >
                           {user.can_finance ? (
@@ -547,9 +547,9 @@ create table if not exists telegram_allowed_users (
                 {staffMembers.map((member) => {
                   const isEditing = editingStaffId === member.id
                   return (
-                    <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                    <div key={member.id} className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white font-medium truncate">{member.full_name}</p>
+                        <p className="text-sm text-slate-900 dark:text-white font-medium truncate">{member.full_name}</p>
                         <p className="text-xs text-slate-500">{getStaffRoleLabel(member.role)}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -560,7 +560,7 @@ create table if not exists telegram_allowed_users (
                               value={editingTgId}
                               onChange={(e) => setEditingTgId(e.target.value)}
                               placeholder="ID пользователя Telegram"
-                              className="w-36 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-xs text-slate-200 outline-none focus:border-amber-500/50"
+                              className="w-36 px-2 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-amber-500/50"
                             />
                             <button
                               onClick={async () => {
@@ -587,7 +587,7 @@ create table if not exists telegram_allowed_users (
                             </button>
                             <button
                               onClick={() => setEditingStaffId(null)}
-                              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
                             >
                               <XCircle className="w-3.5 h-3.5" />
                             </button>
@@ -600,7 +600,7 @@ create table if not exists telegram_allowed_users (
                             {can('telegram.edit_staff_telegram') && (
                               <button
                                 onClick={() => { setEditingStaffId(member.id); setEditingTgId(member.telegram_chat_id || '') }}
-                                className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+                                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
                               >
                                 <Settings2 className="w-3.5 h-3.5" />
                               </button>
@@ -632,7 +632,7 @@ create table if not exists telegram_allowed_users (
                   value={webhookUrl}
                   onChange={(e) => setWebhookUrl(e.target.value)}
                   placeholder="https://your-domain.com/api/telegram/webhook"
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-amber-500/50"
+                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none focus:border-amber-500/50"
                 />
                 {can('telegram.setup_webhook') && (
                   <button
@@ -703,7 +703,7 @@ create table if not exists telegram_allowed_users (
                 { cmd: '#123 принял', desc: 'Ответ по задаче — взял в работу', locked: false },
                 { cmd: '#123 готово', desc: 'Ответ по задаче — завершил', locked: false },
               ].map(({ cmd, desc, locked }) => (
-                <div key={cmd} className="flex items-center gap-3 py-1.5 border-b border-slate-800/40 last:border-0">
+                <div key={cmd} className="flex items-center gap-3 py-1.5 border-b border-slate-200/60 dark:border-slate-800/40 last:border-0">
                   <code className="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono w-32 shrink-0 truncate">
                     {cmd}
                   </code>
@@ -727,12 +727,12 @@ create table if not exists telegram_allowed_users (
               Выполните этот SQL в Supabase → SQL Editor для создания таблицы разрешённых пользователей.
             </p>
             <div className="relative">
-              <pre className="text-xs text-slate-300 bg-slate-800/60 rounded-xl p-4 overflow-x-auto font-mono leading-relaxed border border-slate-700">
+              <pre className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4 overflow-x-auto font-mono leading-relaxed border border-slate-200 dark:border-slate-700">
                 {SQL_TEXT}
               </pre>
               <button
                 onClick={() => navigator.clipboard.writeText(SQL_TEXT)}
-                className="absolute top-3 right-3 p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white transition-colors"
+                className="absolute top-3 right-3 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                 title="Скопировать"
               >
                 <Copy className="w-3.5 h-3.5" />

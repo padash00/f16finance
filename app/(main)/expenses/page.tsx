@@ -1088,7 +1088,7 @@ export default function ExpensesPage() {
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
                       activeFiltersCount > 0
                         ? 'bg-red-500/20 border-red-500/30 text-red-400'
-                        : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-red-500/50'
+                        : 'bg-white dark:bg-gray-800/50 border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300 hover:border-red-500/50'
                     }`}
                   >
                     <Filter className="w-4 h-4" />
@@ -1102,10 +1102,10 @@ export default function ExpensesPage() {
 
                   <button
                     onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-red-500/50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800/50 rounded-xl border border-slate-200 dark:border-gray-700 hover:border-red-500/50 transition-colors"
                   >
                     <CalendarDays className="w-4 h-4 text-red-400" />
-                    <span className="text-gray-300 text-sm">{periodLabel}</span>
+                    <span className="text-slate-700 dark:text-gray-300 text-sm">{periodLabel}</span>
                     <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -1115,7 +1115,7 @@ export default function ExpensesPage() {
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
                         includeExtraInTotals
                           ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
-                          : 'bg-gray-800/50 border-gray-700 text-gray-400'
+                          : 'bg-white dark:bg-gray-800/50 border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400'
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-gray-500'}`} />
@@ -1124,13 +1124,13 @@ export default function ExpensesPage() {
                   )}
 
                   {canExportExpense && (
-                    <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                    <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300">
                       <Download className="w-4 h-4 mr-1" /> Экспорт
                     </Button>
                   )}
 
                   <Link href="/expenses/analysis">
-                    <Button variant="outline" size="sm" className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                    <Button variant="outline" size="sm" className="border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300">
                       <BarChart3 className="w-4 h-4 mr-1" /> Анализ
                     </Button>
                   </Link>
@@ -1153,7 +1153,7 @@ export default function ExpensesPage() {
               <>
               {/* Calendar */}
               {isCalendarOpen && (
-                <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
+                <div className="mt-4 p-4 bg-white dark:bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
                   <div className="flex flex-wrap gap-2 mb-4">
                     {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
                       <button
@@ -1162,7 +1162,7 @@ export default function ExpensesPage() {
                         className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
                           activePreset === p
                             ? 'bg-red-500 text-white shadow-lg shadow-red-500/25'
-                            : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                            : 'bg-slate-100 dark:bg-gray-800 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-gray-700'
                         }`}
                       >
                         {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
@@ -1176,7 +1176,7 @@ export default function ExpensesPage() {
                         type="date"
                         value={dateFrom}
                         onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-red-500 outline-none"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 outline-none"
                       />
                     </div>
                     <div>
@@ -1185,7 +1185,7 @@ export default function ExpensesPage() {
                         type="date"
                         value={dateTo}
                         onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-red-500 outline-none"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 outline-none"
                       />
                     </div>
                   </div>
@@ -1193,16 +1193,16 @@ export default function ExpensesPage() {
               )}
 
               {error ? (
-                <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
                   {error}
                 </div>
               ) : null}
 
               {/* Filters Panel */}
               {showFilters && (
-                <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
+                <div className="mt-4 p-4 bg-white dark:bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
                       <Filter className="w-4 h-4 text-red-400" />
                       Фильтры данных
                     </h3>
@@ -1216,7 +1216,7 @@ export default function ExpensesPage() {
                           Сбросить все
                         </button>
                       )}
-                      <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-white">
+                      <button onClick={() => setShowFilters(false)} className="text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white">
                         <X className="w-5 h-5" />
                       </button>
                     </div>
@@ -1231,7 +1231,7 @@ export default function ExpensesPage() {
                       <select
                         value={companyFilter}
                         onChange={(e) => setCompanyFilter(e.target.value)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                       >
                         <option value="all">Все компании</option>
                         {companies.map(c => (
@@ -1248,7 +1248,7 @@ export default function ExpensesPage() {
                       <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                       >
                         <option value="all">Все категории</option>
                         {categories.map(c => (
@@ -1265,7 +1265,7 @@ export default function ExpensesPage() {
                       <select
                         value={payFilter}
                         onChange={(e) => setPayFilter(e.target.value as PayFilter)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                       >
                         <option value="all">Любая</option>
                         <option value="cash">Наличные 💵</option>
@@ -1281,7 +1281,7 @@ export default function ExpensesPage() {
                       <select
                         value={sortMode}
                         onChange={(e) => setSortMode(e.target.value as SortMode)}
-                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                       >
                         <option value="date_desc">Дата ↓</option>
                         <option value="date_asc">Дата ↑</option>
@@ -1300,7 +1300,7 @@ export default function ExpensesPage() {
                           <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as ExpenseStatusFilter)}
-                            className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                            className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                           >
                             <option value="all">Все статусы</option>
                             <option value="confirmed">Подтвержден</option>
@@ -1318,7 +1318,7 @@ export default function ExpensesPage() {
                           <select
                             value={documentFilter}
                             onChange={(e) => setDocumentFilter(e.target.value as DocumentKindFilter)}
-                            className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                            className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                           >
                             <option value="all">Любой</option>
                             <option value="receipt">Чек</option>
@@ -1343,13 +1343,13 @@ export default function ExpensesPage() {
                         placeholder="Введите текст для поиска..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-gray-800 text-white pl-10 pr-4 py-2.5 rounded-lg border border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
+                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-sm"
                       />
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
                       {searchTerm && (
                         <button
                           onClick={() => setSearchTerm('')}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1361,42 +1361,42 @@ export default function ExpensesPage() {
                   </div>
 
                   {activeFiltersCount > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-800">
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-gray-800">
                       <span className="text-xs text-gray-500">Активные фильтры:</span>
                       {companyFilter !== 'all' && (
                         <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-lg flex items-center gap-1">
                           Компания: {companyName(companyFilter)}
-                          <button onClick={() => setCompanyFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setCompanyFilter('all')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {categoryFilter !== 'all' && (
                         <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-lg flex items-center gap-1">
                           Категория: {categoryFilter}
-                          <button onClick={() => setCategoryFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setCategoryFilter('all')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {payFilter !== 'all' && (
                         <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
                           Оплата: {payFilter === 'cash' ? 'Наличные' : cashLabels.providerName}
-                          <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setPayFilter('all')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {canManageExpense && statusFilter !== 'all' && (
-                        <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-purple-500/20 text-purple-700 dark:text-purple-300 text-xs rounded-lg flex items-center gap-1">
                           Статус: {statusLabelByValue[statusFilter as Exclude<ExpenseStatusFilter, 'all'>]}
-                          <button onClick={() => setStatusFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setStatusFilter('all')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {canManageExpense && documentFilter !== 'all' && (
-                        <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg flex items-center gap-1">
                           Документ: {documentLabelByValue[documentFilter as Exclude<DocumentKindFilter, 'all'>]}
-                          <button onClick={() => setDocumentFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setDocumentFilter('all')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {searchTerm && (
-                        <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-lg flex items-center gap-1">
+                        <span className="px-2 py-1 bg-slate-100 dark:bg-gray-700 text-slate-700 dark:text-gray-300 text-xs rounded-lg flex items-center gap-1">
                           Поиск: "{searchTerm}"
-                          <button onClick={() => setSearchTerm('')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setSearchTerm('')} className="hover:text-slate-900 dark:hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                     </div>
@@ -1408,7 +1408,7 @@ export default function ExpensesPage() {
           />
 
           {/* Tabs */}
-          <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+          <div className="flex gap-2 p-1 bg-white dark:bg-gray-800/50 rounded-xl w-fit border border-slate-200 dark:border-gray-700">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
             <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<BarChart3 className="w-4 h-4" />} label="Аналитика" />
             <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')} icon={<Clock className="w-4 h-4" />} label="Список" />
@@ -1456,15 +1456,15 @@ export default function ExpensesPage() {
 
       {isClient && editingExpense ? createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">Редактирование расхода</h2>
-                <p className="mt-1 text-sm text-slate-400">Изменения сохранятся сразу в базе и попадут в аудит.</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Изменения сохранятся сразу в базе и попадут в аудит.</p>
               </div>
               <button
                 onClick={closeExpenseEditor}
-                className="rounded-xl border border-white/10 p-2 text-slate-400 transition hover:border-white/20 hover:text-white"
+                className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-slate-500 dark:text-slate-400 transition hover:border-slate-300 dark:hover:border-white/20 hover:text-slate-900 dark:hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1477,7 +1477,7 @@ export default function ExpensesPage() {
                   type="date"
                   value={editExpenseDate}
                   onChange={(e) => setEditExpenseDate(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
                 />
               </div>
               <div className="space-y-2">
@@ -1485,7 +1485,7 @@ export default function ExpensesPage() {
                 <select
                   value={editExpenseCompanyId || ''}
                   onChange={(e) => setEditExpenseCompanyId(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
                 >
                   <option value="">— выберите компанию —</option>
                   {companies.map((company) => (
@@ -1500,7 +1500,7 @@ export default function ExpensesPage() {
                 <select
                   value={editExpenseOperatorId}
                   onChange={(e) => setEditExpenseOperatorId(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
                 >
                   <option value="none">Без оператора</option>
                   {operators.map((operator) => (
@@ -1515,7 +1515,7 @@ export default function ExpensesPage() {
                 <select
                   value={editExpenseCategory}
                   onChange={(e) => setEditExpenseCategory(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50 [color-scheme:dark]"
+                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50 dark:[color-scheme:dark]"
                 >
                   <option value="">— Без категории —</option>
                   {allCategories.map((c) => (
@@ -1529,7 +1529,7 @@ export default function ExpensesPage() {
                   inputMode="numeric"
                   value={editExpenseCashDraft}
                   onChange={(e) => setEditExpenseCashDraft(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
                   placeholder="0"
                 />
               </div>
@@ -1539,7 +1539,7 @@ export default function ExpensesPage() {
                   inputMode="numeric"
                   value={editExpenseKaspiDraft}
                   onChange={(e) => setEditExpenseKaspiDraft(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
                   placeholder="0"
                 />
               </div>
@@ -1551,13 +1551,13 @@ export default function ExpensesPage() {
                 value={editExpenseCommentDraft}
                 onChange={(e) => setEditExpenseCommentDraft(e.target.value)}
                 rows={3}
-                className="w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-3 text-sm text-white outline-none focus:border-red-500/50"
+                className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
                 placeholder="Комментарий к расходу"
               />
             </div>
 
             {/* Attachment section */}
-            <div className="mt-3 border-t border-gray-800 pt-3">
+            <div className="mt-3 border-t border-slate-200 dark:border-gray-800 pt-3">
               <p className="text-xs text-gray-500 mb-2">Вложения (фото чеков, накладные)</p>
               {editingExpense ? (() => {
                 const urls = editingExpense.attachments?.length
@@ -1583,7 +1583,7 @@ export default function ExpensesPage() {
                       )}
                     </div>
                     {canImportFile && (
-                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 w-fit">
                         <Upload className="w-3.5 h-3.5" />
                         <span>Добавить ещё</span>
                         <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
@@ -1591,7 +1591,7 @@ export default function ExpensesPage() {
                     )}
                   </div>
                 ) : canImportFile ? (
-                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 w-fit">
                     <Upload className="w-3.5 h-3.5" />
                     <span>Прикрепить файл или несколько файлов</span>
                     <input type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleAttachmentUpload} />
@@ -1624,25 +1624,25 @@ export default function ExpensesPage() {
           }}
         >
           <div
-            className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-white/10 bg-slate-950 overflow-hidden shadow-2xl transition-all"
+            className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 overflow-hidden shadow-2xl transition-all"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="h-12 border-b border-white/10 flex items-center justify-between px-3">
-              <div className="text-sm text-white">Добавление расхода</div>
+            <div className="h-12 border-b border-slate-200 dark:border-white/10 flex items-center justify-between px-3">
+              <div className="text-sm text-slate-900 dark:text-white">Добавление расхода</div>
               <button
                 onClick={() => {
                   setShowAddExpenseModal(false)
                   setExpenseModalLoading(false)
                 }}
-                className="rounded-md p-1.5 text-gray-400 hover:text-white hover:bg-white/10"
+                className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="relative h-[calc(92vh-48px)]">
               {expenseModalLoading ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/90">
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 dark:bg-slate-950/90">
+                  <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-300">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Открываю форму расхода...
                   </div>
@@ -1650,7 +1650,7 @@ export default function ExpensesPage() {
               ) : null}
               <iframe
                 src="/expenses-embed/new?embedded=1"
-                className="w-full h-full bg-slate-950"
+                className="w-full h-full bg-white dark:bg-slate-950"
                 title="Добавление расхода"
                 onLoad={() => setExpenseModalLoading(false)}
               />
@@ -1667,12 +1667,12 @@ export default function ExpensesPage() {
           onClick={() => setPreviewUrl(null)}
         >
           <div
-            className="relative w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col rounded-2xl border border-white/10 bg-gray-900 shadow-2xl overflow-hidden"
+            className="relative w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <div className="flex items-center gap-2 text-sm text-gray-300">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-300">
                 <Paperclip className="w-4 h-4 text-blue-400" />
                 Вложение
               </div>
@@ -1681,13 +1681,13 @@ export default function ExpensesPage() {
                   href={previewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded-lg hover:bg-white/5"
+                  className="text-xs text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
                 >
                   Открыть оригинал ↗
                 </a>
                 <button
                   onClick={() => setPreviewUrl(null)}
-                  className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                  className="p-1 rounded-lg text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1734,7 +1734,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
         active
           ? 'bg-red-500 text-white shadow-lg shadow-red-500/25'
-          : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+          : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-700/50'
       }`}
     >
       {icon}
@@ -1781,14 +1781,14 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
 
       {/* Chart & Structure */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="lg:col-span-2 p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-500/20 rounded-xl">
                 <BarChart3 className="w-5 h-5 text-red-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">Динамика расходов</h3>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Динамика расходов</h3>
                 <p className="text-xs text-gray-500">По дням с трендом</p>
               </div>
             </div>
@@ -1820,12 +1820,12 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-orange-500/20 rounded-xl">
               <Tag className="w-5 h-5 text-orange-400" />
             </div>
-            <h3 className="text-sm font-semibold text-white">Структура по категориям</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Структура по категориям</h3>
           </div>
           
           <div className="h-48 mb-4">
@@ -1854,10 +1854,10 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
               <div key={cat.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                  <span className="text-gray-400 truncate max-w-[100px]">{cat.name}</span>
+                  <span className="text-slate-500 dark:text-gray-400 truncate max-w-[100px]">{cat.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">{Formatters.moneyDetailed(cat.value)}</span>
+                  <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(cat.value)}</span>
                   <span className="text-gray-500">({cat.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
@@ -1884,18 +1884,18 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
         })).filter((b: any) => b.monthly_budget > 0).sort((a: any, b: any) => b.pct - a.pct)
 
         return (
-          <Card className="p-5 bg-gray-900/80 border-gray-800">
-            <h3 className="text-sm font-semibold text-white mb-4">Бюджет категорий</h3>
+          <Card className="p-5 bg-white dark:bg-gray-900/80 border-slate-200 dark:border-gray-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Бюджет категорий</h3>
             <div className="space-y-3">
               {budgetItems.map((item: any) => (
                 <div key={item.id}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-300">{item.name}</span>
+                    <span className="text-slate-700 dark:text-gray-300">{item.name}</span>
                     <span className={item.pct >= 90 ? 'text-red-400' : item.pct >= 70 ? 'text-amber-400' : 'text-emerald-400'}>
                       {item.spent.toLocaleString('ru-RU')} / {item.monthly_budget.toLocaleString('ru-RU')} ₸ ({item.pct}%)
                     </span>
                   </div>
-                  <div className="h-1.5 bg-gray-800 rounded-full">
+                  <div className="h-1.5 bg-slate-100 dark:bg-gray-800 rounded-full">
                     <div className={`h-1.5 rounded-full transition-all ${item.pct >= 90 ? 'bg-red-500' : item.pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{width: `${item.pct}%`}} />
                   </div>
                 </div>
@@ -1907,16 +1907,16 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
 
       {/* AI Prediction & Top Category */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 border-0 bg-gradient-to-br from-red-900/30 via-gray-900 to-orange-900/30 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-gradient-to-br from-red-50 via-white to-orange-50 dark:from-red-900/30 dark:via-gray-900 dark:to-orange-900/30 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-red-500/20 rounded-xl">
               <Sparkles className="w-5 h-5 text-red-400" />
             </div>
-            <h3 className="text-sm font-semibold text-white">AI Прогноз</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">AI Прогноз</h3>
           </div>
           
           <div className="mb-4">
-            <p className="text-xs text-gray-400 mb-1">Ожидается в следующем месяце</p>
+            <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Ожидается в следующем месяце</p>
             <p className="text-2xl font-bold bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
               {Formatters.moneyDetailed(analytics.prediction.value)}
             </p>
@@ -1925,40 +1925,40 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-400">Достоверность</span>
+                <span className="text-slate-500 dark:text-gray-400">Достоверность</span>
                 <span className={analytics.prediction.confidence > 70 ? 'text-green-400' : 'text-yellow-400'}>
                   {analytics.prediction.confidence}%
                 </span>
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-red-400 to-orange-400 rounded-full transition-all" style={{ width: `${analytics.prediction.confidence}%` }} />
               </div>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-yellow-500/20 rounded-xl">
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
             </div>
-            <h3 className="text-sm font-semibold text-white">Топ категория</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Топ категория</h3>
           </div>
-          <div className="text-lg font-bold text-white mb-1 truncate" title={analytics.topCategory[0]}>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mb-1 truncate" title={analytics.topCategory[0]}>
             {analytics.topCategory[0]}
           </div>
           <div className="text-2xl font-bold text-yellow-400">{Formatters.moneyDetailed(analytics.topAmount)}</div>
           <p className="text-xs text-gray-500 mt-2">Больше всего расходов</p>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+        <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-green-500/20 rounded-xl">
               <Zap className="w-5 h-5 text-green-400" />
             </div>
-            <h3 className="text-sm font-semibold text-white">Рекомендация AI</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Рекомендация AI</h3>
           </div>
-          <p className="text-sm text-gray-300 leading-relaxed">
+          <p className="text-sm text-slate-700 dark:text-gray-300 leading-relaxed">
             {analytics.trend === 'up' 
               ? 'Расходы растут. Рекомендуется пересмотреть бюджет и оптимизировать затраты в категории ' + analytics.topCategory[0]
               : analytics.trend === 'down'
@@ -1969,13 +1969,13 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
       </div>
 
       {/* Recent Expenses */}
-      <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+      <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-500/20 rounded-xl">
               <Clock className="w-5 h-5 text-red-400" />
             </div>
-            <h3 className="text-sm font-semibold text-white">Последние расходы</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Последние расходы</h3>
           </div>
         </div>
         
@@ -1999,8 +1999,8 @@ function AnalyticsTab({ analytics }: any) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-white mb-4">Распределение по способам оплаты</h3>
+        <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Распределение по способам оплаты</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
@@ -2020,16 +2020,16 @@ function AnalyticsTab({ analytics }: any) {
           </div>
         </Card>
 
-        <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-white mb-4">Топ категории расходов</h3>
+        <Card className="p-6 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Топ категории расходов</h3>
           <div className="space-y-4">
             {analytics.categoryData.map((cat: any) => (
               <div key={cat.name}>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-400">{cat.name}</span>
-                  <span className="text-white font-medium">{Formatters.moneyDetailed(cat.value)}</span>
+                  <span className="text-slate-500 dark:text-gray-400">{cat.name}</span>
+                  <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(cat.value)}</span>
                 </div>
-                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-2 bg-slate-100 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div 
                     className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
@@ -2045,12 +2045,12 @@ function AnalyticsTab({ analytics }: any) {
         <Card className="p-6 border-0 bg-yellow-500/10 border-yellow-500/20 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="w-5 h-5 text-yellow-400" />
-            <h3 className="text-sm font-semibold text-white">Обнаружены аномалии</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Обнаружены аномалии</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {analytics.anomalies.map((a: any, i: number) => (
-              <div key={i} className="p-3 bg-gray-800/50 rounded-xl">
-                <div className="text-xs text-gray-400 mb-1">{DateUtils.formatDate(a.date)}</div>
+              <div key={i} className="p-3 bg-slate-100 dark:bg-gray-800/50 rounded-xl">
+                <div className="text-xs text-slate-500 dark:text-gray-400 mb-1">{DateUtils.formatDate(a.date)}</div>
                 <div className={`text-sm font-medium ${a.type === 'spike' ? 'text-red-400' : 'text-green-400'}`}>
                   {a.type === 'spike' ? '↗ Всплеск' : '↘ Падение'}: {Formatters.moneyDetailed(a.amount)}
                 </div>
@@ -2116,18 +2116,18 @@ function ListTab({
   }, [hasMore, loadMore, loading, loadingMore])
 
   return (
-    <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
+    <Card className="border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm overflow-hidden">
       <div ref={tableContainerRef} className="max-h-[72vh] overflow-auto">
         <table className="w-full min-w-[820px]">
           <thead className="sticky top-0 z-10">
-            <tr className="border-b border-gray-700 bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+            <tr className="border-b border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
               <th className="px-4 py-3 text-left">Дата</th>
               <th className="px-4 py-3 text-left">Компания</th>
               <th className="px-4 py-3 text-left">Категория</th>
               {showControlColumns ? <th className="px-4 py-3 text-left">Статус</th> : null}
               <th className="px-4 py-3 text-right text-red-400">Нал</th>
               <th className="px-4 py-3 text-right text-red-400">{cashLabels.providerName}</th>
-              <th className="px-4 py-3 text-right text-white">Итого</th>
+              <th className="px-4 py-3 text-right text-slate-900 dark:text-white">Итого</th>
               {showControlColumns ? <th className="px-4 py-3 text-left">Документ</th> : null}
               <th className="px-4 py-3 text-left">Комментарий</th>
               <th className="px-4 py-3 text-center w-8"></th>
@@ -2157,12 +2157,12 @@ function ListTab({
                   : 'Подтвержден'
               const statusClass =
                 row.status === 'pending_approval'
-                  ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                  ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border-yellow-500/40'
                   : row.status === 'approved'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
                   : row.status === 'declined'
-                  ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                  : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                  ? 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40'
+                  : 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40'
               const docLabel =
                 row.document_kind === 'receipt'
                   ? 'Чек'
@@ -2184,14 +2184,14 @@ function ListTab({
               return (
                 <tr
                   key={row.id}
-                  className={`border-b border-gray-800/50 hover:bg-white/5 transition-colors ${
-                    idx % 2 === 0 ? 'bg-transparent' : 'bg-gray-900/20'
+                  className={`border-b border-slate-100 dark:border-gray-800/50 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
+                    idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/50 dark:bg-gray-900/20'
                   } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/30' : ''}`}
                 >
                   <td className="px-4 py-3 whitespace-nowrap text-gray-400 font-mono text-xs">
                     {DateUtils.formatDate(row.date)}
                   </td>
-                  <td className="px-4 py-3 font-medium whitespace-nowrap text-gray-300">
+                  <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-700 dark:text-gray-300">
                     {company?.name ?? '—'}
                     {isExtra && (
                       <span className="ml-2 text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded border border-yellow-500/30">
@@ -2200,7 +2200,7 @@ function ListTab({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-300 border border-slate-200 dark:border-gray-700">
                       {row.category || 'Общее'}
                     </span>
                     <div className="mt-1 text-[11px] text-gray-500">{operatorName(row.operator_id)}</div>
@@ -2279,13 +2279,13 @@ function ListTab({
       )}
 
       {hasMore && (
-        <div className="flex justify-center p-4 border-t border-gray-800">
+        <div className="flex justify-center p-4 border-t border-slate-200 dark:border-gray-800">
           <div ref={loadMoreSentinelRef} aria-hidden className="h-px w-px" />
           <Button
             variant="outline"
             onClick={loadMore}
             disabled={loadingMore}
-            className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+            className="border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-300"
           >
             {loadingMore ? (
               <span className="flex items-center gap-2">
@@ -2307,14 +2307,14 @@ function ListTab({
 
 function MetricCard({ label, value, icon, color, trend, trendIcon, percentage }: any) {
   return (
-    <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm hover:bg-gray-800/80 transition-colors">
+    <Card className="p-4 border-0 bg-white dark:bg-gray-800/50 backdrop-blur-sm hover:bg-slate-50 dark:hover:bg-gray-800/80 transition-colors">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-400 uppercase tracking-wide">{label}</span>
+        <span className="text-xs text-slate-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
         <div className={`p-2 rounded-xl bg-gradient-to-br ${color} bg-opacity-20`}>
           {icon}
         </div>
       </div>
-      <div className="text-xl font-bold text-white mb-1">{Formatters.moneyDetailed(value)}</div>
+      <div className="text-xl font-bold text-slate-900 dark:text-white mb-1">{Formatters.moneyDetailed(value)}</div>
       {percentage !== undefined && (
         <div className="text-xs text-gray-500">{percentage.toFixed(1)}% от общего</div>
       )}
@@ -2333,12 +2333,12 @@ function ExpenseRowCompact({ row, companyName, isExtra }: any) {
   
   return (
     <div className={`flex items-center justify-between p-3 rounded-xl transition-all ${
-      isExtra ? 'bg-yellow-500/5 border border-yellow-500/20' : 'hover:bg-gray-700/30'
+      isExtra ? 'bg-yellow-500/5 border border-yellow-500/20' : 'hover:bg-slate-100 dark:hover:bg-gray-700/30'
     }`}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className="w-2 h-2 rounded-full bg-red-400" />
         <div className="flex flex-col min-w-0">
-          <span className="text-sm font-medium text-white truncate flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-900 dark:text-white truncate flex items-center gap-2">
             {companyName}
             {isExtra && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">ДОП</span>}
           </span>

@@ -906,10 +906,10 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         ? 'Низкая уверенность'
         : 'Уверенность не определена'
   const cogsConfidenceClass = cogsConfidence === 'high'
-    ? 'border-emerald-300/30 bg-emerald-400/15 text-emerald-100'
+    ? 'border-emerald-300/30 bg-emerald-400/15 text-emerald-700 dark:text-emerald-100'
     : cogsConfidence === 'medium'
-      ? 'border-amber-300/30 bg-amber-400/15 text-amber-100'
-      : 'border-rose-300/30 bg-rose-400/15 text-rose-100'
+      ? 'border-amber-300/30 bg-amber-400/15 text-amber-700 dark:text-amber-100'
+      : 'border-rose-300/30 bg-rose-400/15 text-rose-700 dark:text-rose-100'
 
   const filteredReceipts = useMemo(() => {
     const q = receiptSearch.trim().toLowerCase()
@@ -957,13 +957,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
           </>
         )
         const hdrToolbar = (
-          <div className="inline-flex w-fit rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+          <div className="inline-flex w-fit rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-0.5 text-xs">
             {(['all', 'warehouse', 'showcase'] as const).map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => setScope(s)}
-                className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 {s === 'all' ? 'Все' : s === 'warehouse' ? 'Подсобка' : 'Витрина'}
               </button>
@@ -990,7 +990,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Документов</p>
           {loading ? <Skeleton className="mt-1 h-7 w-14" /> : (
             <p className="mt-1 text-xl font-semibold">{(data?.receipts || []).length}</p>
@@ -999,22 +999,22 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Сумма всех приёмок</p>
           {loading ? <Skeleton className="mt-1 h-7 w-28" /> : (
-            <p className="mt-1 truncate text-xl font-semibold text-emerald-200" title={formatMoney(totalReceiptsAmount)}>{formatMoney(totalReceiptsAmount)}</p>
+            <p className="mt-1 truncate text-xl font-semibold text-emerald-700 dark:text-emerald-200" title={formatMoney(totalReceiptsAmount)}>{formatMoney(totalReceiptsAmount)}</p>
           )}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Поставщиков</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : (
-            <p className="mt-1 text-xl font-semibold text-amber-200">{(data?.suppliers || []).length}</p>
+            <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{(data?.suppliers || []).length}</p>
           )}
         </Card>
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">{error}</div>
       ) : null}
       {success ? (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div>
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>
       ) : null}
 
       {/* Toolbar */}
@@ -1062,11 +1062,11 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
           <p className="text-[11px] uppercase tracking-wider text-amber-300/80 mb-2">Черновики приемки</p>
           <div className="flex flex-wrap gap-2">
             {(data?.drafts || []).map((draft) => (
-              <div key={draft.id} className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-black/20 px-3 py-1 text-xs">
-                <button type="button" onClick={() => applyDraft(draft)} className="text-amber-200 hover:text-white">
+              <div key={draft.id} className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-slate-100 dark:bg-black/20 px-3 py-1 text-xs">
+                <button type="button" onClick={() => applyDraft(draft)} className="text-amber-700 dark:text-amber-200 hover:text-slate-900 dark:hover:text-white">
                   {draft.title || 'Черновик'}
                 </button>
-                <button type="button" onClick={() => void deleteDraft(draft.id)} className="text-rose-300 hover:text-rose-100">×</button>
+                <button type="button" onClick={() => void deleteDraft(draft.id)} className="text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-100">×</button>
               </div>
             ))}
           </div>
@@ -1074,7 +1074,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       ) : null}
 
       {/* Main table */}
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
         {loading && filteredReceipts.length === 0 ? (
           <StoreDataTableSkeleton columns={7} />
         ) : filteredReceipts.length === 0 ? (
@@ -1086,7 +1086,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
           <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -1094,23 +1094,23 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full min-w-[840px] text-sm">
-              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
-                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
                   <th className="py-2.5 px-2 font-normal">Поставщик</th>
                   <th className="w-40 py-2.5 px-2 font-normal">Локация</th>
                   <th className="w-32 py-2.5 px-2 font-normal">Накладная</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
-                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-emerald-300/70">Сумма</th>
+                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-emerald-700/70 dark:text-emerald-300/70">Сумма</th>
                   <th className="w-28 py-2.5 px-2 font-normal">Оплата</th>
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {filteredReceipts.map((receipt) => (
                   <tr
                     key={receipt.id}
-                    className={`transition hover:bg-white/[0.02] ${receipt.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}
+                    className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${receipt.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}
                   >
                     <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
                       <span className="text-xs text-muted-foreground">{formatDate(receipt.received_at)}</span>
@@ -1123,7 +1123,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                               ? 'Оприходование'
                               : receipt.supplier?.name || 'Без поставщика'}
                             {receipt.status === 'cancelled' ? (
-                              <span className="ml-2 inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-normal text-rose-200 no-underline">
+                              <span className="ml-2 inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-normal text-rose-700 dark:text-rose-200 no-underline">
                                 Отменена
                               </span>
                             ) : null}
@@ -1132,7 +1132,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         <TooltipContent side="top" align="start" className="max-w-md">
                           {receipt.kind === 'posting' ? 'Оприходование (без поставщика)' : receipt.supplier?.name || 'Без поставщика'}
                           {receipt.comment ? <div className="mt-1 text-xs text-muted-foreground">{receipt.comment}</div> : null}
-                          {receipt.cancel_reason ? <div className="mt-1 text-xs text-rose-300">Причина отмены: {receipt.cancel_reason}</div> : null}
+                          {receipt.cancel_reason ? <div className="mt-1 text-xs text-rose-700 dark:text-rose-300">Причина отмены: {receipt.cancel_reason}</div> : null}
                         </TooltipContent>
                       </Tooltip>
                       {receipt.comment ? (
@@ -1144,32 +1144,32 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     </td>
                     <td className="w-32 py-2.5 px-2 align-middle">
                       {receipt.invoice_file_url ? (
-                        <a href={receipt.invoice_file_url} target="_blank" rel="noreferrer" className="truncate font-mono text-xs text-emerald-300 underline">
+                        <a href={receipt.invoice_file_url} target="_blank" rel="noreferrer" className="truncate font-mono text-xs text-emerald-700 dark:text-emerald-300 underline">
                           {receipt.invoice_number || 'Открыть'}
                         </a>
                       ) : (
-                        <span className="truncate font-mono text-xs text-rose-300">Нет файла</span>
+                        <span className="truncate font-mono text-xs text-rose-700 dark:text-rose-300">Нет файла</span>
                       )}
                     </td>
                     <td className="w-20 py-2.5 px-2 text-right align-middle">
                       <span className="text-sm font-semibold">{(receipt.items || []).length}</span>
                     </td>
                     <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
-                      <span className="text-sm font-semibold text-emerald-300">{formatMoney(receipt.total_amount || 0)}</span>
+                      <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{formatMoney(receipt.total_amount || 0)}</span>
                     </td>
                     <td className="w-28 py-2.5 px-2 align-middle">
                       {(() => {
                         const debt = debtByReceiptId.get(String(receipt.id))
                         if (!debt) return <span className="text-xs text-muted-foreground">—</span>
                         if (debt.status === 'paid') {
-                          return <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">Оплачен</span>
+                          return <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-200">Оплачен</span>
                         }
                         if (debt.status === 'written_off') {
-                          return <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-2 py-0.5 text-[10px] text-slate-200">Списан</span>
+                          return <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-2 py-0.5 text-[10px] text-slate-700 dark:text-slate-200">Списан</span>
                         }
                         const overdue = debt.due_date ? new Date(debt.due_date).getTime() < Date.now() : false
                         return (
-                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${overdue ? 'border-red-500/40 bg-red-500/15 text-red-200' : 'border-amber-500/30 bg-amber-500/15 text-amber-200'}`}>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${overdue ? 'border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-200' : 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-200'}`}>
                             {overdue ? 'Просрочен' : debt.is_consignment ? 'Реализация' : 'Долг'}
                           </span>
                         )
@@ -1200,9 +1200,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
       {/* Create receipt dialog */}
       <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
-              <PackagePlus className="h-5 w-5 text-emerald-300" />
+              <PackagePlus className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               Новый документ приёмки
             </DialogTitle>
             <DialogDescription>
@@ -1232,8 +1232,8 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   Добавить товар
                 </Button>
               </div>
-              <p className="mt-2 text-[11px] text-emerald-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
-              {quickError ? <p className="mt-2 text-xs text-rose-300">{quickError}</p> : null}
+              <p className="mt-2 text-[11px] text-emerald-700/80 dark:text-emerald-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
+              {quickError ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{quickError}</p> : null}
               {quickMatches.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {quickMatches.map((item) => (
@@ -1246,7 +1246,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         setQuickError(null)
                         quickInputRef.current?.focus()
                       }}
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200 hover:bg-white/[0.08]"
+                      className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                       title={`${item.name} · ${item.barcode}`}
                     >
                       <span className="block max-w-[340px] truncate">{item.name} · {item.barcode}</span>
@@ -1256,13 +1256,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               )}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3">
               <button
                 type="button"
                 onClick={() => setShowBulkTools((v) => !v)}
                 className="flex w-full items-center justify-between"
               >
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Массовые операции по строкам</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Массовые операции по строкам</p>
                 <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showBulkTools ? 'rotate-180' : ''}`} />
               </button>
               {showBulkTools ? (
@@ -1279,13 +1279,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3">
               <button
                 type="button"
                 onClick={() => setShowTemplatesTools((v) => !v)}
                 className="flex w-full items-center justify-between"
               >
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны приемки</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Шаблоны приемки</p>
                 <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showTemplatesTools ? 'rotate-180' : ''}`} />
               </button>
               {showTemplatesTools ? (
@@ -1302,9 +1302,9 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   {savedTemplates.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {savedTemplates.map((tpl) => (
-                        <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs">
-                          <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-200 hover:text-white">{tpl.name}</button>
-                          <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-300 hover:text-rose-200">×</button>
+                        <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] px-3 py-1 text-xs">
+                          <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
+                          <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-700 dark:text-rose-300 hover:text-rose-900 dark:hover:text-rose-200">×</button>
                         </div>
                       ))}
                     </div>
@@ -1330,18 +1330,18 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
               <div className="space-y-2">
                 <Label>Поставщик (обязательно)</Label>
-                <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-0.5 text-xs">
                   <button
                     type="button"
                     onClick={() => setSupplierMode('existing')}
-                    className={`rounded-md px-3 py-1.5 transition ${supplierMode === 'existing' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`rounded-md px-3 py-1.5 transition ${supplierMode === 'existing' ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                   >
                     Из списка
                   </button>
                   <button
                     type="button"
                     onClick={() => setSupplierMode('new')}
-                    className={`rounded-md px-3 py-1.5 transition ${supplierMode === 'new' ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`rounded-md px-3 py-1.5 transition ${supplierMode === 'new' ? 'bg-slate-200 dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                   >
                     Новый поставщик
                   </button>
@@ -1402,14 +1402,14 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   <button
                     type="button"
                     onClick={() => setPaymentMode('now')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200' : 'border-white/10 text-muted-foreground hover:bg-white/5'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'now' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-200' : 'border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
                   >
                     Сразу
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMode('deferred')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-200' : 'border-white/10 text-muted-foreground hover:bg-white/5'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs border ${paymentMode === 'deferred' ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-200' : 'border-slate-200 dark:border-white/10 text-muted-foreground hover:bg-slate-50 dark:hover:bg-white/5'}`}
                   >
                     В долг / Под реализацию
                   </button>
@@ -1437,10 +1437,10 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         onChange={(event) => void uploadPaymentReceipt(event.target.files?.[0] || null)}
                         disabled={uploadingPaymentReceipt}
                       />
-                      {uploadingPaymentReceipt ? <Loader2 className="h-4 w-4 animate-spin text-emerald-300" /> : null}
+                      {uploadingPaymentReceipt ? <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-300" /> : null}
                     </div>
                     {paymentReceiptFileUrl ? (
-                      <a href={paymentReceiptFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                      <a href={paymentReceiptFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-700 dark:text-emerald-300 underline">
                         Чек загружен — открыть файл
                       </a>
                     ) : (
@@ -1458,7 +1458,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-white/20 bg-transparent"
+                        className="h-4 w-4 rounded border-slate-300 dark:border-white/20 bg-transparent"
                         checked={isConsignment}
                         onChange={(event) => setIsConsignment(event.target.checked)}
                       />
@@ -1481,7 +1481,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   onChange={(event) => void uploadInvoice(event.target.files?.[0] || null)}
                   disabled={uploadingInvoice}
                 />
-                {uploadingInvoice ? <Loader2 className="h-4 w-4 animate-spin text-amber-300" /> : null}
+                {uploadingInvoice ? <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-300" /> : null}
                 {canAiParse && (
                 <Button
                   type="button"
@@ -1497,14 +1497,14 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                 )}
               </div>
               {invoiceFileUrl ? (
-                <a href={invoiceFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                <a href={invoiceFileUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-700 dark:text-emerald-300 underline">
                   Накладная загружена — открыть файл
                 </a>
               ) : (
-                <p className="text-xs text-amber-200">Без загруженной накладной приемка не будет проведена.</p>
+                <p className="text-xs text-amber-700 dark:text-amber-200">Без загруженной накладной приемка не будет проведена.</p>
               )}
               {aiParseResult ? (
-                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-3 text-xs text-emerald-100">
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-3 text-xs text-emerald-900 dark:text-emerald-100">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium">
                       ИИ-черновик: найдено {aiParseResult.items.length} строк, сопоставлено {aiParseResult.matched_count}, без совпадения {aiParseResult.unmatched_count}.
@@ -1526,16 +1526,16 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   {(() => {
                     const learned = aiParseResult.items.filter((it) => it.match_source === 'mapping_supplier').length
                     return learned > 0 ? (
-                      <p className="text-[11px] text-emerald-200/90">🎯 Узнано по предыдущим приёмкам этого поставщика: {learned}</p>
+                      <p className="text-[11px] text-emerald-700/90 dark:text-emerald-200/90">🎯 Узнано по предыдущим приёмкам этого поставщика: {learned}</p>
                     ) : null
                   })()}
-                  <p className="mt-1 text-emerald-200/90">
+                  <p className="mt-1 text-emerald-700/90 dark:text-emerald-200/90">
                     {aiParseResult.supplier_name ? `Поставщик: ${aiParseResult.supplier_name}. ` : ''}
                     {aiParseResult.invoice_number ? `Номер: ${aiParseResult.invoice_number}. ` : ''}
                     {aiParseResult.invoice_date ? `Дата: ${aiParseResult.invoice_date}.` : ''}
                   </p>
                   {aiParseResult.cogs_suggestion?.recommended_category_name ? (
-                    <div className="mt-2 rounded-lg border border-emerald-300/20 bg-black/20 px-2 py-2 text-[11px] text-emerald-100">
+                    <div className="mt-2 rounded-lg border border-emerald-300/20 bg-slate-50 dark:bg-black/20 px-2 py-2 text-[11px] text-emerald-900 dark:text-emerald-100">
                       <p>
                         Рекомендованная COGS-категория: <span className="font-medium">{aiParseResult.cogs_suggestion.recommended_category_name}</span>
                       </p>
@@ -1543,7 +1543,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         {cogsConfidenceLabel}
                       </p>
                       {aiParseResult.cogs_suggestion.reason ? (
-                        <p className="mt-1 text-emerald-200/85">{aiParseResult.cogs_suggestion.reason}</p>
+                        <p className="mt-1 text-emerald-700/85 dark:text-emerald-200/85">{aiParseResult.cogs_suggestion.reason}</p>
                       ) : null}
                       <div className="mt-2">
                         <Button
@@ -1558,7 +1558,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                       </div>
                       {(aiParseResult.cogs_suggestion.alternatives || []).length > 0 ? (
                         <div className="mt-2 space-y-1">
-                          <p className="text-emerald-200/80">Альтернативы:</p>
+                          <p className="text-emerald-700/80 dark:text-emerald-200/80">Альтернативы:</p>
                           <div className="flex flex-wrap gap-1.5">
                             {(aiParseResult.cogs_suggestion.alternatives || []).map((alt) => (
                               <Button
@@ -1588,14 +1588,14 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     </Button>
                   </div>
                   {aiParseResult.items.some((item) => !(item.manual_item_id || item.matched_item_id)) ? (
-                    <div className="mt-3 space-y-2 rounded-lg border border-emerald-300/20 bg-black/20 p-2">
-                      <p className="text-[11px] text-emerald-200/90">Ручное сопоставление несвязанных строк:</p>
+                    <div className="mt-3 space-y-2 rounded-lg border border-emerald-300/20 bg-slate-50 dark:bg-black/20 p-2">
+                      <p className="text-[11px] text-emerald-700/90 dark:text-emerald-200/90">Ручное сопоставление несвязанных строк:</p>
                       {aiParseResult.items.map((item, index) => {
                         const resolvedId = item.manual_item_id || item.matched_item_id || '__none__'
                         if (resolvedId !== '__none__') return null
                         return (
                           <div key={`${item.invoice_name}-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
-                            <p className="truncate text-emerald-100">
+                            <p className="truncate text-emerald-900 dark:text-emerald-100">
                               {item.invoice_name} · {item.quantity} шт
                             </p>
                             <Select
@@ -1628,7 +1628,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Что важно по этой приемке" rows={3} />
             </div>
 
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2 text-sm text-emerald-200">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2 text-sm text-emerald-700 dark:text-emerald-200">
               Цены применяются автоматически: закуп обновляет себестоимость, продажа и наценка синхронизируются по всем точкам.
             </div>
 
@@ -1650,12 +1650,12 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
               <Button type="button" variant="outline" onClick={addLine}>
                 Добавить строку
               </Button>
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-4 py-3 text-right">
                 {returnTotal > 0 ? (
                   <>
                     <div className="flex justify-end gap-4 text-xs text-muted-foreground">
                       <span>По накладной: <span className="text-foreground tabular-nums">{formatMoney(receiptTotal + returnTotal)}</span></span>
-                      <span>Возврат: <span className="text-rose-300 tabular-nums">−{formatMoney(returnTotal)}</span></span>
+                      <span>Возврат: <span className="text-rose-700 dark:text-rose-300 tabular-nums">−{formatMoney(returnTotal)}</span></span>
                     </div>
                     <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">К приёмке (на склад и долг)</p>
                   </>
@@ -1679,7 +1679,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
       <Dialog open={receiptDetailsOpen} onOpenChange={setReceiptDetailsOpen}>
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
             <DialogTitle>Детали приёмки</DialogTitle>
             <DialogDescription>
               {selectedReceipt
@@ -1699,16 +1699,16 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                       <span> · Накладная: <span className="text-foreground">{selectedReceipt.invoice_number}</span></span>
                     ) : null}
                     {selectedReceipt.invoice_file_url ? (
-                      <span> · <a href={selectedReceipt.invoice_file_url} target="_blank" rel="noreferrer" className="underline text-emerald-300">Файл накладной</a></span>
+                      <span> · <a href={selectedReceipt.invoice_file_url} target="_blank" rel="noreferrer" className="underline text-emerald-700 dark:text-emerald-300">Файл накладной</a></span>
                     ) : null}
                     <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedReceipt.total_amount || 0))}</span></span>
                     {selectedReceipt.kind === 'posting' ? (
-                      <span> · <span className="text-blue-300">Оприходование</span></span>
+                      <span> · <span className="text-blue-700 dark:text-blue-300">Оприходование</span></span>
                     ) : null}
                   </div>
                   <div className="ml-auto">
                     {selectedReceipt.status === 'cancelled' ? (
-                      <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-xs text-rose-200">
+                      <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-xs text-rose-700 dark:text-rose-200">
                         Отменена{selectedReceipt.cancelled_at ? ` · ${formatDate(selectedReceipt.cancelled_at)}` : ''}
                       </span>
                     ) : canCancel ? (
@@ -1716,7 +1716,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                        className="border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
                         onClick={() => void cancelReceipt(selectedReceipt)}
                       >
                         Отменить приёмку
@@ -1725,13 +1725,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                   </div>
                 </div>
                 {selectedReceipt.cancel_reason ? (
-                  <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-300">
+                  <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
                     Причина отмены: {selectedReceipt.cancel_reason}
                   </div>
                 ) : null}
-                <div className="overflow-auto rounded-xl border border-white/10">
+                <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
                   <table className="w-full min-w-[560px] table-fixed text-sm">
-                    <thead className="bg-white/[0.03]">
+                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
                         <th className="px-3 py-2 font-normal">Штрихкод</th>
@@ -1742,12 +1742,12 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                     </thead>
                     <tbody>
                       {(selectedReceipt.items || []).map((item) => (
-                        <tr key={item.id} className="border-t border-white/[0.06]">
+                        <tr key={item.id} className="border-t border-slate-100 dark:border-white/[0.06]">
                           <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
                             <span className="flex items-center gap-2 min-w-0">
                               <span className="block truncate">{item.item?.name || 'Товар'}</span>
                               {item.is_bonus ? (
-                                <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                                <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
                                   Бонус
                                 </span>
                               ) : null}

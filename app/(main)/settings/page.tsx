@@ -274,7 +274,7 @@ export default function SettingsPage() {
             actions={
               <a
                 href="/settings/payment-provider"
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20"
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
               >
                 💳 Платёжный провайдер
               </a>
@@ -282,7 +282,7 @@ export default function SettingsPage() {
           />
 
           {error && (
-            <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">
+            <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">
               {error}
             </div>
           )}
@@ -319,7 +319,7 @@ export default function SettingsPage() {
                             <p className="text-center text-sm text-muted-foreground py-10">Компаний пока нет. Добавьте первую ниже.</p>
                         )}
                         {!loading && filteredCompanies.map(c => (
-                            <div key={c.id} className="group p-3 rounded-lg border border-border/50 bg-black/20 hover:bg-white/5 transition-all flex items-center justify-between">
+                            <div key={c.id} className="group p-3 rounded-lg border border-border/50 bg-slate-100/50 hover:bg-slate-100 dark:bg-black/20 dark:hover:bg-white/5 transition-all flex items-center justify-between">
                                 {editCompId === c.id ? (
                                     <div className="flex-1 flex items-center gap-2">
                                         <input
@@ -339,7 +339,7 @@ export default function SettingsPage() {
                                                 type="checkbox"
                                                 checked={editCompData.show_in_structure}
                                                 onChange={e => setEditCompData({ ...editCompData, show_in_structure: e.target.checked })}
-                                                className="rounded border-white/10 bg-input"
+                                                className="rounded border-slate-200 dark:border-white/10 bg-input"
                                             />
                                             В структуре
                                         </label>
@@ -359,8 +359,8 @@ export default function SettingsPage() {
                                             <div>
                                                 <p className="text-sm font-medium text-foreground">{c.name}</p>
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    {c.code && <span className="text-[10px] text-muted-foreground bg-white/5 px-1.5 rounded uppercase tracking-wider">{c.code}</span>}
-                                                    <span className={`text-[10px] px-1.5 rounded border ${c.show_in_structure ? 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10' : 'text-gray-400 border-white/10 bg-white/5'}`}>
+                                                    {c.code && <span className="text-[10px] text-muted-foreground bg-slate-100 dark:bg-white/5 px-1.5 rounded uppercase tracking-wider">{c.code}</span>}
+                                                    <span className={`text-[10px] px-1.5 rounded border ${c.show_in_structure ? 'text-cyan-700 dark:text-cyan-300 border-cyan-500/30 bg-cyan-500/10' : 'text-gray-500 border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5'}`}>
                                                         {c.show_in_structure ? 'В структуре' : 'Скрыта'}
                                                     </span>
                                                 </div>
@@ -405,7 +405,7 @@ export default function SettingsPage() {
                                     type="checkbox"
                                     checked={newComp.show_in_structure}
                                     onChange={e => setNewComp({ ...newComp, show_in_structure: e.target.checked })}
-                                    className="rounded border-white/10 bg-input"
+                                    className="rounded border-slate-200 dark:border-white/10 bg-input"
                                 />
                                 В структуре
                             </label>
@@ -450,7 +450,7 @@ export default function SettingsPage() {
                         {!loading && filteredStaff.map(s => {
                             const isSpecial = SPECIAL_ROLES.has(s.role || '')
                             return (
-                            <div key={s.id} className="group p-3 rounded-lg border border-border/50 bg-black/20 hover:bg-white/5 transition-all">
+                            <div key={s.id} className="group p-3 rounded-lg border border-border/50 bg-slate-100/50 hover:bg-slate-100 dark:bg-black/20 dark:hover:bg-white/5 transition-all">
                                 {editStaffId === s.id ? (
                                     // РЕЖИМ РЕДАКТИРОВАНИЯ СОТРУДНИКА
                                     <div className="space-y-2">
@@ -493,7 +493,7 @@ export default function SettingsPage() {
                                     // РЕЖИМ ПРОСМОТРА
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs ${
+                                            <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-slate-900 dark:text-white text-xs ${
                                               s.role === 'owner' ? 'bg-amber-600' :
                                               s.role === 'manager' ? 'bg-blue-600' :
                                               s.role === 'marketer' ? 'bg-purple-600' :
@@ -508,7 +508,7 @@ export default function SettingsPage() {
                                                         s.role === 'owner' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' :
                                                         s.role === 'manager' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
                                                         s.role === 'marketer' ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' :
-                                                        'text-muted-foreground border-white/10 bg-white/5'
+                                                        'text-muted-foreground border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5'
                                                     }`}>
                                                         {roleLabel(s.role)}
                                                     </span>

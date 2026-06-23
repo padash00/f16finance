@@ -1147,7 +1147,7 @@ function ShiftsPageContent() {
                     className={`rounded-2xl border px-3 py-3 text-left transition-all ${
                       checked
                         ? 'border-accent bg-accent/15 text-foreground'
-                        : 'border-border bg-background text-muted-foreground hover:bg-white/[0.04]'
+                        : 'border-border bg-background text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                     }`}
                   >
                     <div className="text-xs uppercase">{day.dayName}</div>
@@ -1158,7 +1158,7 @@ function ShiftsPageContent() {
             </div>
 
             {!bulkCompanySupportsNight && (
-              <div className="mt-3 text-xs text-amber-300">
+              <div className="mt-3 text-xs text-amber-700 dark:text-amber-300">
                 Для точки {bulkCompany?.name} ночные смены отключены.
               </div>
             )}
@@ -1175,10 +1175,10 @@ function ShiftsPageContent() {
               <div
                 className={
                   actionNotice.tone === 'success'
-                    ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-300'
+                    ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300'
                     : actionNotice.tone === 'error'
-                      ? 'rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300'
-                      : 'rounded-lg border border-white/10 bg-white/[0.04] p-4 text-foreground'
+                      ? 'rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300'
+                      : 'rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] p-4 text-foreground'
                 }
               >
                 {actionNotice.text}
@@ -1190,8 +1190,8 @@ function ShiftsPageContent() {
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-400" />
                   <div className="min-w-0">
-                    <div className="font-semibold text-amber-300">Найдены потенциальные конфликты по операторам</div>
-                    <div className="mt-1 text-sm text-amber-100/80">
+                    <div className="font-semibold text-amber-700 dark:text-amber-300">Найдены потенциальные конфликты по операторам</div>
+                    <div className="mt-1 text-sm text-amber-700/80 dark:text-amber-100/80">
                       Один и тот же оператор стоит в нескольких сменах за один день. Проверь эти назначения:
                     </div>
                     <div className="mt-3 grid gap-2">
@@ -1286,13 +1286,13 @@ function ShiftsPageContent() {
                         </div>
                         <div className="rounded-xl border border-border bg-card px-3 py-2">
                           <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Подтвердили</div>
-                          <div className="mt-1 text-sm font-semibold text-emerald-300">
+                          <div className="mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                             {panelPublication.confirmed_count}/{panelPublication.total_count}
                           </div>
                         </div>
                         <div className="rounded-xl border border-border bg-card px-3 py-2">
                           <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Проблемы</div>
-                          <div className="mt-1 text-sm font-semibold text-amber-300">{panelPublication.issue_count}</div>
+                          <div className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-300">{panelPublication.issue_count}</div>
                         </div>
                       </div>
                     ) : (
@@ -1303,7 +1303,7 @@ function ShiftsPageContent() {
                   </div>
 
                   {workflowError && (
-                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-sm text-red-300">
+                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-sm text-red-700 dark:text-red-300">
                       {workflowError}
                     </div>
                   )}
@@ -1319,10 +1319,10 @@ function ShiftsPageContent() {
                               <div
                                 className={`rounded-full px-2 py-1 text-[11px] ${
                                   item.status === 'sent'
-                                    ? 'bg-emerald-500/15 text-emerald-300'
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                                     : item.status === 'missing_telegram'
-                                      ? 'bg-amber-500/15 text-amber-300'
-                                      : 'bg-rose-500/15 text-rose-300'
+                                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                      : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
                                 }`}
                               >
                                 {item.status === 'sent'
@@ -1356,10 +1356,10 @@ function ShiftsPageContent() {
                               <div
                                 className={`rounded-full px-2 py-1 text-[11px] ${
                                   response.status === 'confirmed'
-                                    ? 'bg-emerald-500/15 text-emerald-300'
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                                     : response.status === 'issue_reported'
-                                      ? 'bg-amber-500/15 text-amber-300'
-                                      : 'bg-white/5 text-muted-foreground'
+                                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                      : 'bg-slate-100 dark:bg-white/5 text-muted-foreground'
                                 }`}
                               >
                                 {response.status === 'confirmed'
@@ -1401,12 +1401,12 @@ function ShiftsPageContent() {
                               <div
                                 className={`rounded-full px-2 py-1 text-[11px] ${
                                   request.status === 'open'
-                                    ? 'bg-amber-500/15 text-amber-300'
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                                     : request.status === 'resolved'
-                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                                       : request.status === 'dismissed'
-                                        ? 'bg-white/10 text-muted-foreground'
-                                        : 'bg-amber-500/15 text-amber-300'
+                                        ? 'bg-slate-100 dark:bg-white/10 text-muted-foreground'
+                                        : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                                 }`}
                               >
                                 {request.status === 'open'
@@ -1419,13 +1419,13 @@ function ShiftsPageContent() {
                               </div>
                             </div>
 
-                            <div className="mt-3 rounded-lg bg-black/10 px-3 py-2 text-sm text-foreground">
+                            <div className="mt-3 rounded-lg bg-slate-100 dark:bg-black/10 px-3 py-2 text-sm text-foreground">
                               {request.reason || 'Оператор ещё не прислал причину, бот ждёт ответ.'}
                             </div>
 
                             {request.lead_status === 'proposed' && (
-                              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-amber-100">
-                                <div className="text-[11px] uppercase tracking-[0.16em] text-amber-300/80">Предложение старшего</div>
+                              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-amber-800 dark:text-amber-100">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-amber-700/80 dark:text-amber-300/80">Предложение старшего</div>
                                 <div className="mt-1">
                                   {request.lead_operator_name || 'Старший'} предлагает:{' '}
                                   {request.lead_action === 'replace'
@@ -1434,13 +1434,13 @@ function ShiftsPageContent() {
                                       ? 'снять со смены'
                                       : 'оставить как есть'}
                                 </div>
-                                {request.lead_note ? <div className="mt-1 text-amber-100/90">{request.lead_note}</div> : null}
+                                {request.lead_note ? <div className="mt-1 text-amber-800/90 dark:text-amber-100/90">{request.lead_note}</div> : null}
                               </div>
                             )}
 
                             {request.resolution_note && request.status !== 'open' && (
-                              <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
-                                <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-300/80">Как обработано</div>
+                              <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-100">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-700/80 dark:text-emerald-300/80">Как обработано</div>
                                 <div className="mt-1">{request.resolution_note}</div>
                               </div>
                             )}
@@ -1758,10 +1758,10 @@ function EditableShiftCell({
     if (isConflict) return 'bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
     if (workflowState?.kind === 'issue') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
     if (workflowState?.kind === 'resolved') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
-    if (workflowState?.kind === 'dismissed') return 'bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+    if (workflowState?.kind === 'dismissed') return 'bg-slate-50 dark:bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
     if (workflowState?.kind === 'confirmed') return 'bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.24)]'
     if (isSelectedOperator) return 'bg-emerald-500/12 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)]'
-    return 'hover:bg-white/5'
+    return 'hover:bg-slate-100 dark:hover:bg-white/5'
   }
 
   return (
@@ -1815,7 +1815,7 @@ function EditableShiftCell({
             <span
               className={
                 val
-                  ? `font-medium ${isConflict ? 'text-amber-100' : 'text-foreground'}`
+                  ? `font-medium ${isConflict ? 'text-amber-700 dark:text-amber-100' : 'text-foreground'}`
                   : 'text-xs text-muted-foreground/20 group-hover:text-muted-foreground/50'
               }
             >
@@ -1829,12 +1829,12 @@ function EditableShiftCell({
         <div
           className={`pointer-events-none absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
             workflowState.kind === 'confirmed'
-              ? 'bg-emerald-500/15 text-emerald-300'
+              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
               : workflowState.kind === 'issue'
-                ? 'bg-amber-500/15 text-amber-300'
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                 : workflowState.kind === 'resolved'
-                  ? 'bg-amber-500/15 text-amber-300'
-                  : 'bg-white/10 text-muted-foreground'
+                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                  : 'bg-slate-100 dark:bg-white/10 text-muted-foreground'
           }`}
         >
           {workflowState.kind === 'confirmed'

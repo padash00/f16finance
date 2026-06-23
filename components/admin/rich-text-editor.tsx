@@ -85,20 +85,20 @@ export function RichTextEditor({ value, onChange, className }: Props) {
       attributes: {
         class:
           [
-            'min-h-[360px] max-w-none px-5 py-4 text-sm leading-7 text-slate-100 focus:outline-none',
+            'min-h-[360px] max-w-none px-5 py-4 text-sm leading-7 text-slate-700 dark:text-slate-100 focus:outline-none',
             '[&_p]:my-3 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
-            '[&_h1]:my-5 [&_h1]:text-3xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-white',
-            '[&_h2]:my-4 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-amber-100',
-            '[&_h3]:my-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:leading-tight [&_h3]:text-slate-100',
+            '[&_h1]:my-5 [&_h1]:text-3xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-slate-900 dark:[&_h1]:text-white',
+            '[&_h2]:my-4 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-amber-700 dark:[&_h2]:text-amber-100',
+            '[&_h3]:my-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:leading-tight [&_h3]:text-slate-700 dark:[&_h3]:text-slate-100',
             '[&_strong]:font-black [&_em]:italic [&_u]:underline [&_s]:line-through',
             '[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-7 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-7 [&_li]:my-1',
             '[&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-amber-300/70 [&_blockquote]:bg-amber-950/20 [&_blockquote]:px-4 [&_blockquote]:py-2 [&_blockquote]:italic [&_blockquote]:text-amber-50',
-            '[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-700 [&_pre]:bg-slate-950 [&_pre]:p-4 [&_pre]:text-xs [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-amber-100 [&_pre_code]:bg-transparent [&_pre_code]:p-0',
-            '[&_a]:font-semibold [&_a]:text-amber-300 [&_a]:underline [&_img]:my-4 [&_img]:max-h-[420px] [&_img]:rounded-xl [&_img]:border [&_img]:border-slate-800',
-            '[&_mark]:rounded [&_mark]:px-1 [&_mark]:text-white',
+            '[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200 dark:[&_pre]:border-slate-700 [&_pre]:bg-white dark:[&_pre]:bg-slate-950 [&_pre]:p-4 [&_pre]:text-xs [&_code]:rounded [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-amber-700 dark:[&_code]:text-amber-100 [&_pre_code]:bg-transparent [&_pre_code]:p-0',
+            '[&_a]:font-semibold [&_a]:text-amber-300 [&_a]:underline [&_img]:my-4 [&_img]:max-h-[420px] [&_img]:rounded-xl [&_img]:border [&_img]:border-slate-200 dark:[&_img]:border-slate-800',
+            '[&_mark]:rounded [&_mark]:px-1 [&_mark]:text-slate-900 dark:[&_mark]:text-white',
             '[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-xl',
-            '[&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-bold',
-            '[&_td]:border [&_td]:border-slate-700 [&_td]:px-3 [&_td]:py-2',
+            '[&_th]:border [&_th]:border-slate-200 dark:[&_th]:border-slate-700 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-bold',
+            '[&_td]:border [&_td]:border-slate-200 dark:[&_td]:border-slate-700 [&_td]:px-3 [&_td]:py-2',
           ].join(' '),
       },
     },
@@ -116,7 +116,7 @@ export function RichTextEditor({ value, onChange, className }: Props) {
 
   if (!editor) {
     return (
-      <div className={`rounded-2xl border border-slate-700/70 bg-slate-950/70 p-6 text-sm text-slate-500 ${className ?? ''}`}>
+      <div className={`rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 p-6 text-sm text-slate-500 ${className ?? ''}`}>
         Загрузка редактора…
       </div>
     )
@@ -144,8 +144,8 @@ export function RichTextEditor({ value, onChange, className }: Props) {
   }
 
   return (
-    <div className={`overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950/70 ${className ?? ''}`}>
-      <div className="flex flex-wrap gap-1 border-b border-slate-800 bg-slate-900/80 px-2 py-2" onMouseDown={(event) => event.preventDefault()}>
+    <div className={`overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 ${className ?? ''}`}>
+      <div className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 px-2 py-2" onMouseDown={(event) => event.preventDefault()}>
         <ToolGroup>
           <ToolButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Отменить (Ctrl+Z)">
             <Undo className="h-4 w-4" />
@@ -262,7 +262,7 @@ export function RichTextEditor({ value, onChange, className }: Props) {
 }
 
 function ToolGroup({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center gap-0.5 border-r border-slate-800 pr-1.5 last:border-r-0">{children}</div>
+  return <div className="flex items-center gap-0.5 border-r border-slate-200 dark:border-slate-800 pr-1.5 last:border-r-0">{children}</div>
 }
 
 function ToolButton({
@@ -287,8 +287,8 @@ function ToolButton({
       title={title}
       className={`grid h-8 w-8 place-items-center rounded-md transition ${
         active
-          ? 'bg-amber-300/20 text-amber-200'
-          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-30 disabled:hover:bg-transparent'
+          ? 'bg-amber-300/20 text-amber-700 dark:text-amber-200'
+          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:hover:bg-transparent'
       }`}
     >
       {children}

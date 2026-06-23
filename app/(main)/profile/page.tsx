@@ -185,8 +185,8 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="app-page flex min-h-[60vh] items-center justify-center">
-        <Card className="w-full max-w-xl border-white/10 bg-slate-950/70 p-6 text-white">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300">
+        <Card className="w-full max-w-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/70 p-6 text-slate-900 dark:text-white">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-4 py-4 text-sm text-slate-700 dark:text-slate-300">
             <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
             Загружаем профиль…
           </div>
@@ -198,7 +198,7 @@ export default function ProfilePage() {
   if (!session) {
     return (
       <div className="app-page">
-        <Card className="border-white/10 bg-slate-950/70 p-6 text-white">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/70 p-6 text-slate-900 dark:text-white">
           <p>Не удалось загрузить данные сессии. Перезайдите.</p>
         </Card>
       </div>
@@ -217,17 +217,17 @@ export default function ProfilePage() {
         actions={
           <>
             {session.roleLabel ? (
-              <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-0.5 text-xs font-medium text-violet-200">
+              <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-200">
                 {session.roleLabel}
               </span>
             ) : null}
             {session.activeOrganization ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-0.5 text-xs text-slate-300">
+              <span className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3 py-0.5 text-xs text-slate-700 dark:text-slate-300">
                 {session.activeOrganization.name}
               </span>
             ) : null}
             {session.isSuperAdmin ? (
-              <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-0.5 text-xs font-medium text-amber-200">
+              <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-200">
                 Супер-админ
               </span>
             ) : null}
@@ -236,7 +236,7 @@ export default function ProfilePage() {
       />
 
       {/* Имя */}
-      <Card className="border-white/10 bg-slate-950/70 p-6 text-white">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/70 p-6 text-slate-900 dark:text-white">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
             <User className="h-5 w-5 text-blue-300" />
@@ -248,7 +248,7 @@ export default function ProfilePage() {
         </div>
         <div className="space-y-3">
           <div>
-            <Label htmlFor="fullName" className="text-xs text-slate-400">
+            <Label htmlFor="fullName" className="text-xs text-slate-500 dark:text-slate-400">
               Полное имя
             </Label>
             <Input
@@ -256,7 +256,7 @@ export default function ProfilePage() {
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               placeholder="Иван Петров"
-              className="mt-1 bg-slate-900/80 border-white/10"
+              className="mt-1 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10"
               maxLength={200}
             />
           </div>
@@ -275,7 +275,7 @@ export default function ProfilePage() {
       </Card>
 
       {/* Email */}
-      <Card className="border-white/10 bg-slate-950/70 p-6 text-white">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/70 p-6 text-slate-900 dark:text-white">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
             <Mail className="h-5 w-5 text-emerald-300" />
@@ -283,25 +283,25 @@ export default function ProfilePage() {
           <div>
             <h2 className="text-base font-semibold">Email и логин</h2>
             <p className="text-xs text-slate-500">
-              Текущий: <span className="text-slate-300">{session.email || '—'}</span>
+              Текущий: <span className="text-slate-700 dark:text-slate-300">{session.email || '—'}</span>
             </p>
           </div>
         </div>
         <div className="space-y-3">
           {session.isSuperAdmin ? (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
               <div className="mb-1 flex items-center gap-2 font-semibold">
                 <AlertTriangle className="h-4 w-4" />
                 Внимание — вы супер-администратор
               </div>
-              <p className="text-xs leading-5 text-amber-100/90">
+              <p className="text-xs leading-5 text-amber-700/90 dark:text-amber-100/90">
                 Ваши права привязаны к email через переменную <code className="rounded bg-black/30 px-1">ADMIN_EMAILS</code> на Vercel.
                 Перед сменой email <strong>обязательно</strong> добавьте новый адрес в эту переменную и передеплойте проект — иначе после подтверждения вы потеряете супер-админ права.
               </p>
             </div>
           ) : null}
           <div>
-            <Label htmlFor="newEmail" className="text-xs text-slate-400">
+            <Label htmlFor="newEmail" className="text-xs text-slate-500 dark:text-slate-400">
               Новый email
             </Label>
             <Input
@@ -310,7 +310,7 @@ export default function ProfilePage() {
               value={newEmail}
               onChange={(event) => setNewEmail(event.target.value)}
               placeholder="new@example.com"
-              className="mt-1 bg-slate-900/80 border-white/10"
+              className="mt-1 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10"
               autoComplete="email"
             />
             <p className="mt-1 text-[11px] text-slate-500">
@@ -332,7 +332,7 @@ export default function ProfilePage() {
       </Card>
 
       {/* Пароль */}
-      <Card className="border-white/10 bg-slate-950/70 p-6 text-white">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/70 p-6 text-slate-900 dark:text-white">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
             <KeyRound className="h-5 w-5 text-amber-300" />
@@ -409,7 +409,7 @@ function PasswordInput({
 }) {
   return (
     <div>
-      <Label htmlFor={id} className="text-xs text-slate-400">
+      <Label htmlFor={id} className="text-xs text-slate-500 dark:text-slate-400">
         {label}
       </Label>
       <div className="relative mt-1">
@@ -418,13 +418,13 @@ function PasswordInput({
           type={show ? 'text' : 'password'}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="bg-slate-900/80 border-white/10 pr-10"
+          className="bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10 pr-10"
           autoComplete={autoComplete}
         />
         <button
           type="button"
           onClick={onToggleShow}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-white/5 hover:text-white"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
         >
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
@@ -436,10 +436,10 @@ function PasswordInput({
 
 function noticeClass(tone: 'success' | 'error' | 'info'): string {
   if (tone === 'success') {
-    return 'rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300'
+    return 'rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300'
   }
   if (tone === 'error') {
-    return 'rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300'
+    return 'rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300'
   }
-  return 'rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm text-blue-300'
+  return 'rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm text-blue-700 dark:text-blue-300'
 }

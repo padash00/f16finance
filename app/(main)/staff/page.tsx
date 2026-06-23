@@ -142,19 +142,19 @@ const PAY_SLOT_LABEL: Record<PaySlot, { label: string; icon: any }> = {
 const ACCOUNT_STATE_LABEL: Record<StaffAccountState, { label: string; className: string }> = {
   no_email: {
     label: 'Нет email',
-    className: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+    className: 'text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/20',
   },
   no_account: {
     label: 'Нет аккаунта',
-    className: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+    className: 'text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/20',
   },
   invited: {
     label: 'Приглашён',
-    className: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+    className: 'text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/20',
   },
   active: {
     label: 'Активен',
-    className: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+    className: 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
   },
 }
 
@@ -200,7 +200,7 @@ function StaffLoading() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center animate-pulse">
             <Users2 className="w-8 h-8 text-white" />
           </div>
-          <p className="text-slate-400">Загрузка сотрудников...</p>
+          <p className="text-slate-500 dark:text-slate-400">Загрузка сотрудников...</p>
         </div>
     </>
   )
@@ -571,29 +571,29 @@ export default function StaffPageSmart() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  className={`h-9 w-9 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
                   onClick={() => void loadData(true)}
                   aria-label="Обновить"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </Button>
                 {canExport && (
-                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт PDF">
+                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт PDF">
                     <Download className="h-4 w-4" />
                   </Button>
                 )}
               </>
             }
             toolbar={
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  ФОТ: <span className="font-semibold text-white">{money(stats.totalBudget)}</span>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <div className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-1.5">
+                  ФОТ: <span className="font-semibold text-slate-900 dark:text-white">{money(stats.totalBudget)}</span>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Сотрудников: <span className="font-semibold text-white">{stats.activeStaff}</span>
+                <div className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-1.5">
+                  Сотрудников: <span className="font-semibold text-slate-900 dark:text-white">{stats.activeStaff}</span>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Средний оклад: <span className="font-semibold text-white">{moneyCompact(stats.avgSalary)}</span>
+                <div className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-1.5">
+                  Средний оклад: <span className="font-semibold text-slate-900 dark:text-white">{moneyCompact(stats.avgSalary)}</span>
                 </div>
               </div>
             }
@@ -601,7 +601,7 @@ export default function StaffPageSmart() {
 
           {pageNotice && (
             <Card className={cn('p-3 border text-sm', pageNotice.tone === 'success' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10')}>
-              <div className={cn('flex items-center gap-2', pageNotice.tone === 'success' ? 'text-emerald-300' : 'text-red-300')}>
+              <div className={cn('flex items-center gap-2', pageNotice.tone === 'success' ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300')}>
                 {pageNotice.tone === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                 <span>{pageNotice.text}</span>
               </div>
@@ -612,33 +612,33 @@ export default function StaffPageSmart() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Поиск..." className="w-full pl-9 pr-8 h-9 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
-              {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>}
+              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Поиск..." className="w-full pl-9 pr-8 h-9 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+              {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X className="w-4 h-4" /></button>}
             </div>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="h-9 px-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-emerald-500/50 [color-scheme:dark]">
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="h-9 px-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500/50 dark:[color-scheme:dark]">
               <option value="name">По имени</option>
               <option value="salary">По окладу</option>
             </select>
-            <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 transition-colors flex items-center">{sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-400 ml-1">
-              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-white/10 text-emerald-500" />
+            <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors flex items-center">{sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-500 dark:text-slate-400 ml-1">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-slate-200 dark:border-white/10 text-emerald-500" />
               Архивные
             </label>
-            {(searchTerm || showInactive || sortBy !== 'name' || sortDir !== 'asc') && <button onClick={resetFilters} className="text-sm text-slate-500 hover:text-white transition-colors">Сбросить</button>}
+            {(searchTerm || showInactive || sortBy !== 'name' || sortDir !== 'asc') && <button onClick={resetFilters} className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">Сбросить</button>}
           </div>
 
           {/* Main Table */}
-          <Card className="overflow-hidden border-white/10 bg-white/[0.04] p-0">
+          <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-0">
             <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
               <table className="w-full text-sm">
                 <thead className={adminTableStickyTheadClass}>
-                  <tr className="border-b border-white/5">
-                    <th className="py-4 px-4 text-left text-xs font-medium text-slate-400">Сотрудник</th>
-                    <th className="py-4 px-4 text-right text-xs font-medium text-slate-400">Оклад</th>
-                    <th className="py-4 px-4 text-center text-xs font-medium text-slate-400">Действия</th>
+                  <tr className="border-b border-slate-200 dark:border-white/5">
+                    <th className="py-4 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Сотрудник</th>
+                    <th className="py-4 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Оклад</th>
+                    <th className="py-4 px-4 text-center text-xs font-medium text-slate-500 dark:text-slate-400">Действия</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                   {loading && !refreshing && (
                     <tr>
                       <td colSpan={3} className="py-12 text-center text-slate-500">
@@ -716,7 +716,7 @@ function StaffRow({
   return (
     <>
       <tr className={cn(
-        "group transition-colors hover:bg-white/5",
+        "group transition-colors hover:bg-slate-50 dark:hover:bg-white/5",
         !staff.is_active && "opacity-50"
       )}>
         <td className="py-4 px-4">
@@ -728,7 +728,7 @@ function StaffRow({
               <RoleIcon className="w-4 h-4" />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-white">{staff.full_name}</span>
+              <span className="font-medium text-slate-900 dark:text-white">{staff.full_name}</span>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className={cn(
                   "text-[10px] px-1.5 py-0.5 rounded border",
@@ -747,7 +747,7 @@ function StaffRow({
               </div>
               <span className={cn(
                 "mt-1 text-[11px]",
-                effectiveEmail?.trim() ? "text-slate-500" : "text-amber-300"
+                effectiveEmail?.trim() ? "text-slate-500" : "text-amber-700 dark:text-amber-300"
               )}>
                 {effectiveEmail?.trim() || 'Email не заполнен'}
               </span>
@@ -765,7 +765,7 @@ function StaffRow({
           </div>
         </td>
         
-        <td className="py-4 px-4 text-right font-medium text-white">
+        <td className="py-4 px-4 text-right font-medium text-slate-900 dark:text-white">
           {money(staff.monthly_salary || 0)}
         </td>
 
@@ -776,9 +776,9 @@ function StaffRow({
                 size="sm"
                 variant="outline"
                 className={cn(
-                  "h-8 px-3 text-xs gap-1.5 border-white/10 bg-white/[0.03]",
-                  !effectiveEmail?.trim() && "border-amber-500/30 text-amber-300 hover:bg-amber-500/10",
-                  !staff.is_active && "border-slate-700 text-slate-500"
+                  "h-8 px-3 text-xs gap-1.5 border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]",
+                  !effectiveEmail?.trim() && "border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10",
+                  !staff.is_active && "border-slate-200 dark:border-slate-700 text-slate-500"
                 )}
                 onClick={onInviteAccount}
                 disabled={inviteBusy}
@@ -798,7 +798,7 @@ function StaffRow({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 px-3 text-xs gap-1.5 border-white/10 bg-white/[0.03]"
+                className="h-8 px-3 text-xs gap-1.5 border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]"
                 onClick={onResetPassword}
                 disabled={resetBusy || !staff.is_active}
                 title={!staff.is_active ? 'Нельзя отправить письмо архивному сотруднику' : `Отправить письмо для смены пароля на ${effectiveEmail}`}
@@ -889,7 +889,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-white/10 text-white sm:max-w-md">
+      <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <div className={cn(
@@ -900,14 +900,14 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
             </div>
             <span>{staff.short_name || staff.full_name}</span>
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogDescription className="text-slate-500 dark:text-slate-400">
             Оклад: {money(salary)} · Выплачено: {money(paidSoFar)}
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           {submitError && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
               {submitError}
             </div>
           )}
@@ -924,21 +924,21 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs text-slate-400 font-medium">Дата</label>
-              <Input 
-                type="date" 
-                value={date} 
-                onChange={e => setDate(e.target.value)} 
-                className="bg-slate-800/50 border-white/10 text-white"
+              <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Дата</label>
+              <Input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white"
                 required
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-slate-400 font-medium">Тип выплаты</label>
-              <select 
-                value={slot} 
+              <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Тип выплаты</label>
+              <select
+                value={slot}
                 onChange={e => setSlot(e.target.value as PaySlot)}
-                className="w-full h-9 rounded-md border border-white/10 bg-slate-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full h-9 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 px-3 py-1 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500/50"
                 required
               >
                 <option value="first">Аванс (1-е число)</option>
@@ -949,14 +949,14 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs text-slate-400 font-medium">Сумма (₸)</label>
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Сумма (₸)</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-lg">₸</span>
-              <Input 
-                type="number" 
-                value={amount} 
-                onChange={e => setAmount(e.target.value)} 
-                className="bg-slate-800/50 border-white/10 text-white pl-10 font-mono text-lg" 
+              <Input
+                type="number"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white pl-10 font-mono text-lg"
                 required
               />
             </div>
@@ -979,21 +979,21 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs text-slate-400 font-medium">Комментарий</label>
-            <Input 
-              value={comment} 
-              onChange={e => setComment(e.target.value)} 
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Комментарий</label>
+            <Input
+              value={comment}
+              onChange={e => setComment(e.target.value)}
               placeholder="Бонус, штраф, примечание..."
-              className="bg-slate-800/50 border-white/10 text-white"
+              className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white"
             />
           </div>
 
           <DialogFooter className="pt-4">
-            <Button 
-              type="button" 
-              variant="ghost" 
+            <Button
+              type="button"
+              variant="ghost"
               onClick={onClose}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
               Отмена
             </Button>

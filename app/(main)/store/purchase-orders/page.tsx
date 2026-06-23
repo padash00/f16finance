@@ -64,10 +64,10 @@ type CatalogItem = { id: string; name: string; barcode: string; unit?: string | 
 type DraftLine = { item_id: string; qty: string }
 
 const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = {
-  draft: { label: 'Черновик', cls: 'bg-slate-500/15 text-slate-200 border-slate-500/30' },
-  sent: { label: 'Отправлена', cls: 'bg-sky-500/15 text-sky-200 border-sky-500/30' },
-  received: { label: 'Получена', cls: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30' },
-  cancelled: { label: 'Отменена', cls: 'bg-rose-500/15 text-rose-200 border-rose-500/30' },
+  draft: { label: 'Черновик', cls: 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border-slate-500/30' },
+  sent: { label: 'Отправлена', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-200 border-sky-500/30' },
+  received: { label: 'Получена', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30' },
+  cancelled: { label: 'Отменена', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-200 border-rose-500/30' },
 }
 
 const fmtDate = (value: string | null | undefined) => {
@@ -259,13 +259,13 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
           </Button>
         )
         const hdrToolbar = (
-          <div className="flex flex-wrap gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
+          <div className="flex flex-wrap gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-slate-200 dark:border-slate-700">
             {(['all', 'draft', 'sent', 'received', 'cancelled'] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                  statusFilter === s ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'
+                  statusFilter === s ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {s === 'all' ? 'Все' : STATUS_META[s].label} ({counts[s] || 0})
@@ -291,8 +291,8 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
         )
       })()}
 
-      {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
-      {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card> : null}
+      {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
+      {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card> : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -305,7 +305,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
           {orders.map((o) => (
             <Card
               key={o.id}
-              className="p-3 bg-slate-900/60 border-slate-800 cursor-pointer hover:border-emerald-500/40 transition"
+              className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 cursor-pointer hover:border-emerald-500/40 transition"
               onClick={() => void openDetail(o.id)}
             >
               <div className="flex items-center justify-between gap-3">
@@ -318,7 +318,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                       {STATUS_META[o.status].label}
                     </span>
                     {o.is_auto ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-200 border-amber-500/30">авто</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-700 dark:text-amber-200 border-amber-500/30">авто</span>
                     ) : null}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
@@ -326,7 +326,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                     {o.sent_at ? ` · отправлена ${fmtDate(o.sent_at)}` : ''}
                   </div>
                 </div>
-                <span className="text-emerald-300 text-sm shrink-0">Открыть →</span>
+                <span className="text-emerald-600 dark:text-emerald-300 text-sm shrink-0">Открыть →</span>
               </div>
             </Card>
           ))}
@@ -337,12 +337,12 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!saving) setCreateOpen(false) }}>
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
               <h2 className="text-lg font-semibold">Новая заявка поставщику</h2>
-              <button onClick={() => setCreateOpen(false)} className="text-muted-foreground hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setCreateOpen(false)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
             <div className="space-y-3 mt-4">
@@ -420,7 +420,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
       {detail ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!statusBusy) setDetail(null) }}>
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
@@ -431,12 +431,12 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                     {STATUS_META[detail.status].label}
                   </span>
                   {detail.is_auto ? (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-200 border-amber-500/30">авто</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-700 dark:text-amber-200 border-amber-500/30">авто</span>
                   ) : null}
                   <span className="text-xs text-muted-foreground">создана {fmtDate(detail.created_at)}</span>
                 </div>
               </div>
-              <button onClick={() => setDetail(null)} className="text-muted-foreground hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setDetail(null)} className="text-muted-foreground hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
             {detail.supplier ? (
@@ -451,12 +451,12 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
               <p className="mt-2 text-sm text-muted-foreground">Комментарий: {detail.comment}</p>
             ) : null}
             {detail.cancel_reason ? (
-              <p className="mt-2 text-sm text-rose-300">Причина отмены: {detail.cancel_reason}</p>
+              <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">Причина отмены: {detail.cancel_reason}</p>
             ) : null}
 
-            <div className="mt-4 overflow-auto rounded-xl border border-white/10">
+            <div className="mt-4 overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
               <table className="w-full text-sm">
-                <thead className="bg-white/[0.03] text-xs text-muted-foreground">
+                <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>
                     <th className="px-3 py-2 text-right font-normal">Остаток был</th>
@@ -465,7 +465,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                 </thead>
                 <tbody>
                   {(detail.items || []).map((it) => (
-                    <tr key={it.id} className="border-t border-white/[0.06]">
+                    <tr key={it.id} className="border-t border-slate-200 dark:border-white/[0.06]">
                       <td className="px-3 py-2">
                         <span className="block truncate">{it.item?.name || 'Товар'}</span>
                         <span className="block font-mono text-[10px] text-muted-foreground">{it.item?.barcode || '—'}</span>
@@ -473,7 +473,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
                       <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                         {it.current_qty} {it.item?.unit || 'шт'}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-200">
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-200">
                         {it.suggested_qty} {it.item?.unit || 'шт'}
                       </td>
                     </tr>
@@ -507,7 +507,7 @@ export default function PurchaseOrdersPage({ embedded = false }: { embedded?: bo
               {detail.status === 'draft' || detail.status === 'sent' ? (
                 <Button
                   variant="outline"
-                  className="border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
+                  className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10"
                   disabled={statusBusy}
                   onClick={() => {
                     const reason = window.prompt('Причина отмены (необязательно):') ?? undefined

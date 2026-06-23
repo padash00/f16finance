@@ -59,7 +59,7 @@ type Props = {
 }
 
 const inputClass =
-  'h-10 w-full rounded-lg border border-gray-700 bg-gray-800/60 px-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
+  'h-10 w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
 
 export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
   const open = !!employee
@@ -242,31 +242,31 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
       onClick={onClose}
     >
       <Card
-        className="w-full max-w-2xl my-8 bg-gray-900/95 border-gray-800 backdrop-blur shadow-2xl flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl my-8 bg-white dark:bg-gray-900/95 border-slate-200 dark:border-gray-800 backdrop-blur shadow-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-800 bg-gradient-to-r from-gray-900 to-gray-900/95 shrink-0">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-gray-800 bg-gradient-to-r from-white to-slate-50 dark:from-gray-900 dark:to-gray-900/95 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-blue-500/10 ring-1 ring-indigo-500/20 flex items-center justify-center shrink-0">
                 <User className="w-6 h-6 text-indigo-300" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base font-bold text-white truncate">{employee.full_name}</h2>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white truncate">{employee.full_name}</h2>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider border bg-gradient-to-r ${typeColor}`}>
                     {typeLabel}
                   </span>
                   {employee.role && (
-                    <span className="text-xs text-gray-400">{employee.role}</span>
+                    <span className="text-xs text-slate-500 dark:text-gray-400">{employee.role}</span>
                   )}
                 </div>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white shrink-0"
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
@@ -278,7 +278,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
                 activeTab === 'edit'
                   ? 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/30'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <User className="w-3.5 h-3.5 inline mr-1.5" />Редактировать
@@ -288,7 +288,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
                 activeTab === 'activity'
                   ? 'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/30'
-                  : 'text-gray-400 hover:text-white'
+                  : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Activity className="w-3.5 h-3.5 inline mr-1.5" />Активность
@@ -315,13 +315,13 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                     <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">События HR</div>
                     <div className="space-y-1.5">
                       {activity.events.slice(0, 10).map((e: any) => (
-                        <div key={e.id} className="px-3 py-2 rounded-md border border-gray-800 bg-gray-900/40 text-xs">
+                        <div key={e.id} className="px-3 py-2 rounded-md border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 text-xs">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-white capitalize">{actionRu(e.action)}</span>
+                            <span className="text-slate-900 dark:text-white capitalize">{actionRu(e.action)}</span>
                             <span className="text-gray-500">{new Date(e.created_at).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                           {e.actor_name && <div className="text-gray-500 mt-0.5">от {e.actor_name}</div>}
-                          {e.payload?.reason && <div className="text-gray-400 italic mt-0.5">«{e.payload.reason}»</div>}
+                          {e.payload?.reason && <div className="text-slate-700 dark:text-gray-400 italic mt-0.5">«{e.payload.reason}»</div>}
                         </div>
                       ))}
                     </div>
@@ -334,8 +334,8 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                     <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Последние смены</div>
                     <div className="space-y-1">
                       {activity.shifts.slice(0, 10).map((s: any) => (
-                        <div key={s.id} className="px-3 py-1.5 rounded-md bg-gray-900/40 border border-gray-800 text-xs flex items-center justify-between">
-                          <span className="text-white">{new Date(s.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</span>
+                        <div key={s.id} className="px-3 py-1.5 rounded-md bg-white dark:bg-gray-900/40 border border-slate-200 dark:border-gray-800 text-xs flex items-center justify-between">
+                          <span className="text-slate-900 dark:text-white">{new Date(s.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</span>
                           <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${s.shift_type === 'night' ? 'bg-indigo-500/15 text-indigo-300' : 'bg-amber-500/15 text-amber-300'}`}>
                             {s.shift_type === 'night' ? 'Ночь' : 'День'}
                           </span>
@@ -352,7 +352,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                     <div className="space-y-1">
                       {activity.debts.slice(0, 10).map((d: any) => (
                         <div key={d.id} className="px-3 py-1.5 rounded-md bg-red-500/5 border border-red-500/20 text-xs flex items-center justify-between">
-                          <span className="text-red-300">{Math.round(d.amount).toLocaleString('ru-RU')} ₸</span>
+                          <span className="text-red-700 dark:text-red-300">{Math.round(d.amount).toLocaleString('ru-RU')} ₸</span>
                           <span className="text-gray-500">{d.week_start || '—'}</span>
                         </div>
                       ))}
@@ -367,7 +367,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                     <div className="space-y-1">
                       {activity.payments.slice(0, 10).map((p: any) => (
                         <div key={p.id} className="px-3 py-1.5 rounded-md bg-emerald-500/5 border border-emerald-500/20 text-xs flex items-center justify-between">
-                          <span className="text-emerald-300">{Math.round(p.amount || 0).toLocaleString('ru-RU')} ₸</span>
+                          <span className="text-emerald-700 dark:text-emerald-300">{Math.round(p.amount || 0).toLocaleString('ru-RU')} ₸</span>
                           <span className="text-gray-500">{p.pay_date}</span>
                         </div>
                       ))}
@@ -471,8 +471,8 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                       }
                       className={`px-3 py-2 rounded-lg border text-left text-sm transition flex items-center gap-2 ${
                         checked
-                          ? 'border-indigo-500/50 bg-indigo-500/10 text-white'
-                          : 'border-gray-700 bg-gray-800/40 text-gray-400 hover:border-gray-600'
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-slate-900 dark:text-white'
+                          : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600'
                       }`}
                     >
                       <div
@@ -552,14 +552,14 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
           {/* Deep-link на полный профиль */}
           <Link
             href={profileLink}
-            className="block px-3 py-2.5 rounded-lg border border-gray-700 bg-gray-800/40 hover:border-gray-600 hover:bg-gray-800/60 transition group"
+            className="block px-3 py-2.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 hover:border-slate-300 dark:hover:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-800/60 transition group"
           >
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300 flex items-center gap-2">
-                <ExternalLink className="w-4 h-4 text-gray-500 group-hover:text-white" />
+              <span className="text-slate-700 dark:text-gray-300 flex items-center gap-2">
+                <ExternalLink className="w-4 h-4 text-gray-500 group-hover:text-slate-900 dark:group-hover:text-white" />
                 Открыть полный профиль
               </span>
-              <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-white" />
+              <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-slate-900 dark:group-hover:text-white" />
             </div>
             <div className="text-xs text-gray-500 mt-0.5">Документы, зарплата, карьерная история</div>
           </Link>
@@ -568,7 +568,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
 
         {/* Footer with Save (только для edit таба) */}
         {activeTab === 'edit' && (
-        <div className="px-5 py-4 border-t border-gray-800 bg-gray-900/95 shrink-0">
+        <div className="px-5 py-4 border-t border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900/95 shrink-0">
           <Button
             onClick={save}
             disabled={saving}
@@ -621,7 +621,7 @@ function Section({ icon, label, children }: { icon: React.ReactNode; label: stri
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <label className="block text-xs text-slate-500 dark:text-gray-400 mb-1">{label}</label>
       {children}
     </div>
   )

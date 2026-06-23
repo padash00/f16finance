@@ -141,7 +141,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
         )
       })()}
 
-      {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
+      {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -150,9 +150,9 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
       ) : filtered.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground text-center">Поставщиков нет.</Card>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
           <table className="w-full text-sm">
-            <thead className="bg-white/[0.04] text-left text-xs text-muted-foreground">
+            <thead className="bg-slate-50 dark:bg-white/[0.04] text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-normal">Поставщик</th>
                 <th className="px-3 py-2.5 font-normal">БИН/ИИН</th>
@@ -164,11 +164,11 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
                 <th className="px-2 py-2.5"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.04]">
+            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
               {filtered.map((s) => (
-                <tr key={s.id} className="hover:bg-white/[0.02]">
+                <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                   <td className="px-4 py-2.5">
-                    <Link href={`/store/suppliers/${s.id}`} className="font-medium hover:text-emerald-300">
+                    <Link href={`/store/suppliers/${s.id}`} className="font-medium hover:text-emerald-700 dark:hover:text-emerald-300">
                       {s.organization_name || s.name}
                     </Link>
                     {s.organization_name && s.organization_name !== s.name ? (
@@ -180,7 +180,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
                   <td className="px-3 py-2.5 text-right">{formatMoney(s.receipts_total)} ₸</td>
                   <td className="px-3 py-2.5 text-right">
                     {s.open_debts_count > 0 ? (
-                      <span className="text-amber-200">
+                      <span className="text-amber-700 dark:text-amber-200">
                         {s.open_debts_count} · {formatMoney(s.open_debts_sum)} ₸
                       </span>
                     ) : (
@@ -190,7 +190,7 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
                   <td className="px-3 py-2.5 text-right">{s.aliases_count}</td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground">{fmtDate(s.last_receipt_date)}</td>
                   <td className="px-2 py-2.5 text-right">
-                    <Link href={`/store/suppliers/${s.id}`} className="inline-flex items-center text-xs text-emerald-300 hover:text-emerald-200">
+                    <Link href={`/store/suppliers/${s.id}`} className="inline-flex items-center text-xs text-emerald-700 dark:text-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200">
                       Открыть <ArrowRight className="w-3 h-3 ml-1" />
                     </Link>
                   </td>
@@ -203,8 +203,8 @@ export default function SuppliersListPage({ embedded = false }: { embedded?: boo
 
       {addOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !saving) setAddOpen(false) }}>
-          <Card className="w-full max-w-md border-white/10 bg-gray-900 p-5">
-            <div className="mb-4 text-base font-semibold text-white">Новый поставщик</div>
+          <Card className="w-full max-w-md border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 p-5">
+            <div className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Новый поставщик</div>
             <div className="space-y-3">
               <div>
                 <Label className="mb-1 block text-xs">Название *</Label>

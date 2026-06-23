@@ -46,16 +46,16 @@ type AdjKind = 'bonus' | 'fine' | 'debt'
 type AdjustmentRow = { id: string; date: string; amount: number; kind: string; comment: string | null; company_id: string | null; status: string; salary_week_id: string | null; linked_expense_id: string | null }
 type VoidTarget = { type: 'payment' | 'adjustment'; id: string; label: string }
 
-const input = 'h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
-const selectCls = 'h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-emerald-400/40 focus:outline-none [color-scheme:dark]'
-const textarea = 'min-h-[80px] w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const input = 'h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const selectCls = 'h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white focus:border-emerald-400/40 focus:outline-none dark:[color-scheme:dark]'
+const textarea = 'min-h-[80px] w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
-const statusMeta = (s: WeekData['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-300' }
+const statusMeta = (s: WeekData['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300' }
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}><div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-white">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}><div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-slate-900 dark:text-white">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
 }
 
 function OperatorSalaryDetailPageContent() {
@@ -260,25 +260,25 @@ function OperatorSalaryDetailPageContent() {
             }
             actions={
               <>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
+                <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
                   Прошлая неделя
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>
+                <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>
                   Текущая
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
+                <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
                   Следующая
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void load()}>
+                <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => void load()}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Обновить
                 </Button>
               </>
             }
             toolbar={
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                  Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 dark:text-slate-300">
+                <div className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-1.5">
+                  Неделя: <span className="font-semibold text-slate-900 dark:text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span>
                 </div>
                 {st ? <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${st.className}`}>{st.label}</span> : null}
                 {data && data.week.status === 'paid' ? (
@@ -287,7 +287,7 @@ function OperatorSalaryDetailPageContent() {
                     onClick={() => void unlockWeek()}
                     disabled={unlocking}
                     title="Разблокировать неделю и пересчитать по актуальным правилам"
-                    className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-60"
+                    className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 disabled:opacity-60"
                   >
                     {unlocking ? 'Разблокировка...' : '🔓 Разблокировать и пересчитать'}
                   </button>
@@ -299,20 +299,20 @@ function OperatorSalaryDetailPageContent() {
             }
           />
 
-          {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
+          {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
 
           {/* Weekly summary */}
           {loading ? (
-            <Card className="flex items-center justify-center gap-2 border-white/10 bg-white/[0.04] p-16 text-slate-400">
+            <Card className="flex items-center justify-center gap-2 border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-16 text-slate-500 dark:text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin" />Загрузка данных...
             </Card>
           ) : data ? (
             <>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-300"><DollarSign className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Начислено</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.grossAmount)}</div><div className="mt-0.5 text-xs text-slate-500">бонусы: <span className="text-emerald-300">+{money(data.week.bonusAmount)}</span></div></div></div></Card>
-                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-rose-500/15 p-2.5 text-rose-300"><TrendingDown className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Удержания</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.fineAmount + data.week.debtAmount + data.week.advanceAmount)}</div><div className="mt-0.5 text-xs text-slate-500">штрафы {money(data.week.fineAmount)} · долги {money(data.week.debtAmount)} · авансы {money(data.week.advanceAmount)}</div></div></div></Card>
-                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2.5 text-blue-300"><CheckCircle2 className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.paidAmount)}</div></div></div></Card>
-                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2.5 text-amber-300"><CreditCard className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.remainingAmount)}</div></div></div></Card>
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-700 dark:text-emerald-300"><DollarSign className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Начислено</div><div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{money(data.week.grossAmount)}</div><div className="mt-0.5 text-xs text-slate-500">бонусы: <span className="text-emerald-700 dark:text-emerald-300">+{money(data.week.bonusAmount)}</span></div></div></div></Card>
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-rose-500/15 p-2.5 text-rose-600 dark:text-rose-300"><TrendingDown className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Удержания</div><div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{money(data.week.fineAmount + data.week.debtAmount + data.week.advanceAmount)}</div><div className="mt-0.5 text-xs text-slate-500">штрафы {money(data.week.fineAmount)} · долги {money(data.week.debtAmount)} · авансы {money(data.week.advanceAmount)}</div></div></div></Card>
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2.5 text-blue-600 dark:text-blue-300"><CheckCircle2 className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{money(data.week.paidAmount)}</div></div></div></Card>
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2.5 text-amber-700 dark:text-amber-300"><CreditCard className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{money(data.week.remainingAmount)}</div></div></div></Card>
               </div>
 
               {/* History of weeks */}
@@ -322,11 +322,11 @@ function OperatorSalaryDetailPageContent() {
                     const wst = statusMeta(w.status)
                     const isCurrent = w.weekStart === weekStart
                     return (
-                      <button key={w.id} type="button" onClick={() => setWeekStart(w.weekStart)} className={`shrink-0 rounded-2xl border p-3 text-left text-xs transition ${isCurrent ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
-                        <div className="font-medium text-white">{formatRuDate(w.weekStart)}</div>
-                        <div className="mt-1 text-slate-400">{formatRuDate(w.weekEnd)}</div>
+                      <button key={w.id} type="button" onClick={() => setWeekStart(w.weekStart)} className={`shrink-0 rounded-2xl border p-3 text-left text-xs transition ${isCurrent ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06]'}`}>
+                        <div className="font-medium text-slate-900 dark:text-white">{formatRuDate(w.weekStart)}</div>
+                        <div className="mt-1 text-slate-500 dark:text-slate-400">{formatRuDate(w.weekEnd)}</div>
                         <div className={`mt-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${wst.className}`}>{wst.label}</div>
-                        <div className="mt-1 text-slate-300">Остаток: {money(w.remainingAmount)}</div>
+                        <div className="mt-1 text-slate-700 dark:text-slate-300">Остаток: {money(w.remainingAmount)}</div>
                       </button>
                     )
                   })}
@@ -336,7 +336,7 @@ function OperatorSalaryDetailPageContent() {
               {/* Actions */}
               <div className="flex flex-wrap gap-3">
                 {canCreateAdvance && (
-                  <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceOpen(true)}>
+                  <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />Выдать аванс
                   </Button>
                 )}
@@ -345,7 +345,7 @@ function OperatorSalaryDetailPageContent() {
                   <Wallet className="mr-2 h-4 w-4" />Выплатить
                 </Button>
                 )}
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
+                <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
                   {tgSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
                   {data.operator.telegram_chat_id ? 'Отправить в Telegram' : 'Нет Telegram'}
                 </Button>
@@ -353,11 +353,11 @@ function OperatorSalaryDetailPageContent() {
 
               {/* Company allocations */}
               {data.week.companyAllocations.length > 0 && (
-                <Card className="border-white/10 bg-white/[0.04] p-5">
-                  <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
-                    <Building2 className="h-4 w-4 text-emerald-300" />Разбивка по точкам
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5">
+                  <div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
+                    <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />Разбивка по точкам
                   </div>
-                  <AdminTableViewport maxHeight="min(45vh, 22rem)" className="rounded-xl border border-white/10 bg-transparent">
+                  <AdminTableViewport maxHeight="min(45vh, 22rem)" className="rounded-xl border border-slate-200 dark:border-white/10 bg-transparent">
                     <table className="min-w-full text-xs">
                       <thead className={adminTableStickyTheadClass}>
                         <tr>
@@ -372,17 +372,17 @@ function OperatorSalaryDetailPageContent() {
                       </thead>
                       <tbody>
                         {data.week.companyAllocations.map((a) => (
-                          <tr key={a.companyId} className="border-t border-white/5 text-slate-200">
+                          <tr key={a.companyId} className="border-t border-white/5 text-slate-700 dark:text-slate-200">
                             <td className="py-3 pr-3">
-                              <div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div>
+                              <div className="font-medium text-slate-900 dark:text-white">{a.companyName || a.companyCode || a.companyId}</div>
                               <div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div>
                             </td>
                             <td className="py-3 text-right">{money(a.accruedAmount)}</td>
-                            <td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td>
-                            <td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td>
-                            <td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td>
-                            <td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td>
-                            <td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td>
+                            <td className="py-3 text-right text-emerald-700 dark:text-emerald-300">{money(a.bonusAmount)}</td>
+                            <td className="py-3 text-right text-rose-600 dark:text-rose-300">{money(a.fineAmount)}</td>
+                            <td className="py-3 text-right text-rose-600 dark:text-rose-300">{money(a.debtAmount)}</td>
+                            <td className="py-3 text-right text-amber-700 dark:text-amber-300">{money(a.advanceAmount)}</td>
+                            <td className="py-3 text-right font-medium text-slate-900 dark:text-white">{money(a.netAmount)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -392,25 +392,25 @@ function OperatorSalaryDetailPageContent() {
               )}
 
               {/* Payments */}
-              <Card className="border-white/10 bg-white/[0.04] p-5">
-                <div className="mb-4 text-sm font-medium text-white">Платежи недели</div>
+              <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5">
+                <div className="mb-4 text-sm font-medium text-slate-900 dark:text-white">Платежи недели</div>
                 {data.week.payments.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div>
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">По этой неделе ещё нет платежей.</div>
                 ) : (
                   <div className="space-y-3">
                     {data.week.payments.map((p) => (
-                      <div key={p.id} className={`rounded-2xl border p-4 ${p.status === 'voided' ? 'border-red-500/20 bg-red-500/5 opacity-60' : 'border-white/10 bg-white/[0.03]'}`}>
+                      <div key={p.id} className={`rounded-2xl border p-4 ${p.status === 'voided' ? 'border-red-500/20 bg-red-500/5 opacity-60' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]'}`}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <div className={`text-sm font-medium ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-white'}`}>{formatRuDate(p.payment_date)}</div>
+                              <div className={`text-sm font-medium ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>{formatRuDate(p.payment_date)}</div>
                               {p.status === 'voided' && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">аннулирован</span>}
                             </div>
                             <div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} · Безналичный: {money(p.kaspi_amount)}</div>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-right">
-                              <div className={`text-sm font-semibold ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-emerald-300'}`}>{money(p.total_amount)}</div>
+                              <div className={`text-sm font-semibold ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-emerald-700 dark:text-emerald-300'}`}>{money(p.total_amount)}</div>
                             </div>
                             {p.status === 'active' && canVoidPayment && (
                               <button type="button" onClick={() => setVoidConfirm({ type: 'payment', id: p.id, label: `Выплата ${money(p.total_amount)} от ${formatRuDate(p.payment_date)}` })} className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20">
@@ -428,20 +428,20 @@ function OperatorSalaryDetailPageContent() {
 
               {/* Adjustments list */}
               {data.adjustments.length > 0 && (
-                <Card className="border-white/10 bg-white/[0.04] p-5">
-                  <div className="mb-4 text-sm font-medium text-white">Корректировки за неделю</div>
+                <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5">
+                  <div className="mb-4 text-sm font-medium text-slate-900 dark:text-white">Корректировки за неделю</div>
                   <div className="space-y-2">
                     {data.adjustments.map((a) => {
                       const kindLabel = a.kind === 'bonus' ? 'Бонус' : a.kind === 'fine' ? 'Штраф' : a.kind === 'debt' ? 'Долг' : 'Аванс'
-                      const kindCls = a.kind === 'bonus' ? 'text-emerald-300' : 'text-rose-300'
+                      const kindCls = a.kind === 'bonus' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'
                       const company = a.company_id ? data.companies.find((c) => c.id === a.company_id) : null
                       const isVoided = a.status === 'voided'
                       return (
-                        <div key={a.id} className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${isVoided ? 'border-red-500/20 bg-red-500/5 opacity-60' : 'border-white/10 bg-white/[0.03]'}`}>
+                        <div key={a.id} className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${isVoided ? 'border-red-500/20 bg-red-500/5 opacity-60' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]'}`}>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`text-xs font-semibold ${isVoided ? 'text-slate-500' : kindCls}`}>{kindLabel}</span>
-                              <span className={`text-sm font-medium ${isVoided ? 'line-through text-slate-500' : 'text-white'}`}>{money(a.amount)}</span>
+                              <span className={`text-sm font-medium ${isVoided ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>{money(a.amount)}</span>
                               {isVoided && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">аннулировано</span>}
                               <span className="text-xs text-slate-500">{formatRuDate(a.date)}</span>
                               {company && <span className="text-xs text-slate-500">{company.name || company.code}</span>}
@@ -461,8 +461,8 @@ function OperatorSalaryDetailPageContent() {
               )}
 
               {/* Adjustment form */}
-              <Card className="border-white/10 bg-white/[0.04] p-5">
-                <div className="mb-4 text-sm font-medium text-white">Ручная корректировка</div>
+              <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5">
+                <div className="mb-4 text-sm font-medium text-slate-900 dark:text-white">Ручная корректировка</div>
                 <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" onSubmit={submitAdjustment}>
                   <select className={selectCls} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjKind)}>
                     <option value="fine">Штраф</option>
@@ -480,13 +480,13 @@ function OperatorSalaryDetailPageContent() {
                   </Button>
                   <input className={`${input} md:col-span-2 xl:col-span-5`} type="text" placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
                 </form>
-                {adjSuccess ? <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
+                {adjSuccess ? <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
               </Card>
 
               {/* Shifts table */}
-              <Card className="overflow-hidden border-white/10 bg-white/[0.04] p-0">
-                <div className="border-b border-white/10 px-5 py-4 text-sm font-medium text-white">
-                  Смены за неделю <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-400">{shifts.length}</span>
+              <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-0">
+                <div className="border-b border-slate-200 dark:border-white/10 px-5 py-4 text-sm font-medium text-slate-900 dark:text-white">
+                  Смены за неделю <span className="ml-2 rounded-full bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">{shifts.length}</span>
                 </div>
                 <AdminTableViewport maxHeight="min(60vh, 36rem)" className="rounded-none border-0 bg-transparent">
                   <table className="min-w-full text-sm">
@@ -506,16 +506,16 @@ function OperatorSalaryDetailPageContent() {
                       {shifts.length === 0 ? (
                         <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">Нет смен за эту неделю.</td></tr>
                       ) : shifts.map((shift) => (
-                        <tr key={shift.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                          <td className="px-4 py-3 font-mono text-xs text-slate-300">{formatRuDate(shift.date)}</td>
+                        <tr key={shift.id} className="border-t border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                          <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-slate-300">{formatRuDate(shift.date)}</td>
                           <td className="px-4 py-3 text-center">
                             {shift.shift === 'day' ? <Sun className="inline h-4 w-4 text-yellow-400" /> : <Moon className="inline h-4 w-4 text-blue-400" />}
                           </td>
                           <td className="px-4 py-3 text-xs text-slate-400">{shift.companyName || shift.companyCode || '—'}</td>
-                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.cash ? 'text-white' : 'text-slate-600'}`}>{shift.cash ? money(shift.cash) : '—'}</td>
-                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.kaspi ? 'text-white' : 'text-slate-600'}`}>{shift.kaspi ? money(shift.kaspi) : '—'}</td>
-                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.card ? 'text-white' : 'text-slate-600'}`}>{shift.card ? money(shift.card) : '—'}</td>
-                          <td className="px-4 py-3 text-right font-mono text-xs text-white">{money(shift.totalIncome)}</td>
+                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.cash ? 'text-slate-900 dark:text-white' : 'text-slate-600'}`}>{shift.cash ? money(shift.cash) : '—'}</td>
+                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.kaspi ? 'text-slate-900 dark:text-white' : 'text-slate-600'}`}>{shift.kaspi ? money(shift.kaspi) : '—'}</td>
+                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.card ? 'text-slate-900 dark:text-white' : 'text-slate-600'}`}>{shift.card ? money(shift.card) : '—'}</td>
+                          <td className="px-4 py-3 text-right font-mono text-xs text-slate-900 dark:text-white">{money(shift.totalIncome)}</td>
                           <td className="max-w-[200px] truncate px-4 py-3 text-xs text-slate-400">{shift.comments.length ? shift.comments.join(' · ') : '—'}</td>
                         </tr>
                       ))}
@@ -532,28 +532,28 @@ function OperatorSalaryDetailPageContent() {
           <form className="space-y-4" onSubmit={submitAdvance}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Точка</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Точка</label>
                 <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
                   {(data?.week.companyAllocations.length ? data.week.companyAllocations.map((a) => ({ id: a.companyId, label: a.companyName || a.companyCode || a.companyId })) : (data?.companies || []).map((c) => ({ id: c.id, label: c.name || c.code || c.id }))).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Дата</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата</label>
                 <input className={input} type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
-                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <Input className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white" type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Безналичный</label>
-                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Безналичный</label>
+                <Input className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white" type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
             <textarea className={textarea} value={advanceComment} onChange={(e) => setAdvanceComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">Итого: <span className="font-semibold text-white">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm text-slate-700 dark:text-slate-300">Итого: <span className="font-semibold text-slate-900 dark:text-white">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceOpen(false)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceOpen(false)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
             </div>
           </form>
@@ -563,8 +563,8 @@ function OperatorSalaryDetailPageContent() {
       {voidConfirm ? (
         <Modal title="Аннулировать?" subtitle={voidConfirm.label} onClose={() => !voidSaving && setVoidConfirm(null)}>
           <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
               <div>
                 {voidConfirm.type === 'payment'
                   ? 'Выплата будет аннулирована, а связанные расходы — удалены. Это действие нельзя отменить.'
@@ -572,7 +572,7 @@ function OperatorSalaryDetailPageContent() {
               </div>
             </div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setVoidConfirm(null)} disabled={voidSaving}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setVoidConfirm(null)} disabled={voidSaving}>Отмена</Button>
               <Button type="button" className="rounded-xl bg-red-500 text-white hover:bg-red-400" onClick={() => void voidItem()} disabled={voidSaving}>
                 {voidSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="mr-2 h-4 w-4" />Аннулировать</>}
               </Button>
@@ -586,23 +586,23 @@ function OperatorSalaryDetailPageContent() {
           <form className="space-y-4" onSubmit={submitPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
                 <input className={input} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
               </div>
-              <div className="flex items-center rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400">Выплата разложится по точкам пропорционально начислению</div>
+              <div className="flex items-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-xs text-slate-500 dark:text-slate-400">Выплата разложится по точкам пропорционально начислению</div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
-                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
+                <Input className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white" type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Безналичный</label>
-                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Безналичный</label>
+                <Input className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white" type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
             <textarea className={textarea} value={payComment} onChange={(e) => setPayComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">Выплата: <span className="font-semibold text-white">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-sm text-slate-700 dark:text-slate-300">Выплата: <span className="font-semibold text-slate-900 dark:text-white">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setPayOpen(false)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setPayOpen(false)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>

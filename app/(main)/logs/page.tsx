@@ -451,7 +451,7 @@ function PayloadRows({ item }: { item: LogItem }) {
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-1.5 text-xs">
           <span className="text-slate-500">{r.label}:</span>
-          <span className={r.highlight ? 'font-semibold text-white' : 'text-slate-300'}>{r.value}</span>
+          <span className={r.highlight ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}>{r.value}</span>
         </div>
       ))}
     </div>
@@ -485,12 +485,12 @@ function entityIcon(entityType: string | null, action: string | null) {
 
 function actionBadgeColor(action: string | null): string {
   const a = (action || '').toLowerCase()
-  if (a === 'create' || a === 'create-batch') return 'bg-emerald-500/15 text-emerald-300'
-  if (a === 'update' || a.includes('update')) return 'bg-amber-500/15 text-amber-300'
-  if (a === 'delete') return 'bg-rose-500/15 text-rose-300'
-  if (a === 'login' || a === 'success') return 'bg-sky-500/15 text-sky-300'
-  if (a === 'failed' || a === 'error') return 'bg-red-500/15 text-red-300'
-  return 'bg-white/8 text-slate-400'
+  if (a === 'create' || a === 'create-batch') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+  if (a === 'update' || a.includes('update')) return 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+  if (a === 'delete') return 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+  if (a === 'login' || a === 'success') return 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+  if (a === 'failed' || a === 'error') return 'bg-red-500/15 text-red-700 dark:text-red-300'
+  return 'bg-slate-100 text-slate-500 dark:bg-white/8 dark:text-slate-400'
 }
 
 const ACTION_BADGE_LABELS: Record<string, string> = {
@@ -633,7 +633,7 @@ export default function LogsPage() {
         icon={<ShieldCheck className="h-5 w-5" aria-hidden />}
         actions={
           <>
-            <Button variant="outline" onClick={exportLogs} className="border-white/10 bg-white/5 hover:bg-white/10">
+            <Button variant="outline" onClick={exportLogs} className="border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
               <Download className="mr-2 h-4 w-4" />
               Экспорт CSV
             </Button>
@@ -654,27 +654,27 @@ export default function LogsPage() {
           { label: 'Ошибки отправки', value: stats.failed, icon: CircleAlert },
           { label: 'Ошибки системы', value: stats.systemErrors, icon: AlertTriangle },
         ].map(({ label, value, icon: Icon }) => (
-          <Card key={label} className="border-white/10 bg-slate-950/65 p-4 text-white">
+          <Card key={label} className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-4 text-slate-900 dark:text-white">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-400">{label}</p>
                 <p className="mt-1.5 text-2xl font-semibold">{value}</p>
               </div>
-              <div className="rounded-xl bg-white/6 p-2.5"><Icon className="h-4 w-4 text-sky-300" /></div>
+              <div className="rounded-xl bg-slate-100 dark:bg-white/6 p-2.5"><Icon className="h-4 w-4 text-sky-600 dark:text-sky-300" /></div>
             </div>
           </Card>
         ))}
       </div>
 
       {/* Filters */}
-      <Card className="border-white/10 bg-slate-950/65 p-5 text-white">
+      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-5 text-slate-900 dark:text-white">
         {/* Presets */}
         <div className="mb-4 flex flex-wrap gap-2">
           {PRESETS.map(p => (
             <button
               key={p.key}
               onClick={() => applyPreset(p.key)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${(p.key === 'all' && !domain && !onlyErrors) || (domain === p.key) || (p.key === 'errors' && onlyErrors) ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/40' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${(p.key === 'all' && !domain && !onlyErrors) || (domain === p.key) || (p.key === 'errors' && onlyErrors) ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/40' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
             >
               {p.label}
             </button>
@@ -688,24 +688,24 @@ export default function LogsPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && loadLogs(true)}
               placeholder="Поиск по тексту..."
-              className="border-white/10 bg-slate-900/60 pl-10 text-white" />
+              className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 pl-10 text-slate-900 dark:text-white" />
           </div>
           <select value={actor} onChange={e => setActor(e.target.value)}
-            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white [color-scheme:dark]">
+            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
             <option value="">Все пользователи</option>
             {(data?.filters.actors || []).map(o => <option key={o} value={o}>{o.split('@')[0]}</option>)}
           </select>
           <select value={entityType} onChange={e => setEntityType(e.target.value)}
-            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white [color-scheme:dark]">
+            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
             <option value="">Все типы</option>
             {(data?.filters.entityTypes || []).map(o => <option key={o} value={o}>{ENTITY_LABELS[o] || o}</option>)}
           </select>
           <select value={action} onChange={e => setAction(e.target.value)}
-            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white [color-scheme:dark]">
+            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:[color-scheme:dark]">
             <option value="">Все действия</option>
             {(data?.filters.actions || []).map(o => <option key={o} value={o}>{ACTION_BADGE_LABELS[o] || o}</option>)}
           </select>
-          <label className="flex h-10 items-center gap-2 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-slate-200 cursor-pointer">
+          <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 px-3 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
             <input type="checkbox" checked={onlyErrors} onChange={e => setOnlyErrors(e.target.checked)}
               className="h-4 w-4 rounded border-white/20 bg-transparent" />
             Только ошибки
@@ -719,8 +719,8 @@ export default function LogsPage() {
 
       {/* Log items */}
       {loading ? (
-        <Card className="border-white/10 bg-slate-950/65 p-6 text-white">
-          <div className="flex items-center gap-3 text-sm text-slate-400">
+        <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-6 text-slate-900 dark:text-white">
+          <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin text-sky-300" /> Загружаем журнал...
           </div>
         </Card>
@@ -735,7 +735,7 @@ export default function LogsPage() {
             const isNotif = item.kind === 'notification'
 
             return (
-              <Card key={item.id} className={`border-white/8 bg-slate-950/60 p-4 text-white transition hover:bg-slate-900/60 ${isError ? 'border-red-500/20' : ''}`}>
+              <Card key={item.id} className={`border-slate-200 bg-white dark:border-white/8 dark:bg-slate-950/60 p-4 text-slate-900 dark:text-white transition hover:bg-slate-50 dark:hover:bg-slate-900/60 ${isError ? 'border-red-500/20' : ''}`}>
                 <div className="flex items-start gap-3">
                   <div className={`mt-0.5 shrink-0 rounded-xl p-2 ${bg}`}>
                     <Icon className={`h-4 w-4 ${color}`} />
@@ -744,7 +744,7 @@ export default function LogsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Kind badge */}
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isNotif ? 'bg-emerald-500/10 text-emerald-400' : item.kind === 'ai' ? 'bg-violet-500/10 text-violet-300' : 'bg-sky-500/10 text-sky-400'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isNotif ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : item.kind === 'ai' ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-sky-500/10 text-sky-700 dark:text-sky-400'}`}>
                         {isNotif ? 'уведомление' : item.kind === 'ai' ? 'ИИ' : 'аудит'}
                       </span>
 
@@ -760,10 +760,10 @@ export default function LogsPage() {
                         const f = formatItem(item)
                         if (!f) return null
                         const labels: Record<string, { text: string; cls: string }> = {
-                          info: { text: 'инфо', cls: 'bg-slate-500/15 text-slate-300' },
-                          normal: { text: 'обычное', cls: 'bg-sky-500/15 text-sky-300' },
-                          important: { text: 'важное', cls: 'bg-amber-500/15 text-amber-300' },
-                          critical: { text: 'критично', cls: 'bg-red-500/20 text-red-300' },
+                          info: { text: 'инфо', cls: 'bg-slate-500/15 text-slate-700 dark:text-slate-300' },
+                          normal: { text: 'обычное', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300' },
+                          important: { text: 'важное', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300' },
+                          critical: { text: 'критично', cls: 'bg-red-500/20 text-red-700 dark:text-red-300' },
                         }
                         const sev = labels[f.severity] || labels.info
                         return (
@@ -775,7 +775,7 @@ export default function LogsPage() {
 
                       {/* Error badge */}
                       {isError && (
-                        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300">ошибка</span>
+                        <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-300">ошибка</span>
                       )}
 
                       {/* Time */}
@@ -785,7 +785,7 @@ export default function LogsPage() {
                     </div>
 
                     {/* Main title */}
-                    <p className="mt-1.5 text-sm font-medium leading-snug text-slate-100">
+                    <p className="mt-1.5 text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">
                       {humanTitle(item)}
                     </p>
 
@@ -794,14 +794,14 @@ export default function LogsPage() {
                         {item.detailRows.map((row, index) => {
                           const { label, value } = humanDetailRow(row)
                           return (
-                            <div key={`${item.id}:${index}`} className="rounded-md border border-white/8 bg-white/[0.03] px-2.5 py-1.5 text-xs">
+                            <div key={`${item.id}:${index}`} className="rounded-md border border-slate-200 bg-slate-50 dark:border-white/8 dark:bg-white/[0.03] px-2.5 py-1.5 text-xs">
                               {value ? (
                                 <>
                                   <span className="text-slate-500">{label}:</span>{' '}
-                                  <span className="text-slate-200">{value}</span>
+                                  <span className="text-slate-700 dark:text-slate-200">{value}</span>
                                 </>
                               ) : (
-                                <span className="text-slate-200">{row}</span>
+                                <span className="text-slate-700 dark:text-slate-200">{row}</span>
                               )}
                             </div>
                           )
@@ -831,7 +831,7 @@ export default function LogsPage() {
 
           {/* Pagination */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Страница {data?.page || 1} • всего {data?.total || 0} событий
             </p>
             <div className="flex gap-2">

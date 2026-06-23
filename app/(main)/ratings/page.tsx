@@ -37,7 +37,7 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-xl">🥇</span>
   if (rank === 2) return <span className="text-xl">🥈</span>
   if (rank === 3) return <span className="text-xl">🥉</span>
-  return <span className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-800 text-xs text-slate-400 font-bold">{rank}</span>
+  return <span className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400 font-bold">{rank}</span>
 }
 
 // ================== PAGE ==================
@@ -151,32 +151,32 @@ export default function RatingsPage() {
                   }} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     activePreset === p
                       ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                      : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700'
+                      : 'bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}>
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
                 ))}
-                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
+                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
                   <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
                   <input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom') }}
-                    className="bg-transparent text-sm text-slate-200 outline-none w-[120px]"
+                    className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none w-[120px]"
                   />
                   <span className="text-slate-500">—</span>
                   <input
                     type="date"
                     value={dateTo}
                     onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom') }}
-                    className="bg-transparent text-sm text-slate-200 outline-none w-[120px]"
+                    className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none w-[120px]"
                   />
                 </div>
                 {companies.length > 0 && (
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-xl text-sm text-slate-200 outline-none"
+                    className="px-3 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-200 outline-none"
                   >
                     <option value="">Все компании</option>
                     {companies.map((c) => (
@@ -190,26 +190,26 @@ export default function RatingsPage() {
 
           {/* Summary stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Card className="p-4 bg-slate-900/80 border-amber-500/20">
+            <Card className="p-4 bg-white dark:bg-slate-900/80 border-amber-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <Users2 className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-400">Операторов в рейтинге</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Операторов в рейтинге</p>
               </div>
               <p className="text-xl font-bold text-amber-400">{leaderboard.length}</p>
             </Card>
-            <Card className="p-4 bg-slate-900/80 border-emerald-500/20">
+            <Card className="p-4 bg-white dark:bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-slate-400">Суммарная выручка</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Суммарная выручка</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(totalRevenue)}</p>
             </Card>
-            <Card className="p-4 bg-slate-900/80 border-amber-500/20 col-span-2 md:col-span-1">
+            <Card className="p-4 bg-white dark:bg-slate-900/80 border-amber-500/20 col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-2">
                 <Medal className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-400">Лидер периода</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Лидер периода</p>
               </div>
-              <p className="text-xl font-bold text-white truncate">{leaderboard[0]?.name || '—'}</p>
+              <p className="text-xl font-bold text-slate-900 dark:text-white truncate">{leaderboard[0]?.name || '—'}</p>
               {leaderboard[0] && (
                 <p className="text-xs text-emerald-400 mt-1">{fmtMoney(leaderboard[0].revenue)}</p>
               )}
@@ -217,8 +217,8 @@ export default function RatingsPage() {
           </div>
 
           {/* Leaderboard */}
-          <Card className="p-5 bg-slate-900/80 border-slate-800">
-            <h2 className="text-sm font-semibold text-white mb-4">Таблица лидеров</h2>
+          <Card className="p-5 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Таблица лидеров</h2>
 
             {/* Полный лоадер только при первой загрузке */}
             {loading && leaderboard.length === 0 ? (
@@ -235,7 +235,7 @@ export default function RatingsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-sm">
                   <thead>
-                    <tr className="text-slate-500 border-b border-slate-800 text-xs uppercase tracking-wide">
+                    <tr className="text-slate-500 border-b border-slate-200 dark:border-slate-800 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 pr-3 font-medium w-10">#</th>
                       <th className="text-left py-2 pr-4 font-medium">Оператор</th>
                       <th className="text-right py-2 pr-4 font-medium">Выручка</th>
@@ -252,19 +252,19 @@ export default function RatingsPage() {
                       return (
                         <tr
                           key={row.operatorId}
-                          className={`border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors ${rank <= 3 && row.revenue > 0 ? 'bg-amber-500/3' : ''}`}
+                          className={`border-b border-slate-200/40 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors ${rank <= 3 && row.revenue > 0 ? 'bg-amber-500/3' : ''}`}
                         >
                           <td className="py-3 pr-3">
                             <RankBadge rank={rank} />
                           </td>
                           <td className="py-3 pr-4">
                             <div>
-                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-slate-200' : rank === 3 && row.revenue > 0 ? 'text-orange-300' : 'text-slate-400'}`}>
+                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-700 dark:text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-slate-700 dark:text-slate-200' : rank === 3 && row.revenue > 0 ? 'text-orange-600 dark:text-orange-300' : 'text-slate-500 dark:text-slate-400'}`}>
                                 {row.name}
                               </p>
                               {row.revenue > 0 && (
                                 <div className="flex items-center gap-2 mt-1">
-                                  <div className="h-1 rounded-full bg-slate-800 flex-1 max-w-[120px]">
+                                  <div className="h-1 rounded-full bg-slate-200 dark:bg-slate-800 flex-1 max-w-[120px]">
                                     <div
                                       className="h-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
                                       style={{ width: `${sharePercent}%` }}
@@ -281,8 +281,8 @@ export default function RatingsPage() {
                               : <span className="text-slate-600 text-xs">нет данных</span>
                             }
                           </td>
-                          <td className="py-3 pr-4 text-right text-slate-300">{row.shifts || '—'}</td>
-                          <td className="py-3 pr-4 text-right text-slate-300">{row.days || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-slate-700 dark:text-slate-300">{row.shifts || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-slate-700 dark:text-slate-300">{row.days || '—'}</td>
                           <td className="py-3 pr-4 text-right text-amber-400 font-medium">
                             {row.avgCheck > 0 ? fmtMoney(row.avgCheck) : '—'}
                           </td>
@@ -308,26 +308,26 @@ export default function RatingsPage() {
 
           {/* Top 3 podium */}
           {leaderboard.filter(r => r.revenue > 0).length >= 3 && (
-            <Card className="p-5 bg-slate-900/80 border-amber-500/20">
-              <h2 className="text-sm font-semibold text-white mb-4">Подиум</h2>
+            <Card className="p-5 bg-white dark:bg-slate-900/80 border-amber-500/20">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Подиум</h2>
               <div className="flex items-end justify-center gap-3">
                 {/* 2nd */}
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-20 h-20 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
                     <span className="text-3xl">🥈</span>
                   </div>
-                  <div className="w-24 h-16 bg-slate-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-slate-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
-                    <span className="text-xs text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
+                  <div className="w-24 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
+                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
                   </div>
                 </div>
                 {/* 1st */}
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-24 h-24 rounded-2xl bg-amber-900/30 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
+                  <div className="w-24 h-24 rounded-2xl bg-amber-50 dark:bg-amber-900/30 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
                     <span className="text-4xl">🥇</span>
                   </div>
                   <div className="w-28 h-24 bg-amber-500/10 border border-amber-500/20 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-amber-300 font-semibold truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[0]?.name}</span>
+                    <span className="text-xs text-amber-700 dark:text-amber-300 font-semibold truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[0]?.name}</span>
                     <span className="text-sm font-bold text-emerald-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[0]?.revenue ?? 0)}</span>
                     <span className="text-xs text-slate-500">{leaderboard.filter(r => r.revenue > 0)[0]?.shifts} смен</span>
                   </div>
@@ -338,8 +338,8 @@ export default function RatingsPage() {
                     <span className="text-3xl">🥉</span>
                   </div>
                   <div className="w-24 h-12 bg-orange-500/5 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-orange-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[2]?.name}</span>
-                    <span className="text-xs text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-orange-600 dark:text-orange-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[2]?.name}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
                   </div>
                 </div>
               </div>

@@ -129,7 +129,7 @@ export default function ValuationPage() {
         actions={
           <button
             onClick={() => void load()}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.08] hover:text-foreground"
             title="Обновить"
           >
             <RefreshCw className="h-4 w-4" />
@@ -140,19 +140,19 @@ export default function ValuationPage() {
       {/* Hero — диапазон оценки */}
       <Card className="relative overflow-hidden border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-orange-500/[0.03] p-6">
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
-        <p className="text-[11px] uppercase tracking-widest text-amber-300/80">Ориентировочная стоимость бизнеса</p>
+        <p className="text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300/80">Ориентировочная стоимость бизнеса</p>
         {data.profitable ? (
           <>
-            <p className="mt-2 text-4xl font-bold tabular-nums text-amber-200">
+            <p className="mt-2 text-4xl font-bold tabular-nums text-amber-700 dark:text-amber-200">
               {fmtMln(data.valuation.low)} — {fmtMln(data.valuation.high)}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               Средняя оценка: <span className="font-semibold text-foreground">{formatMoney(data.valuation.mid)} ₸</span>
-              {' '}· мультипликатор <span className="font-semibold text-amber-200">{data.multiple.mid}×</span> к годовой EBITDA
+              {' '}· мультипликатор <span className="font-semibold text-amber-700 dark:text-amber-200">{data.multiple.mid}×</span> к годовой EBITDA
             </p>
           </>
         ) : (
-          <p className="mt-2 text-lg font-semibold text-rose-200">
+          <p className="mt-2 text-lg font-semibold text-rose-700 dark:text-rose-200">
             Бизнес убыточен на уровне EBITDA — оценка по мультипликатору неприменима. Сначала нужно выйти в плюс.
           </p>
         )}
@@ -160,30 +160,30 @@ export default function ValuationPage() {
 
       {/* KPI ряд */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card className="border-white/10 bg-white/[0.02] p-4">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">EBITDA за 12 мес</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-300">{formatMoney(data.ebitda_12mo)} ₸</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{formatMoney(data.ebitda_12mo)} ₸</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             Выручка {formatMoney(data.revenue_12mo)} ₸ · чистая прибыль {formatMoney(data.net_profit_12mo)} ₸
           </p>
         </Card>
-        <Card className="border-white/10 bg-white/[0.02] p-4">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">EBITDA-маржа</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-violet-300">{data.ebitda_margin}%</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-violet-600 dark:text-violet-300">{data.ebitda_margin}%</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {data.margin_cv != null
               ? `Стабильность: ${data.margin_cv < 0.2 ? 'высокая' : data.margin_cv > 0.5 ? 'низкая' : 'средняя'}`
               : 'Стабильность: мало данных'}
           </p>
         </Card>
-        <Card className="border-white/10 bg-white/[0.02] p-4">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Тренд год к году</p>
           {data.trend_pct == null ? (
             <p className="mt-1 flex items-center gap-1.5 text-2xl font-bold text-muted-foreground">
               <Minus className="h-5 w-5" /> нет данных
             </p>
           ) : (
-            <p className={`mt-1 flex items-center gap-1.5 text-2xl font-bold tabular-nums ${trendUp ? 'text-emerald-300' : 'text-rose-300'}`}>
+            <p className={`mt-1 flex items-center gap-1.5 text-2xl font-bold tabular-nums ${trendUp ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>
               {trendUp ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
               {trendUp ? '+' : ''}{data.trend_pct}%
             </p>
@@ -195,7 +195,7 @@ export default function ValuationPage() {
       </div>
 
       {/* Как сложился мультипликатор */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <h2 className="text-sm font-semibold">Как сложился мультипликатор</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Базовый мультипликатор {data.multiple.base}× корректируется по факторам ниже → итог {data.multiple.mid}×
@@ -203,13 +203,13 @@ export default function ValuationPage() {
         <div className="mt-4 space-y-2">
           {data.factors.map((f) => {
             const dot =
-              f.status === 'good' ? 'bg-emerald-400' : f.status === 'bad' ? 'bg-rose-400' : 'bg-white/30'
+              f.status === 'good' ? 'bg-emerald-400' : f.status === 'bad' ? 'bg-rose-400' : 'bg-slate-300 dark:bg-white/30'
             const effectText =
               f.effect === 0 ? '—' : `${f.effect > 0 ? '+' : ''}${f.effect}×`
             const effectColor =
-              f.effect > 0 ? 'text-emerald-300' : f.effect < 0 ? 'text-rose-300' : 'text-muted-foreground'
+              f.effect > 0 ? 'text-emerald-600 dark:text-emerald-300' : f.effect < 0 ? 'text-rose-600 dark:text-rose-300' : 'text-muted-foreground'
             return (
-              <div key={f.key} className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+              <div key={f.key} className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.02] px-3 py-2.5">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
@@ -223,13 +223,13 @@ export default function ValuationPage() {
           })}
         </div>
         <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5">
-          <span className="text-sm font-semibold text-amber-200">Итоговый мультипликатор</span>
-          <span className="text-lg font-bold tabular-nums text-amber-200">{data.multiple.mid}×</span>
+          <span className="text-sm font-semibold text-amber-700 dark:text-amber-200">Итоговый мультипликатор</span>
+          <span className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-200">{data.multiple.mid}×</span>
         </div>
       </Card>
 
       {/* График EBITDA по месяцам */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <h2 className="text-sm font-semibold">EBITDA по месяцам (12 мес)</h2>
         <div className="mt-3 h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -252,7 +252,7 @@ export default function ValuationPage() {
       </Card>
 
       {/* Дисклеймер */}
-      <Card className="border-white/10 bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
         <p className="font-medium text-foreground/80">Как читать эту оценку</p>
         <p className="mt-1">
           Это ориентир, а не официальная оценка. Реальная цена всегда обсуждается с покупателем и зависит от вещей,

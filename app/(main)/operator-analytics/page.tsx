@@ -201,7 +201,7 @@ const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: st
   warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
   danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
   opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Zap },
-  info: { bg: 'bg-slate-800/30', border: 'border-white/5', text: 'text-slate-400', icon: Info },
+  info: { bg: 'bg-slate-50 dark:bg-slate-800/30', border: 'border-slate-200 dark:border-white/5', text: 'text-slate-500 dark:text-slate-400', icon: Info },
 }
 
 const DATE_PRESETS: Record<DatePreset, { label: string; getRange: () => { from: string; to: string } }> = {
@@ -475,15 +475,15 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   }
   
   return (
-    <div 
+    <div
       onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-5 hover:bg-slate-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
+      className={`relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-5 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-3">
           <div className={`p-2 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
-            <Icon className="w-4 h-4 text-white" />
+            <Icon className="w-4 h-4 text-slate-900 dark:text-white" />
           </div>
           {trend !== undefined && (
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
@@ -495,8 +495,8 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
             </span>
           )}
         </div>
-        <p className="text-slate-400 text-xs mb-1">{title}</p>
-        <p className="text-xl font-bold text-white mb-1">{value}</p>
+        <p className="text-slate-500 dark:text-slate-400 text-xs mb-1">{title}</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
         {subValue && <p className="text-xs text-slate-500">{subValue}</p>}
       </div>
     </div>
@@ -517,8 +517,8 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
           <Icon className="w-3.5 h-3.5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-white mb-0.5">{insight.title}</p>
-          <p className="text-[11px] text-slate-400 line-clamp-2">{insight.description}</p>
+          <p className="text-xs font-medium text-slate-900 dark:text-white mb-0.5">{insight.title}</p>
+          <p className="text-[11px] text-slate-700 dark:text-slate-400 line-clamp-2">{insight.description}</p>
           {insight.metric && (
             <p className={`text-sm font-bold mt-1 ${styles.text}`}>{insight.metric}</p>
           )}
@@ -594,9 +594,9 @@ const OperatorDetailsModal = memo(({
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div
         ref={modalRef}
-        className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl w-full max-w-4xl my-8 animate-in fade-in zoom-in duration-200"
       >
-        <div className="sticky top-0 bg-slate-900 border-b border-white/5 rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 rounded-t-2xl z-10">
           <div className="p-6 flex justify-between items-center">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-amber-600">
@@ -615,21 +615,21 @@ const OperatorDetailsModal = memo(({
                 )}
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
                   {operator.operatorName}
                 </h2>
                 <div className="flex items-center gap-3 mt-1">
                   {operator.position && (
                     <>
-                      <p className="text-sm text-slate-400">{operator.position}</p>
+                      <p className="text-sm text-slate-700 dark:text-slate-400">{operator.position}</p>
                       <span className="w-1 h-1 rounded-full bg-slate-600" />
                     </>
                   )}
-                  <p className="text-sm text-slate-400 font-mono">ID: {operator.operatorId.slice(0, 8)}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-400 font-mono">ID: {operator.operatorId.slice(0, 8)}</p>
                   {tenure && (
                     <>
                       <span className="w-1 h-1 rounded-full bg-slate-600" />
-                      <p className="text-sm text-slate-400 flex items-center gap-1">
+                      <p className="text-sm text-slate-700 dark:text-slate-400 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {tenure}
                       </p>
@@ -640,7 +640,7 @@ const OperatorDetailsModal = memo(({
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+              className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-colors"
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -652,7 +652,7 @@ const OperatorDetailsModal = memo(({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'overview'
                   ? 'bg-amber-500/20 text-amber-400 border-b-2 border-amber-500'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
               Обзор
@@ -662,7 +662,7 @@ const OperatorDetailsModal = memo(({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'payments'
                   ? 'bg-amber-500/20 text-amber-400 border-b-2 border-amber-500'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
               Платежи
@@ -672,7 +672,7 @@ const OperatorDetailsModal = memo(({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'adjustments'
                   ? 'bg-amber-500/20 text-amber-400 border-b-2 border-amber-500'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
               Корректировки
@@ -723,8 +723,8 @@ const OperatorDetailsModal = memo(({
 
               {operator.dailyData.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-white">Динамика выручки по дням</h3>
-                  <div className="h-48 bg-slate-800/30 rounded-xl p-4 border border-white/5">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Динамика выручки по дням</h3>
+                  <div className="h-48 bg-slate-50 dark:bg-slate-800/30 rounded-xl p-4 border border-slate-200 dark:border-white/5">
                     <OperatorDailyChart data={operator.dailyData} />
                   </div>
                   <div className="flex justify-between text-xs">
@@ -749,21 +749,21 @@ const OperatorDetailsModal = memo(({
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-slate-800/30 rounded-lg">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Всего смен</p>
-                  <p className="text-lg font-semibold text-white">{operator.shifts}</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{operator.shifts}</p>
                 </div>
-                <div className="p-3 bg-slate-800/30 rounded-lg">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Рабочих дней</p>
-                  <p className="text-lg font-semibold text-white">{operator.days}</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{operator.days}</p>
                 </div>
-                <div className="p-3 bg-slate-800/30 rounded-lg">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Смен в день</p>
-                  <p className="text-lg font-semibold text-white">{shiftsPerDay}</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{shiftsPerDay}</p>
                 </div>
-                <div className="p-3 bg-slate-800/30 rounded-lg">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/30 rounded-lg">
                   <p className="text-xs text-slate-500 mb-1">Доля в выручке</p>
-                  <p className="text-lg font-semibold text-white">{(operator.share * 100).toFixed(1)}%</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-white">{(operator.share * 100).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -772,28 +772,28 @@ const OperatorDetailsModal = memo(({
           {activeTab === 'payments' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 bg-slate-800/30 rounded-xl border border-emerald-500/20">
+                <div className="p-4 bg-white dark:bg-slate-800/30 rounded-xl border border-emerald-500/20">
                   <p className="text-xs text-slate-500 mb-2">Наличные</p>
                   <p className="text-xl font-bold text-emerald-400">{formatMoneyCompact(operator.cashAmount)}</p>
                   <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.cashAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
-                <div className="p-4 bg-slate-800/30 rounded-xl border border-blue-500/20">
+                <div className="p-4 bg-white dark:bg-slate-800/30 rounded-xl border border-blue-500/20">
                   <p className="text-xs text-slate-500 mb-2">Безналичный</p>
                   <p className="text-xl font-bold text-blue-400">{formatMoneyCompact(operator.kaspiAmount)}</p>
                   <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.kaspiAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
-                <div className="p-4 bg-slate-800/30 rounded-xl border border-amber-500/20">
+                <div className="p-4 bg-white dark:bg-slate-800/30 rounded-xl border border-amber-500/20">
                   <p className="text-xs text-slate-500 mb-2">Online</p>
                   <p className="text-xl font-bold text-amber-400">{formatMoneyCompact(operator.onlineAmount)}</p>
                   <p className="text-xs text-slate-500 mt-2">
                     {operator.totalTurnover > 0 ? ((operator.onlineAmount / operator.totalTurnover) * 100).toFixed(1) : 0}% от выручки
                   </p>
                 </div>
-                <div className="p-4 bg-slate-800/30 rounded-xl border border-amber-500/20">
+                <div className="p-4 bg-white dark:bg-slate-800/30 rounded-xl border border-amber-500/20">
                   <p className="text-xs text-slate-500 mb-2">Карта</p>
                   <p className="text-xl font-bold text-amber-400">{formatMoneyCompact(operator.cardAmount)}</p>
                   <p className="text-xs text-slate-500 mt-2">
@@ -803,8 +803,8 @@ const OperatorDetailsModal = memo(({
               </div>
 
               {dominantPayment && (
-                <div className="p-4 bg-slate-800/30 rounded-xl border border-white/5">
-                  <p className="text-sm text-slate-400">Доминирующий метод оплаты</p>
+                <div className="p-4 bg-white dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-white/5">
+                  <p className="text-sm text-slate-700 dark:text-slate-400">Доминирующий метод оплаты</p>
                   <p className="text-2xl font-bold mt-1" style={{ color: dominantPayment.color }}>
                     {dominantPayment.name}
                   </p>
@@ -856,11 +856,11 @@ const OperatorDetailsModal = memo(({
                 </div>
               </div>
 
-              <div className="mt-6 p-6 bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl border border-white/5">
+              <div className="mt-6 p-6 bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-800/50 dark:to-slate-900/50 rounded-xl border border-slate-200 dark:border-white/5">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm text-slate-400 mb-2">Итоговый баланс за период</p>
-                    <p className="text-3xl font-bold text-white">{formatMoneyFull(finalBalance)}</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-400 mb-2">Итоговый баланс за период</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatMoneyFull(finalBalance)}</p>
                     <div className="flex flex-wrap gap-4 mt-3 text-xs">
                       <span className="text-slate-500">Выручка: {formatMoneyCompact(operator.totalTurnover)}</span>
                       <span className="text-slate-500">Премии: +{formatMoneyCompact(operator.manualPlus)}</span>
@@ -872,7 +872,7 @@ const OperatorDetailsModal = memo(({
                       ? 'bg-emerald-500/20 border border-emerald-500/30' 
                       : 'bg-rose-500/20 border border-rose-500/30'
                   }`}>
-                    <p className="text-sm text-slate-400 mb-1">Чистый эффект</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-400 mb-1">Чистый эффект</p>
                     <p className={`text-xl font-bold ${operator.netEffect >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {operator.netEffect >= 0 ? '+' : ''}{formatMoneyFull(operator.netEffect)}
                     </p>
@@ -883,10 +883,10 @@ const OperatorDetailsModal = memo(({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-slate-900 border-t border-white/5 rounded-b-2xl p-4 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-colors"
           >
             Закрыть
           </button>
@@ -1712,9 +1712,9 @@ function OperatorAnalyticsContent() {
             <div className="w-16 h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-rose-400" />
             </div>
-            <h2 className="text-xl font-semibold text-white">Ошибка загрузки</h2>
-            <p className="text-slate-400 max-w-md">{error}</p>
-            <Button onClick={handleRefresh} variant="outline" className="border-white/10">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Ошибка загрузки</h2>
+            <p className="text-slate-700 dark:text-slate-400 max-w-md">{error}</p>
+            <Button onClick={handleRefresh} variant="outline" className="border-slate-200 dark:border-white/10">
               <RefreshCw className="w-4 h-4 mr-2" />
               Повторить
             </Button>
@@ -1732,7 +1732,7 @@ function OperatorAnalyticsContent() {
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
               toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
               toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-              'bg-slate-900/80 border-white/10 text-white'
+              'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white'
             }`}>
               <div className="text-sm font-medium">{toast.message}</div>
             </div>
@@ -1747,13 +1747,13 @@ function OperatorAnalyticsContent() {
             backHref="/dashboard"
             actions={
               <>
-                <div className="flex bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
+                <div className="flex bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-xl p-1 border border-slate-200 dark:border-white/10">
                   {(['thisWeek', 'lastWeek', 'thisMonth'] as DatePreset[]).map((preset) => (
                     <button
                       key={preset}
                       onClick={() => handlePresetChange(preset)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        datePreset === preset ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'
+                        datePreset === preset ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       {DATE_PRESETS[preset].label}
@@ -1764,7 +1764,7 @@ function OperatorAnalyticsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
                 >
@@ -1774,7 +1774,7 @@ function OperatorAnalyticsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-white/10 bg-slate-900/50 backdrop-blur-xl hover:bg-white/10"
+                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10"
                   onClick={handleDownloadCSV}
                   title="Скачать CSV"
                 >
@@ -1783,7 +1783,7 @@ function OperatorAnalyticsContent() {
               </>
             }
             toolbar={
-              <p className="text-slate-400 flex items-center gap-2 text-sm">
+              <p className="text-slate-700 dark:text-slate-400 flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4" />
                 {formatDateRange(dateFrom, dateTo)}
               </p>
@@ -1800,19 +1800,19 @@ function OperatorAnalyticsContent() {
           )}
 
           {/* Filters Bar */}
-          <div className="rounded-2xl bg-slate-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
+          <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400" />
-                <span className="text-sm text-slate-400">Фильтры:</span>
+                <Filter className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                <span className="text-sm text-slate-700 dark:text-slate-400">Фильтры:</span>
               </div>
 
               <button
                 onClick={() => setIncludeArena(!includeArena)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeArena
-                    ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10'
-                    : 'border-white/10 text-slate-400 hover:bg-white/5'
+                    ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10'
+                    : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 Arena
@@ -1822,8 +1822,8 @@ function OperatorAnalyticsContent() {
                 onClick={() => setIncludeRamen(!includeRamen)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeRamen
-                    ? 'border-amber-500/50 text-amber-300 bg-amber-500/10'
-                    : 'border-white/10 text-slate-400 hover:bg-white/5'
+                    ? 'border-amber-500/50 text-amber-700 dark:text-amber-300 bg-amber-500/10'
+                    : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 Ramen
@@ -1833,28 +1833,28 @@ function OperatorAnalyticsContent() {
                 onClick={() => setIncludeExtra(!includeExtra)}
                 className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                   includeExtra
-                    ? 'border-amber-500/50 text-amber-300 bg-amber-500/10'
-                    : 'border-white/10 text-slate-400 hover:bg-white/5'
+                    ? 'border-amber-500/50 text-amber-700 dark:text-amber-300 bg-amber-500/10'
+                    : 'border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
                 }`}
               >
                 Extra
               </button>
 
-              <div className="h-4 w-px bg-white/10 mx-2" />
+              <div className="h-4 w-px bg-slate-200 dark:bg-white/10 mx-2" />
 
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={showInactive}
                   onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-white/10 bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
+                  className="rounded border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800/50 text-amber-500 focus:ring-amber-500/20"
                 />
-                <span className="text-xs text-slate-400">Показывать неактивных</span>
+                <span className="text-xs text-slate-700 dark:text-slate-400">Показывать неактивных</span>
               </label>
 
               <button
                 onClick={() => setShowCharts(!showCharts)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-white/10 text-xs hover:bg-slate-700/50 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-xs hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
               >
                 <BarChart3 className="w-3.5 h-3.5" />
                 {showCharts ? 'Скрыть графики' : 'Показать графики'}
@@ -1868,12 +1868,12 @@ function OperatorAnalyticsContent() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Поиск оператора..."
-                  className="h-8 w-48 pl-8 pr-7 bg-slate-800/50 border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                  className="h-8 w-48 pl-8 pr-7 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                 />
                 {search && (
                   <button
                     onClick={() => setSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1936,15 +1936,15 @@ function OperatorAnalyticsContent() {
           )}
 
           {/* Main Table */}
-          <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
+          <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/5">
+                  <tr className="border-b border-slate-200 dark:border-white/5">
                     <th className="py-3 px-2 text-left">
                       <button
                         onClick={() => handleSort('name')}
-                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                       >
                         Оператор
                         {sortKey === 'name' && (
@@ -1957,7 +1957,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-center">
                       <button
                         onClick={() => handleSort('shifts')}
-                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                       >
                         Смен
                         {sortKey === 'shifts' && (
@@ -1969,7 +1969,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">
                       <button
                         onClick={() => handleSort('turnover')}
-                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors ml-auto"
                       >
                         Выручка
                         {sortKey === 'turnover' && (
@@ -1980,7 +1980,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">
                       <button
                         onClick={() => handleSort('avg')}
-                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors ml-auto"
                       >
                         Ср. смена
                         {sortKey === 'avg' && (
@@ -2000,7 +2000,7 @@ function OperatorAnalyticsContent() {
                     <th className="py-3 px-2 text-right">
                       <button
                         onClick={() => handleSort('net')}
-                        className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors ml-auto"
                       >
                         Чистый
                         {sortKey === 'net' && (
@@ -2035,7 +2035,7 @@ function OperatorAnalyticsContent() {
                       <tr
                         key={op.operatorId}
                         onClick={() => setSelectedOperator(op)}
-                        className="border-t border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                        className="border-t border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
                       >
                         <td className="py-2 px-2">
                           <Link 
@@ -2074,13 +2074,13 @@ function OperatorAnalyticsContent() {
                         <td className="py-2 px-2">
                           <div className="space-y-0.5">
                             {op.phone && (
-                              <div className="flex items-center gap-1 text-slate-400 text-xs" title={formatPhone(op.phone)}>
+                              <div className="flex items-center gap-1 text-slate-700 dark:text-slate-400 text-xs" title={formatPhone(op.phone)}>
                                 <Phone className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate max-w-[100px]">{op.phone}</span>
                               </div>
                             )}
                             {op.email && (
-                              <div className="flex items-center gap-1 text-slate-400 text-xs" title={op.email}>
+                              <div className="flex items-center gap-1 text-slate-700 dark:text-slate-400 text-xs" title={op.email}>
                                 <Mail className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate max-w-[120px]">{op.email}</span>
                               </div>
@@ -2097,7 +2097,7 @@ function OperatorAnalyticsContent() {
                         <td className="py-2 px-2 text-center">
                           <Link 
                             href={`/operators/${op.operatorId}/profile?tab=docs`}
-                            className="inline-flex items-center gap-1 text-slate-400 hover:text-amber-400 transition-colors"
+                            className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-400 hover:text-amber-400 transition-colors"
                             onClick={(e) => e.stopPropagation()}
                             title={`${op.documents_count} документов${op.expiring_documents > 0 ? `, ${op.expiring_documents} скоро истекают` : ''}`}
                           >
@@ -2133,7 +2133,7 @@ function OperatorAnalyticsContent() {
                 </tbody>
 
                 {analytics.rows.length > 0 && (
-                  <tfoot className="border-t border-white/5 bg-white/5">
+                  <tfoot className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5">
                     <tr>
                       <td className="py-3 px-2 font-semibold" colSpan={3}>Итого</td>
                       <td className="py-3 px-2 text-center font-semibold">{analytics.totalsFiltered.shifts}</td>
@@ -2167,7 +2167,7 @@ function OperatorAnalyticsContent() {
                       <td className="py-3 px-2 text-right font-semibold text-amber-400">
                         {formatMoneyCompact(analytics.totalsFiltered.advances)}
                       </td>
-                      <td className="py-3 px-2 text-right font-semibold text-white">
+                      <td className="py-3 px-2 text-right font-semibold text-slate-900 dark:text-white">
                         {formatMoneyCompact(analytics.totalsFiltered.netEffect)}
                       </td>
                     </tr>
@@ -2181,7 +2181,7 @@ function OperatorAnalyticsContent() {
           {showCharts && analytics.rows.length > 0 && mounted && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Top Operators Chart */}
-              <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
+              <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-amber-400" />
                   Топ-5 операторов по выручке
@@ -2210,7 +2210,7 @@ function OperatorAnalyticsContent() {
               </Card>
 
               {/* Payment Distribution */}
-              <Card className="p-4 bg-slate-900/40 backdrop-blur-xl border-white/5">
+              <Card className="p-4 bg-white dark:bg-slate-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
                 <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                   <PieChart className="w-4 h-4 text-amber-400" />
                   Распределение по типам платежей

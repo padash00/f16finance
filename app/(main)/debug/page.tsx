@@ -604,7 +604,7 @@ export default function DebugPage() {
       <div>
         <button
           onClick={() => setShowDetails(!showDetails)}
-          className="flex items-center gap-2 text-xs text-slate-400 hover:text-white"
+          className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
         >
           {showDetails ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           Технические детали
@@ -665,7 +665,7 @@ function AlertsBanner({
 }) {
   return (
     <Card className="border-amber-500/30 bg-amber-500/[0.05] p-4">
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-200">
+      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-200">
         <AlertTriangle className="h-4 w-4" />
         Требует внимания • {alerts.length}
       </div>
@@ -674,7 +674,7 @@ function AlertsBanner({
           <li
             key={i}
             className={`flex items-start gap-2 ${
-              a.severity === 'error' ? 'text-rose-300' : 'text-amber-200'
+              a.severity === 'error' ? 'text-rose-600 dark:text-rose-300' : 'text-amber-700 dark:text-amber-200'
             }`}
           >
             <span className="mt-1 h-1 w-1 rounded-full bg-current shrink-0" />
@@ -699,7 +699,7 @@ function SanityRow({ rows }: { rows: SanityRow[] }) {
               ? 'text-emerald-400'
               : 'text-slate-500'
         return (
-          <Card key={r.key} className="border-white/5 bg-white/[0.02] p-3">
+          <Card key={r.key} className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-3">
             <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500">
               <Timer className="h-3 w-3" /> {r.label}
             </div>
@@ -723,8 +723,8 @@ function CronsCard({
   error: string | null
 }) {
   return (
-    <Card className="border-white/5 bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+    <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
         <Clock className="h-4 w-4 text-cyan-400" />
         Cron jobs {crons && <span className="text-slate-500">• {crons.length}</span>}
       </div>
@@ -748,9 +748,9 @@ function CronsCard({
             return (
               <div
                 key={c.path}
-                className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5"
+                className="flex items-center gap-3 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5"
               >
-                <span className="font-mono text-slate-200 truncate flex-1">{name}</span>
+                <span className="font-mono text-slate-700 dark:text-slate-200 truncate flex-1">{name}</span>
                 <span className="text-[10px] text-slate-500 tabular-nums">
                   {fmtCronSchedule(c.schedule)}
                 </span>
@@ -777,8 +777,8 @@ function MigrationsCard({
   loading: boolean
 }) {
   return (
-    <Card className="border-white/5 bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+    <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
         <Database className="h-4 w-4 text-violet-400" />
         Миграции
       </div>
@@ -793,27 +793,27 @@ function MigrationsCard({
         )
       ) : migrations.error ? (
         <div className="space-y-2">
-          <div className="text-xs text-slate-400">
-            Файлов миграций: <span className="text-white">{migrations.file_count}</span>
+          <div className="text-xs text-slate-700 dark:text-slate-400">
+            Файлов миграций: <span className="text-slate-900 dark:text-white">{migrations.file_count}</span>
           </div>
-          <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.05] p-2.5 text-[11px] leading-relaxed text-amber-200/80">
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/[0.05] p-2.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-200/80">
             {migrations.error}
           </div>
         </div>
       ) : (
         <>
           <div className="mb-3 grid grid-cols-2 gap-2 text-center text-xs">
-            <div className="rounded-md border border-white/5 bg-white/[0.02] p-2">
+            <div className="rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-2">
               <div className="text-[10px] uppercase text-slate-500">В файлах</div>
-              <div className="text-base font-bold text-white">{migrations.file_count}</div>
+              <div className="text-base font-bold text-slate-900 dark:text-white">{migrations.file_count}</div>
             </div>
-            <div className="rounded-md border border-white/5 bg-white/[0.02] p-2">
+            <div className="rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-2">
               <div className="text-[10px] uppercase text-slate-500">В БД</div>
-              <div className="text-base font-bold text-white">{migrations.applied_count}</div>
+              <div className="text-base font-bold text-slate-900 dark:text-white">{migrations.applied_count}</div>
             </div>
           </div>
           {migrations.pending.length === 0 && migrations.extra.length === 0 ? (
-            <div className="flex items-center gap-2 text-xs text-emerald-300">
+            <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-300">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Всё синхронизировано
             </div>
@@ -821,13 +821,13 @@ function MigrationsCard({
             <div className="space-y-2 text-xs">
               {migrations.pending.length > 0 && (
                 <div>
-                  <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-rose-300">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-300">
                     Не применены ({migrations.pending.length})
                     <button
                       onClick={() =>
                         navigator.clipboard.writeText(migrations.pending.join('\n'))
                       }
-                      className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-400 hover:bg-white/5 hover:text-white"
+                      className="ml-auto rounded border border-slate-200 dark:border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                     >
                       копировать список
                     </button>
@@ -837,7 +837,7 @@ function MigrationsCard({
                       <div
                         key={m}
                         title={m}
-                        className="break-all rounded bg-rose-500/5 px-2 py-1 font-mono text-[11px] leading-snug text-rose-200/90"
+                        className="break-all rounded bg-rose-500/5 px-2 py-1 font-mono text-[11px] leading-snug text-rose-700 dark:text-rose-200/90"
                       >
                         {m}.sql
                       </div>
@@ -852,13 +852,13 @@ function MigrationsCard({
               )}
               {migrations.extra.length > 0 && (
                 <div>
-                  <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-amber-300">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-300">
                     В БД, но нет файла ({migrations.extra.length})
                     <button
                       onClick={() =>
                         navigator.clipboard.writeText(migrations.extra.join('\n'))
                       }
-                      className="ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-400 hover:bg-white/5 hover:text-white"
+                      className="ml-auto rounded border border-slate-200 dark:border-white/10 px-1.5 py-0.5 text-[9px] normal-case text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                     >
                       копировать
                     </button>
@@ -868,7 +868,7 @@ function MigrationsCard({
                       <div
                         key={m}
                         title={m}
-                        className="break-all rounded bg-amber-500/5 px-2 py-1 font-mono text-[11px] leading-snug text-amber-200/90"
+                        className="break-all rounded bg-amber-500/5 px-2 py-1 font-mono text-[11px] leading-snug text-amber-700 dark:text-amber-200/90"
                       >
                         {m}
                       </div>
@@ -915,14 +915,14 @@ function TablesSection({
   toggleGroup: (s: string) => void
 }) {
   return (
-    <Card className="border-white/5 bg-white/[0.02] p-4">
+    <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-medium text-white">
+        <h2 className="text-sm font-medium text-slate-900 dark:text-white">
           Таблицы БД <span className="text-slate-500">• {stats.total}</span>
         </h2>
         <div className="text-xs text-slate-500">
           <span className="text-emerald-400">{stats.ok}</span> OK ·{' '}
-          <span className="text-slate-400">{stats.empty}</span> пусто ·{' '}
+          <span className="text-slate-500 dark:text-slate-400">{stats.empty}</span> пусто ·{' '}
           <span className="text-amber-400">{stats.missing}</span> нет ·{' '}
           <span className="text-rose-400">{stats.error}</span> ошибки
         </div>
@@ -933,10 +933,10 @@ function TablesSection({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск…"
-              className="h-7 w-48 rounded-md border border-white/10 bg-white/[0.03] pl-6 pr-2 text-xs text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
+              className="h-7 w-48 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] pl-6 pr-2 text-xs text-slate-700 dark:text-slate-200 outline-none placeholder:text-slate-500 focus:border-blue-500/40"
             />
           </div>
-          <div className="flex gap-0.5 rounded-md bg-white/5 p-0.5 text-[10px]">
+          <div className="flex gap-0.5 rounded-md bg-slate-100 dark:bg-white/5 p-0.5 text-[10px]">
             {(
               [
                 { key: 'all', label: 'Все' },
@@ -951,8 +951,8 @@ function TablesSection({
                 onClick={() => setFilter(b.key)}
                 className={`px-2 py-1 rounded ${
                   filter === b.key
-                    ? 'bg-white/10 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {b.label}
@@ -1001,26 +1001,26 @@ function TableGroupBlock({
   onToggle: () => void
 }) {
   return (
-    <div className="rounded-md border border-white/5 bg-white/[0.01]">
+    <div className="rounded-md border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.01]">
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/[0.02]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-100 dark:hover:bg-white/[0.02]"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3 text-slate-500" />
         ) : (
           <ChevronRight className="h-3 w-3 text-slate-500" />
         )}
-        <span className="font-medium text-slate-300">{title}</span>
+        <span className="font-medium text-slate-700 dark:text-slate-300">{title}</span>
         <span className="text-slate-500">• {rows.length}</span>
         {problemCount > 0 && (
-          <span className="ml-auto rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300">
+          <span className="ml-auto rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-600 dark:text-rose-300">
             {problemCount} проблем
           </span>
         )}
       </button>
       {expanded && (
-        <div className="grid gap-px border-t border-white/5 bg-white/5 px-px pb-px sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-px border-t border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-white/5 px-px pb-px sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((r) => (
             <TableRow key={r.name} row={r} />
           ))}
@@ -1034,15 +1034,15 @@ function TableRow({ row }: { row: TableResult }) {
   const color = (() => {
     switch (row.status) {
       case 'ok':
-        return 'bg-slate-950'
+        return 'bg-white dark:bg-slate-950'
       case 'empty':
-        return 'bg-slate-950'
+        return 'bg-white dark:bg-slate-950'
       case 'missing':
         return 'bg-amber-500/[0.06]'
       case 'error':
         return 'bg-rose-500/[0.08]'
       default:
-        return 'bg-slate-950'
+        return 'bg-white dark:bg-slate-950'
     }
   })()
 
@@ -1064,18 +1064,18 @@ function TableRow({ row }: { row: TableResult }) {
   return (
     <div className={`flex items-center gap-2 px-3 py-1.5 text-xs ${color}`}>
       <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
-      <span className="font-mono text-slate-200 truncate flex-1">{row.name}</span>
+      <span className="font-mono text-slate-700 dark:text-slate-200 truncate flex-1">{row.name}</span>
       {row.error ? (
         <span
           title={row.error}
           className={`text-[10px] truncate max-w-[140px] ${
-            row.status === 'missing' ? 'text-amber-300' : 'text-rose-300'
+            row.status === 'missing' ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300'
           }`}
         >
           {row.status === 'missing' ? 'нет' : row.error}
         </span>
       ) : (
-        <span className="text-slate-400 tabular-nums">{fmtCount(row.count)}</span>
+        <span className="text-slate-500 dark:text-slate-400 tabular-nums">{fmtCount(row.count)}</span>
       )}
     </div>
   )
@@ -1089,8 +1089,8 @@ function StorageCard({
   error: string | null
 }) {
   return (
-    <Card className="border-white/5 bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+    <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
         <HardDrive className="h-4 w-4 text-orange-400" />
         Storage {buckets && <span className="text-slate-500">• {buckets.length}</span>}
       </div>
@@ -1105,12 +1105,12 @@ function StorageCard({
           {buckets.map((b) => (
             <div
               key={b.name}
-              className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5"
+              className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5"
             >
-              <span className="font-mono text-slate-200 flex-1 truncate">{b.name}</span>
+              <span className="font-mono text-slate-700 dark:text-slate-200 flex-1 truncate">{b.name}</span>
               <span
                 className={`text-[10px] ${
-                  b.public ? 'text-emerald-300' : 'text-slate-500'
+                  b.public ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500'
                 }`}
               >
                 {b.public ? 'public' : 'private'}
@@ -1127,20 +1127,20 @@ function EnvCard() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
   return (
-    <Card className="border-white/5 bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+    <Card className="border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">
         <Key className="h-4 w-4 text-amber-400" />
         Env (client-side)
       </div>
       <div className="space-y-1 text-xs">
-        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
-          <span className="font-mono text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_URL</span>
+        <div className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5">
+          <span className="font-mono text-slate-500 dark:text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_URL</span>
           <span className={url ? 'text-emerald-400' : 'text-rose-400'}>
             {url ? '✓' : '✗'}
           </span>
         </div>
-        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
-          <span className="font-mono text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>
+        <div className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-white/5 bg-white dark:bg-white/[0.02] px-2.5 py-1.5">
+          <span className="font-mono text-slate-500 dark:text-slate-400 flex-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>
           <span className={key ? 'text-emerald-400' : 'text-rose-400'}>
             {key ? '✓' : '✗'}
           </span>

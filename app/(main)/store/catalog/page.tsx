@@ -28,9 +28,9 @@ function QuickLink({
     <Link
       href={href}
       prefetch
-      className="group flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 transition hover:border-emerald-400/30 hover:bg-white/[0.07]"
+      className="group flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-100/60 px-3 py-2 transition hover:border-emerald-400/30 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.07]"
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-300">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0">
@@ -60,7 +60,7 @@ export default function StoreCatalogPage() {
         }
       />
 
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0 shadow-[0_18px_50px_rgba(0,0,0,0.14)]">
+      <Card className="overflow-hidden border-slate-200 bg-card/70 p-0 shadow-[0_18px_50px_rgba(0,0,0,0.14)] dark:border-white/10">
         <CardContent className="p-4 sm:p-5">
           <CatalogPageContent />
         </CardContent>

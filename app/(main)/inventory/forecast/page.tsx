@@ -51,11 +51,11 @@ function statusLabel(status: ForecastItem['status']) {
 
 function statusBadgeClass(status: ForecastItem['status']) {
   switch (status) {
-    case 'critical': return 'bg-red-500/20 text-red-300 border-red-500/30'
-    case 'warning': return 'bg-orange-500/20 text-orange-300 border-orange-500/30'
-    case 'low': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
-    case 'ok': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-    case 'no_sales': return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    case 'critical': return 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30'
+    case 'warning': return 'bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/30'
+    case 'low': return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border-yellow-500/30'
+    case 'ok': return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+    case 'no_sales': return 'bg-gray-500/20 text-gray-500 dark:text-gray-400 border-gray-500/30'
   }
 }
 
@@ -273,8 +273,8 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
             onClick={() => setFilterStatus(btn.key)}
             className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               filterStatus === btn.key
-                ? 'bg-white/20 text-white'
-                : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white'
+                ? 'bg-slate-200 dark:bg-white/20 text-slate-900 dark:text-white'
+                : 'bg-slate-100 dark:bg-white/5 text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             {btn.label}
@@ -293,18 +293,18 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
 
       {/* Error */}
       {error && (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">
           {error}
         </div>
       )}
 
       {/* Table */}
-      <Card className="border-white/10 bg-card/70">
+      <Card className="border-slate-200 dark:border-white/10 bg-card/70">
         <CardContent className="p-0">
           {loading ? (
             <div className="space-y-0">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-3 gap-2 border-b border-white/5 px-4 py-3 sm:grid-cols-7 sm:gap-4">
+                <div key={i} className="grid grid-cols-3 gap-2 border-b border-slate-100 dark:border-white/5 px-4 py-3 sm:grid-cols-7 sm:gap-4">
                   <Skeleton className="h-4 w-32" />
                   <Skeleton className="h-4 w-20" />
                   <Skeleton className="h-4 w-14 justify-self-end" />
@@ -323,7 +323,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10">
+                  <tr className="border-b border-slate-200 dark:border-white/10">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Наименование</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Категория</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Остаток</th>
@@ -337,7 +337,7 @@ export function InventoryForecastPageContent({ embedded = false }: { embedded?: 
                   {filtered.map(item => (
                     <tr
                       key={item.item_id}
-                      className={`border-b border-white/5 ${rowBgClass(item.status)}`}
+                      className={`border-b border-slate-100 dark:border-white/5 ${rowBgClass(item.status)}`}
                     >
                       <td className="px-4 py-3 font-medium">{item.name}</td>
                       <td className="px-4 py-3 text-muted-foreground">{item.category || '—'}</td>

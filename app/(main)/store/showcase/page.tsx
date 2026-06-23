@@ -318,7 +318,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                 <select
                   value={selectedCompanyId || ''}
                   onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                  className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+                  className="h-9 appearance-none rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
                 >
                   {companies.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -373,22 +373,22 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
 
       {/* Stats strip */}
       <div className="grid grid-cols-3 gap-3">
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
           <p className="mt-1 text-xl font-semibold">{balances.length}</p>
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Ед. товара на витрине</p>
-          <p className="mt-1 text-xl font-semibold text-amber-200">{totalShowcaseQty}</p>
+          <p className="text-[10px] uppercase tracking-widest text-amber-700 dark:text-amber-300/70">Ед. товара на витрине</p>
+          <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{totalShowcaseQty}</p>
         </Card>
-        <Card className={`p-3 ${newRequestsCount > 0 ? 'border-amber-500/20 bg-amber-500/[0.05]' : 'border-white/10 bg-white/[0.03]'}`}>
-          <p className={`text-[10px] uppercase tracking-widest ${newRequestsCount > 0 ? 'text-amber-300/70' : 'text-muted-foreground'}`}>Заявок в работе</p>
-          <p className={`mt-1 text-xl font-semibold ${newRequestsCount > 0 ? 'text-amber-300' : ''}`}>{newRequestsCount}</p>
+        <Card className={`p-3 ${newRequestsCount > 0 ? 'border-amber-500/20 bg-amber-500/[0.05]' : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]'}`}>
+          <p className={`text-[10px] uppercase tracking-widest ${newRequestsCount > 0 ? 'text-amber-700 dark:text-amber-300/70' : 'text-muted-foreground'}`}>Заявок в работе</p>
+          <p className={`mt-1 text-xl font-semibold ${newRequestsCount > 0 ? 'text-amber-700 dark:text-amber-300' : ''}`}>{newRequestsCount}</p>
         </Card>
       </div>
 
       {sendSuccess && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 className="h-4 w-4" />
           Заявка отправлена — менеджер получил уведомление
         </div>
@@ -431,7 +431,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
         {loading && balances.length === 0 ? (
           <div className="p-4">
             <TableSkeleton rows={8} cols={5} />
@@ -455,8 +455,8 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
         ) : (
           <div className="max-h-[calc(100vh-380px)] overflow-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
-                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-9 py-2.5 pl-4 pr-1 font-normal">
                     <input
                       type="checkbox"
@@ -469,21 +469,21 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                   <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Итого</th>
-                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-300/70">Подсобка</th>
-                  <th className="w-24 py-2.5 px-2 text-right font-normal text-amber-300/70">Витрина</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-700 dark:text-amber-300/70">Подсобка</th>
+                  <th className="w-24 py-2.5 px-2 text-right font-normal text-amber-700 dark:text-amber-300/70">Витрина</th>
                   <th className="w-24 py-2.5 px-2 pr-4 text-right font-normal">Цена</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {filteredBalances.map((b) => {
                   const qty = Number(b.quantity)
                   const threshold = b.item?.low_stock_threshold ?? null
                   const isLow = threshold !== null ? qty <= threshold : qty <= 0
                   const isZero = qty <= 0
-                  const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-amber-300'
+                  const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-amber-700 dark:text-amber-300'
                   const rowBg = isLow && !isZero ? 'bg-amber-500/[0.03]' : isZero ? 'bg-rose-500/[0.03]' : ''
                   return (
-                    <tr key={b.item_id} className={`transition hover:bg-white/[0.02] ${rowBg}`}>
+                    <tr key={b.item_id} className={`transition hover:bg-slate-50 dark:hover:bg-white/[0.02] ${rowBg}`}>
                       <td className="w-9 py-2.5 pl-4 pr-1 align-middle">
                         <input
                           type="checkbox"
@@ -515,7 +515,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                         <span className="text-sm font-semibold">{b.catalog_quantity}</span>
                       </td>
                       <td className="w-20 py-2.5 px-2 text-right align-middle">
-                        <span className="text-sm font-semibold text-amber-300">{b.warehouse_quantity}</span>
+                        <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{b.warehouse_quantity}</span>
                       </td>
                       <td className="w-24 py-2.5 px-2 text-right align-middle">
                         <span className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</span>
@@ -549,16 +549,16 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       )}
 
       {/* Request history */}
-      <Card className="border-white/10 bg-card/70">
-        <CardHeader className="border-b border-white/10 pb-3">
+      <Card className="border-slate-200 dark:border-white/10 bg-card/70">
+        <CardHeader className="border-b border-slate-200 dark:border-white/10 pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <ClipboardList className="h-4 w-4 text-amber-300" />
+              <ClipboardList className="h-4 w-4 text-amber-700 dark:text-amber-300" />
               История заявок
             </CardTitle>
             <Link
               href="/store/requests"
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-amber-300 transition-colors"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
             >
               Все заявки
               <ArrowRight className="h-3 w-3" />
@@ -576,7 +576,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
               <p className="text-xs">Заявок пока нет</p>
             </div>
           ) : (
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-slate-100 dark:divide-white/[0.06]">
               {pendingRequests.map((req) => (
                 <div key={req.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -610,9 +610,9 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       {/* Request Sheet */}
       <Sheet open={showRequestPanel} onOpenChange={setShowRequestPanel}>
         <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
+          <SheetHeader className="border-b border-slate-200 dark:border-white/10 p-5">
             <SheetTitle className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-amber-300" />
+              <ClipboardList className="h-5 w-5 text-amber-700 dark:text-amber-300" />
               Заявка на пополнение
             </SheetTitle>
             <SheetDescription>
@@ -621,14 +621,14 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
           </SheetHeader>
           <div className="flex-1 overflow-y-auto p-5">
               {!warehouse ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
                   Склад для этой точки не настроен. Сначала добавьте товары на склад.
                 </div>
               ) : (
                 <form onSubmit={handleSendRequest} className="space-y-3">
                   <div className="space-y-2 max-h-80 overflow-y-auto">
                     {requestLines.map((line, idx) => (
-                      <div key={idx} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
+                      <div key={idx} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 space-y-2">
                         <div className="space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Товар</Label>
                           <select
@@ -648,8 +648,8 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                             return bal ? (
                               <p className="text-[10px] text-muted-foreground">
                                 Итого: <span className="font-medium text-foreground">{bal.catalog_quantity}</span>
-                                {' · '}Склад: <span className="font-medium text-amber-300">{bal.warehouse_quantity}</span>
-                                {' · '}Витрина: <span className="font-medium text-amber-300">{bal.quantity}</span>
+                                {' · '}Склад: <span className="font-medium text-amber-700 dark:text-amber-300">{bal.warehouse_quantity}</span>
+                                {' · '}Витрина: <span className="font-medium text-amber-700 dark:text-amber-300">{bal.quantity}</span>
                               </p>
                             ) : null
                           })()}
@@ -661,7 +661,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                               <button
                                 type="button"
                                 onClick={() => setLineQty(idx, String(Math.max(0, parseQty(line.requested_qty) - 1)))}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 hover:bg-white/[0.06]"
+                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.06]"
                               >
                                 <Minus className="h-3 w-3" />
                               </button>
@@ -674,7 +674,7 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                               <button
                                 type="button"
                                 onClick={() => setLineQty(idx, String(parseQty(line.requested_qty) + 1))}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 hover:bg-white/[0.06]"
+                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.06]"
                               >
                                 <Plus className="h-3 w-3" />
                               </button>
@@ -725,9 +725,9 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
       {/* Return Sheet */}
       <Sheet open={showReturnPanel} onOpenChange={setShowReturnPanel}>
         <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
+          <SheetHeader className="border-b border-slate-200 dark:border-white/10 p-5">
             <SheetTitle className="flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-amber-300" />
+              <Trash2 className="h-5 w-5 text-amber-700 dark:text-amber-300" />
               Возврат на склад
             </SheetTitle>
             <SheetDescription>
@@ -736,14 +736,14 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
           </SheetHeader>
           <div className="flex-1 overflow-y-auto p-5">
               {balances.length === 0 ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
                   Витрина пустая — нечего возвращать.
                 </div>
               ) : (
                 <form onSubmit={handleReturn} className="space-y-3">
                   <div className="space-y-2 max-h-80 overflow-y-auto">
                     {returnLines.map((line, idx) => (
-                      <div key={idx} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
+                      <div key={idx} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-2.5 space-y-2">
                         <div className="space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Товар</Label>
                           <select
@@ -763,11 +763,11 @@ export default function ShowcasePage({ embedded = false }: { embedded?: boolean 
                           <div className="space-y-1 flex-1">
                             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Количество</Label>
                             <div className="flex items-center gap-1">
-                              <button type="button" onClick={() => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: String(Math.max(0, parseQty(l.requested_qty) - 1)) } : l))} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 hover:bg-white/[0.06]">
+                              <button type="button" onClick={() => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: String(Math.max(0, parseQty(l.requested_qty) - 1)) } : l))} className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.06]">
                                 <Minus className="h-3 w-3" />
                               </button>
                               <Input value={line.requested_qty} onChange={(e) => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: e.target.value } : l))} placeholder="0" className="h-7 text-xs text-center flex-1" />
-                              <button type="button" onClick={() => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: String(parseQty(l.requested_qty) + 1) } : l))} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 hover:bg-white/[0.06]">
+                              <button type="button" onClick={() => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: String(parseQty(l.requested_qty) + 1) } : l))} className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.06]">
                                 <Plus className="h-3 w-3" />
                               </button>
                             </div>

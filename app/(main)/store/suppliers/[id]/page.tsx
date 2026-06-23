@@ -349,10 +349,10 @@ export default function SupplierCardPage() {
   if (!supplier) {
     return (
       <div className="app-page max-w-2xl space-y-4">
-        <Link href="/store/suppliers" className="inline-flex items-center text-sm text-emerald-300 hover:text-emerald-200">
+        <Link href="/store/suppliers" className="inline-flex items-center text-sm text-emerald-600 dark:text-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200">
           <ArrowLeft className="w-4 h-4 mr-1" /> К списку поставщиков
         </Link>
-        <Card className="p-6 text-sm text-red-200 border-red-500/30 bg-red-500/10">{error || 'Поставщик не найден'}</Card>
+        <Card className="p-6 text-sm text-red-700 dark:text-red-200 border-red-500/30 bg-red-500/10">{error || 'Поставщик не найден'}</Card>
       </div>
     )
   }
@@ -380,27 +380,27 @@ export default function SupplierCardPage() {
         }
       />
 
-      {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card> : null}
-      {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card> : null}
+      {error ? <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
+      {success ? <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card> : null}
 
       {stats ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Card className="p-3 bg-gray-900/60 border-gray-800">
+          <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Накладных</div>
             <div className="text-lg font-bold">{stats.receiptsCount}</div>
             <div className="text-xs text-muted-foreground">{formatMoney(stats.totalSpend)} ₸ оборот</div>
           </Card>
-          <Card className="p-3 bg-gray-900/60 border-gray-800">
+          <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Открытые долги</div>
-            <div className="text-lg font-bold text-amber-300">{stats.openDebtsCount}</div>
+            <div className="text-lg font-bold text-amber-600 dark:text-amber-300">{stats.openDebtsCount}</div>
             <div className="text-xs text-muted-foreground">{formatMoney(stats.openDebtsSum)} ₸</div>
           </Card>
-          <Card className="p-3 bg-gray-900/60 border-gray-800">
+          <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Алиасов AI</div>
             <div className="text-lg font-bold">{stats.aliasesCount}</div>
             <div className="text-xs text-muted-foreground">обученных строк</div>
           </Card>
-          <Card className="p-3 bg-gray-900/60 border-gray-800">
+          <Card className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
             <div className="text-[11px] text-muted-foreground uppercase">Средний срок оплаты</div>
             <div className="text-lg font-bold">{stats.avgDaysToPay == null ? '—' : `${stats.avgDaysToPay} дн`}</div>
             <div className="text-xs text-muted-foreground">от приёмки до платежа</div>
@@ -408,7 +408,7 @@ export default function SupplierCardPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+      <div className="flex flex-wrap gap-2 p-1 bg-slate-100 dark:bg-gray-800/50 rounded-xl w-fit border border-slate-200 dark:border-gray-700">
         <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')} icon={<Building2 className="w-4 h-4" />} label="Настройки" />
         <TabBtn active={tab === 'products'} onClick={() => setTab('products')} icon={<Tag className="w-4 h-4" />} label={`Товары (${products.length})`} />
         <TabBtn active={tab === 'receipts'} onClick={() => setTab('receipts')} icon={<Receipt className="w-4 h-4" />} label={`Накладные (${receipts.length})`} />
@@ -417,7 +417,7 @@ export default function SupplierCardPage() {
       </div>
 
       {tab === 'overview' ? (
-        <Card className="p-5 bg-gray-900/60 border-gray-800 space-y-4 max-w-3xl">
+        <Card className="p-5 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800 space-y-4 max-w-3xl">
           <div>
             <h2 className="text-lg font-semibold">Настройки поставщика</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -444,8 +444,8 @@ export default function SupplierCardPage() {
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-4 space-y-3">
-            <p className="text-[11px] uppercase tracking-wider text-emerald-300/80 font-medium">Торговый представитель</p>
+          <div className="border-t border-slate-200 dark:border-white/10 pt-4 space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300/80 font-medium">Торговый представитель</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Имя торгпреда</Label>
@@ -461,7 +461,7 @@ export default function SupplierCardPage() {
             </p>
           </div>
 
-          <div className="border-t border-white/10 pt-4 grid sm:grid-cols-2 gap-3">
+          <div className="border-t border-slate-200 dark:border-white/10 pt-4 grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Контактное лицо (общее)</Label>
               <Input value={editForm.contact_name} onChange={(e) => setEditForm((f) => ({ ...f, contact_name: e.target.value }))} placeholder="Бухгалтер, менеджер..." />
@@ -490,14 +490,14 @@ export default function SupplierCardPage() {
             За этим поставщиком пока не закреплено товаров. Товар закрепляется автоматически при проведении приёмки от этого поставщика.
           </Card>
         ) : (
-          <Card className="bg-gray-900/60 border-gray-800 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-white/10 text-xs text-muted-foreground">
+          <Card className="bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800 overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-slate-200 dark:border-white/10 text-xs text-muted-foreground">
               <span>
                 Умный порог = расход/день × срок поставки ({supplier.lead_time_days ?? 3} дн) × 1.5.
                 {stats && stats.reorderCount > 0 ? (
-                  <span className="ml-1 text-amber-300 font-medium">Пора заказывать: {stats.reorderCount}.</span>
+                  <span className="ml-1 text-amber-600 dark:text-amber-300 font-medium">Пора заказывать: {stats.reorderCount}.</span>
                 ) : (
-                  <span className="ml-1 text-emerald-300">Всё в норме.</span>
+                  <span className="ml-1 text-emerald-600 dark:text-emerald-300">Всё в норме.</span>
                 )}
               </span>
               <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={openTransferItems}>
@@ -507,7 +507,7 @@ export default function SupplierCardPage() {
             </div>
             <div className="overflow-auto">
               <table className="w-full text-sm">
-                <thead className="bg-white/[0.03] text-xs text-muted-foreground">
+                <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
                   <tr className="text-left">
                     <th className="px-3 py-2 font-normal">Товар</th>
                     <th className="px-3 py-2 text-right font-normal">Остаток</th>
@@ -518,20 +518,20 @@ export default function SupplierCardPage() {
                 </thead>
                 <tbody>
                   {products.map((p) => (
-                    <tr key={p.id} className={`border-t border-white/[0.06] ${p.needs_reorder ? 'bg-amber-500/[0.04]' : ''}`}>
+                    <tr key={p.id} className={`border-t border-slate-100 dark:border-white/[0.06] ${p.needs_reorder ? 'bg-amber-500/[0.04]' : ''}`}>
                       <td className="px-3 py-2">
                         <span className="flex items-center gap-2 min-w-0">
                           <span className="block truncate">{p.name}</span>
                           {!p.is_active ? (
-                            <span className="shrink-0 rounded-full border border-gray-500/30 bg-gray-500/10 px-1.5 py-0.5 text-[10px] text-gray-300">архив</span>
+                            <span className="shrink-0 rounded-full border border-gray-500/30 bg-gray-500/10 px-1.5 py-0.5 text-[10px] text-gray-600 dark:text-gray-300">архив</span>
                           ) : null}
                           {p.needs_reorder ? (
-                            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">пора заказывать</span>
+                            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">пора заказывать</span>
                           ) : null}
                         </span>
                         <span className="block font-mono text-[10px] text-muted-foreground mt-0.5">{p.barcode || '—'}</span>
                       </td>
-                      <td className={`px-3 py-2 text-right tabular-nums ${p.needs_reorder ? 'text-amber-300 font-semibold' : ''}`}>
+                      <td className={`px-3 py-2 text-right tabular-nums ${p.needs_reorder ? 'text-amber-700 dark:text-amber-300 font-semibold' : ''}`}>
                         {p.stock} {p.unit || 'шт'}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
@@ -539,13 +539,13 @@ export default function SupplierCardPage() {
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         <span>{p.effective_threshold || '—'}</span>
-                        <span className={`ml-1 text-[10px] ${p.threshold_source === 'manual' ? 'text-sky-300' : 'text-violet-300'}`}>
+                        <span className={`ml-1 text-[10px] ${p.threshold_source === 'manual' ? 'text-sky-600 dark:text-sky-300' : 'text-violet-600 dark:text-violet-300'}`}>
                           {p.threshold_source === 'manual' ? 'ручной' : 'умный'}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {p.needs_reorder && p.suggested_qty > 0 ? (
-                          <span className="font-semibold text-amber-200">+{p.suggested_qty} {p.unit || 'шт'}</span>
+                          <span className="font-semibold text-amber-700 dark:text-amber-200">+{p.suggested_qty} {p.unit || 'шт'}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -565,17 +565,17 @@ export default function SupplierCardPage() {
         ) : (
           <div className="space-y-2">
             {receipts.map((r) => (
-              <Card key={r.id} className="p-3 bg-gray-900/60 border-gray-800">
+              <Card key={r.id} className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm">
-                      <FileText className="w-4 h-4 text-emerald-300 shrink-0" />
+                      <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
                       <span className="font-medium">{r.invoice_number || `#${r.id.slice(0, 8)}`}</span>
                       <span className="text-muted-foreground text-xs">· {fmtDate(r.received_at)}</span>
                       {r.location?.name ? <span className="text-muted-foreground text-xs">→ {r.location.name}</span> : null}
                     </div>
                     {r.invoice_file_url ? (
-                      <a href={r.invoice_file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                      <a href={r.invoice_file_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 dark:text-emerald-300 underline">
                         Накладная ↗
                       </a>
                     ) : null}
@@ -603,18 +603,18 @@ export default function SupplierCardPage() {
         ) : (
           <div className="space-y-2">
             {debts.map((d) => (
-              <Card key={d.id} className="p-3 bg-gray-900/60 border-gray-800">
+              <Card key={d.id} className="p-3 bg-white dark:bg-gray-900/60 border-slate-200 dark:border-gray-800">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="font-medium">{formatMoney(d.total_amount)} ₸</span>
-                      {d.is_consignment ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-200 border border-purple-500/30">реализация</span> : null}
+                      {d.is_consignment ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-200 border border-purple-500/30">реализация</span> : null}
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                         d.status === 'open'
-                          ? 'bg-amber-500/15 text-amber-200 border-amber-500/30'
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200 border-amber-500/30'
                           : d.status === 'paid'
-                          ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30'
-                          : 'bg-gray-500/15 text-gray-200 border-gray-500/30'
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30'
+                          : 'bg-gray-500/15 text-gray-600 dark:text-gray-200 border-gray-500/30'
                       }`}>
                         {d.status === 'open' ? 'Открыт' : d.status === 'paid' ? 'Оплачен' : 'Списан'}
                       </span>
@@ -625,7 +625,7 @@ export default function SupplierCardPage() {
                       {d.payment_paid_at ? <span>Оплачен: {fmtDate(d.payment_paid_at)}</span> : null}
                     </div>
                   </div>
-                  <Link href={`/store/billing`} className="text-xs text-emerald-300 hover:text-emerald-200">
+                  <Link href={`/store/billing`} className="text-xs text-emerald-600 dark:text-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-200">
                     К долгам →
                   </Link>
                 </div>
@@ -650,9 +650,9 @@ export default function SupplierCardPage() {
           {aliases.length === 0 ? (
             <Card className="p-6 text-sm text-muted-foreground text-center">Алиасов нет — заведутся после первой приёмки от этого поставщика.</Card>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-white/10">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
               <table className="w-full text-sm">
-                <thead className="bg-white/[0.04] text-left text-xs text-muted-foreground">
+                <thead className="bg-slate-50 dark:bg-white/[0.04] text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2.5 font-normal">Имя из накладной (raw)</th>
                     <th className="px-3 py-2.5 font-normal">Товар каталога</th>
@@ -663,9 +663,9 @@ export default function SupplierCardPage() {
                     <th className="px-2 py-2.5"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04]">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                   {aliases.map((a) => (
-                    <tr key={a.id} className="hover:bg-white/[0.02]">
+                    <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                       <td className="px-3 py-2 max-w-[280px] truncate">{a.invoice_name}</td>
                       <td className="px-3 py-2">
                         <p className="truncate">{a.item?.name || '—'}</p>
@@ -678,7 +678,7 @@ export default function SupplierCardPage() {
                       <td className="px-2 py-2 text-right">
                         <button
                           onClick={() => void deleteAlias(a.id)}
-                          className="text-muted-foreground hover:text-red-300 transition"
+                          className="text-muted-foreground hover:text-red-600 dark:hover:text-red-300 transition"
                           title="Удалить алиас"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -696,7 +696,7 @@ export default function SupplierCardPage() {
       {addAliasOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !savingAlias && setAddAliasOpen(false)}>
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold">Добавить алиас вручную</h2>
@@ -745,8 +745,8 @@ export default function SupplierCardPage() {
 
       {transferOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !transferring) setTransferOpen(false) }}>
-          <Card className="w-full max-w-md border-white/10 bg-gray-900 p-5">
-            <div className="mb-1 text-base font-semibold text-white">Перенести к другому поставщику</div>
+          <Card className="w-full max-w-md border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 p-5">
+            <div className="mb-1 text-base font-semibold text-slate-900 dark:text-white">Перенести к другому поставщику</div>
             <p className="mb-4 text-xs text-muted-foreground">
               {transferMode === 'receipt'
                 ? <>Накладная <span className="text-foreground">{transferReceiptLabel}</span> и её товары перейдут выбранному поставщику.</>
@@ -781,7 +781,7 @@ function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
     <button
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-        active ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'
+        active ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'
       }`}
     >
       {icon}

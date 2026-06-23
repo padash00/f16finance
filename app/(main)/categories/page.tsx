@@ -33,21 +33,21 @@ import {
 
 // Цвет по финансовой группе — чтобы категории читались с первого взгляда.
 const GROUP_STYLE: Record<string, { text: string; bg: string; border: string }> = {
-  revenue: { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
-  cogs: { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
-  operating: { text: 'text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/25' },
-  pos_commission: { text: 'text-violet-300', bg: 'bg-violet-500/10', border: 'border-violet-500/25' },
-  payroll: { text: 'text-blue-300', bg: 'bg-blue-500/10', border: 'border-blue-500/25' },
-  payroll_advance: { text: 'text-blue-300', bg: 'bg-blue-500/10', border: 'border-blue-500/25' },
-  payroll_tax: { text: 'text-indigo-300', bg: 'bg-indigo-500/10', border: 'border-indigo-500/25' },
-  income_tax: { text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/25' },
-  financial_expenses: { text: 'text-fuchsia-300', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/25' },
-  non_operating: { text: 'text-orange-300', bg: 'bg-orange-500/10', border: 'border-orange-500/25' },
-  depreciation: { text: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-500/25' },
-  capex: { text: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/25' },
-  profit_distribution: { text: 'text-purple-300', bg: 'bg-purple-500/10', border: 'border-purple-500/25' },
+  revenue: { text: 'text-emerald-600 dark:text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
+  cogs: { text: 'text-emerald-600 dark:text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
+  operating: { text: 'text-sky-600 dark:text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/25' },
+  pos_commission: { text: 'text-violet-600 dark:text-violet-300', bg: 'bg-violet-500/10', border: 'border-violet-500/25' },
+  payroll: { text: 'text-blue-600 dark:text-blue-300', bg: 'bg-blue-500/10', border: 'border-blue-500/25' },
+  payroll_advance: { text: 'text-blue-600 dark:text-blue-300', bg: 'bg-blue-500/10', border: 'border-blue-500/25' },
+  payroll_tax: { text: 'text-indigo-600 dark:text-indigo-300', bg: 'bg-indigo-500/10', border: 'border-indigo-500/25' },
+  income_tax: { text: 'text-rose-600 dark:text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/25' },
+  financial_expenses: { text: 'text-fuchsia-600 dark:text-fuchsia-300', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/25' },
+  non_operating: { text: 'text-orange-600 dark:text-orange-300', bg: 'bg-orange-500/10', border: 'border-orange-500/25' },
+  depreciation: { text: 'text-cyan-600 dark:text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-500/25' },
+  capex: { text: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/25' },
+  profit_distribution: { text: 'text-purple-700 dark:text-purple-300', bg: 'bg-purple-500/10', border: 'border-purple-500/25' },
 }
-const groupStyle = (g: string | null) => GROUP_STYLE[g || 'operating'] || { text: 'text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20' }
+const groupStyle = (g: string | null) => GROUP_STYLE[g || 'operating'] || { text: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/20' }
 
 type Category = {
   id: string
@@ -236,7 +236,7 @@ export default function CategoriesPage() {
               {loading && <div className="col-span-2 text-center py-10 text-muted-foreground animate-pulse">Загрузка...</div>}
 
               {!loading && filteredCategories.map((cat) => (
-                <Card key={cat.id} className={`group relative overflow-hidden border-white/[0.08] bg-white/[0.025] p-4 transition-all ${editingId === cat.id ? 'ring-2 ring-amber-500/40' : 'hover:border-white/20 hover:bg-white/[0.05]'}`}>
+                <Card key={cat.id} className={`group relative overflow-hidden border-slate-200 bg-white dark:border-white/[0.08] dark:bg-white/[0.025] p-4 transition-all ${editingId === cat.id ? 'ring-2 ring-amber-500/40' : 'hover:border-slate-300 hover:bg-slate-50 dark:hover:border-white/20 dark:hover:bg-white/[0.05]'}`}>
                   {editingId === cat.id ? (
                     <div className="space-y-3 relative z-10">
                       <div>
@@ -283,7 +283,7 @@ export default function CategoriesPage() {
                           <h3 className="truncate font-bold text-foreground">{cat.name}</h3>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="inline-flex items-center rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                             {cat.type || 'Общее'}
                           </span>
                           <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[10px] font-medium ${groupStyle(cat.accounting_group).bg} ${groupStyle(cat.accounting_group).border} ${groupStyle(cat.accounting_group).text}`}>
@@ -322,7 +322,7 @@ export default function CategoriesPage() {
                                     {spent.toLocaleString('ru-RU')} / {budget.toLocaleString('ru-RU')} ₸ ({pct}%)
                                   </span>
                                 </div>
-                                <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+                                <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
                                   <div
                                     className={`h-full transition-all ${barColor}`}
                                     style={{ width: `${Math.min(100, pct)}%` }}
@@ -361,7 +361,7 @@ export default function CategoriesPage() {
           {/* Форма создания */}
           {can('categories.create') && (
           <div className="lg:col-span-1">
-            <Card className="sticky top-6 border-white/[0.08] bg-white/[0.03] p-6">
+            <Card className="sticky top-6 border-slate-200 bg-white dark:border-white/[0.08] dark:bg-white/[0.03] p-6">
               <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border">
                 <div className="p-2 bg-accent/10 rounded-lg text-accent">
                   <Plus className="w-5 h-5" />
@@ -426,7 +426,7 @@ export default function CategoriesPage() {
 
         {/* Info-баннер: почему группы фиксированные */}
         <div className="rounded-xl border border-blue-500/25 bg-blue-500/5 px-4 py-3 flex items-start gap-3">
-          <div className="shrink-0 p-1.5 rounded-lg bg-blue-500/15 text-blue-300">
+          <div className="shrink-0 p-1.5 rounded-lg bg-blue-500/15 text-blue-700 dark:text-blue-300">
             <Info className="w-4 h-4" />
           </div>
           <div className="text-xs text-muted-foreground leading-relaxed flex-1">
@@ -438,7 +438,7 @@ export default function CategoriesPage() {
               Это узлы цепочки P&L (ОПИУ): <span className="text-foreground">Выручка → COGS → Валовая → Операционные/ФОТ → EBITDA → Амортизация → EBIT → Финансовые → EBT → Налог → Чистая прибыль</span>. Дашборд, /profitability и cashflow считают показатели на основе этого порядка. Любая ваша категория относится к одной из 11 групп — выберите подходящую при создании.
             </p>
             <p className="mt-1.5">
-              <span className="text-purple-300 font-medium">Доля партнёра / дивиденды</span> → группа <span className="text-foreground font-medium">«Распределение прибыли»</span> (вне P&L, как CAPEX).
+              <span className="text-purple-700 dark:text-purple-300 font-medium">Доля партнёра / дивиденды</span> → группа <span className="text-foreground font-medium">«Распределение прибыли»</span> (вне P&L, как CAPEX).
             </p>
           </div>
         </div>
@@ -459,10 +459,10 @@ export default function CategoriesPage() {
                   <div key={node.key}
                     className={`flex items-center justify-between rounded-xl px-4 py-3 font-bold text-sm ${
                       isLast
-                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                         : isFirst
-                        ? 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
-                        : 'bg-white/[0.06] border border-white/10 text-foreground'
+                        ? 'bg-blue-500/15 border border-blue-500/30 text-blue-700 dark:text-blue-300'
+                        : 'bg-slate-100 border border-slate-200 dark:bg-white/[0.06] dark:border-white/10 text-foreground'
                     }`}
                   >
                     <span>{node.label}</span>
@@ -477,9 +477,9 @@ export default function CategoriesPage() {
               return (
                 <div key={node.group} className="flex items-center gap-3 pl-4">
                   <div className="flex flex-col items-center w-4 self-stretch">
-                    <div className="w-px flex-1 bg-white/10" />
+                    <div className="w-px flex-1 bg-slate-200 dark:bg-white/10" />
                   </div>
-                  <div className="flex-1 flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 my-0.5">
+                  <div className="flex-1 flex items-center justify-between rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03] px-3 py-2.5 my-0.5">
                     <div className="flex items-center gap-2">
                       <TrendingDown className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                       <div>
@@ -488,7 +488,7 @@ export default function CategoriesPage() {
                       </div>
                     </div>
                     <span className={`ml-3 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      count > 0 ? 'bg-accent/15 text-accent' : 'bg-white/5 text-muted-foreground'
+                      count > 0 ? 'bg-accent/15 text-accent' : 'bg-slate-100 dark:bg-white/5 text-muted-foreground'
                     }`}>
                       {count} кат.
                     </span>
@@ -506,13 +506,13 @@ export default function CategoriesPage() {
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-amber-300">CAPEX</p>
+                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">CAPEX</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       Покупка оборудования — капитализируется, не идёт в расход периода.
                     </p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    (countByGroup['capex'] || 0) > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-muted-foreground'
+                    (countByGroup['capex'] || 0) > 0 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-slate-100 dark:bg-white/5 text-muted-foreground'
                   }`}>
                     {countByGroup['capex'] || 0} кат.
                   </span>
@@ -521,7 +521,7 @@ export default function CategoriesPage() {
               <div className="rounded-xl border border-purple-500/25 bg-purple-500/5 px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-purple-300 flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
                       <PieChart className="w-3.5 h-3.5" />
                       Распределение прибыли
                     </p>
@@ -530,7 +530,7 @@ export default function CategoriesPage() {
                     </p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    (countByGroup['profit_distribution'] || 0) > 0 ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-muted-foreground'
+                    (countByGroup['profit_distribution'] || 0) > 0 ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300' : 'bg-slate-100 dark:bg-white/5 text-muted-foreground'
                   }`}>
                     {countByGroup['profit_distribution'] || 0} кат.
                   </span>
@@ -549,7 +549,7 @@ export default function CategoriesPage() {
               const count = countByGroup[group.value] || 0
               const catsInGroup = categories.filter(c => (c.accounting_group || 'operating') === group.value)
               return (
-                <Card key={group.value} className={`border-l-2 border-white/[0.08] bg-white/[0.025] p-4 transition-colors hover:bg-white/[0.05] ${groupStyle(group.value).border}`}>
+                <Card key={group.value} className={`border-l-2 border-slate-200 bg-white dark:border-white/[0.08] dark:bg-white/[0.025] p-4 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.05] ${groupStyle(group.value).border}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -557,7 +557,7 @@ export default function CategoriesPage() {
                           {group.label}
                         </span>
                         {group.kind === 'off_chain' && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] text-muted-foreground border border-white/10">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 dark:bg-white/[0.04] text-muted-foreground border border-slate-200 dark:border-white/10">
                             <Wallet className="w-2.5 h-2.5" />
                             Вне P&L
                           </span>
@@ -568,7 +568,7 @@ export default function CategoriesPage() {
                       {catsInGroup.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {catsInGroup.slice(0, 5).map(c => (
-                            <span key={c.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white/5 text-muted-foreground border border-white/10">
+                            <span key={c.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-50 dark:bg-white/5 text-muted-foreground border border-slate-200 dark:border-white/10">
                               <Tag className="w-2.5 h-2.5" />
                               {c.name}
                             </span>
@@ -582,7 +582,7 @@ export default function CategoriesPage() {
                     {can('categories.create') && (
                       <button
                         onClick={() => { setNewAccountingGroup(group.value as FinancialGroup); setTab('categories') }}
-                        className="shrink-0 flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs text-muted-foreground transition hover:border-accent/40 hover:text-accent"
+                        className="shrink-0 flex items-center gap-1 rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03] px-2.5 py-1.5 text-xs text-muted-foreground transition hover:border-accent/40 hover:text-accent"
                       >
                         <Plus className="w-3 h-3" />
                         Добавить

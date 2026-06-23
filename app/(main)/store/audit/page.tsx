@@ -251,7 +251,7 @@ export default function StoreAuditPage() {
           }
         />
 
-        {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</Card> : null}
+        {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</Card> : null}
 
         {loading ? (
           <Card className="flex items-center gap-3 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</Card>
@@ -264,7 +264,7 @@ export default function StoreAuditPage() {
                 <Card className="flex items-center justify-between gap-3 p-4 transition hover:border-amber-400/40">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${a.status === 'open' ? 'bg-emerald-500/15 text-emerald-300' : a.status === 'closed' ? 'bg-zinc-500/15 text-zinc-300' : 'bg-red-500/15 text-red-300'}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${a.status === 'open' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : a.status === 'closed' ? 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300' : 'bg-red-500/15 text-red-700 dark:text-red-300'}`}>
                         {a.status === 'open' ? 'Открыт' : a.status === 'closed' ? 'Закрыт' : 'Отменён'}
                       </span>
                       <span className="truncate text-sm font-medium text-foreground">{a.locationName}</span>
@@ -295,7 +295,7 @@ export default function StoreAuditPage() {
             <Button variant="ghost" size="sm" onClick={() => setView('list')} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> Назад</Button>
           }
         />
-        {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</Card> : null}
+        {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</Card> : null}
 
         <Card className="space-y-4 p-4">
           <div className="space-y-1.5">
@@ -310,9 +310,9 @@ export default function StoreAuditPage() {
 
           <div className="space-y-1.5">
             <Label>Режим подсчёта</Label>
-            <div className="flex border border-white/10">
-              <button type="button" onClick={() => setMode('single')} className={`flex-1 px-3 py-2 text-xs transition ${mode === 'single' ? 'bg-amber-500/15 text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Обычный</button>
-              <button type="button" onClick={() => setMode('double')} className={`flex-1 border-l border-white/10 px-3 py-2 text-xs transition ${mode === 'double' ? 'bg-amber-500/15 text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Двойной слепой</button>
+            <div className="flex border border-slate-200 dark:border-white/10">
+              <button type="button" onClick={() => setMode('single')} className={`flex-1 px-3 py-2 text-xs transition ${mode === 'single' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Обычный</button>
+              <button type="button" onClick={() => setMode('double')} className={`flex-1 border-l border-slate-200 dark:border-white/10 px-3 py-2 text-xs transition ${mode === 'double' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Двойной слепой</button>
             </div>
             <p className="text-[11px] text-muted-foreground">{mode === 'double' ? 'Назначьте 2 операторов на одну секцию — посчитают независимо, расхождение пойдёт на пересчёт.' : 'Один оператор на секцию.'}</p>
           </div>
@@ -386,7 +386,7 @@ export default function StoreAuditPage() {
           <Button variant="ghost" size="sm" onClick={() => { setView('list'); void loadActs() }} className="gap-1.5"><ArrowLeft className="h-4 w-4" /> К списку</Button>
         }
       />
-      {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</Card> : null}
+      {error ? <Card className="border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</Card> : null}
 
       {!detail ? (
         <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка…</Card>
@@ -409,7 +409,7 @@ export default function StoreAuditPage() {
                       <span className="flex items-center gap-1.5 text-foreground"><Users className="h-3 w-3 text-muted-foreground" /> {p.operatorName}</span>
                       <span className="text-muted-foreground tabular-nums">{p.counted} / {p.total}</span>
                     </div>
-                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-white/[0.05]">
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-200 dark:bg-white/[0.05]">
                       <div className="h-full bg-amber-500 transition-all" style={{ width: `${p.total ? Math.min(100, (p.counted / p.total) * 100) : 0}%` }} />
                     </div>
                   </div>
@@ -418,19 +418,19 @@ export default function StoreAuditPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {detail.assignments.map((a) => (
-                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
+                  <span key={a.id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
                     <Users className="h-3 w-3" /> {a.operatorName} · {a.categoryName || 'Вся локация'}
                   </span>
                 ))}
               </div>
             )}
             {isOpen ? (
-              <div className="space-y-2 border-t border-white/5 pt-3">
+              <div className="space-y-2 border-t border-slate-200 dark:border-white/5 pt-3">
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                   <input type="checkbox" checked={assignDebt} onChange={(e) => setAssignDebt(e.target.checked)} className="h-4 w-4 accent-amber-500" />
                   Повесить недостачу долгом на ответственных (удержится из зарплаты)
                 </label>
-                {hasConflicts ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">Есть расхождения между счётчиками — решите их (примите значение или на пересчёт), затем закрывайте.</div> : null}
+                {hasConflicts ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">Есть расхождения между счётчиками — решите их (примите значение или на пересчёт), затем закрывайте.</div> : null}
                 <Button onClick={() => void closeAct(false)} disabled={closing || detail.countedItems === 0 || hasConflicts} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
                   {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   Закрыть акт и провести
@@ -439,7 +439,7 @@ export default function StoreAuditPage() {
                   type="button"
                   onClick={() => void closeAct(true)}
                   disabled={closing}
-                  className="w-full rounded-md border border-rose-500/30 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
+                  className="w-full rounded-md border border-rose-500/30 px-3 py-2 text-xs text-rose-700 dark:text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
                 >
                   Принудительно закрыть (обойти блокировки)
                 </button>
@@ -448,7 +448,7 @@ export default function StoreAuditPage() {
                   type="button"
                   onClick={() => void cancelAct()}
                   disabled={canceling}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:border-rose-500/40 hover:text-rose-300 disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 dark:border-white/10 px-3 py-2 text-xs text-muted-foreground transition hover:border-rose-500/40 hover:text-rose-700 dark:hover:text-rose-300 disabled:opacity-50"
                 >
                   {canceling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
                   Отменить акт (вернуть как было)
@@ -457,15 +457,15 @@ export default function StoreAuditPage() {
               </div>
             ) : null}
             {debtsCreated && debtsCreated > 0 ? (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Создано долгов: {debtsCreated} — удержатся из зарплаты ответственных.</div>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">Создано долгов: {debtsCreated} — удержатся из зарплаты ответственных.</div>
             ) : null}
             {detail.act.status === 'closed' ? (
-              <div className="space-y-2 border-t border-white/5 pt-3">
+              <div className="space-y-2 border-t border-slate-200 dark:border-white/5 pt-3">
                 <button
                   type="button"
                   onClick={() => void revertAct()}
                   disabled={reverting}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border border-rose-500/40 px-3 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-rose-500/40 px-3 py-2.5 text-sm font-medium text-rose-700 dark:text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
                 >
                   {reverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
                   Откатить ревизию
@@ -488,7 +488,7 @@ export default function StoreAuditPage() {
 
               {/* Сводка: движения во время ревизии учтены в факте, не считаются пропажей */}
               {closeSummary && closeSummary.movedItems > 0 ? (
-                <div className="mb-3 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-300">
+                <div className="mb-3 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
                   Во время ревизии были движения по {closeSummary.movedItems} поз.
                   {closeSummary.movedIn > 0 ? ` приход +${fmt(closeSummary.movedIn)}` : ''}
                   {closeSummary.movedOut > 0 ? ` продажи −${fmt(closeSummary.movedOut)}` : ''}
@@ -506,7 +506,7 @@ export default function StoreAuditPage() {
                     .map((r) => {
                       const moved = r.movedIn > 0 || r.movedOut > 0
                       return (
-                        <div key={r.item_id} className="border-b border-white/5 py-1.5 last:border-0">
+                        <div key={r.item_id} className="border-b border-slate-100 dark:border-white/5 py-1.5 last:border-0">
                           <div className="flex items-center justify-between gap-3 text-sm">
                             <span className="min-w-0 truncate text-foreground">{r.name}</span>
                             <div className="flex shrink-0 items-center gap-3 tabular-nums">
@@ -554,22 +554,22 @@ export default function StoreAuditPage() {
                     .sort((a, b) => (b.conflict ? 1 : 0) - (a.conflict ? 1 : 0) || Math.abs(b.variance) - Math.abs(a.variance))
                     .map((r) =>
                       r.conflict && isOpen ? (
-                        <div key={r.item_id} className="border-b border-white/5 py-2 last:border-0">
+                        <div key={r.item_id} className="border-b border-slate-100 dark:border-white/5 py-2 last:border-0">
                           <div className="flex items-center justify-between gap-2 text-sm">
                             <span className="min-w-0 truncate text-foreground">{r.name}</span>
-                            <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">расхождение</span>
+                            <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-300">расхождение</span>
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             {(r.counts || []).map((c: any, i: number) => (
-                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-white/10 px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-300">
+                              <button key={i} type="button" onClick={() => void resolveItem(r.item_id, c.qty)} title="Принять это значение" className="rounded border border-slate-200 dark:border-white/10 px-2 py-1 text-xs tabular-nums text-foreground transition hover:border-amber-400/40 hover:text-amber-700 dark:hover:text-amber-300">
                                 {c.by || 'счёт'}: {fmt(c.qty)}
                               </button>
                             ))}
-                            <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
+                            <button type="button" onClick={() => void recountItem(r.item_id)} className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/10">на пересчёт</button>
                           </div>
                         </div>
                       ) : (
-                        <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 text-sm last:border-0">
+                        <div key={r.item_id} className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 py-1.5 text-sm last:border-0">
                           <span className="min-w-0 truncate text-foreground">{r.name}</span>
                           <div className="flex items-center gap-4 tabular-nums">
                             {!isOpen ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}

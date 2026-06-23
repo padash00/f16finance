@@ -197,14 +197,14 @@ export default function ReceiptSettingsPage() {
       />
 
       {error ? (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">{error}</div>
       ) : null}
       {success ? (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div>
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-600 dark:text-emerald-300">{success}</div>
       ) : null}
 
       {/* Inform banner */}
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3 text-xs text-amber-200">
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3 text-xs text-amber-700 dark:text-amber-200">
         <div className="flex gap-2">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
@@ -227,7 +227,7 @@ export default function ReceiptSettingsPage() {
       </div>
 
       {loading || !settings ? (
-        <Card className="border-white/10 bg-card/70 p-8">
+        <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-8">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Загружаем настройки…
@@ -236,9 +236,9 @@ export default function ReceiptSettingsPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Налогоплательщик */}
-          <Card className="border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-amber-300" />
+              <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Налогоплательщик</h2>
             </div>
             <div className="space-y-3">
@@ -271,9 +271,9 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* ККМ */}
-          <Card className="border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-amber-300" />
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Контрольно-кассовая машина</h2>
             </div>
             <div className="space-y-3">
@@ -297,9 +297,9 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* НДС */}
-          <Card className="border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-amber-300" />
+              <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">НДС</h2>
             </div>
             <div className="flex items-center justify-between">
@@ -327,9 +327,9 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* ОФД */}
-          <Card className="border-white/10 bg-card/70 p-5 space-y-4">
+          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-amber-300" />
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Оператор фискальных данных (ОФД)</h2>
             </div>
             <div className="space-y-3">
@@ -353,9 +353,9 @@ export default function ReceiptSettingsPage() {
           </Card>
 
           {/* Языки и доп. */}
-          <Card className="border-white/10 bg-card/70 p-5 space-y-4 lg:col-span-2">
+          <Card className="border-slate-200 dark:border-white/10 bg-card/70 p-5 space-y-4 lg:col-span-2">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-amber-300" />
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               <h2 className="text-sm font-semibold">Параметры чека</h2>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -375,7 +375,7 @@ export default function ReceiptSettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
                 <div>
                   <Label className="cursor-pointer">Запрашивать ИИН покупателя</Label>
                   <p className="text-xs text-muted-foreground">По требованию (для юр.лиц)</p>
@@ -400,19 +400,19 @@ export default function ReceiptSettingsPage() {
           {/* Маркировка / НКТ — будущее */}
           <Card className="border-amber-500/20 bg-amber-500/[0.04] p-5 space-y-3 lg:col-span-2">
             <div className="flex items-center gap-2">
-              <Info className="h-4 w-4 text-amber-300" />
-              <h2 className="text-sm font-semibold text-amber-200">Маркировка и НКТ — появятся позже</h2>
+              <Info className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+              <h2 className="text-sm font-semibold text-amber-700 dark:text-amber-200">Маркировка и НКТ — появятся позже</h2>
             </div>
-            <p className="text-xs text-amber-200/80">
+            <p className="text-xs text-amber-700/80 dark:text-amber-200/80">
               Печать кода маркируемого товара и кода по Национальному каталогу товаров (НКТ) станет обязательной в составе чека.
               Поддержка появится отдельным релизом. Переключатели ниже зарезервированы — не включайте, пока не появится логика.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 opacity-60">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
                 <Label>Печать маркировки на чеке</Label>
                 <Switch checked={settings.marking_enabled} onCheckedChange={(v) => patch('marking_enabled', v)} disabled />
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 opacity-60">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 opacity-60">
                 <Label>Код товара по НКТ</Label>
                 <Switch checked={settings.nkt_enabled} onCheckedChange={(v) => patch('nkt_enabled', v)} disabled />
               </div>

@@ -544,16 +544,16 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
           ) : null
         )
         const hdrToolbar = (
-          <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl w-fit border border-slate-700">
+          <div className="flex gap-2 p-1 bg-white dark:bg-slate-800/50 rounded-xl w-fit border border-slate-200 dark:border-slate-700">
             <button
               onClick={() => setActiveTab('debts')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'debts' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'debts' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}
             >
               <Wallet className="w-4 h-4" /> Долги
             </button>
             <button
               onClick={() => setActiveTab('invoices')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'invoices' ? 'bg-emerald-500/20 text-emerald-200' : 'text-muted-foreground hover:text-white'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'invoices' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-200' : 'text-muted-foreground hover:text-slate-900 dark:hover:text-white'}`}
             >
               <FileText className="w-4 h-4" /> Накладные
             </button>
@@ -578,13 +578,13 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       })()}
 
       {error ? (
-        <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-200">{error}</Card>
+        <Card className="p-3 border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">{error}</Card>
       ) : null}
       {success ? (
-        <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">{success}</Card>
+        <Card className="p-3 border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card>
       ) : null}
 
-      <Card className="p-3 bg-slate-900/40 border-slate-800">
+      <Card className="p-3 bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
           <Input
             value={searchQuery}
@@ -605,7 +605,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <button
               type="button"
               onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setCompanyFilter('') }}
-              className="rounded-md border border-white/10 px-3 py-2 text-xs text-muted-foreground hover:text-white hover:bg-white/5"
+              className="rounded-md border border-slate-200 dark:border-white/10 px-3 py-2 text-xs text-muted-foreground hover:text-slate-900 dark:hover:text-white hover:bg-white/5"
             >
               Сбросить фильтры
             </button>
@@ -616,17 +616,17 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       {activeTab === 'debts' ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Card className="p-3 bg-slate-900/60 border-slate-800">
+            <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Открытых долгов</div>
-              <div className="text-lg font-bold text-amber-300">{totalsByStatus.openCount}</div>
+              <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{totalsByStatus.openCount}</div>
               <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.open)} ₸</div>
             </Card>
-            <Card className="p-3 bg-slate-900/60 border-slate-800">
+            <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Просрочено</div>
-              <div className="text-lg font-bold text-red-300">{totalsByStatus.overdueCount}</div>
+              <div className="text-lg font-bold text-red-700 dark:text-red-300">{totalsByStatus.overdueCount}</div>
               <div className="text-xs text-muted-foreground">{formatMoney(totalsByStatus.overdue)} ₸</div>
             </Card>
-            <Card className="p-3 bg-slate-900/60 border-slate-800">
+            <Card className="p-3 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <div className="text-[11px] text-muted-foreground uppercase">Фильтр статуса</div>
               <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
                 <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
@@ -680,7 +680,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
           ) : (
             <div className="space-y-2">
               {filteredDebts.map((debt) => (
-                <Card key={debt.id} className="p-4 bg-slate-900/60 border-slate-800">
+                <Card key={debt.id} className="p-4 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     {debt.status === 'open' ? (
                       <input
@@ -695,15 +695,15 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                         <span className="font-semibold">{debt.supplier?.organization_name || debt.supplier?.name || 'Поставщик не указан'}</span>
                         {debt.supplier?.bin_iin ? <span className="text-xs text-muted-foreground">· {debt.supplier.bin_iin}</span> : null}
                         {debt.is_consignment ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-200 border border-amber-500/30">реализация</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-200 border border-amber-500/30">реализация</span>
                         ) : null}
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full border ${
                             debt.status === 'open'
-                              ? 'bg-amber-500/15 text-amber-200 border-amber-500/30'
+                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200 border-amber-500/30'
                               : debt.status === 'paid'
-                              ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30'
-                              : 'bg-slate-500/15 text-slate-200 border-slate-500/30'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30'
+                              : 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border-slate-500/30'
                           }`}
                         >
                           {debt.status === 'open' ? 'Открыт' : debt.status === 'paid' ? 'Оплачен' : 'Списан'}
@@ -715,12 +715,12 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                         {debt.due_date ? <span>Срок: {fmtDate(debt.due_date)}</span> : null}
                         {debt.payment_paid_at ? <span>Оплачено: {fmtDate(debt.payment_paid_at)}</span> : null}
                         {debt.receipt?.invoice_file_url ? (
-                          <a href={debt.receipt.invoice_file_url} target="_blank" rel="noreferrer" className="text-emerald-300 underline">
+                          <a href={debt.receipt.invoice_file_url} target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-300 underline">
                             Накладная ↗
                           </a>
                         ) : null}
                         {debt.payment_receipt_file_url ? (
-                          <a href={debt.payment_receipt_file_url} target="_blank" rel="noreferrer" className="text-emerald-300 underline">
+                          <a href={debt.payment_receipt_file_url} target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-300 underline">
                             Чек об оплате ↗
                           </a>
                         ) : null}
@@ -768,7 +768,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                           <Button
                             variant="outline"
                             size="sm"
-                            className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                            className="border-rose-500/30 text-rose-600 dark:text-rose-300 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-200"
                             disabled={deletingId === debt.id}
                             onClick={() => handleDeleteDebt(debt)}
                           >
@@ -799,15 +799,15 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <div className="space-y-4">
               {groupedReceipts.map(({ date, items }) => (
                 <div key={date} className="space-y-2">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground border-b border-white/10 pb-1">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground border-b border-slate-200 dark:border-white/10 pb-1">
                     {fmtDate(date)} · накладных: {items.length}
                   </div>
                   {items.map((r) => (
-                    <Card key={r.id} className="p-4 bg-slate-900/60 border-slate-800">
+                    <Card key={r.id} className="p-4 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <Receipt className="w-4 h-4 text-emerald-300" />
+                            <Receipt className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
                             <span className="font-semibold">{r.invoice_number || `#${(r.id || '').slice(0, 8)}`}</span>
                             <span className="text-muted-foreground">· {r.supplier?.organization_name || r.supplier?.name || '—'}</span>
                             {r.location?.name ? (
@@ -817,7 +817,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                           <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-3">
                             <span>Позиций: {r.items?.length || 0}</span>
                             {r.invoice_file_url ? (
-                              <a href={r.invoice_file_url} target="_blank" rel="noreferrer" className="text-emerald-300 underline">
+                              <a href={r.invoice_file_url} target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-300 underline">
                                 Накладная ↗
                               </a>
                             ) : null}
@@ -840,7 +840,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       {payDebt ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={closePay}>
           <div
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -850,7 +850,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   {payDebt.supplier?.organization_name || payDebt.supplier?.name || '—'} · {formatMoney(payDebt.total_amount)} ₸
                 </p>
               </div>
-              <button onClick={closePay} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+              <button onClick={closePay} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -881,7 +881,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                 {uploadingReceipt ? <p className="text-xs text-muted-foreground"><Loader2 className="w-3 h-3 inline animate-spin mr-1" />Загрузка...</p> : null}
                 {payReceiptUrl ? (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <a href={payReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                    <a href={payReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 dark:text-emerald-300 underline">
                       Чек загружен — открыть файл
                     </a>
                     <Button
@@ -898,15 +898,15 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   </div>
                 ) : null}
                 {receiptParseHint ? (
-                  <div className="rounded-lg border border-emerald-300/20 bg-emerald-500/[0.06] p-2 text-[11px] text-emerald-100 space-y-1">
+                  <div className="rounded-lg border border-emerald-300/20 bg-emerald-500/[0.06] p-2 text-[11px] text-emerald-700 dark:text-emerald-100 space-y-1">
                     {receiptParseHint.total != null ? <p>Сумма в чеке: <b>{Math.round(receiptParseHint.total)} ₸</b></p> : null}
                     {receiptParseHint.method ? <p>Способ: {receiptParseHint.method === 'kaspi' ? 'Безналичный' : 'Наличные'}</p> : null}
                     {receiptParseHint.paid_at ? <p>Дата: {receiptParseHint.paid_at}</p> : null}
                     {receiptParseHint.merchant ? <p>Получатель: {receiptParseHint.merchant}</p> : null}
                     {receiptParseHint.warning ? (
-                      <p className="text-rose-300 mt-1">⚠ {receiptParseHint.warning}</p>
+                      <p className="text-rose-600 dark:text-rose-300 mt-1">⚠ {receiptParseHint.warning}</p>
                     ) : (
-                      <p className="text-emerald-300 mt-1">✓ Совпадает с долгом</p>
+                      <p className="text-emerald-600 dark:text-emerald-300 mt-1">✓ Совпадает с долгом</p>
                     )}
                   </div>
                 ) : null}
@@ -930,7 +930,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       {writeOffDebt ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !writingOff && setWriteOffDebt(null)}>
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -940,7 +940,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   {writeOffDebt.supplier?.organization_name || writeOffDebt.supplier?.name || '—'} · {formatMoney(writeOffDebt.total_amount)} ₸
                 </p>
               </div>
-              <button onClick={() => !writingOff && setWriteOffDebt(null)} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+              <button onClick={() => !writingOff && setWriteOffDebt(null)} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -971,7 +971,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       {bulkPayOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !bulkPaying && setBulkPayOpen(false)}>
           <div
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -981,7 +981,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   Будет закрыто {selectedIds.size} долгов на сумму {formatMoney(selectedSum)} ₸ одним чеком.
                 </p>
               </div>
-              <button onClick={() => !bulkPaying && setBulkPayOpen(false)} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+              <button onClick={() => !bulkPaying && setBulkPayOpen(false)} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1011,7 +1011,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                 />
                 {bulkUploading ? <p className="text-xs text-muted-foreground"><Loader2 className="w-3 h-3 inline animate-spin mr-1" />Загрузка...</p> : null}
                 {bulkReceiptUrl ? (
-                  <a href={bulkReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline">
+                  <a href={bulkReceiptUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 dark:text-emerald-300 underline">
                     Чек загружен — открыть файл
                   </a>
                 ) : null}
@@ -1036,7 +1036,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       {reschedDebt ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !rescheduling && setReschedDebt(null)}>
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -1049,7 +1049,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
                   <p className="text-xs text-muted-foreground mt-1">Текущий срок: {fmtDate(reschedDebt.due_date)}</p>
                 ) : null}
               </div>
-              <button onClick={() => !rescheduling && setReschedDebt(null)} className="rounded-xl border border-white/10 p-2 text-muted-foreground hover:text-white">
+              <button onClick={() => !rescheduling && setReschedDebt(null)} className="rounded-xl border border-slate-200 dark:border-white/10 p-2 text-muted-foreground hover:text-slate-900 dark:hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>

@@ -170,11 +170,11 @@ export function ChecklistEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="!max-w-[1180px] flex h-[92vh] flex-col gap-0 overflow-hidden border-slate-800 bg-slate-950 p-0 text-slate-100"
+        className="!max-w-[1180px] flex h-[92vh] flex-col gap-0 overflow-hidden border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-0 text-slate-900 dark:text-slate-100"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/80 px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 px-6 py-4">
           <div className="min-w-0">
-            <DialogTitle className="text-base font-black text-amber-100">
+            <DialogTitle className="text-base font-black text-amber-700 dark:text-amber-100">
               {isEditingTemplate ? 'Редактор чек-листа' : 'Новый чек-лист'}
             </DialogTitle>
             <p className="mt-1 text-xs text-slate-500">Сценарий, пункты проверки и предпросмотр для оператора в одном окне.</p>
@@ -182,13 +182,13 @@ export function ChecklistEditorDialog({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-100"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2 border-b border-slate-800 bg-slate-950/80 px-6 py-3">
+        <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 px-6 py-3">
           <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<ClipboardList className="h-4 w-4" />}>
             Настройки
           </TabButton>
@@ -237,7 +237,7 @@ export function ChecklistEditorDialog({
                     <textarea
                       value={templateValue.description}
                       onChange={(event) => setTemplateValue({ ...templateValue, description: event.target.value })}
-                      className="min-h-24 w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-400/80"
+                      className="min-h-24 w-full rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400/80"
                       placeholder="Например: перед открытием смены проверь кассу, чистоту, технику и готовность точки."
                     />
                   </div>
@@ -294,7 +294,7 @@ export function ChecklistEditorDialog({
                             key={minutes}
                             type="button"
                             onClick={() => setTemplateValue({ ...templateValue, recurrence_minutes: String(minutes) })}
-                            className="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-bold text-slate-300 hover:border-amber-300/60 hover:text-amber-100"
+                            className="rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/70 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-amber-300/60 hover:text-amber-700 dark:hover:text-amber-100"
                           >
                             {minutes === 1440 ? 'Раз в день' : `${minutes} мин`}
                           </button>
@@ -310,7 +310,7 @@ export function ChecklistEditorDialog({
 
               <div className="space-y-4">
                 <div className="rounded-3xl border border-amber-300/20 bg-amber-300/10 p-4">
-                  <p className="text-sm font-black text-amber-100">Умные флаги</p>
+                  <p className="text-sm font-black text-amber-700 dark:text-amber-100">Умные флаги</p>
                   <div className="mt-3 space-y-3">
                     <Toggle checked={templateValue.blocks_shift} onChange={(checked) => setTemplateValue({ ...templateValue, blocks_shift: checked })}>
                       Блокировать смену, пока не выполнен
@@ -321,9 +321,9 @@ export function ChecklistEditorDialog({
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-slate-800 bg-slate-950/50 p-4">
-                  <p className="text-sm font-black text-slate-100">Как это сработает</p>
-                  <div className="mt-3 space-y-2 text-sm text-slate-400">
+                <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 p-4">
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">Как это сработает</p>
+                  <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-400">
                     <SmartLine ok={!!templateValue.title}>Оператор увидит понятное название сценария.</SmartLine>
                     <SmartLine ok={templateItems.length > 0}>Внутри есть пункты проверки.</SmartLine>
                     <SmartLine ok={templateItems.some((item) => item.requires_photo)}>Есть хотя бы один пункт с фото-подтверждением.</SmartLine>
@@ -337,10 +337,10 @@ export function ChecklistEditorDialog({
           {activeTab === 'items' && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_440px]">
               <div className="space-y-3">
-                <div className="rounded-3xl border border-slate-800 bg-slate-900/45 p-4">
+                <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/45 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-black text-slate-100">Пункты чек-листа</p>
+                      <p className="text-sm font-black text-slate-900 dark:text-slate-100">Пункты чек-листа</p>
                       <p className="mt-1 text-xs text-slate-500">Оператор проходит их сверху вниз. Важные пункты можно сделать обязательными и с фото.</p>
                     </div>
                     <button
@@ -378,13 +378,13 @@ export function ChecklistEditorDialog({
                     className={`w-full rounded-3xl border p-4 text-left transition ${
                       itemValue.id === item.id
                         ? 'border-amber-300/60 bg-amber-300/10'
-                        : 'border-slate-800 bg-slate-950/45 hover:border-slate-600'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/45 hover:border-slate-400 dark:hover:border-slate-600'
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-black text-amber-100">{index + 1}</span>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 dark:bg-slate-900 text-xs font-black text-amber-700 dark:text-amber-100">{index + 1}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="break-words text-sm font-black text-slate-100">{item.title}</p>
+                        <p className="break-words text-sm font-black text-slate-900 dark:text-slate-100">{item.title}</p>
                         <RichDescription html={item.description} className="mt-1 text-xs leading-5 text-slate-500" empty="Описание не заполнено." />
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Badge>{ANSWER_TYPE_LABELS[item.answer_type]}</Badge>
@@ -400,7 +400,7 @@ export function ChecklistEditorDialog({
                           event.stopPropagation()
                           void onDeleteItem(item)
                         }}
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200 hover:bg-rose-500/20"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -409,21 +409,21 @@ export function ChecklistEditorDialog({
                 ))}
 
                 {!templateItems.length && canEditItems && (
-                  <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-950/40 p-6 text-sm text-slate-500">
+                  <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/40 p-6 text-sm text-slate-500">
                     Пунктов пока нет. Нажмите “Новый пункт” и опишите первую проверку.
                   </div>
                 )}
               </div>
 
               <form
-                className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900/45 p-4"
+                className="space-y-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/45 p-4"
                 onSubmit={async (event) => {
                   event.preventDefault()
                   await onSubmitItem(itemValue)
                 }}
               >
                 <div>
-                  <p className="text-sm font-black text-slate-100">{isEditingItem ? 'Редактировать пункт' : 'Новый пункт'}</p>
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">{isEditingItem ? 'Редактировать пункт' : 'Новый пункт'}</p>
                   <p className="mt-1 text-xs text-slate-500">Здесь настраивается конкретная проверка для оператора.</p>
                 </div>
 
@@ -452,7 +452,7 @@ export function ChecklistEditorDialog({
                       onChange={(html) => setItemValue({ ...itemValue, description: html })}
                     />
                   ) : (
-                    <div className="rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-500 opacity-50">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 px-4 py-3 text-sm text-slate-500 opacity-50">
                       Сначала сохраните чек-лист, чтобы заполнить инструкцию.
                     </div>
                   )}
@@ -534,7 +534,7 @@ export function ChecklistEditorDialog({
                   <button
                     type="button"
                     onClick={() => resetItemForTemplate()}
-                    className="rounded-2xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-slate-500"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500"
                   >
                     Очистить
                   </button>
@@ -552,10 +552,10 @@ export function ChecklistEditorDialog({
           )}
 
           {activeTab === 'preview' && (
-            <div className="mx-auto max-w-3xl rounded-[2rem] border border-slate-800 bg-slate-900/45 p-5">
-              <div className="rounded-3xl border border-amber-300/20 bg-gradient-to-br from-slate-950 to-slate-900 p-5">
+            <div className="mx-auto max-w-3xl rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/45 p-5">
+              <div className="rounded-3xl border border-amber-300/20 bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-950 dark:to-slate-900 p-5">
                 <div className="flex items-start gap-4">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-300/15 text-amber-100">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-300/15 text-amber-700 dark:text-amber-100">
                     <ClipboardList className="h-6 w-6" />
                   </div>
                   <div className="min-w-0">
@@ -564,8 +564,8 @@ export function ChecklistEditorDialog({
                       <Badge>{ROLE_SCOPE_LABELS[templateValue.role_scope] || templateValue.role_scope}</Badge>
                       <Badge>{templateValue.blocks_shift ? 'Блокирует смену' : 'Не блокирует'}</Badge>
                     </div>
-                    <h3 className="mt-3 break-words text-2xl font-black text-white">{templateValue.title || 'Название чек-листа'}</h3>
-                    <p className="mt-2 break-words text-sm leading-6 text-slate-400">
+                    <h3 className="mt-3 break-words text-2xl font-black text-slate-900 dark:text-white">{templateValue.title || 'Название чек-листа'}</h3>
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-700 dark:text-slate-400">
                       {templateValue.description || 'Описание увидит оператор перед прохождением чек-листа.'}
                     </p>
                   </div>
@@ -574,11 +574,11 @@ export function ChecklistEditorDialog({
 
               <div className="mt-4 space-y-3">
                 {templateItems.map((item, index) => (
-                  <div key={item.id} className="rounded-3xl border border-slate-800 bg-slate-950/50 p-4">
+                  <div key={item.id} className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 p-4">
                     <div className="flex items-start gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-black text-amber-100">{index + 1}</span>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 dark:bg-slate-900 text-xs font-black text-amber-700 dark:text-amber-100">{index + 1}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="break-words text-sm font-black text-slate-100">{item.title}</p>
+                        <p className="break-words text-sm font-black text-slate-900 dark:text-slate-100">{item.title}</p>
                         <RichDescription html={item.description} className="mt-1 text-xs leading-5 text-slate-500" empty="Инструкция не заполнена." />
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Badge>{ANSWER_TYPE_LABELS[item.answer_type]}</Badge>
@@ -586,12 +586,12 @@ export function ChecklistEditorDialog({
                           {item.requires_photo ? <Badge>нужно фото</Badge> : null}
                         </div>
                       </div>
-                      {item.requires_photo ? <Camera className="h-5 w-5 shrink-0 text-sky-300" /> : <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" />}
+                      {item.requires_photo ? <Camera className="h-5 w-5 shrink-0 text-sky-600 dark:text-sky-300" /> : <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-300" />}
                     </div>
                   </div>
                 ))}
                 {!templateItems.length && (
-                  <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-950/40 p-6 text-sm text-slate-500">
+                  <div className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/40 p-6 text-sm text-slate-500">
                     После добавления пунктов здесь будет видно, как чек-лист выглядит для оператора.
                   </div>
                 )}
@@ -600,7 +600,7 @@ export function ChecklistEditorDialog({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-slate-800 bg-slate-900/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-slate-500">
             Совет: сначала сохраните сценарий, потом добавляйте пункты и проверьте вкладку “Предпросмотр”.
           </p>
@@ -608,7 +608,7 @@ export function ChecklistEditorDialog({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="rounded-2xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-slate-500"
+              className="rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500"
             >
               Закрыть
             </button>
@@ -632,9 +632,9 @@ export function ChecklistEditorDialog({
 
 function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900/45 p-5">
+    <section className="space-y-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/45 p-5">
       <div>
-        <p className="text-sm font-black text-slate-100">{title}</p>
+        <p className="text-sm font-black text-slate-900 dark:text-slate-100">{title}</p>
         <p className="mt-1 text-xs text-slate-500">{hint}</p>
       </div>
       {children}
@@ -648,7 +648,7 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
       type="button"
       onClick={onClick}
       className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-bold transition ${
-        active ? 'border-amber-300/60 bg-amber-300/15 text-amber-100' : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-600'
+        active ? 'border-amber-300/60 bg-amber-300/15 text-amber-700 dark:text-amber-100' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-600'
       }`}
     >
       {icon}
@@ -660,7 +660,7 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
 function SmartLine({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2">
-      {ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />}
+      {ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />}
       <span>{children}</span>
     </div>
   )
@@ -678,7 +678,7 @@ function Toggle({
   disabled?: boolean
 }) {
   return (
-    <label className={`flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300 ${disabled ? 'opacity-50' : ''}`}>
+    <label className={`flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 px-4 py-3 text-sm text-slate-700 dark:text-slate-300 ${disabled ? 'opacity-50' : ''}`}>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} disabled={disabled} />
       {children}
     </label>
@@ -687,7 +687,7 @@ function Toggle({
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="max-w-full break-words rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-bold text-amber-100">
+    <span className="max-w-full break-words rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-100">
       {children}
     </span>
   )
@@ -701,7 +701,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-400/80 disabled:opacity-50 ${props.className ?? ''}`}
+      className={`w-full rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400/80 disabled:opacity-50 ${props.className ?? ''}`}
     />
   )
 }
@@ -710,7 +710,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-400/80 disabled:opacity-50 ${props.className ?? ''}`}
+      className={`w-full rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400/80 disabled:opacity-50 ${props.className ?? ''}`}
     />
   )
 }
@@ -726,7 +726,7 @@ function RichDescription({ html, className, empty }: { html: string | null | und
   if (!trimmed) return <p className={`break-words ${className ?? ''}`}>{empty}</p>
   return (
     <div
-      className={`break-words [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1 ${className ?? ''}`}
+      className={`break-words [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-700 dark:[&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-200 dark:[&_th]:border-slate-700 [&_th]:bg-slate-100 dark:[&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-200 dark:[&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1 ${className ?? ''}`}
       dangerouslySetInnerHTML={{ __html: trimmed }}
     />
   )

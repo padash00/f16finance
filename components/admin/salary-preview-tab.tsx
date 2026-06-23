@@ -143,17 +143,17 @@ export function SalaryPreviewTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-white/10 bg-gray-900/40 p-5">
+      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-gray-900/40 p-5">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_160px]">
           <div>
-            <label className="mb-1.5 block text-xs uppercase tracking-wider text-gray-400">
+            <label className="mb-1.5 block text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">
               Оператор
             </label>
             <select
               value={operatorId}
               onChange={(event) => setOperatorId(event.target.value)}
               disabled={loadingOperators}
-              className="h-10 w-full rounded-md border border-white/10 bg-gray-950 px-3 text-sm text-white outline-none"
+              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none dark:border-white/10 dark:bg-gray-950 dark:text-white"
             >
               {loadingOperators ? (
                 <option>Загрузка...</option>
@@ -169,7 +169,7 @@ export function SalaryPreviewTab() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs uppercase tracking-wider text-gray-400">
+            <label className="mb-1.5 block text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">
               Начало недели (пн)
             </label>
             <Input
@@ -190,7 +190,7 @@ export function SalaryPreviewTab() {
           </div>
         </div>
         {error ? (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             {error}
           </div>
@@ -200,42 +200,42 @@ export function SalaryPreviewTab() {
       {data ? (
         <>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-            <Card className="border-cyan-500/20 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Смен</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{data.summary.shiftsCount}</p>
+            <Card className="border-cyan-500/20 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Смен</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{data.summary.shiftsCount}</p>
             </Card>
-            <Card className="border-emerald-500/20 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Начислено</p>
-              <p className="mt-2 text-xl font-semibold text-white">{formatMoney(data.summary.grossAmount)}</p>
+            <Card className="border-emerald-500/20 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Начислено</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.grossAmount)}</p>
             </Card>
-            <Card className="border-violet-500/20 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Авто-бонусы</p>
-              <p className="mt-2 text-xl font-semibold text-white">{formatMoney(data.summary.autoBonusTotal)}</p>
+            <Card className="border-violet-500/20 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Авто-бонусы</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.autoBonusTotal)}</p>
             </Card>
-            <Card className="border-cyan-500/20 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Стаж</p>
-              <p className="mt-2 text-xl font-semibold text-white">{formatMoney(data.summary.seniorityBonusTotal || 0)}</p>
+            <Card className="border-cyan-500/20 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Стаж</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.seniorityBonusTotal || 0)}</p>
             </Card>
-            <Card className="border-amber-500/20 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Штрафы</p>
-              <p className="mt-2 text-xl font-semibold text-white">{formatMoney(data.summary.fineAmount)}</p>
+            <Card className="border-amber-500/20 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Штрафы</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{formatMoney(data.summary.fineAmount)}</p>
             </Card>
-            <Card className="border-rose-500/20 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">Долги+Аванс</p>
-              <p className="mt-2 text-xl font-semibold text-white">
+            <Card className="border-rose-500/20 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">Долги+Аванс</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
                 {formatMoney(data.summary.debtAmount + data.summary.advanceAmount)}
               </p>
             </Card>
-            <Card className="border-green-500/30 bg-gray-900/40 p-4">
-              <p className="text-xs uppercase tracking-wider text-gray-400">К выплате</p>
-              <p className="mt-2 text-2xl font-semibold text-green-300">
+            <Card className="border-green-500/30 bg-white dark:bg-gray-900/40 p-4">
+              <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">К выплате</p>
+              <p className="mt-2 text-2xl font-semibold text-green-600 dark:text-green-300">
                 {formatMoney(data.summary.netAmount)}
               </p>
             </Card>
           </div>
 
-          <Card className="border-white/10 bg-gray-900/40 p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">
+          <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-gray-900/40 p-5">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-gray-300">
               Разбор по сменам ({data.weekStart} — {data.weekEnd})
             </h3>
             {data.shiftRulesCount === 0 ? (
@@ -250,7 +250,7 @@ export function SalaryPreviewTab() {
 
             <div className="mt-4 space-y-3">
               {shiftsByDate.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-white/10 p-6 text-center text-sm text-gray-500">
+                <div className="rounded-xl border border-dashed border-slate-200 dark:border-white/10 p-6 text-center text-sm text-gray-500">
                   За эту неделю нет смен у оператора.
                 </div>
               ) : (
@@ -259,7 +259,7 @@ export function SalaryPreviewTab() {
                   return (
                     <div
                       key={shift.id}
-                      className="rounded-xl border border-white/10 bg-gray-950/60 p-4"
+                      className="rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-gray-950/60 p-4"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -267,24 +267,24 @@ export function SalaryPreviewTab() {
                             <ShiftIcon
                               className={`h-4 w-4 ${shift.shift === 'day' ? 'text-amber-400' : 'text-indigo-400'}`}
                             />
-                            <span className="text-sm font-semibold text-white">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
                               {formatDate(shift.date)}, {shift.shift === 'day' ? 'дневная' : 'ночная'}
                             </span>
                             {shift.companyName ? (
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-gray-300">
+                              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
                                 {shift.companyName}
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-1 text-xs text-gray-400">
-                            Выручка: <span className="text-gray-200">{formatMoney(shift.totalIncome)}</span>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                            Выручка: <span className="text-slate-700 dark:text-gray-200">{formatMoney(shift.totalIncome)}</span>
                           </p>
                           {shift.matchedRules.length > 0 ? (
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {shift.matchedRules.map((rule) => (
                                 <span
                                   key={rule.id}
-                                  className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-200"
+                                  className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-700 dark:text-violet-200"
                                 >
                                   <Sparkles className="h-3 w-3" />
                                   {rule.name}
@@ -295,25 +295,25 @@ export function SalaryPreviewTab() {
                         </div>
 
                         <div className="grid min-w-[240px] gap-1 text-xs md:text-right">
-                          <div className="flex items-center justify-between gap-6 text-gray-300">
+                          <div className="flex items-center justify-between gap-6 text-slate-700 dark:text-gray-300">
                             <span className="text-gray-500">Оклад</span>
                             <span>{formatMoney(shift.baseSalary)}</span>
                           </div>
-                          <div className="flex items-center justify-between gap-6 text-gray-300">
+                          <div className="flex items-center justify-between gap-6 text-slate-700 dark:text-gray-300">
                             <span className="text-gray-500">Авто-бонус</span>
                             <span>{formatMoney(shift.autoBonus)}</span>
                           </div>
-                          <div className="flex items-center justify-between gap-6 text-gray-300">
+                          <div className="flex items-center justify-between gap-6 text-slate-700 dark:text-gray-300">
                             <span className="text-gray-500">
                               Стаж{shift.seniorityPercent ? ` ${shift.seniorityPercent}%` : ''}
                             </span>
                             <span>{formatMoney(shift.seniorityBonus || 0)}</span>
                           </div>
-                          <div className="flex items-center justify-between gap-6 text-gray-300">
+                          <div className="flex items-center justify-between gap-6 text-slate-700 dark:text-gray-300">
                             <span className="text-gray-500">Роль</span>
                             <span>{formatMoney(shift.roleBonus)}</span>
                           </div>
-                          <div className="mt-1 flex items-center justify-between gap-6 border-t border-white/10 pt-1 text-sm font-semibold text-white">
+                          <div className="mt-1 flex items-center justify-between gap-6 border-t border-slate-200 dark:border-white/10 pt-1 text-sm font-semibold text-slate-900 dark:text-white">
                             <span>Итого</span>
                             <span>{formatMoney(shift.salary)}</span>
                           </div>
@@ -327,42 +327,42 @@ export function SalaryPreviewTab() {
           </Card>
 
           {data.companyAllocations.length > 0 ? (
-            <Card className="border-white/10 bg-gray-900/40 p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">
+            <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-gray-900/40 p-5">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-gray-300">
                 Распределение по точкам
               </h3>
               <div className="mt-4 space-y-2">
                 {data.companyAllocations.map((alloc) => (
                   <div
                     key={alloc.companyId}
-                    className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-gray-950/60 p-3 md:grid-cols-[1.5fr_repeat(6,auto)]"
+                    className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-gray-950/60 p-3 md:grid-cols-[1.5fr_repeat(6,auto)]"
                   >
-                    <div className="text-sm font-medium text-white">
+                    <div className="text-sm font-medium text-slate-900 dark:text-white">
                       {alloc.companyName || '—'}
                     </div>
                     <div className="text-right text-xs">
                       <div className="text-gray-500">Начислено</div>
-                      <div className="font-semibold text-gray-200">{formatMoney(alloc.accruedAmount)}</div>
+                      <div className="font-semibold text-slate-700 dark:text-gray-200">{formatMoney(alloc.accruedAmount)}</div>
                     </div>
                     <div className="text-right text-xs">
                       <div className="text-gray-500">Бонусы</div>
-                      <div className="font-semibold text-gray-200">{formatMoney(alloc.bonusAmount)}</div>
+                      <div className="font-semibold text-slate-700 dark:text-gray-200">{formatMoney(alloc.bonusAmount)}</div>
                     </div>
                     <div className="text-right text-xs">
                       <div className="text-gray-500">Штрафы</div>
-                      <div className="font-semibold text-gray-200">{formatMoney(alloc.fineAmount)}</div>
+                      <div className="font-semibold text-slate-700 dark:text-gray-200">{formatMoney(alloc.fineAmount)}</div>
                     </div>
                     <div className="text-right text-xs">
                       <div className="text-gray-500">Долги</div>
-                      <div className="font-semibold text-gray-200">{formatMoney(alloc.debtAmount)}</div>
+                      <div className="font-semibold text-slate-700 dark:text-gray-200">{formatMoney(alloc.debtAmount)}</div>
                     </div>
                     <div className="text-right text-xs">
                       <div className="text-gray-500">Аванс</div>
-                      <div className="font-semibold text-gray-200">{formatMoney(alloc.advanceAmount)}</div>
+                      <div className="font-semibold text-slate-700 dark:text-gray-200">{formatMoney(alloc.advanceAmount)}</div>
                     </div>
                     <div className="text-right text-xs">
                       <div className="text-gray-500">Чистыми</div>
-                      <div className="font-semibold text-green-300">{formatMoney(alloc.netAmount)}</div>
+                      <div className="font-semibold text-green-600 dark:text-green-300">{formatMoney(alloc.netAmount)}</div>
                     </div>
                   </div>
                 ))}

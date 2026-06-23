@@ -210,21 +210,21 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
         }}
       >
         <Card
-          className="w-full max-w-md p-6 bg-gradient-to-br from-emerald-950/80 via-gray-900 to-gray-900 border-emerald-500/30"
+          className="w-full max-w-md p-6 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/80 dark:via-gray-900 dark:to-gray-900 border-emerald-500/30"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-col items-center text-center">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4 ring-4 ring-emerald-500/10">
               <CheckCircle2 className="w-9 h-9 text-emerald-400" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-1">Сотрудник создан</h2>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">Сотрудник создан</h2>
             <p className="text-sm text-gray-400 mb-5">{success.full_name}</p>
 
             {success.username && success.password && (
               <div className="w-full space-y-2 mb-5">
                 <CredField label="Логин" value={success.username} />
                 <CredField label="Пароль" value={success.password} mono />
-                <p className="text-xs text-amber-300/80 mt-2 flex items-start gap-1.5">
+                <p className="text-xs text-amber-700 dark:text-amber-300/80 mt-2 flex items-start gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <span>Передайте пароль оператору. После закрытия он не сохранится в системе.</span>
                 </p>
@@ -253,11 +253,11 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
       onClick={onClose}
     >
       <Card
-        className="w-full max-w-2xl my-8 bg-gray-900/95 border-gray-800 backdrop-blur shadow-2xl"
+        className="w-full max-w-2xl my-8 bg-white dark:bg-gray-900/95 border-slate-200 dark:border-gray-800 backdrop-blur shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="relative px-6 py-5 border-b border-gray-800 bg-gradient-to-r from-indigo-900/30 via-gray-900 to-gray-900">
+        <div className="relative px-6 py-5 border-b border-slate-200 dark:border-gray-800 bg-gradient-to-r from-indigo-50 via-white to-white dark:from-indigo-900/30 dark:via-gray-900 dark:to-gray-900">
           <div className="absolute -top-12 -right-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -265,13 +265,13 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                 <UserPlus className="w-5 h-5 text-indigo-300" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Нанять сотрудника</h2>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Нанять сотрудника</h2>
                 <p className="text-xs text-gray-400">Один экран — профиль, логин, должность</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white"
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors text-gray-400 hover:text-slate-900 dark:hover:text-white"
               aria-label="Закрыть"
             >
               <X className="w-5 h-5" />
@@ -416,7 +416,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white"
+                      className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-slate-900 dark:hover:text-white"
                       title={showPassword ? 'Скрыть' : 'Показать'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -424,7 +424,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                     <button
                       type="button"
                       onClick={() => setPassword(genPassword())}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-slate-900 dark:hover:text-white"
                       title="Сгенерировать новый"
                     >
                       <Shuffle className="w-4 h-4" />
@@ -458,14 +458,14 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                       }
                       className={`px-3 py-2.5 rounded-lg border text-left text-sm transition ${
                         checked
-                          ? 'border-indigo-500/50 bg-indigo-500/10 text-white'
-                          : 'border-gray-700 bg-gray-800/40 text-gray-400 hover:border-gray-600 hover:text-white'
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-slate-900 dark:text-white'
+                          : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 text-slate-500 dark:text-gray-400 hover:border-slate-300 dark:hover:border-gray-600 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <div
                           className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            checked ? 'border-indigo-400 bg-indigo-500/30' : 'border-gray-600'
+                            checked ? 'border-indigo-400 bg-indigo-500/30' : 'border-slate-300 dark:border-gray-600'
                           }`}
                         >
                           {checked && <Check className="w-3 h-3 text-indigo-300" />}
@@ -498,7 +498,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
 
           {/* Error */}
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm flex items-start gap-2">
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-sm flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <div>{error}</div>
             </div>
@@ -506,8 +506,8 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-800 flex items-center justify-end gap-2 bg-gray-900/50">
-          <Button variant="outline" onClick={onClose} disabled={submitting} className="border-gray-700">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-gray-800 flex items-center justify-end gap-2 bg-slate-50 dark:bg-gray-900/50">
+          <Button variant="outline" onClick={onClose} disabled={submitting} className="border-slate-200 dark:border-gray-700">
             Отмена
           </Button>
           <Button
@@ -537,7 +537,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
 // ============ Helpers UI ============
 
 const inputClass =
-  'h-10 w-full rounded-lg border border-gray-700 bg-gray-800/60 px-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
+  'h-10 w-full rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors'
 
 function SectionLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -559,7 +559,7 @@ function Field({
 }) {
   return (
     <div className={wide ? 'sm:col-span-2' : ''}>
-      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <label className="block text-xs text-slate-500 dark:text-gray-400 mb-1">{label}</label>
       {children}
     </div>
   )
@@ -585,13 +585,13 @@ function TypeCard({
       className={`p-4 rounded-xl border text-left transition-all ${
         active
           ? 'border-indigo-500/60 bg-gradient-to-br from-indigo-500/15 to-blue-500/10 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10'
-          : 'border-gray-700 bg-gray-800/40 hover:border-gray-600'
+          : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 hover:border-slate-300 dark:hover:border-gray-600'
       }`}
     >
       <div className="flex items-start gap-3">
         <div className="text-2xl">{icon}</div>
         <div className="flex-1">
-          <div className={`font-semibold text-sm ${active ? 'text-white' : 'text-gray-300'}`}>{title}</div>
+          <div className={`font-semibold text-sm ${active ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-gray-300'}`}>{title}</div>
           <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
         </div>
         {active && (
@@ -613,14 +613,14 @@ function CredField({ label, value, mono = false }: { label: string; value: strin
     })
   }
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-gray-900/60 border border-gray-800">
+    <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-gray-900/60 border border-slate-200 dark:border-gray-800">
       <div className="flex-1 min-w-0 text-left">
         <div className="text-[10px] uppercase tracking-wider text-gray-500">{label}</div>
-        <div className={`text-sm text-white truncate ${mono ? 'font-mono' : ''}`}>{value}</div>
+        <div className={`text-sm text-slate-900 dark:text-white truncate ${mono ? 'font-mono' : ''}`}>{value}</div>
       </div>
       <button
         onClick={copy}
-        className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors shrink-0"
+        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors shrink-0"
         title="Скопировать"
       >
         {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}

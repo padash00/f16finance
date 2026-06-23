@@ -89,17 +89,17 @@ export default function PaymentProviderSettingsPage() {
 
       <Card className="p-4 sm:p-6">
         {loading ? (
-          <div className="text-sm text-slate-400">Загрузка...</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">Загрузка...</div>
         ) : companies.length === 0 ? (
-          <div className="text-sm text-slate-400">У вас нет ни одной компании.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">У вас нет ни одной компании.</div>
         ) : (
           <div className="space-y-3">
             {companies.map((c) => {
               const current = providers.find((p) => p.id === c.payment_provider_id)
               return (
-                <div key={c.id} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div key={c.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-sm font-medium text-white">{c.name}</div>
+                    <div className="text-sm font-medium text-slate-900 dark:text-white">{c.name}</div>
                     {c.code && <div className="text-xs text-slate-500">Код: {c.code}</div>}
                   </div>
                   <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ export default function PaymentProviderSettingsPage() {
                       value={c.payment_provider_id || ''}
                       onChange={(e) => void changeProvider(c.id, e.target.value || null)}
                       disabled={savingId === c.id}
-                      className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none"
+                      className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-900 dark:text-white focus:border-emerald-400 focus:outline-none"
                     >
                       <option value="">— не выбрано —</option>
                       {providers.map((p) => (
@@ -118,7 +118,7 @@ export default function PaymentProviderSettingsPage() {
                       ))}
                     </select>
                     {savingId === c.id ? (
-                      <span className="text-xs text-slate-400">сохраняем…</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">сохраняем…</span>
                     ) : savedId === c.id ? (
                       <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                         <CheckCircle2 className="w-3.5 h-3.5" /> сохранено
@@ -133,8 +133,8 @@ export default function PaymentProviderSettingsPage() {
       </Card>
 
       <Card className="p-4 sm:p-6 bg-amber-500/5 border-amber-500/20">
-        <h3 className="mb-2 text-sm font-semibold text-amber-300">Как работает</h3>
-        <ul className="space-y-1 text-xs text-amber-100/80 list-disc pl-5">
+        <h3 className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-300">Как работает</h3>
+        <ul className="space-y-1 text-xs text-amber-700/80 dark:text-amber-100/80 list-disc pl-5">
           <li>Если выбран Kaspi → в интерфейсе показывается «Kaspi POS», «Kaspi Online», «Kaspi QR»</li>
           <li>Если Halyk → «Halyk POS», «Halyk Online»</li>
           <li>Если «Универсальный» (generic) → нейтрально «Безналичный POS»</li>

@@ -727,7 +727,7 @@ export default function BranchPlanPage() {
         actions={
           <button
             onClick={() => { const fresh = defaultDraft(); setDraft(fresh); setSavedSnapshot(draftSnapshot(fresh)); void loadList() }}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-muted-foreground transition hover:bg-slate-100 dark:hover:bg-white/[0.08] hover:text-foreground"
             title="Обновить"
           >
             <RefreshCw className="h-4 w-4" />
@@ -755,7 +755,7 @@ export default function BranchPlanPage() {
               </Select>
             ) : null}
             {dirty ? (
-              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-200">
                 Есть несохранённые изменения
               </span>
             ) : null}
@@ -763,10 +763,10 @@ export default function BranchPlanPage() {
         }
       />
 
-      {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</Card> : null}
-      {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{success}</Card> : null}
+      {error ? <Card className="border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">{error}</Card> : null}
+      {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-200">{success}</Card> : null}
 
-      <Card className="border-white/10 bg-white/[0.02] p-4">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4">
         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Название модели</Label>
         <Input
           className="mt-1 text-lg font-semibold"
@@ -780,42 +780,42 @@ export default function BranchPlanPage() {
       <Card className="relative overflow-hidden border-purple-500/30 bg-gradient-to-br from-purple-500/[0.08] to-pink-500/[0.03] p-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-purple-300/80">Стартовые вложения</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-purple-200">{formatMoney(Math.round(calc.totalCapex))} ₸</p>
+            <p className="text-[11px] uppercase tracking-widest text-purple-700 dark:text-purple-300/80">Стартовые вложения</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.totalCapex))} ₸</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               ПК: {formatMoney(Math.round(calc.pcCapex))} · прочее: {formatMoney(Math.round(calc.otherCapex))}
             </p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-emerald-300/80">Выручка / мес</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-200">{formatMoney(Math.round(calc.baseScenario.revenue))} ₸</p>
+            <p className="text-[11px] uppercase tracking-widest text-emerald-700 dark:text-emerald-300/80">Выручка / мес</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(Math.round(calc.baseScenario.revenue))} ₸</p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-rose-300/80">Расходы / мес</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))} ₸</p>
+            <p className="text-[11px] uppercase tracking-widest text-rose-700 dark:text-rose-300/80">Расходы / мес</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))} ₸</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
               Фикс {formatMoney(Math.round(calc.baseScenario.opexFixed))} · % {formatMoney(Math.round(calc.baseScenario.opexPercent))}
             </p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-amber-300/80">Прибыль / мес</p>
-            <p className={`mt-1 text-2xl font-bold tabular-nums ${calc.baseScenario.profit > 0 ? 'text-amber-200' : 'text-rose-200'}`}>
+            <p className="text-[11px] uppercase tracking-widest text-amber-700 dark:text-amber-300/80">Прибыль / мес</p>
+            <p className={`mt-1 text-2xl font-bold tabular-nums ${calc.baseScenario.profit > 0 ? 'text-amber-700 dark:text-amber-200' : 'text-rose-700 dark:text-rose-200'}`}>
               {formatMoney(Math.round(calc.baseScenario.profit))} ₸
             </p>
             {calc.paybackMonths != null ? (
               <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Окупаемость: <span className="font-semibold text-amber-200">{calc.paybackMonths.toFixed(1)} мес</span>
+                Окупаемость: <span className="font-semibold text-amber-700 dark:text-amber-200">{calc.paybackMonths.toFixed(1)} мес</span>
               </p>
             ) : (
-              <p className="mt-0.5 text-[10px] text-rose-300">Прибыль ≤ 0 — окупаемость не наступит</p>
+              <p className="mt-0.5 text-[10px] text-rose-600 dark:text-rose-300">Прибыль ≤ 0 — окупаемость не наступит</p>
             )}
           </div>
         </div>
 
         {calc.breakEvenHours != null ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm">
+          <div className="mt-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-4 py-2.5 text-sm">
             <span className="text-muted-foreground">Точка безубыточности: </span>
-            нужно <span className="font-bold text-purple-200">{calc.breakEvenHours.toFixed(1)} ч/устройство в сутки</span>
+            нужно <span className="font-bold text-purple-700 dark:text-purple-200">{calc.breakEvenHours.toFixed(1)} ч/устройство в сутки</span>
             <span className="text-muted-foreground"> при текущих тарифах и OPEX, чтобы выйти в ноль.</span>
           </div>
         ) : null}
@@ -842,26 +842,26 @@ export default function BranchPlanPage() {
       </Card>
 
       {/* ── СЦЕНАРИИ ──────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div>
           <h2 className="text-sm font-semibold">Сценарии</h2>
           <p className="text-[11px] text-muted-foreground">
             Множители выручки и OPEX к базе. Используйте для оценки рисков и upside.
           </p>
         </div>
-        <div className="mt-3 overflow-auto rounded-xl border border-white/10">
+        <div className="mt-3 overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
           <table className="w-full text-sm">
-            <thead className="bg-white/[0.03] text-xs text-muted-foreground">
+            <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
               <tr className="text-left">
                 <th className="px-3 py-2 font-normal"></th>
-                <th className="px-3 py-2 text-center font-normal text-emerald-300/80">Best</th>
-                <th className="px-3 py-2 text-center font-normal text-amber-300/80">Expected</th>
-                <th className="px-3 py-2 text-center font-normal text-rose-300/80">Worst</th>
+                <th className="px-3 py-2 text-center font-normal text-emerald-700 dark:text-emerald-300/80">Best</th>
+                <th className="px-3 py-2 text-center font-normal text-amber-700 dark:text-amber-300/80">Expected</th>
+                <th className="px-3 py-2 text-center font-normal text-rose-700 dark:text-rose-300/80">Worst</th>
               </tr>
             </thead>
             <tbody>
               {(['best','expected','worst'] as const).map((k) => null /* placeholder */)}
-              <tr className="border-t border-white/[0.06]">
+              <tr className="border-t border-slate-100 dark:border-white/[0.06]">
                 <td className="px-3 py-2 text-muted-foreground">Множитель выручки</td>
                 {(['best','expected','worst'] as const).map((k) => (
                   <td key={k} className="px-3 py-2">
@@ -877,7 +877,7 @@ export default function BranchPlanPage() {
                   </td>
                 ))}
               </tr>
-              <tr className="border-t border-white/[0.06]">
+              <tr className="border-t border-slate-100 dark:border-white/[0.06]">
                 <td className="px-3 py-2 text-muted-foreground">Множитель OPEX (фикс)</td>
                 {(['best','expected','worst'] as const).map((k) => (
                   <td key={k} className="px-3 py-2">
@@ -893,29 +893,29 @@ export default function BranchPlanPage() {
                   </td>
                 ))}
               </tr>
-              <tr className="border-t border-white/[0.06] bg-white/[0.01]">
+              <tr className="border-t border-slate-100 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.01]">
                 <td className="px-3 py-2 text-muted-foreground">Выручка / мес</td>
-                <td className="px-3 py-2 text-center tabular-nums text-emerald-200">{formatMoney(Math.round(calc.scenarioBest.revenue))}</td>
-                <td className="px-3 py-2 text-center tabular-nums text-amber-200">{formatMoney(Math.round(calc.scenarioExpected.revenue))}</td>
-                <td className="px-3 py-2 text-center tabular-nums text-rose-200">{formatMoney(Math.round(calc.scenarioWorst.revenue))}</td>
+                <td className="px-3 py-2 text-center tabular-nums text-emerald-700 dark:text-emerald-200">{formatMoney(Math.round(calc.scenarioBest.revenue))}</td>
+                <td className="px-3 py-2 text-center tabular-nums text-amber-700 dark:text-amber-200">{formatMoney(Math.round(calc.scenarioExpected.revenue))}</td>
+                <td className="px-3 py-2 text-center tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.scenarioWorst.revenue))}</td>
               </tr>
-              <tr className="border-t border-white/[0.06]">
+              <tr className="border-t border-slate-100 dark:border-white/[0.06]">
                 <td className="px-3 py-2 text-muted-foreground">Расходы / мес</td>
                 <td className="px-3 py-2 text-center tabular-nums">{formatMoney(Math.round(calc.scenarioBest.opex))}</td>
                 <td className="px-3 py-2 text-center tabular-nums">{formatMoney(Math.round(calc.scenarioExpected.opex))}</td>
                 <td className="px-3 py-2 text-center tabular-nums">{formatMoney(Math.round(calc.scenarioWorst.opex))}</td>
               </tr>
-              <tr className="border-t border-white/[0.06] bg-white/[0.02]">
+              <tr className="border-t border-slate-100 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.02]">
                 <td className="px-3 py-2 font-semibold">Прибыль / мес</td>
-                <td className="px-3 py-2 text-center tabular-nums font-semibold text-emerald-200">{formatMoney(Math.round(calc.scenarioBest.profit))}</td>
-                <td className="px-3 py-2 text-center tabular-nums font-semibold text-amber-200">{formatMoney(Math.round(calc.scenarioExpected.profit))}</td>
-                <td className="px-3 py-2 text-center tabular-nums font-semibold text-rose-200">{formatMoney(Math.round(calc.scenarioWorst.profit))}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-semibold text-emerald-700 dark:text-emerald-200">{formatMoney(Math.round(calc.scenarioBest.profit))}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-semibold text-amber-700 dark:text-amber-200">{formatMoney(Math.round(calc.scenarioExpected.profit))}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-semibold text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.scenarioWorst.profit))}</td>
               </tr>
-              <tr className="border-t border-white/[0.06]">
+              <tr className="border-t border-slate-100 dark:border-white/[0.06]">
                 <td className="px-3 py-2 font-semibold">Окупаемость</td>
-                <td className="px-3 py-2 text-center tabular-nums font-semibold text-emerald-200">{calc.scenarioBest.payback != null ? `${calc.scenarioBest.payback.toFixed(1)} мес` : '—'}</td>
-                <td className="px-3 py-2 text-center tabular-nums font-semibold text-amber-200">{calc.scenarioExpected.payback != null ? `${calc.scenarioExpected.payback.toFixed(1)} мес` : '—'}</td>
-                <td className="px-3 py-2 text-center tabular-nums font-semibold text-rose-200">{calc.scenarioWorst.payback != null ? `${calc.scenarioWorst.payback.toFixed(1)} мес` : '—'}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-semibold text-emerald-700 dark:text-emerald-200">{calc.scenarioBest.payback != null ? `${calc.scenarioBest.payback.toFixed(1)} мес` : '—'}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-semibold text-amber-700 dark:text-amber-200">{calc.scenarioExpected.payback != null ? `${calc.scenarioExpected.payback.toFixed(1)} мес` : '—'}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-semibold text-rose-700 dark:text-rose-200">{calc.scenarioWorst.payback != null ? `${calc.scenarioWorst.payback.toFixed(1)} мес` : '—'}</td>
               </tr>
             </tbody>
           </table>
@@ -923,7 +923,7 @@ export default function BranchPlanPage() {
       </Card>
 
       {/* ── RAMP-UP ───────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Постепенный выход на нагрузку (ramp-up)</h2>
@@ -977,10 +977,10 @@ export default function BranchPlanPage() {
       </Card>
 
       {/* ── КОНФИГУРАЦИИ ПК ────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Cpu className="h-4 w-4 text-purple-300" />
+            <Cpu className="h-4 w-4 text-purple-600 dark:text-purple-300" />
             <div>
               <h2 className="text-sm font-semibold">Конфигурации ПК</h2>
               <p className="text-[11px] text-muted-foreground">Раскладка по комплектующим (процессор, видеокарта, ОЗУ, монитор и т.д.). Цена 1 ПК = сумма компонентов.</p>
@@ -995,7 +995,7 @@ export default function BranchPlanPage() {
             const unit = pcUnitPrice(c)
             const total = unit * num(c.quantity)
             return (
-              <div key={c.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
+              <div key={c.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_120px_180px_180px_auto] gap-2 items-end">
                   <div className="space-y-1">
                     <Label className="text-[10px]">Название</Label>
@@ -1007,11 +1007,11 @@ export default function BranchPlanPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px]">Цена 1 ПК</Label>
-                    <div className="grid h-10 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-sm tabular-nums">{formatMoney(Math.round(unit))} ₸</div>
+                    <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">{formatMoney(Math.round(unit))} ₸</div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px]">Подитог</Label>
-                    <div className="grid h-10 place-items-center rounded-lg border border-purple-500/30 bg-purple-500/[0.06] text-sm font-semibold tabular-nums text-purple-200">{formatMoney(Math.round(total))} ₸</div>
+                    <div className="grid h-10 place-items-center rounded-lg border border-purple-500/30 bg-purple-500/[0.06] text-sm font-semibold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(total))} ₸</div>
                   </div>
                   <Button size="icon" variant="ghost" onClick={() => setDraft((d) => ({ ...d, pc_configs: d.pc_configs.filter((x) => x.id !== c.id) }))}>
                     <Trash2 className="h-4 w-4" />
@@ -1086,12 +1086,12 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 flex items-center justify-end rounded-xl border border-purple-500/30 bg-purple-500/[0.06] px-4 py-2.5">
           <span className="mr-2 text-sm text-muted-foreground">Итого ПК:</span>
-          <span className="text-lg font-bold tabular-nums text-purple-200">{formatMoney(Math.round(calc.pcCapex))} ₸</span>
+          <span className="text-lg font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.pcCapex))} ₸</span>
         </div>
       </Card>
 
       {/* ── ПРОЧИЕ ВЛОЖЕНИЯ ──────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold">Прочие стартовые вложения</h2>
@@ -1147,7 +1147,7 @@ export default function BranchPlanPage() {
               </div>
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">Подитог</Label> : null}
-                <div className="grid h-10 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-sm tabular-nums">
+                <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
                   {formatMoney(Math.round(num(r.unit_price) * num(r.quantity)))} ₸
                 </div>
               </div>
@@ -1159,12 +1159,12 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 flex items-center justify-end rounded-xl border border-purple-500/30 bg-purple-500/[0.06] px-4 py-2.5">
           <span className="mr-2 text-sm text-muted-foreground">Итого прочее:</span>
-          <span className="text-lg font-bold tabular-nums text-purple-200">{formatMoney(Math.round(calc.otherCapex))} ₸</span>
+          <span className="text-lg font-bold tabular-nums text-purple-700 dark:text-purple-200">{formatMoney(Math.round(calc.otherCapex))} ₸</span>
         </div>
       </Card>
 
       {/* ── ТАРИФЫ ──────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Тарифы</h2>
@@ -1195,7 +1195,7 @@ export default function BranchPlanPage() {
               </div>
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">₸/час</Label> : null}
-                <div className="grid h-10 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-sm tabular-nums">
+                <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
                   {formatMoney(Math.round(tariffRate(t)))}
                 </div>
               </div>
@@ -1208,7 +1208,7 @@ export default function BranchPlanPage() {
       </Card>
 
       {/* ── ЗОНЫ ────────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Зоны и загрузка</h2>
@@ -1220,7 +1220,7 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 space-y-3">
           {draft.zones.map((z) => (
-            <div key={z.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
+            <div key={z.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.4fr)_110px_130px_auto] gap-2 items-end">
                 <div className="space-y-1">
                   <Label className="text-[10px]">Название</Label>
@@ -1296,7 +1296,7 @@ export default function BranchPlanPage() {
       </Card>
 
       {/* ── OPEX ────────────────────────────────────────────────────────────── */}
-      <Card className="border-white/10 bg-white/[0.02] p-5">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Ежемесячные расходы (OPEX)</h2>
@@ -1329,7 +1329,7 @@ export default function BranchPlanPage() {
               </div>
               <div className="space-y-1">
                 {idx === 0 ? <Label className="text-[10px]">В месяц</Label> : null}
-                <div className="grid h-10 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-sm tabular-nums">
+                <div className="grid h-10 place-items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-sm tabular-nums">
                   {r.kind === 'percent_of_revenue'
                     ? formatMoney(Math.round((num(r.amount) / 100) * calc.baseScenario.revenue))
                     : formatMoney(Math.round(num(r.amount)))} ₸
@@ -1343,13 +1343,13 @@ export default function BranchPlanPage() {
         </div>
         <div className="mt-3 flex items-center justify-end rounded-xl border border-rose-500/30 bg-rose-500/[0.06] px-4 py-2.5">
           <span className="mr-2 text-sm text-muted-foreground">Итого OPEX / мес:</span>
-          <span className="text-lg font-bold tabular-nums text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))} ₸</span>
+          <span className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-200">{formatMoney(Math.round(calc.baseScenario.opex))} ₸</span>
         </div>
       </Card>
 
       <div className="flex flex-wrap justify-end gap-2">
         {draft.id ? (
-          <Button variant="outline" className="border-rose-500/40 text-rose-200 hover:bg-rose-500/10" onClick={() => void deleteDraft()}>
+          <Button variant="outline" className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10" onClick={() => void deleteDraft()}>
             <Trash2 className="mr-1 h-4 w-4" /> Удалить
           </Button>
         ) : null}
@@ -1359,7 +1359,7 @@ export default function BranchPlanPage() {
         </Button>
       </div>
 
-      <Card className="border-white/10 bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
+      <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-4 text-[11px] leading-relaxed text-muted-foreground">
         <p className="font-medium text-foreground/80">Как пользоваться</p>
         <p className="mt-1">
           1) Собираешь конфигурации ПК по компонентам (процессор, GPU, ОЗУ, монитор и т.д.) — цена 1 ПК считается сама.

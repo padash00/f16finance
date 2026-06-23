@@ -46,16 +46,16 @@ export function CategoryEditorDialog({ open, onOpenChange, initialValue, compani
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="!max-w-[1000px] flex h-[88vh] flex-col gap-0 overflow-hidden border-slate-800 bg-slate-950 p-0 text-slate-100"
+        className="!max-w-[1000px] flex h-[88vh] flex-col gap-0 overflow-hidden border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-0 text-slate-900 dark:text-slate-100"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/80 px-6 py-4">
-          <DialogTitle className="text-base font-bold text-amber-100">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 px-6 py-4">
+          <DialogTitle className="text-base font-bold text-amber-700 dark:text-amber-100">
             {isEditing ? 'Редактирование категории' : 'Новая категория'}
           </DialogTitle>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-100"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
           >
             <X className="h-4 w-4" />
           </button>
@@ -113,7 +113,7 @@ export function CategoryEditorDialog({ open, onOpenChange, initialValue, compani
             <RichTextEditor value={value.description} onChange={(html) => setValue({ ...value, description: html })} />
           </div>
 
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
               checked={value.is_active}
@@ -123,11 +123,11 @@ export function CategoryEditorDialog({ open, onOpenChange, initialValue, compani
           </label>
         </form>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-800 bg-slate-900/80 px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 px-6 py-4">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-2xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-slate-500"
+            className="rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500"
           >
             Отмена
           </button>
@@ -156,7 +156,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className="w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-400/80"
+      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400/80"
     />
   )
 }
@@ -165,7 +165,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className="w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-400/80"
+      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-950/70 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-amber-400/80"
     />
   )
 }

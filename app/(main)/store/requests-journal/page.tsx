@@ -149,13 +149,13 @@ function requestStatusLabel(status: string) {
 }
 
 function requestStatusClass(status: string) {
-  if (status === 'approved_full') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-  if (status === 'approved_partial') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (status === 'issued') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-  if (status === 'received') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
-  if (status === 'rejected') return 'border-red-500/30 bg-red-500/10 text-red-200'
-  if (status === 'disputed') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
-  return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+  if (status === 'approved_full') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+  if (status === 'approved_partial') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  if (status === 'issued') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  if (status === 'received') return 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-200'
+  if (status === 'rejected') return 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
+  if (status === 'disputed') return 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-200'
+  return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
 }
 
 function RequestStatusBadge({ status }: { status: string }) {
@@ -454,42 +454,42 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-1 text-xl font-semibold">{stats.total}</p>}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Новые</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.newCount}</p>}
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{stats.newCount}</p>}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Одобрены</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.approved}</p>}
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-200">{stats.approved}</p>}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Выданы</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.issued}</p>}
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{stats.issued}</p>}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Получены</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-200">{stats.received}</p>}
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{stats.received}</p>}
         </Card>
         <Card className="border-red-500/20 bg-red-500/[0.05] p-3">
           <p className="text-[10px] uppercase tracking-widest text-red-300/70">Отклонены</p>
-          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-red-200">{stats.rejected}</p>}
+          {loading ? <Skeleton className="mt-1 h-7 w-8" /> : <p className="mt-1 text-xl font-semibold text-red-700 dark:text-red-200">{stats.rejected}</p>}
         </Card>
       </div>
 
-      {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">{error}</div> : null}
+      {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-700 dark:text-red-200">{error}</div> : null}
       {refreshing ? (
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Обновление журнала…
         </div>
       ) : null}
 
       {/* Main table */}
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-slate-200 bg-card/70 dark:border-white/10 p-0">
         {loading && filtered.length === 0 ? (
           <StoreDataTableSkeleton columns={8} />
         ) : filtered.length === 0 ? (
@@ -501,7 +501,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
           <div className="relative max-h-[calc(100vh-340px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-card/90 dark:border-white/10 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -509,8 +509,8 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full min-w-[860px] text-sm">
-              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
-                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-32 py-2.5 pl-4 pr-2 font-normal">Создана</th>
                   <th className="py-2.5 px-2 font-normal">Точка</th>
                   <th className="w-36 py-2.5 px-2 font-normal">Статус</th>
@@ -521,7 +521,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Просмотр</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {filtered.map((request) => {
                   const items = asArray(request.items)
                   const requested = items.reduce((sum, i) => sum + Number(i.requested_qty || 0), 0)
@@ -529,7 +529,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                   const timeline = requestTimeline(request)
                   const pointName = request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'
                   return (
-                    <tr key={request.id} className="transition hover:bg-white/[0.02]">
+                    <tr key={request.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                       <td className="w-32 py-2.5 pl-4 pr-2 align-middle">
                         <span className="text-xs text-muted-foreground">{formatDateTime(request.created_at)}</span>
                       </td>
@@ -543,9 +543,9 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                               <div className="font-semibold">{pointName}</div>
                               <div className="text-muted-foreground">Источник: {request.source_location?.name || '—'}</div>
                               <div className="text-muted-foreground">Витрина: {request.target_location?.name || '—'}</div>
-                              {request.comment ? <div className="mt-1 border-t border-white/10 pt-1">Заявка: {request.comment}</div> : null}
+                              {request.comment ? <div className="mt-1 border-t border-slate-200 dark:border-white/10 pt-1">Заявка: {request.comment}</div> : null}
                               {request.decision_comment ? <div>Решение: {request.decision_comment}</div> : null}
-                              <div className="mt-1 border-t border-white/10 pt-1 space-y-0.5">
+                              <div className="mt-1 border-t border-slate-200 dark:border-white/10 pt-1 space-y-0.5">
                                 {timeline.map((step) => (
                                   <div key={step.key} className="flex justify-between gap-3">
                                     <span className="text-muted-foreground">{step.label}:</span>
@@ -597,7 +597,7 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                       <td className="w-32 py-2.5 px-2 pr-2 text-right align-middle">
                         <span className="text-xs text-muted-foreground">{formatQty(requested)}</span>
                         <span className="mx-1 text-xs text-muted-foreground">→</span>
-                        <span className="text-sm font-semibold text-emerald-300">{formatQty(approved)}</span>
+                        <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-300">{formatQty(approved)}</span>
                       </td>
                       <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
                         <Button
@@ -630,9 +630,9 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
         }}
       >
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-amber-300" />
+              <ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               Детали заявки
             </DialogTitle>
             <DialogDescription>
@@ -678,19 +678,19 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                 </div>
 
                 {selectedRequest.comment ? (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-3 text-sm">
                     <span className="text-xs uppercase tracking-wider text-muted-foreground">Комментарий к заявке</span>
                     <p className="mt-1 text-foreground">{selectedRequest.comment}</p>
                   </div>
                 ) : null}
                 {selectedRequest.decision_comment ? (
-                  <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-3 text-sm">
                     <span className="text-xs uppercase tracking-wider text-muted-foreground">Решение / комментарий</span>
                     <p className="mt-1 text-foreground">{selectedRequest.decision_comment}</p>
                   </div>
                 ) : null}
 
-                <div className="rounded-lg border border-white/10 p-3">
+                <div className="rounded-lg border border-slate-200 dark:border-white/10 p-3">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">Хронология</p>
                   <ul className="mt-2 space-y-1.5 text-sm">
                     {requestTimeline(selectedRequest).map((step) => (
@@ -706,9 +706,9 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
 
                 <div>
                   <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Состав заявки (что запрошено и одобрено)</p>
-                  <div className="overflow-auto rounded-xl border border-white/10">
+                  <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
                     <table className="w-full min-w-[640px] table-fixed text-sm">
-                      <thead className="bg-white/[0.03]">
+                      <thead className="bg-slate-50 dark:bg-white/[0.03]">
                         <tr className="text-left text-xs text-muted-foreground">
                           <th className="px-3 py-2 font-normal">Товар</th>
                           <th className="w-32 px-3 py-2 font-normal">Штрихкод</th>
@@ -726,13 +726,13 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
                           </tr>
                         ) : (
                           asArray(selectedRequest.items).map((item) => (
-                            <tr key={item.id} className="border-t border-white/[0.06]">
+                            <tr key={item.id} className="border-t border-slate-100 dark:border-white/[0.06]">
                               <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
                                 <span className="block truncate">{item.item?.name || 'Товар'}</span>
                               </td>
                               <td className="w-32 px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
                               <td className="w-24 px-3 py-2 text-right">{formatQty(Number(item.requested_qty || 0))}</td>
-                              <td className="w-24 px-3 py-2 text-right text-emerald-300">
+                              <td className="w-24 px-3 py-2 text-right text-emerald-600 dark:text-emerald-300">
                                 {item.approved_qty == null ? '—' : formatQty(Number(item.approved_qty))}
                               </td>
                               <td className="px-3 py-2 text-muted-foreground">{item.comment || '—'}</td>

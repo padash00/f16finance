@@ -435,7 +435,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       {(() => {
         const hdrActions = (
           <>
-            <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+            <div className="inline-flex rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-0.5 text-xs">
               {(['all', 'warehouse', 'showcase'] as const).map((s) => (
                 <button
                   key={s}
@@ -473,17 +473,17 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Документов</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : <p className="mt-1 text-xl font-semibold">{(data?.writeoffs || []).length}</p>}
         </Card>
         <Card className="border-rose-500/20 bg-rose-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-rose-300/70">Сумма всех списаний</p>
+          <p className="text-[10px] uppercase tracking-widest text-rose-700 dark:text-rose-300/70">Сумма всех списаний</p>
           {loading ? <Skeleton className="mt-1 h-7 w-28" /> : (
-            <p className="mt-1 truncate text-xl font-semibold text-rose-200" title={formatMoney(totalWriteoffsAmount)}>{formatMoney(totalWriteoffsAmount)}</p>
+            <p className="mt-1 truncate text-xl font-semibold text-rose-700 dark:text-rose-200" title={formatMoney(totalWriteoffsAmount)}>{formatMoney(totalWriteoffsAmount)}</p>
           )}
         </Card>
-        <Card className="border-white/10 bg-white/[0.03] p-3">
+        <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Причин</p>
           {loading ? <Skeleton className="mt-1 h-7 w-10" /> : (
             <p className="mt-1 text-xl font-semibold">{new Set((data?.writeoffs || []).map((w) => w.reason).filter(Boolean)).size}</p>
@@ -491,8 +491,8 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
         </Card>
       </div>
 
-      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div> : null}
-      {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div> : null}
+      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300">{success}</div> : null}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
@@ -534,7 +534,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       </div>
 
       {/* Main table */}
-      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+      <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-card/70 p-0">
         {loading && filteredWriteoffs.length === 0 ? (
           <StoreDataTableSkeleton columns={6} />
         ) : filteredWriteoffs.length === 0 ? (
@@ -546,7 +546,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
           <div className="relative max-h-[calc(100vh-380px)] overflow-auto">
             {refreshing ? (
               <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/35 pt-10 backdrop-blur-[0.5px]">
-                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow-md">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Обновление…
                 </div>
@@ -554,19 +554,19 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
             ) : null}
             <div className={refreshing ? 'pointer-events-none opacity-50' : undefined}>
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
-                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
                   <th className="w-48 py-2.5 px-2 font-normal">Локация</th>
                   <th className="py-2.5 px-2 font-normal">Причина</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
-                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-rose-300/70">Сумма</th>
+                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-rose-700 dark:text-rose-300/70">Сумма</th>
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-slate-200 dark:divide-white/[0.04]">
                 {filteredWriteoffs.map((writeoff) => (
-                  <tr key={writeoff.id} className="transition hover:bg-white/[0.02]">
+                  <tr key={writeoff.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
                       <span className="text-xs text-muted-foreground">{formatDate(writeoff.written_at)}</span>
                     </td>
@@ -579,7 +579,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                           <p className="flex items-center gap-1.5 truncate text-sm font-medium">
                             <span className="truncate">{writeoff.reason || '—'}</span>
                             {writeoff.status === 'cancelled' ? (
-                              <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                              <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
                                 отменено
                               </span>
                             ) : null}
@@ -601,7 +601,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                       <span className="text-sm font-semibold">{(writeoff.items || []).length}</span>
                     </td>
                     <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
-                      <span className="text-sm font-semibold text-rose-300">{formatMoney(Number(writeoff.total_amount || 0))}</span>
+                      <span className="text-sm font-semibold text-rose-700 dark:text-rose-300">{formatMoney(Number(writeoff.total_amount || 0))}</span>
                     </td>
                     <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
                       <Button
@@ -628,9 +628,9 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
       {/* Create writeoff dialog */}
       <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
         <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1300px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
-              <ArchiveX className="h-5 w-5 text-rose-300" />
+              <ArchiveX className="h-5 w-5 text-rose-700 dark:text-rose-300" />
               Новый документ списания
             </DialogTitle>
             <DialogDescription>
@@ -660,8 +660,8 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   Добавить товар
                 </Button>
               </div>
-              <p className="mt-2 text-[11px] text-rose-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
-              {quickError ? <p className="mt-2 text-xs text-rose-300">{quickError}</p> : null}
+              <p className="mt-2 text-[11px] text-rose-700 dark:text-rose-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
+              {quickError ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{quickError}</p> : null}
               {quickCandidates.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {quickCandidates.map((balance) => (
@@ -674,7 +674,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                         setQuickError(null)
                         quickInputRef.current?.focus()
                       }}
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200 hover:bg-white/[0.08]"
+                      className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/[0.08]"
                       title={`${balance.item?.name || 'Товар'} · ${balance.item?.barcode || '—'} · ${formatQty(Number(balance.quantity || 0))}`}
                     >
                       <span className="block max-w-[340px] truncate">
@@ -686,8 +686,8 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               )}
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны и экспорт</p>
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3">
+              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Шаблоны и экспорт</p>
               <div className="flex flex-wrap gap-2">
                 <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
                 <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить</Button>
@@ -696,9 +696,9 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               {savedTemplates.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {savedTemplates.map((tpl) => (
-                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs">
-                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-200 hover:text-white">{tpl.name}</button>
-                      <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-300 hover:text-rose-200">×</button>
+                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.04] px-3 py-1 text-xs">
+                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white">{tpl.name}</button>
+                      <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-200">×</button>
                     </div>
                   ))}
                 </div>
@@ -736,7 +736,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
               Доступно в локации: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               {' · '}
               {selectedBalances.length} товарных позиций
@@ -746,7 +746,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
               {lines.map((line, index) => {
                 const selectedBalance = selectedBalances.find((balance) => balance.item_id === line.item_id)
                 return (
-                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.3fr)_180px_120px_minmax(0,1fr)_auto]">
+                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.3fr)_180px_120px_minmax(0,1fr)_auto]">
                   <div className="space-y-1.5">
                     <Label>Товар</Label>
                     <Select
@@ -779,7 +779,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
                   <div className="space-y-1.5">
                     <Label>Штрихкод</Label>
-                    <Input value={selectedBalance?.item?.barcode || '—'} readOnly className="bg-white/[0.03]" />
+                    <Input value={selectedBalance?.item?.barcode || '—'} readOnly className="bg-slate-50 dark:bg-white/[0.03]" />
                   </div>
 
                   <div className="space-y-1.5">
@@ -817,7 +817,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
       <Dialog open={writeoffDetailsOpen} onOpenChange={setWriteoffDetailsOpen}>
         <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-white/10 p-5 text-left">
+          <DialogHeader className="border-b border-slate-200 dark:border-white/10 p-5 text-left">
             <DialogTitle>Детали списания</DialogTitle>
             <DialogDescription>
               {selectedWriteoff
@@ -831,7 +831,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
             ) : (
               <div className="space-y-4">
                 {selectedWriteoff.status === 'cancelled' ? (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-200">
                     Списание отменено{selectedWriteoff.cancelled_at ? ` · ${formatDate(selectedWriteoff.cancelled_at)}` : ''}.
                     Товар возвращён на остаток.
                     {selectedWriteoff.cancel_reason ? <span> Причина: {selectedWriteoff.cancel_reason}</span> : null}
@@ -844,9 +844,9 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   ) : null}
                   <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedWriteoff.total_amount || 0))}</span></span>
                 </div>
-                <div className="overflow-auto rounded-xl border border-white/10">
+                <div className="overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
                   <table className="w-full table-fixed text-sm">
-                    <thead className="bg-white/[0.03]">
+                    <thead className="bg-slate-50 dark:bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
                         <th className="px-3 py-2 font-normal">Штрихкод</th>
@@ -858,7 +858,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                     </thead>
                     <tbody>
                       {(selectedWriteoff.items || []).map((item) => (
-                        <tr key={item.id} className="border-t border-white/[0.06]">
+                        <tr key={item.id} className="border-t border-slate-200 dark:border-white/[0.06]">
                           <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
                             <span className="block truncate">{item.item?.name || 'Товар'}</span>
                           </td>
@@ -877,7 +877,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   <div className="flex justify-end">
                     <Button
                       variant="outline"
-                      className="border-rose-500/40 text-rose-200 hover:bg-rose-500/10"
+                      className="border-rose-500/40 text-rose-700 dark:text-rose-200 hover:bg-rose-500/10"
                       disabled={cancelling}
                       onClick={() => void cancelWriteoff(selectedWriteoff)}
                     >

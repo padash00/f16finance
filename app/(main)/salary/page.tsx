@@ -322,9 +322,9 @@ type WeeklyOperator = {
 type SalaryData = { weekStart: string; weekEnd: string; companies: CompanyOption[]; operators: WeeklyOperator[]; totals: { netAmount: number; paidAmount: number; advanceAmount: number; remainingAmount: number; paidOperators: number; totalOperators: number } }
 type AdjustmentKind = 'bonus' | 'fine' | 'debt'
 
-const input = 'h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
-const selectCls = 'h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-emerald-400/40 focus:outline-none [color-scheme:dark]'
-const textarea = 'min-h-[96px] w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const input = 'h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const selectCls = 'h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white focus:border-emerald-400/40 focus:outline-none [color-scheme:light] dark:[color-scheme:dark]'
+const textarea = 'min-h-[96px] w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
 const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-300' }
@@ -334,16 +334,16 @@ function Modal(props: { title: string; subtitle?: string; onClose: () => void; c
   if (typeof document === 'undefined') return null
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto"
+      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center bg-white/80 dark:bg-slate-950/80 p-4 backdrop-blur-sm overflow-y-auto"
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}
     >
-      <div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#10182b] p-6 shadow-2xl shadow-black/40">
+      <div className="w-full max-w-xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#10182b] p-6 shadow-2xl shadow-black/40">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-semibold text-white">{props.title}</h3>
-            {props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">{props.title}</h3>
+            {props.subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{props.subtitle}</p> : null}
           </div>
-          <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" onClick={props.onClose}>Закрыть</Button>
+          <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10" onClick={props.onClose}>Закрыть</Button>
         </div>
         {props.children}
       </div>
@@ -1075,30 +1075,30 @@ export default function SalaryPage() {
                     variant="outline"
                     onClick={downloadSalaryCSV}
                     disabled={loading || !data}
-                    className="h-8 gap-1.5 rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10"
+                    className="h-8 gap-1.5 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
                   >
                     <Download className="h-3.5 w-3.5" />
                     PDF
                   </Button>
-                  <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
+                  <div className="flex rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
                     <button
                       type="button"
                       onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
-                      className="rounded-lg px-2.5 py-1.5 text-slate-400 transition hover:text-white"
+                      className="rounded-lg px-2.5 py-1.5 text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:hover:text-white"
                     >
                       ←
                     </button>
                     <button
                       type="button"
                       onClick={() => setWeekStart(currentWeek)}
-                      className="rounded-lg px-2.5 py-1.5 text-slate-300 transition hover:text-white"
+                      className="rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 transition hover:text-slate-900 dark:hover:text-white"
                     >
                       Сейчас
                     </button>
                     <button
                       type="button"
                       onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
-                      className="rounded-lg px-2.5 py-1.5 text-slate-400 transition hover:text-white"
+                      className="rounded-lg px-2.5 py-1.5 text-slate-500 dark:text-slate-400 transition hover:text-slate-900 dark:hover:text-white"
                     >
                       →
                     </button>
@@ -1106,7 +1106,7 @@ export default function SalaryPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                    className="h-8 w-8 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
                     onClick={() => void load()}
                     aria-label="Обновить"
                   >
@@ -1117,7 +1117,7 @@ export default function SalaryPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                  className="h-8 w-8 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
                   onClick={() => void loadStaffSalary()}
                   aria-label="Обновить"
                 >
@@ -1127,13 +1127,13 @@ export default function SalaryPage() {
             }
             toolbar={
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5" role="tablist" aria-label="Раздел зарплаты">
+                <div className="flex rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 p-0.5" role="tablist" aria-label="Раздел зарплаты">
                   <button
                     type="button"
                     role="tab"
                     aria-selected={tab === 'operators'}
                     onClick={() => setTab('operators')}
-                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operators' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operators' ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                   >
                     Операторы
                   </button>
@@ -1142,7 +1142,7 @@ export default function SalaryPage() {
                     role="tab"
                     aria-selected={tab === 'operator-events'}
                     onClick={() => setTab('operator-events')}
-                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operator-events' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operator-events' ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                   >
                     Лента операторов
                   </button>
@@ -1152,7 +1152,7 @@ export default function SalaryPage() {
                       role="tab"
                       aria-selected={tab === 'staff'}
                       onClick={() => setTab('staff')}
-                      className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                      className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                     >
                       Административные сотрудники
                     </button>
@@ -1162,21 +1162,21 @@ export default function SalaryPage() {
                     role="tab"
                     aria-selected={tab === 'events'}
                     onClick={() => setTab('events')}
-                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'events' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'events' ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                   >
                     Лента событий
                   </button>
                 </div>
                 {tab === 'operators' || tab === 'operator-events' ? (
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                    <span className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-1">
                       Неделя:{' '}
-                      <span className="font-semibold text-white">
+                      <span className="font-semibold text-slate-900 dark:text-white">
                         {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}
                       </span>
                     </span>
                     {data ? (
-                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-300">
+                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-700 dark:text-emerald-300">
                         Выплачено: <span className="font-semibold">{data.totals.paidOperators}</span>
                       </span>
                     ) : null}
@@ -1199,24 +1199,24 @@ export default function SalaryPage() {
           {tab === 'operators' && (<>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2 text-amber-300"><CreditCard className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2 text-amber-300"><CreditCard className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
             <div className="min-w-0 flex-1 text-xs">{summaryText}</div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
+              <div className="flex rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-black/20 p-0.5 text-xs">
                 {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
-                  <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                  <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
                     {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
                   </button>
                 ))}
               </div>
-              <Button type="button" variant="outline" className="h-8 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
+              <Button type="button" variant="outline" className="h-8 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
             </div>
           </div>
 
@@ -1272,10 +1272,10 @@ export default function SalaryPage() {
                     const title = getOperatorDisplayName(item.operator)
                     return (
                       <Fragment key={item.operator.id}>
-                        <tr key={item.operator.id} className="border-t border-white/5 align-top">
+                        <tr key={item.operator.id} className="border-t border-slate-200 dark:border-white/5 align-top">
                           <td className="px-4 py-4">
                             <div className="flex items-start gap-3">
-                              <button type="button" className="mt-1 rounded-lg border border-white/10 bg-white/5 p-1.5 text-slate-300 transition hover:bg-white/10" onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}>
+                              <button type="button" className="mt-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-1.5 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setExpanded((p) => ({ ...p, [item.operator.id]: !p[item.operator.id] }))}>
                                 {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                               </button>
                               <Link href={`/operators/${item.operator.id}/profile`} className="flex min-w-0 items-start gap-3">
@@ -1283,7 +1283,7 @@ export default function SalaryPage() {
                                   {item.operator.photo_url ? <Image src={item.operator.photo_url} alt={title} width={44} height={44} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white">{title.charAt(0).toUpperCase()}</div>}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="truncate font-medium text-white">{title}</div>
+                                  <div className="truncate font-medium text-slate-900 dark:text-white">{title}</div>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                                     {item.operator.position ? <span>{item.operator.position}</span> : null}
                                     {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">неактивен</span> : null}
@@ -1294,8 +1294,8 @@ export default function SalaryPage() {
                               </Link>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-center"><div className="inline-flex flex-col items-center gap-0.5"><span className="text-base font-semibold text-white">{item.week.shiftsCount}</span><span className="text-[10px] text-slate-500">смен</span></div></td>
-                          <td className="px-4 py-4 text-right font-medium text-white">{money(item.week.grossAmount)}</td>
+                          <td className="px-4 py-4 text-center"><div className="inline-flex flex-col items-center gap-0.5"><span className="text-base font-semibold text-slate-900 dark:text-white">{item.week.shiftsCount}</span><span className="text-[10px] text-slate-500">смен</span></div></td>
+                          <td className="px-4 py-4 text-right font-medium text-slate-900 dark:text-white">{money(item.week.grossAmount)}</td>
                           <td className="px-4 py-4 text-right text-violet-300">{item.week.autoBonusTotal > 0 ? money(item.week.autoBonusTotal) : <span className="text-slate-600">—</span>}</td>
                           <td className="px-4 py-4 text-right text-emerald-300">{money(item.week.bonusAmount)}</td>
                           <td className="px-4 py-4 text-right text-rose-300">{money(item.week.fineAmount)}</td>
@@ -1316,15 +1316,15 @@ export default function SalaryPage() {
                           </td>
                           <td className="px-4 py-4 text-right text-amber-300">{money(item.week.advanceAmount)}</td>
                           <td className="px-4 py-4 text-right text-sky-300">{money(item.week.paidAmount)}</td>
-                          <td className="px-4 py-4 text-right text-lg font-semibold text-white">{money(item.week.remainingAmount)}</td>
+                          <td className="px-4 py-4 text-right text-lg font-semibold text-slate-900 dark:text-white">{money(item.week.remainingAmount)}</td>
                           <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${st.className}`}>{st.label}</span></td>
-                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2">{canCreateAdvance && <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button>}{canCreatePayment && <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button>}<Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-slate-200 transition hover:bg-white/10">Детали</Link></div></td>
-                          <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2">{canUpdateChatId && <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button>}<Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
+                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2">{canCreateAdvance && <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button>}{canCreatePayment && <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button>}<Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-white/10">Детали</Link></div></td>
+                          <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2">{canUpdateChatId && <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button>}<Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-700 dark:text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
                         </tr>
-                        {open ? <tr className="border-t border-white/5 bg-slate-950/30"><td colSpan={13} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr]">
-                          <Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-white/5 text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
-                          <Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-white"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-slate-400">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-white/5 text-slate-200"><td className="py-2 pr-3 text-slate-300">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-slate-400">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-white">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
-                          <Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} • {cashLabels.providerName}: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button>}</div></div>)}</div>}</Card>
+                        {open ? <tr className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950/30"><td colSpan={13} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr]">
+                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-slate-900 dark:text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-slate-900 dark:text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
+                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-slate-900 dark:text-white"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-slate-500 dark:text-slate-400">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-slate-500 dark:text-slate-400">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-slate-900 dark:text-white">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
+                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-900 dark:text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Нал: {money(p.cash_amount)} • {cashLabels.providerName}: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button>}</div></div>)}</div>}</Card>
                           </div></td></tr> : null}
                       </Fragment>
                     )
@@ -1334,14 +1334,14 @@ export default function SalaryPage() {
           </AdminTableViewport>
 
           {canCreateAdjustment && (
-          <Card className="border-white/10 bg-white/[0.04] p-5">
+          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5">
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-300">
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Ручная корректировка недели</h2>
-                <p className="text-sm text-slate-400">Для бонусов, штрафов и ручных долгов. Аванс через эту форму больше не создаётся.</p>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Ручная корректировка недели</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Для бонусов, штрафов и ручных долгов. Аванс через эту форму больше не создаётся.</p>
               </div>
             </div>
             <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submitAdjustment}>
@@ -1372,19 +1372,19 @@ export default function SalaryPage() {
 
           {/* ── OPERATOR EVENTS TAB ─────────────────────────────────────────── */}
           {tab === 'operator-events' && (
-            <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
-              <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
+            <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04]">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 p-5">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-blue-500/15 p-3 text-blue-300">
                     <CalendarDays className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Лента событий операторов</h2>
-                    <p className="text-sm text-slate-400">Недельные начисления, выплаты и удержания операторов за выбранную неделю.</p>
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Лента событий операторов</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Недельные начисления, выплаты и удержания операторов за выбранную неделю.</p>
                   </div>
                 </div>
-                <div className="text-xs text-slate-400">
-                  Событий: <span className="font-semibold text-white">{operatorGlobalTimeline.length}</span>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Событий: <span className="font-semibold text-slate-900 dark:text-white">{operatorGlobalTimeline.length}</span>
                 </div>
               </div>
               <div className="p-5">
@@ -1421,19 +1421,19 @@ export default function SalaryPage() {
                   <input className={input} type="date" value={operatorEventsDateFrom} onChange={(e) => setOperatorEventsDateFrom(e.target.value)} />
                   <input className={input} type="date" value={operatorEventsDateTo} onChange={(e) => setOperatorEventsDateTo(e.target.value)} />
                 </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-                    Событий: <span className="font-semibold text-white">{operatorEventsSummary.total}</span>
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                  <span className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-1">
+                    Событий: <span className="font-semibold text-slate-900 dark:text-white">{operatorEventsSummary.total}</span>
                   </span>
-                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-200">
-                    К выплате за неделю: <span className="font-semibold text-white">{money(operatorEventsSummary.toPay)}</span>
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-700 dark:text-emerald-200">
+                    К выплате за неделю: <span className="font-semibold text-slate-900 dark:text-white">{money(operatorEventsSummary.toPay)}</span>
                   </span>
-                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-200">
-                    Выплачено: <span className="font-semibold text-white">{money(operatorEventsSummary.payouts)}</span>
+                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-700 dark:text-sky-200">
+                    Выплачено: <span className="font-semibold text-slate-900 dark:text-white">{money(operatorEventsSummary.payouts)}</span>
                   </span>
                   <button
                     type="button"
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-slate-300 hover:bg-white/[0.08]"
+                    className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-1 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                     onClick={() => {
                       setOperatorEventsQuery('')
                       setOperatorEventsOperatorId('all')
@@ -1450,20 +1450,20 @@ export default function SalaryPage() {
                 {operatorEventsByOperator.length > 0 ? (
                   <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                     {operatorEventsByOperator.map((row) => (
-                      <div key={row.operatorId} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                      <div key={row.operatorId} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <div className="truncate text-sm font-medium text-white">{row.operatorName}</div>
+                          <div className="truncate text-sm font-medium text-slate-900 dark:text-white">{row.operatorName}</div>
                           <button
                             type="button"
-                            className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-300 hover:bg-white/[0.08]"
+                            className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                             onClick={() => setOperatorEventsOperatorId(row.operatorId)}
                           >
                             Показать
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
                           <span>События</span>
-                          <span className="text-right text-white">{row.events}</span>
+                          <span className="text-right text-slate-900 dark:text-white">{row.events}</span>
                           <span>К выплате</span>
                           <span className="text-right text-emerald-300">{money(row.toPay)}</span>
                           <span>Выплачено</span>
@@ -1484,14 +1484,14 @@ export default function SalaryPage() {
                     ))}
                   </div>
                 ) : filteredOperatorGlobalTimeline.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-8 text-center text-sm text-slate-500">
                     За выбранную неделю нет событий по фильтрам.
                   </div>
                 ) : (
                   <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
                     {groupedVisibleOperatorEvents.map(([dateKey, events]) => (
                       <div key={dateKey} className="space-y-2">
-                        <div className="sticky top-0 z-10 rounded-lg bg-slate-900/90 px-2 py-1 text-[11px] text-slate-400 backdrop-blur">
+                        <div className="sticky top-0 z-10 rounded-lg bg-white/90 dark:bg-slate-900/90 px-2 py-1 text-[11px] text-slate-500 dark:text-slate-400 backdrop-blur">
                           {formatRuDate(dateKey)}
                         </div>
                         {events.map((ev) => {
@@ -1530,21 +1530,21 @@ export default function SalaryPage() {
                                       ? 'Штраф за неделю'
                                       : 'Долг за товары/удержания'
                           return (
-                            <div key={ev.id} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                            <div key={ev.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                  <span className="text-slate-300">{ev.operator_name}</span>
+                                  <span className="text-slate-700 dark:text-slate-300">{ev.operator_name}</span>
                                   {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
                                 </div>
-                                <span className="ml-3 shrink-0 font-medium text-white">{money(ev.amount)}</span>
+                                <span className="ml-3 shrink-0 font-medium text-slate-900 dark:text-white">{money(ev.amount)}</span>
                               </div>
                               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                                 <span>{kindHint}</span>
                                 <span>•</span>
                                 <span>Дата: {formatRuDate(ev.date)}</span>
                               </div>
-                              {ev.comment ? <div className="mt-1.5 text-[11px] text-slate-400">{ev.comment}</div> : null}
+                              {ev.comment ? <div className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">{ev.comment}</div> : null}
                             </div>
                           )
                         })}
@@ -1555,7 +1555,7 @@ export default function SalaryPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                          className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
                           onClick={() => setOperatorEventsLimit((prev) => prev + 100)}
                         >
                           Показать ещё
@@ -1570,13 +1570,13 @@ export default function SalaryPage() {
 
           {/* ── STAFF TAB ───────────────────────────────────────────────────── */}
           {tab === 'staff' && canViewStaffSalary && (
-          <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
-            <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
+          <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04]">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 p-5">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-violet-500/15 p-3 text-violet-300"><Users className="h-5 w-5" /></div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Зарплатная ведомость Административных сотрудников</h2>
-                  <p className="text-sm text-slate-400">Фиксированный оклад, выплата 1-го и 15-го. Бонусы, штрафы, долги, авансы, доп. выходы.</p>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Зарплатная ведомость Административных сотрудников</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Фиксированный оклад, выплата 1-го и 15-го. Бонусы, штрафы, долги, авансы, доп. выходы.</p>
                   {staffSalary?.consistency?.has_issues ? (
                     <p className="mt-2 text-xs text-amber-300">
                       Проверка консистентности: отсутствуют/лишние расходы по зарплате ({staffSalary.consistency.missing_payment_expense_count}
@@ -1593,21 +1593,21 @@ export default function SalaryPage() {
                   type="button"
                   variant="outline"
                   className={
-                    'rounded-xl border-white/10 text-xs ' +
-                    (showStaffArchived ? 'bg-amber-400/20 text-amber-100 hover:bg-amber-400/30' : 'bg-white/5 text-slate-300 hover:bg-white/10')
+                    'rounded-xl border-slate-200 dark:border-white/10 text-xs ' +
+                    (showStaffArchived ? 'bg-amber-400/20 text-amber-700 dark:text-amber-100 hover:bg-amber-400/30' : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10')
                   }
                   onClick={() => setShowStaffArchived((v) => !v)}
                   title={showStaffArchived ? 'Скрыть уволенных' : 'Показать архив'}
                 >
                   {showStaffArchived ? 'Архив открыт' : 'Архив'}
                 </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
               </div>
             </div>
             {staffSalaryLoading ? (
               <div className="space-y-4 p-5">
                 {Array.from({ length: 4 }).map((_, idx) => (
-                  <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div key={idx} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <Skeleton className="h-11 w-11 rounded-2xl" />
@@ -1627,9 +1627,9 @@ export default function SalaryPage() {
                 ))}
               </div>
             ) : !staffSalary || staffSalary.staff.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-white/10 px-1">staff</code>.</div>
+              <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-slate-100 dark:bg-white/10 px-1">staff</code>.</div>
             ) : (
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-slate-200 dark:divide-white/5">
                 {staffSalary.staff.map((s) => {
                   const calc = calcStaffToPay(s, staffSalary.adjustments, staffSalary.payments, currentStaffSalaryPeriod)
                   const activeAdjs = filterStaffAdjustmentsForSlot(
@@ -1675,12 +1675,12 @@ export default function SalaryPage() {
                     <div key={s.id} className={'p-5 ' + (isDismissed ? 'opacity-60' : '')}>
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <div className={'flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-600 to-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600')}>
+                          <div className={'flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-semibold dark:text-white ' + (isDismissed ? 'bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 text-slate-700' : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white')}>
                             {(s.short_name || s.full_name).charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <div className="font-semibold text-white">{s.full_name}</div>
+                              <div className="font-semibold text-slate-900 dark:text-white">{s.full_name}</div>
                               {isDismissed ? (
                                 <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
                                   Уволен{dismissedDateLabel ? ` · ${dismissedDateLabel}` : ''}
@@ -1695,10 +1695,10 @@ export default function SalaryPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {!isDismissed && canStaffAddAdjustment && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           )}
                           {!isDismissed && canStaffAddExtraDay && (
-                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                            <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           )}
                           {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
                             <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
@@ -1715,24 +1715,24 @@ export default function SalaryPage() {
                         <div className="mt-2 text-xs text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
                       ) : null}
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-white">{money(calc.half)}</div></div>
+                        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{money(calc.half)}</div></div>
                         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-300">+{money(calc.bonuses)}</div></div>
                         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
                         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-amber-400/70">Авансы</div><div className="mt-1 text-sm font-semibold text-amber-300">−{money(calc.advances)}</div></div>
-                        <div className="rounded-2xl border border-white/15 bg-white/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-400">К выплате</div><div className="mt-1 text-base font-bold text-white">{money(calc.toPay)}</div></div>
+                        <div className="rounded-2xl border border-slate-200 dark:border-white/15 bg-slate-50 dark:bg-white/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">К выплате</div><div className="mt-1 text-base font-bold text-slate-900 dark:text-white">{money(calc.toPay)}</div></div>
                       </div>
                       {activeAdjs.length > 0 ? (
                         <div className="mt-3 space-y-1.5">
                           <div className="mb-1 text-xs text-slate-500">Активные корректировки:</div>
                           {activeAdjs.map(adj => (
-                            <div key={adj.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                            <div key={adj.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${adj.kind === 'bonus' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : adj.kind === 'advance' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`}>
                                   {staffAdjustmentKindLabel(adj.kind)}
                                 </span>
-                                <span className="font-medium text-white">{money(adj.amount)}</span>
+                                <span className="font-medium text-slate-900 dark:text-white">{money(adj.amount)}</span>
                                 <span className="text-slate-500">{adj.date}</span>
-                                {adj.comment ? <span className="text-slate-400">{adj.comment}</span> : null}
+                                {adj.comment ? <span className="text-slate-500 dark:text-slate-400">{adj.comment}</span> : null}
                               </div>
                               {!adj.id.startsWith('operator-debt:') && canEditStaffSalary ? (
                                 <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
@@ -1776,7 +1776,7 @@ export default function SalaryPage() {
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
                           <div className="flex flex-wrap gap-2">
                             {recentPaymentDetails.map(({ payment, closedAdjustments, generatedAdjustments, closingWindow }) => (
-                              <div key={payment.id} className="min-w-[260px] rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                              <div key={payment.id} className="min-w-[260px] rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
                                 <div className="flex items-center justify-between gap-2">
                                   <span>{payment.pay_date} · {money(payment.amount)} · {staffPaymentSlotLabel(payment.slot)}</span>
                                   {canEditStaffSalary ? (
@@ -1785,13 +1785,13 @@ export default function SalaryPage() {
                                 </div>
                                 <div className="mt-1 text-[11px] text-slate-500">Период закрытия: {closingWindow.label}</div>
                                 {closedAdjustments.length > 0 ? (
-                                  <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                                  <div className="mt-2 space-y-1 border-t border-slate-200 dark:border-white/10 pt-2">
                                     {closedAdjustments.slice(0, 4).map((adj) => (
-                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                                         <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>
                                           закрыто: {staffAdjustmentKindLabel(adj.kind)}
                                         </span>
-                                        <span className="font-medium text-white">{money(adj.amount)}</span>
+                                        <span className="font-medium text-slate-900 dark:text-white">{money(adj.amount)}</span>
                                         <span>{adj.date}</span>
                                         {adj.comment ? <span className="truncate">{adj.comment}</span> : null}
                                       </div>
@@ -1802,13 +1802,13 @@ export default function SalaryPage() {
                                   </div>
                                 ) : null}
                                 {generatedAdjustments.length > 0 ? (
-                                  <div className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                                  <div className="mt-2 space-y-1 border-t border-slate-200 dark:border-white/10 pt-2">
                                     {generatedAdjustments.map((adj) => (
-                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-amber-200">
+                                      <div key={adj.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-200">
                                         <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${staffAdjustmentTone(adj.kind)}`}>
                                           создано: {staffAdjustmentKindLabel(adj.kind)}
                                         </span>
-                                        <span className="font-medium text-white">{money(adj.amount)}</span>
+                                        <span className="font-medium text-slate-900 dark:text-white">{money(adj.amount)}</span>
                                         <span>на следующую выплату</span>
                                       </div>
                                     ))}
@@ -1829,19 +1829,19 @@ export default function SalaryPage() {
 
           {/* ── EVENTS TAB ─────────────────────────────────────────────────── */}
           {tab === 'events' && (
-            <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
-              <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
+            <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04]">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 p-5">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-300">
                     <CalendarDays className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">Лента событий</h2>
-                    <p className="text-sm text-slate-400">Общий поток выплат и корректировок по административным сотрудникам.</p>
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Лента событий</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Общий поток выплат и корректировок по административным сотрудникам.</p>
                   </div>
                 </div>
-                <div className="text-xs text-slate-400">
-                  Событий: <span className="font-semibold text-white">{staffGlobalTimeline.length}</span>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Событий: <span className="font-semibold text-slate-900 dark:text-white">{staffGlobalTimeline.length}</span>
                 </div>
               </div>
               <div className="p-5">
@@ -1878,19 +1878,19 @@ export default function SalaryPage() {
                   <input className={input} type="date" value={eventsDateFrom} onChange={(e) => setEventsDateFrom(e.target.value)} />
                   <input className={input} type="date" value={eventsDateTo} onChange={(e) => setEventsDateTo(e.target.value)} />
                 </div>
-                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-                    Событий: <span className="font-semibold text-white">{eventsSummary.total}</span>
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                  <span className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-1">
+                    Событий: <span className="font-semibold text-slate-900 dark:text-white">{eventsSummary.total}</span>
                   </span>
-                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-200">
-                    Выплаты: <span className="font-semibold text-white">{money(eventsSummary.payments)}</span>
+                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-700 dark:text-sky-200">
+                    Выплаты: <span className="font-semibold text-slate-900 dark:text-white">{money(eventsSummary.payments)}</span>
                   </span>
-                  <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-rose-200">
-                    Удержания: <span className="font-semibold text-white">{money(eventsSummary.deductions)}</span>
+                  <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-rose-700 dark:text-rose-200">
+                    Удержания: <span className="font-semibold text-slate-900 dark:text-white">{money(eventsSummary.deductions)}</span>
                   </span>
                   <button
                     type="button"
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-slate-300 hover:bg-white/[0.08]"
+                    className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-1 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08]"
                     onClick={() => {
                       setEventsQuery('')
                       setEventsStaffId('all')
@@ -1911,14 +1911,14 @@ export default function SalaryPage() {
                     ))}
                   </div>
                 ) : filteredStaffGlobalTimeline.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-8 text-center text-sm text-slate-500">
                     Пока нет событий для отображения.
                   </div>
                 ) : (
                   <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
                     {groupedVisibleEvents.map(([dateKey, events]) => (
                       <div key={dateKey} className="space-y-2">
-                        <div className="sticky top-0 z-10 rounded-lg bg-slate-900/90 px-2 py-1 text-[11px] text-slate-400 backdrop-blur">
+                        <div className="sticky top-0 z-10 rounded-lg bg-white/90 dark:bg-slate-900/90 px-2 py-1 text-[11px] text-slate-500 dark:text-slate-400 backdrop-blur">
                           {formatRuDate(dateKey)}
                         </div>
                         {events.map((ev) => {
@@ -1940,15 +1940,15 @@ export default function SalaryPage() {
                                   ? 'штраф'
                                   : 'долг'
                           return (
-                            <div key={ev.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                            <div key={ev.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
                               <div className="flex min-w-0 items-center gap-2">
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                <span className="text-slate-300">{ev.staff_name}</span>
+                                <span className="text-slate-700 dark:text-slate-300">{ev.staff_name}</span>
                                 {ev.status === 'paid' ? <span className="text-sky-400">(закрыто выплатой)</span> : null}
                                 {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
-                                {ev.comment ? <span className="truncate text-slate-400">{ev.comment}</span> : null}
+                                {ev.comment ? <span className="truncate text-slate-500 dark:text-slate-400">{ev.comment}</span> : null}
                               </div>
-                              <span className="ml-3 shrink-0 font-medium text-white">{money(ev.amount)}</span>
+                              <span className="ml-3 shrink-0 font-medium text-slate-900 dark:text-white">{money(ev.amount)}</span>
                             </div>
                           )
                         })}
@@ -1959,7 +1959,7 @@ export default function SalaryPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                          className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10"
                           onClick={() => setEventsLimit((prev) => prev + 100)}
                         >
                           Показать ещё
@@ -1979,28 +1979,28 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitAdvance}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Точка</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Точка</label>
                 <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
                   {(data?.companies || []).map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
                 <input className={input} type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
                 <input className={input} type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">{cashLabels.providerName}</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">{cashLabels.providerName}</label>
                 <input className={input} type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
             <textarea className={textarea} value={advanceComment} onChange={(e) => setAdvanceComment(e.target.value)} placeholder="Комментарий" />
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Итого аванс: <span className="font-semibold text-white">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Итого аванс: <span className="font-semibold text-slate-900 dark:text-white">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceTarget(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
             </div>
           </form>
@@ -2012,16 +2012,16 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
                 <input className={input} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Эта выплата автоматически разложится по компаниям по фактическому начислению.</div>
+              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Эта выплата автоматически разложится по компаниям по фактическому начислению.</div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
                 <input className={input} type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">{cashLabels.providerName}</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">{cashLabels.providerName}</label>
                 <input className={input} type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
               </div>
             </div>
@@ -2047,12 +2047,12 @@ export default function SalaryPage() {
                       </span>
                     </span>
                   </label>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
+                  <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">
                     <div className="flex justify-between">
                       <span>Выплата сейчас:</span>
-                      <span className="font-semibold text-white">{money(total)}</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{money(total)}</span>
                     </div>
-                    <div className="mt-1 flex justify-between text-xs text-slate-400">
+                    <div className="mt-1 flex justify-between text-xs text-slate-500 dark:text-slate-400">
                       <span>В счёт текущей недели:</span>
                       <span>{money(Math.min(total, remaining))}</span>
                     </div>
@@ -2067,7 +2067,7 @@ export default function SalaryPage() {
               )
             })()}
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setPayTarget(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setPayTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>
@@ -2079,7 +2079,7 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={saveChatId}>
             <input className={input} type="text" value={chatValue} onChange={(e) => setChatValue(e.target.value)} placeholder="Например: -1001234567890" />
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setChatTarget(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setChatTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{chatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
             </div>
           </form>
@@ -2093,15 +2093,15 @@ export default function SalaryPage() {
               <div className="text-[11px] uppercase tracking-wide text-rose-400/70">Сумма долга к оплате</div>
               <div className="mt-1 text-2xl font-bold text-rose-200">{money(payDebtModal.amount)}</div>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Долг будет помечен оплаченным и убран из вычета зарплаты. Запись появится в «Оплаченные долги» — её можно аннулировать (долг вернётся активным).
             </p>
             <div>
-              <label className="mb-2 block text-sm text-slate-300">Комментарий (необязательно)</label>
+              <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Комментарий (необязательно)</label>
               <textarea className={textarea} placeholder="Например: вернул наличными" value={payDebtComment} onChange={(e) => setPayDebtComment(e.target.value)} />
             </div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setPayDebtModal(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setPayDebtModal(null)}>Отмена</Button>
               <Button type="button" onClick={() => void confirmPayStaffDebt()} disabled={payDebtSaving} className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50">
                 {payDebtSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="mr-1.5 h-4 w-4" />Оплатить долг</>}
               </Button>
@@ -2115,7 +2115,7 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitStaffAdjustment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Тип</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Тип</label>
                 <select className={selectCls} value={staffAdjKind} onChange={e => setStaffAdjKind(e.target.value as any)}>
                   <option value="fine">Штраф</option>
                   <option value="debt">Долг</option>
@@ -2124,12 +2124,12 @@ export default function SalaryPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Дата</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата</label>
                 <input className={input} type="date" value={staffAdjDate} onChange={e => setStaffAdjDate(e.target.value)} />
               </div>
               {staffAdjKind === 'advance' ? (
                 <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm text-slate-300">Компания (расход по авансу)</label>
+                  <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Компания (расход по авансу)</label>
                   <select className={selectCls} value={staffAdjCompanyId} onChange={e => setStaffAdjCompanyId(e.target.value)}>
                     <option value="">Выберите компанию</option>
                     {(data?.companies || []).map((c) => (
@@ -2139,13 +2139,13 @@ export default function SalaryPage() {
                 </div>
               ) : null}
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm text-slate-300">Сумма</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Сумма</label>
                 <input className={input} type="text" placeholder="0" value={staffAdjAmount} onChange={e => setStaffAdjAmount(e.target.value)} />
               </div>
             </div>
             <textarea className={textarea} placeholder="Комментарий" value={staffAdjComment} onChange={e => setStaffAdjComment(e.target.value)} />
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setStaffAdjModal(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setStaffAdjModal(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffAdjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
             </div>
           </form>
@@ -2157,18 +2157,18 @@ export default function SalaryPage() {
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Слот</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Слот</label>
                 <select className={selectCls} value={staffPaySlot} onChange={e => setStaffPaySlot(e.target.value as 'first' | 'second')}>
                   <option value="first">Выплата 1-го числа</option>
                   <option value="second">Выплата 15-го числа</option>
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
                 <input className={input} type="date" value={staffPayDate} onChange={e => setStaffPayDate(e.target.value)} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Компания (расход)</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Компания (расход)</label>
                 <select className={selectCls} value={staffPayCompanyId} onChange={e => setStaffPayCompanyId(e.target.value)}>
                   <option value="">Выберите компанию</option>
                   {(data?.companies || []).map((c) => (
@@ -2177,32 +2177,32 @@ export default function SalaryPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
                 <input className={input} type="text" placeholder="0" value={staffPayCash} onChange={e => setStaffPayCash(e.target.value)} />
               </div>
               <div>
-                <label className="mb-2 block text-sm text-slate-300">{cashLabels.providerName}</label>
+                <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">{cashLabels.providerName}</label>
                 <input className={input} type="text" placeholder="0" value={staffPayKaspi} onChange={e => setStaffPayKaspi(e.target.value)} />
               </div>
             </div>
             {staffPayPreview ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
-                <div className="mb-2 text-sm font-medium text-white">Предпросмотр проводки</div>
+              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 text-xs text-slate-700 dark:text-slate-300">
+                <div className="mb-2 text-sm font-medium text-slate-900 dark:text-white">Предпросмотр проводки</div>
                 <div className="grid gap-2 md:grid-cols-2">
-                  <div>Период закрытия: <span className="text-white">{staffPayPreview.closingWindow.label}</span></div>
-                  <div>Очередь: <span className="text-white">{staffPaymentSlotLabel(staffPaySlot)}</span></div>
-                  <div>Закроется корректировок: <span className="text-white">{staffPayPreview.closingAdjustments.length}</span></div>
-                  <div>Расход (компания): <span className="text-white">{staffPayPreview.companyName}</span></div>
-                  <div>Расход (нал/{cashLabels.providerName}): <span className="text-white">{money(staffPayPreview.payCashAmount)} / {money(staffPayPreview.payKaspiAmount)}</span></div>
-                  <div>К выплате по расчёту: <span className="text-white">{money(staffPayPreview.calc.toPay)}</span></div>
-                  <div>Сейчас будет выплачено: <span className="text-white">{money(staffPayPreview.payTotal)}</span></div>
+                  <div>Период закрытия: <span className="text-slate-900 dark:text-white">{staffPayPreview.closingWindow.label}</span></div>
+                  <div>Очередь: <span className="text-slate-900 dark:text-white">{staffPaymentSlotLabel(staffPaySlot)}</span></div>
+                  <div>Закроется корректировок: <span className="text-slate-900 dark:text-white">{staffPayPreview.closingAdjustments.length}</span></div>
+                  <div>Расход (компания): <span className="text-slate-900 dark:text-white">{staffPayPreview.companyName}</span></div>
+                  <div>Расход (нал/{cashLabels.providerName}): <span className="text-slate-900 dark:text-white">{money(staffPayPreview.payCashAmount)} / {money(staffPayPreview.payKaspiAmount)}</span></div>
+                  <div>К выплате по расчёту: <span className="text-slate-900 dark:text-white">{money(staffPayPreview.calc.toPay)}</span></div>
+                  <div>Сейчас будет выплачено: <span className="text-slate-900 dark:text-white">{money(staffPayPreview.payTotal)}</span></div>
                 </div>
                 {staffPayPreview.closingAdjustments.length > 0 ? (
                   <div className="mt-3 max-h-28 space-y-1 overflow-y-auto pr-1">
                     {staffPayPreview.closingAdjustments.map((adj) => (
-                      <div key={adj.id} className="flex items-center justify-between rounded-lg border border-white/10 px-2 py-1">
-                        <span className="text-slate-400">{adj.date} · {staffAdjustmentKindLabel(adj.kind)}</span>
-                        <span className="text-white">{money(adj.amount)}</span>
+                      <div key={adj.id} className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-white/10 px-2 py-1">
+                        <span className="text-slate-500 dark:text-slate-400">{adj.date} · {staffAdjustmentKindLabel(adj.kind)}</span>
+                        <span className="text-slate-900 dark:text-white">{money(adj.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -2210,9 +2210,9 @@ export default function SalaryPage() {
               </div>
             ) : null}
             <textarea className={textarea} placeholder="Комментарий" value={staffPayComment} onChange={e => setStaffPayComment(e.target.value)} />
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Итого: <span className="font-semibold text-white">{money(parseMoney(staffPayCash) + parseMoney(staffPayKaspi))}</span></div>
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Итого: <span className="font-semibold text-slate-900 dark:text-white">{money(parseMoney(staffPayCash) + parseMoney(staffPayKaspi))}</span></div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setStaffPayModal(null)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setStaffPayModal(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffPaySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>
@@ -2222,9 +2222,9 @@ export default function SalaryPage() {
       {broadcastConfirm ? (
         <Modal title="Отправить расчёт всем?" subtitle={`Рассылка Telegram для ${broadcastTargets.length} операторов с активным chat_id`} onClose={() => setBroadcastConfirm(false)}>
           <div className="space-y-4">
-            <p className="text-sm text-slate-300">Каждый оператор получит сообщение со своим расчётом за неделю {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}.</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300">Каждый оператор получит сообщение со своим расчётом за неделю {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}.</p>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setBroadcastConfirm(false)}>Отмена</Button>
+              <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setBroadcastConfirm(false)}>Отмена</Button>
               <Button type="button" className="rounded-xl bg-blue-500 text-white hover:bg-blue-400" onClick={() => { setBroadcastConfirm(false); void sendAll() }}><Send className="mr-2 h-4 w-4" />Отправить</Button>
             </div>
           </div>

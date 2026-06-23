@@ -567,7 +567,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
             onClick={autoArrange}
             disabled={saving}
             title="Расставить станции аккуратной сеткой внутри их зон"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-white/10 disabled:pointer-events-none disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/5 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/10 disabled:pointer-events-none disabled:opacity-40"
           >
             <LayoutGrid className="h-3.5 w-3.5" />
             Авто-расстановка
@@ -580,12 +580,12 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         </div>
 
         {localZones.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] px-2 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Цвета зон</span>
             {localZones.map(z => (
               <span
                 key={z.id}
-                className="inline-flex max-w-[140px] items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-foreground"
+                className="inline-flex max-w-[140px] items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-[10px] text-foreground"
                 title={z.name}
               >
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: z.color ?? '#3b82f6' }} />
@@ -598,7 +598,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         {/* Grid */}
         <div
           ref={gridRef}
-          className="relative border border-white/10 rounded-lg overflow-hidden bg-zinc-900 cursor-crosshair"
+          className="relative border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden bg-slate-100 dark:bg-zinc-900 cursor-crosshair"
           style={{ width: GRID_W * CELL, height: GRID_H * CELL }}
           onDragOver={e => e.preventDefault()}
           onDrop={handleDrop}
@@ -686,7 +686,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 {/* Color picker popover */}
                 {colorPicker === zone.id && (
                   <div
-                    className="absolute z-50 top-6 left-0 flex flex-wrap gap-1 rounded-lg border border-white/20 bg-zinc-900 p-2 shadow-xl"
+                    className="absolute z-50 top-6 left-0 flex flex-wrap gap-1 rounded-lg border border-slate-200 dark:border-white/20 bg-white dark:bg-zinc-900 p-2 shadow-xl"
                     style={{ width: 120 }}
                     onClick={e => e.stopPropagation()}
                   >
@@ -725,7 +725,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               onClick={e => e.stopPropagation()}
             >
               {deco.type === 'label'
-                ? <span className="text-[9px] text-white/60 text-center px-1 leading-tight break-words">{deco.label || 'Text'}</span>
+                ? <span className="text-[9px] text-slate-500 dark:text-white/60 text-center px-1 leading-tight break-words">{deco.label || 'Text'}</span>
                 : deco.type !== 'wall'
                   ? <span className="text-xl" title={deco.label ?? deco.type}>{decoEmoji(deco.type)}</span>
                   : null
@@ -784,7 +784,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         {/* Add decoration modal */}
         {addDecoCell && (
           <div
-            className="flex flex-col gap-3 rounded-xl border border-white/10 bg-zinc-900 p-3"
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-zinc-900 p-3"
             style={{ width: GRID_W * CELL }}
           >
             <div className="flex items-center justify-between">
@@ -796,7 +796,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 <button
                   key={d.type}
                   onClick={() => setNewDecoType(d.type)}
-                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs transition ${newDecoType === d.type ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}
+                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs transition ${newDecoType === d.type ? 'border-primary bg-primary/10' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:border-slate-300 dark:hover:border-white/20'}`}
                 >
                   <span className="text-base">{d.emoji}</span>
                   <span className="text-muted-foreground">{d.label}</span>
@@ -808,7 +808,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 value={newDecoLabel}
                 onChange={e => setNewDecoLabel(e.target.value)}
                 placeholder="Текст надписи"
-                className="rounded border border-white/20 bg-background px-2 py-1 text-sm"
+                className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-sm"
               />
             )}
             <div className="flex items-center gap-3 text-xs">
@@ -820,7 +820,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   max={10}
                   value={newDecoW}
                   onChange={e => setNewDecoW(Math.max(1, Math.min(10, Number(e.target.value))))}
-                  className="w-12 rounded border border-white/20 bg-background px-1.5 py-1 text-sm text-foreground"
+                  className="w-12 rounded border border-slate-200 dark:border-white/20 bg-background px-1.5 py-1 text-sm text-foreground"
                 />
               </label>
               <label className="flex items-center gap-1.5 text-muted-foreground">
@@ -831,7 +831,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   max={10}
                   value={newDecoH}
                   onChange={e => setNewDecoH(Math.max(1, Math.min(10, Number(e.target.value))))}
-                  className="w-12 rounded border border-white/20 bg-background px-1.5 py-1 text-sm text-foreground"
+                  className="w-12 rounded border border-slate-200 dark:border-white/20 bg-background px-1.5 py-1 text-sm text-foreground"
                 />
               </label>
             </div>
@@ -842,7 +842,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               >
                 Добавить
               </button>
-              <button onClick={() => setAddDecoCell(null)} className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-muted-foreground">
+              <button onClick={() => setAddDecoCell(null)} className="rounded-lg border border-slate-200 dark:border-white/10 px-3 py-1.5 text-sm text-muted-foreground">
                 Отмена
               </button>
             </div>
@@ -860,7 +860,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               const onMap = zone.grid_x != null
               const color = zone.color ?? '#3b82f6'
               return (
-                <div key={zone.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs">
+                <div key={zone.id} className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-1.5 text-xs">
                   <span className="flex items-center gap-1.5 truncate">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
                     <span className="truncate">{zone.name}</span>
@@ -895,7 +895,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   key={st.id}
                   draggable
                   onDragStart={e => handleDragStart(e, 'station', st.id, 0, 0)}
-                  className="flex cursor-grab items-center justify-between rounded border border-white/10 bg-white/5 px-2 py-1 text-xs"
+                  className="flex cursor-grab items-center justify-between rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-1 text-xs"
                 >
                   <span className="flex items-center gap-1 truncate">
                     <Monitor className="h-3 w-3 shrink-0 text-indigo-400" />
@@ -933,7 +933,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">На карте</p>
             <div className="space-y-1">
               {stationsOnMap.map(st => (
-                <div key={st.id} className="flex items-center justify-between rounded border border-white/10 bg-white/5 px-2 py-1 text-xs">
+                <div key={st.id} className="flex items-center justify-between rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-1 text-xs">
                   <span className="flex items-center gap-1 truncate">
                     <Monitor className="h-3 w-3 shrink-0 text-indigo-400" />
                     <span className="truncate">{st.name}</span>
@@ -1815,7 +1815,7 @@ function StationsPageContent() {
             title="Обновить данные с сервера"
             onClick={() => void load({ silent: true })}
             disabled={syncing || loading}
-            className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition disabled:opacity-40"
+            className="flex items-center justify-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 p-2 text-muted-foreground hover:text-foreground transition disabled:opacity-40"
           >
             <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
           </button>
@@ -1844,7 +1844,7 @@ function StationsPageContent() {
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Точка</span>
               <div className="relative">
                 {options.length === 0 ? (
-                  <span className="rounded-xl border border-white/10 bg-card px-4 py-2 text-lg font-bold text-foreground">{currentLabel}</span>
+                  <span className="rounded-xl border border-slate-200 dark:border-white/10 bg-card px-4 py-2 text-lg font-bold text-foreground">{currentLabel}</span>
                 ) : (
                   <select
                     value={currentValue}
@@ -1857,7 +1857,7 @@ function StationsPageContent() {
                       if (cId) p.set('company', cId)
                       router.push(`/stations/${pId}?${p.toString()}`)
                     }}
-                    className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                    className="appearance-none rounded-xl border border-slate-200 dark:border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
                   >
                     {options.map(o => (
                       <option key={`${o.pId}|${o.cId}`} value={o.cId ? `${o.pId}|${o.cId}` : o.pId}>
@@ -1884,7 +1884,7 @@ function StationsPageContent() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-0 border-b border-white/10">
+            <div className="flex gap-0 border-b border-slate-200 dark:border-white/10">
               {[
                 { id: 'manage', label: 'Управление', icon: Settings },
                 { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
@@ -1927,14 +1927,14 @@ function StationsPageContent() {
                     <button
                       type="button"
                       onClick={() => setCollapsedZones({})}
-                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                     >
                       Развернуть все
                     </button>
                     <button
                       type="button"
                       onClick={() => setCollapsedZones(Object.fromEntries(zones.map(z => [z.id, true])))}
-                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                     >
                       Свернуть все
                     </button>
@@ -1959,7 +1959,7 @@ function StationsPageContent() {
                   value={manageQuery}
                   onChange={e => setManageQuery(e.target.value)}
                   placeholder="Поиск по названию зоны, станции или тарифа…"
-                  className="w-full rounded-xl border border-white/10 bg-card py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary/50"
+                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-card py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary/50"
                   aria-label="Поиск по зонам и станциям"
                 />
               </div>
@@ -1973,7 +1973,7 @@ function StationsPageContent() {
                   onChange={e => setNewZoneName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleCreateZone(); if (e.key === 'Escape') { setAddingZone(false); setNewZoneName('') } }}
                   placeholder="Название зоны (напр. PlayStation, ПК, VIP)"
-                  className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-1.5 text-sm"
+                  className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-1.5 text-sm"
                 />
                 <button type="button" onClick={handleCreateZone} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Создать
@@ -1983,14 +1983,14 @@ function StationsPageContent() {
             )}
 
             {zones.length === 0 && !addingZone && (
-              <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-slate-200 dark:border-white/10 p-8 text-center text-muted-foreground">
                 <Monitor className="mx-auto h-8 w-8 mb-2 opacity-40" />
                 <p className="text-sm">Зон пока нет. Создайте первую зону, чтобы добавить станции и тарифы.</p>
               </div>
             )}
 
             {zones.length > 0 && filteredZones.length === 0 && (
-              <p className="rounded-xl border border-dashed border-white/10 py-6 text-center text-sm text-muted-foreground">
+              <p className="rounded-xl border border-dashed border-slate-200 dark:border-white/10 py-6 text-center text-sm text-muted-foreground">
                 Ничего не найдено — измените запрос или сбросьте поиск.
               </p>
             )}
@@ -2001,12 +2001,12 @@ function StationsPageContent() {
               const collapsed = Boolean(collapsedZones[zone.id])
               const zColor = zone.color ?? '#3b82f6'
               return (
-                <div key={zone.id} className="rounded-xl border border-white/10 bg-card overflow-hidden">
-                  <div className="flex items-center gap-1 border-b border-white/10 bg-white/5 px-2 py-2 sm:px-3">
+                <div key={zone.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-card overflow-hidden">
+                  <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-2 py-2 sm:px-3">
                     <button
                       type="button"
                       onClick={() => setCollapsedZones(p => ({ ...p, [zone.id]: !p[zone.id] }))}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                       title={collapsed ? 'Развернуть зону' : 'Свернуть зону'}
                       aria-expanded={!collapsed}
                     >
@@ -2019,7 +2019,7 @@ function StationsPageContent() {
                           <input
                             value={zoneEditName}
                             onChange={e => setZoneEditName(e.target.value)}
-                            className="w-full rounded border border-white/20 bg-background px-2 py-1 text-sm"
+                            className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-sm"
                             placeholder="Название зоны"
                           />
                           <div className="flex flex-wrap items-end gap-2">
@@ -2032,7 +2032,7 @@ function StationsPageContent() {
                                 min={0}
                                 step="1"
                                 placeholder="напр. 1200"
-                                className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                               />
                             </label>
                             <div className="flex gap-1">
@@ -2047,7 +2047,7 @@ function StationsPageContent() {
                               <button
                                 type="button"
                                 onClick={() => setEditingZoneId(null)}
-                                className="rounded bg-white/10 px-2 py-1 text-xs"
+                                className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs"
                               >
                                 Отмена
                               </button>
@@ -2060,8 +2060,8 @@ function StationsPageContent() {
                       ) : (
                         <>
                           <span className="truncate font-semibold text-sm">{zone.name}</span>
-                          <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneStations.length} ст.</span>
-                          <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneTariffs.length} тар.</span>
+                          <span className="shrink-0 rounded-full bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneStations.length} ст.</span>
+                          <span className="shrink-0 rounded-full bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneTariffs.length} тар.</span>
                           {zone.extension_hourly_price != null && zone.extension_hourly_price > 0 && (
                             <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
                               час {formatPrice(zone.extension_hourly_price)}
@@ -2088,7 +2088,7 @@ function StationsPageContent() {
                               )
                             }
                           }}
-                          className="rounded p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                          className="rounded p-1.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -2100,7 +2100,7 @@ function StationsPageContent() {
                   </div>
 
                   {!collapsed && (
-                    <div className="grid md:grid-cols-2 divide-y divide-white/10 md:divide-x md:divide-y-0">
+                    <div className="grid md:grid-cols-2 divide-y divide-slate-200 dark:divide-white/10 md:divide-x md:divide-y-0">
                       <div className="p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"><Monitor className="h-3.5 w-3.5" /> Станции</span>
@@ -2111,7 +2111,7 @@ function StationsPageContent() {
                                 setNewStationName('')
                                 setCrudDialog({ kind: 'station', zoneId: zone.id, zoneLabel: zone.name })
                               }}
-                              className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                              className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/10 hover:text-foreground"
                             >
                               <Plus className="h-3 w-3" /> Добавить
                             </button>
@@ -2120,32 +2120,32 @@ function StationsPageContent() {
                         <div className="space-y-1">
                           {zoneStations.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет станций</p>}
                           {zoneStations.map(st => (
-                            <div key={st.id} className="group rounded-lg px-2 py-1.5 hover:bg-white/5">
+                            <div key={st.id} className="group rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
                               {editingStationId === st.id ? (
                                 <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
                                   <input
                                     value={stationEditName}
                                     onChange={e => setStationEditName(e.target.value)}
-                                    className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                    className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                     placeholder="Название станции"
                                   />
                                   <input
                                     value={stationEditCode}
                                     onChange={e => setStationEditCode(e.target.value)}
-                                    className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                    className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                     placeholder="Код станции для установщика (например VIP-111)"
                                   />
                                   <div className="grid grid-cols-2 gap-1">
                                     <input
                                       value={stationEditIp}
                                       onChange={e => setStationEditIp(e.target.value)}
-                                      className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                      className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                       placeholder="IP (например 192.168.0.111)"
                                     />
                                     <input
                                       value={stationEditMac}
                                       onChange={e => setStationEditMac(e.target.value)}
-                                      className="rounded border border-white/20 bg-background px-2 py-1 text-xs uppercase"
+                                      className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs uppercase"
                                       placeholder="MAC (например AA:BB:CC:DD:EE:FF)"
                                     />
                                   </div>
@@ -2161,7 +2161,7 @@ function StationsPageContent() {
                                     <button
                                       type="button"
                                       onClick={() => setEditingStationId(null)}
-                                      className="rounded bg-white/10 px-2 py-1 text-xs"
+                                      className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs"
                                     >
                                       Отмена
                                     </button>
@@ -2189,13 +2189,13 @@ function StationsPageContent() {
                                       )}
                                     </div>
                                     <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                      <span className="rounded bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
                                         Код: {st.station_code || st.name}
                                       </span>
-                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                      <span className="rounded bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
                                         IP: {st.device_ip || 'не задан'}
                                       </span>
-                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                      <span className="rounded bg-slate-100 dark:bg-white/5 px-1.5 py-0.5">
                                         Игр: {stationGames.filter((g) => g.station_id === st.id).length}
                                       </span>
                                     </div>
@@ -2205,7 +2205,7 @@ function StationsPageContent() {
                                         <select
                                           value={quickTariffId}
                                           onChange={e => setQuickTariffId(e.target.value)}
-                                          className="flex-1 rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                          className="flex-1 rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1 text-xs"
                                           autoFocus
                                         >
                                           <option value="">— Тариф —</option>
@@ -2262,7 +2262,7 @@ function StationsPageContent() {
                                           setBindArgs('')
                                           setCrudDialog({ kind: 'stationGames', stationId: st.id, stationLabel: st.name })
                                         }}
-                                        className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                        className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                                         title="Игры станции"
                                       >
                                         <Monitor className="h-3 w-3" />
@@ -2272,14 +2272,14 @@ function StationsPageContent() {
                                       <button
                                         type="button"
                                         onClick={() => openKioskTheme(st as any)}
-                                        className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                        className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                                         title="Тема киоска"
                                       >
                                         <Paintbrush className="h-3 w-3" />
                                       </button>
                                     )}
                                     {can('stations.edit_station') && (
-                                      <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                      <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     )}
                                     {can('stations.delete_station') && (
                                       <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
@@ -2294,7 +2294,7 @@ function StationsPageContent() {
                                     <select
                                       value={kioskBgType}
                                       onChange={(e) => setKioskBgType(e.target.value as any)}
-                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                      className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1 text-xs"
                                     >
                                       <option value="color">Цвет фона</option>
                                       <option value="gradient">Градиент</option>
@@ -2305,26 +2305,26 @@ function StationsPageContent() {
                                       value={kioskBgValue}
                                       onChange={(e) => setKioskBgValue(e.target.value)}
                                       placeholder={kioskBgType === 'color' ? '#07080a' : kioskBgType === 'gradient' ? 'linear-gradient(...)' : 'https://...'}
-                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                      className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1 text-xs"
                                     />
                                     <input
                                       value={kioskAccent}
                                       onChange={(e) => setKioskAccent(e.target.value)}
                                       placeholder="Акцент (#3b82f6)"
-                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                      className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1 text-xs"
                                     />
                                     <input
                                       value={kioskLogoUrl}
                                       onChange={(e) => setKioskLogoUrl(e.target.value)}
                                       placeholder="URL логотипа клуба"
-                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                      className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1 text-xs"
                                     />
                                   </div>
                                   <input
                                     value={kioskAnnouncement}
                                     onChange={(e) => setKioskAnnouncement(e.target.value)}
                                     placeholder="Объявление (бегущая строка)"
-                                    className="w-full rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                    className="w-full rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1 text-xs"
                                   />
                                   <div className="flex gap-1">
                                     <button
@@ -2338,7 +2338,7 @@ function StationsPageContent() {
                                     <button
                                       type="button"
                                       onClick={() => setKioskThemeStationId(null)}
-                                      className="rounded bg-white/10 px-2 py-1 text-xs"
+                                      className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs"
                                     >
                                       Отмена
                                     </button>
@@ -2360,7 +2360,7 @@ function StationsPageContent() {
                                 setNewTariff({ ...EMPTY_NEW_TARIFF })
                                 setCrudDialog({ kind: 'tariff', zoneId: zone.id, zoneLabel: zone.name })
                               }}
-                              className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                              className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-slate-200 dark:hover:bg-white/10 hover:text-foreground"
                             >
                               <Plus className="h-3 w-3" /> Добавить
                             </button>
@@ -2372,10 +2372,10 @@ function StationsPageContent() {
                             <div key={t.id} className="group">
                               {editingTariff?.id === t.id ? (
                                 <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
-                                  <input value={editingTariff.name} onChange={e => setEditingTariff(p => p ? ({ ...p, name: e.target.value }) : p)} className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                  <input value={editingTariff.name} onChange={e => setEditingTariff(p => p ? ({ ...p, name: e.target.value }) : p)} className="w-full rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs" />
                                   <div className="grid grid-cols-2 gap-1">
-                                    <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                                    <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                    <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs" />
+                                    <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs" />
                                   </div>
                                   <div className="grid grid-cols-2 gap-1">
                                     <select
@@ -2392,7 +2392,7 @@ function StationsPageContent() {
                                             }
                                           : p)
                                       }}
-                                      className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                      className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                     >
                                       <option value="fixed">Фикс. длительность</option>
                                       <option value="time_window">Пакет по окну</option>
@@ -2404,25 +2404,25 @@ function StationsPageContent() {
                                         value={editingTariff.window_start_time || ''}
                                         onChange={e => setEditingTariff(p => p ? ({ ...p, window_start_time: e.target.value }) : p)}
                                         type="time"
-                                        className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                        className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                         title="Начало окна"
                                       />
                                       <input
                                         value={editingTariff.window_end_time || ''}
                                         onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)}
                                         type="time"
-                                        className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                        className="rounded border border-slate-200 dark:border-white/20 bg-background px-2 py-1 text-xs"
                                         title="Конец окна"
                                       />
                                     </div>
                                   )}
                                   <div className="flex gap-1">
                                     <button type="button" onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
-                                    <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
+                                    <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs">Отмена</button>
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+                                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
                                   <div className="min-w-0">
                                     <span className="text-sm">{t.name}</span>
                                     <span className="ml-2 text-xs text-muted-foreground">
@@ -2437,7 +2437,7 @@ function StationsPageContent() {
                                   </div>
                                   <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
                                     {can('stations.edit_tariff') && (
-                                      <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                      <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     )}
                                     {can('stations.delete_tariff') && (
                                       <button type="button" onClick={() => handleDeleteTariff(t.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
@@ -2475,7 +2475,7 @@ function StationsPageContent() {
                     onChange={(e) => setBalanceQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && void handleSearchClient()}
                     placeholder="Телефон, карта или имя клиента"
-                    className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                    className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
                   />
                   <button type="button" onClick={() => void handleSearchClient()} disabled={balanceSearching || !balanceQuery.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-40 flex items-center gap-1.5">
                     {balanceSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Найти
@@ -2487,7 +2487,7 @@ function StationsPageContent() {
                       <div
                         key={r.id}
                         onClick={() => setBalanceTargetId(r.id)}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:bg-white/8'}`}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/8'}`}
                       >
                         <div>
                           <p className="font-medium">{r.name || '—'}</p>
@@ -2507,7 +2507,7 @@ function StationsPageContent() {
                           onChange={(e) => setBalanceAmount(e.target.value)}
                           placeholder="Сумма пополнения (₸)"
                           min={1}
-                          className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                          className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
                         />
                         <button type="button" onClick={() => void handleTopUp()} disabled={saving || !balanceAmount || Number(balanceAmount) <= 0} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm text-white font-medium disabled:opacity-40">
                           Пополнить
@@ -2537,17 +2537,17 @@ function StationsPageContent() {
 
               {/* Add new game form */}
               {!editingGame && can('stations.create_game_catalog') && (
-                <div className="rounded-lg border border-white/10 bg-white/3 p-4 space-y-3">
+                <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/3 p-4 space-y-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Новая игра</p>
                   <div className="flex gap-3 items-start">
                     {newGameLogo && (
-                      <img src={newGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <img src={newGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     )}
                     <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название игры" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
-                      <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки (необязательно)" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                      <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название игры" className="rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm" />
+                      <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки (необязательно)" className="rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm" />
                       <div className="flex gap-2">
-                        <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
+                        <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm">
                           <option value="game">Игра</option>
                           <option value="browser">Браузер</option>
                           <option value="app">Программа</option>
@@ -2567,12 +2567,12 @@ function StationsPageContent() {
                   <p className="text-xs text-blue-400 font-semibold uppercase tracking-wide">Редактировать игру</p>
                   <div className="flex gap-3 items-start">
                     {editGameLogo && (
-                      <img src={editGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <img src={editGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     )}
                     <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
-                      <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
-                      <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
+                      <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm" />
+                      <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm" />
+                      <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm">
                         <option value="game">Игра</option>
                         <option value="browser">Браузер</option>
                         <option value="app">Программа</option>
@@ -2587,7 +2587,7 @@ function StationsPageContent() {
                     <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 flex items-center gap-1.5">
                       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Сохранить
                     </button>
-                    <button type="button" onClick={() => setEditingGame(null)} className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Отмена</button>
+                    <button type="button" onClick={() => setEditingGame(null)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Отмена</button>
                   </div>
                 </div>
               )}
@@ -2595,16 +2595,16 @@ function StationsPageContent() {
               {/* Games table */}
               <div className="space-y-1">
                 {gamesCatalog.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-white/10 py-10 text-center text-muted-foreground">
+                  <div className="rounded-lg border border-dashed border-slate-200 dark:border-white/10 py-10 text-center text-muted-foreground">
                     <Gamepad2 className="mx-auto h-8 w-8 mb-2 opacity-30" />
                     <p className="text-sm">Каталог пуст. Добавьте первую игру выше.</p>
                   </div>
                 )}
                 {gamesCatalog.map((g) => (
-                  <div key={g.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 group transition-colors ${g.is_active ? 'border-white/8 bg-white/3 hover:bg-white/5' : 'border-white/5 bg-white/2 opacity-50'}`}>
+                  <div key={g.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 group transition-colors ${g.is_active ? 'border-slate-200 dark:border-white/8 bg-white dark:bg-white/3 hover:bg-slate-50 dark:hover:bg-white/5' : 'border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/2 opacity-50'}`}>
                     {g.logo_url
-                      ? <img src={g.logo_url} alt="" className="h-9 w-9 rounded-md object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      : <div className="h-9 w-9 rounded-md bg-white/10 shrink-0 flex items-center justify-center"><Gamepad2 className="h-4 w-4 text-white/20" /></div>
+                      ? <img src={g.logo_url} alt="" className="h-9 w-9 rounded-md object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      : <div className="h-9 w-9 rounded-md bg-slate-100 dark:bg-white/10 shrink-0 flex items-center justify-center"><Gamepad2 className="h-4 w-4 text-slate-400 dark:text-white/20" /></div>
                     }
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{g.title}</p>
@@ -2612,7 +2612,7 @@ function StationsPageContent() {
                     </div>
                     <div className="hidden group-hover:flex items-center gap-1 shrink-0">
                       {can('stations.edit_game_catalog') && (
-                        <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 text-muted-foreground hover:text-slate-900 dark:hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
                       )}
                       {can('stations.delete_game_catalog') && (
                         <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded-lg p-1.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -2634,7 +2634,7 @@ function StationsPageContent() {
               <select
                 value={bulkZoneId}
                 onChange={(e) => setBulkZoneId(e.target.value)}
-                className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm w-full sm:w-64"
+                className="rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm w-full sm:w-64"
               >
                 <option value="">— Выберите зону —</option>
                 {zones.filter(z => z.is_active).map(z => (
@@ -2648,15 +2648,15 @@ function StationsPageContent() {
                   {gamesCatalog.filter(g => g.is_active).map(g => (
                     <div key={g.id} className="flex items-center gap-3">
                       {g.logo_url
-                        ? <img src={g.logo_url} alt="" className="h-7 w-7 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        : <div className="h-7 w-7 rounded bg-white/10 shrink-0" />
+                        ? <img src={g.logo_url} alt="" className="h-7 w-7 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        : <div className="h-7 w-7 rounded bg-slate-100 dark:bg-white/10 shrink-0" />
                       }
                       <span className="w-32 text-sm shrink-0 truncate">{g.title}</span>
                       <input
                         value={bulkExePaths[g.id] || ''}
                         onChange={(e) => setBulkExePaths(prev => ({ ...prev, [g.id]: e.target.value }))}
                         placeholder={`D:\\Games\\${g.title}\\game.exe`}
-                        className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-1.5 text-xs font-mono"
+                        className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-1.5 text-xs font-mono"
                       />
                     </div>
                   ))}
@@ -2721,29 +2721,29 @@ function StationsPageContent() {
                 type="button"
                 onClick={exportAnalyticsCsv}
                 disabled={analyticsLoading || sessions.length === 0}
-                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground disabled:opacity-40"
                 title="Экспорт всех загруженных сессий за период (CSV, UTF-8)"
               >
                 <Download className="h-4 w-4" /> CSV
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground">Период сохраняется в адресе (<code className="rounded bg-white/5 px-1">tab</code>, <code className="rounded bg-white/5 px-1">afrom</code>, <code className="rounded bg-white/5 px-1">ato</code>) — можно поделиться ссылкой.</p>
+            <p className="text-[11px] text-muted-foreground">Период сохраняется в адресе (<code className="rounded bg-slate-100 dark:bg-white/5 px-1">tab</code>, <code className="rounded bg-slate-100 dark:bg-white/5 px-1">afrom</code>, <code className="rounded bg-slate-100 dark:bg-white/5 px-1">ato</code>) — можно поделиться ссылкой.</p>
 
             {analyticsLoading ? (
               <div className="space-y-4 animate-pulse">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {[1, 2, 3, 4, 5].map(i => (
-                    <div key={i} className="h-24 rounded-xl border border-white/5 bg-white/5" />
+                    <div key={i} className="h-24 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5" />
                   ))}
                 </div>
-                <div className="h-32 rounded-xl border border-white/5 bg-white/5" />
-                <div className="h-40 rounded-xl border border-white/5 bg-white/5" />
+                <div className="h-32 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5" />
+                <div className="h-40 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5" />
                 <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Загружаем сессии…
                 </p>
               </div>
             ) : completedSessions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-muted-foreground text-sm">
+              <div className="rounded-xl border border-dashed border-slate-200 dark:border-white/10 p-8 text-center text-muted-foreground text-sm">
                 За выбранный период нет завершённых сессий
               </div>
             ) : (
@@ -2778,7 +2778,7 @@ function StationsPageContent() {
                           <span className="text-xs text-muted-foreground">{p.label}</span>
                           <span className="text-xs font-semibold">{formatPrice(p.amount)}</span>
                         </div>
-                        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                           <div className="h-full rounded-full transition-all" style={{ width: `${(p.amount / totalRevenue) * 100}%`, background: p.color }} />
                         </div>
                         <span className="text-[10px] text-muted-foreground">{Math.round((p.amount / totalRevenue) * 100)}%</span>
@@ -2846,7 +2846,7 @@ function StationsPageContent() {
                       {byStation.map(({ station, count, revenue, occupancy }) => (
                         <div key={station.id} className="flex items-center gap-3">
                           <span className="w-24 text-sm truncate shrink-0">{station.name}</span>
-                          <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+                          <div className="flex-1 h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                             <div className="h-full rounded-full bg-primary" style={{ width: `${(revenue / (byStation[0]?.revenue || 1)) * 100}%` }} />
                           </div>
                           <span className="text-sm font-medium w-24 text-right shrink-0">{formatPrice(revenue)}</span>
@@ -2869,7 +2869,7 @@ function StationsPageContent() {
                         <div key={tariff.id} className="flex items-center gap-3">
                           <span className="w-36 text-sm truncate shrink-0">{tariff.name}</span>
                           <span className="text-xs text-muted-foreground w-16 shrink-0">{formatMinutes(tariff.duration_minutes)}</span>
-                          <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+                          <div className="flex-1 h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
                             <div className="h-full rounded-full bg-violet-500" style={{ width: `${(revenue / (byTariff[0]?.revenue || 1)) * 100}%` }} />
                           </div>
                           <span className="text-sm font-medium w-24 text-right shrink-0">{formatPrice(revenue)}</span>
@@ -2913,7 +2913,7 @@ function StationsPageContent() {
             {/* Cover preview */}
             {brandingCoverUrl && (
               <div
-                className="relative h-32 w-full overflow-hidden rounded-2xl border border-white/10"
+                className="relative h-32 w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10"
                 style={{ backgroundImage: `url(${brandingCoverUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
               >
                 {brandingLogoUrl && (
@@ -2937,7 +2937,7 @@ function StationsPageContent() {
                     value={brandingLogoUrl}
                     onChange={e => setBrandingLogoUrl(e.target.value)}
                     placeholder="https://example.com/logo.png"
-                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                    className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                   />
                 </label>
 
@@ -2947,7 +2947,7 @@ function StationsPageContent() {
                     value={brandingCoverUrl}
                     onChange={e => setBrandingCoverUrl(e.target.value)}
                     placeholder="https://example.com/cover.jpg"
-                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                    className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                   />
                 </label>
 
@@ -2958,13 +2958,13 @@ function StationsPageContent() {
                       type="color"
                       value={brandingAccent || '#3b82f6'}
                       onChange={e => setBrandingAccent(e.target.value)}
-                      className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-background p-0.5"
+                      className="h-9 w-12 cursor-pointer rounded border border-slate-200 dark:border-white/10 bg-background p-0.5"
                     />
                     <input
                       value={brandingAccent}
                       onChange={e => setBrandingAccent(e.target.value)}
                       placeholder="#3b82f6"
-                      className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                      className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                     />
                   </div>
                 </label>
@@ -2975,7 +2975,7 @@ function StationsPageContent() {
                     value={brandingDescription}
                     onChange={e => setBrandingDescription(e.target.value)}
                     placeholder="Лучший игровой клуб в городе"
-                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                    className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                   />
                 </label>
               </div>
@@ -3008,7 +3008,7 @@ function StationsPageContent() {
                     if (st) openKioskTheme(st as any)
                     else setKioskThemeStationId(null)
                   }}
-                  className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                 >
                   <option value="">— выберите станцию —</option>
                   {stations.map(st => (
@@ -3029,7 +3029,7 @@ function StationsPageContent() {
                 return (
                   <div className="space-y-4">
                     {/* ── Preview ── */}
-                    <div className="relative h-44 rounded-xl overflow-hidden border border-white/10" style={bgStyle}>
+                    <div className="relative h-44 rounded-xl overflow-hidden border border-slate-200 dark:border-white/10" style={bgStyle}>
                       <div className="absolute inset-0 bg-black/20" />
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                         {kioskLogoUrl && (
@@ -3055,7 +3055,7 @@ function StationsPageContent() {
                             key={t}
                             type="button"
                             onClick={() => setKioskBgType(t)}
-                            className={`rounded-lg px-2 py-1.5 text-xs font-medium border transition-colors ${kioskBgType === t ? 'border-primary bg-primary/10 text-primary' : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                            className={`rounded-lg px-2 py-1.5 text-xs font-medium border transition-colors ${kioskBgType === t ? 'border-primary bg-primary/10 text-primary' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10'}`}
                           >
                             {t === 'color' ? 'Цвет' : t === 'gradient' ? 'Градиент' : t === 'image' ? 'Картинка' : 'Видео'}
                           </button>
@@ -3073,7 +3073,7 @@ function StationsPageContent() {
                             type="color"
                             value={kioskBgValue || '#07080a'}
                             onChange={e => setKioskBgValue(e.target.value)}
-                            className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-background p-0.5 shrink-0"
+                            className="h-9 w-12 cursor-pointer rounded border border-slate-200 dark:border-white/10 bg-background p-0.5 shrink-0"
                           />
                         )}
                         <input
@@ -3085,7 +3085,7 @@ function StationsPageContent() {
                             : kioskBgType === 'image' ? 'https://example.com/bg.jpg'
                             : 'https://example.com/bg.mp4'
                           }
-                          className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                          className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                         />
                       </div>
                     </div>
@@ -3098,13 +3098,13 @@ function StationsPageContent() {
                           type="color"
                           value={kioskAccent || '#2563eb'}
                           onChange={e => setKioskAccent(e.target.value)}
-                          className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-background p-0.5 shrink-0"
+                          className="h-9 w-12 cursor-pointer rounded border border-slate-200 dark:border-white/10 bg-background p-0.5 shrink-0"
                         />
                         <input
                           value={kioskAccent}
                           onChange={e => setKioskAccent(e.target.value)}
                           placeholder="#2563eb"
-                          className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                          className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                         />
                       </div>
                     </div>
@@ -3116,7 +3116,7 @@ function StationsPageContent() {
                         value={kioskLogoUrl}
                         onChange={e => setKioskLogoUrl(e.target.value)}
                         placeholder="https://example.com/logo.png"
-                        className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                        className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                       />
                     </div>
 
@@ -3127,7 +3127,7 @@ function StationsPageContent() {
                         value={kioskAnnouncement}
                         onChange={e => setKioskAnnouncement(e.target.value)}
                         placeholder="Добро пожаловать! Акция: 2 часа по цене 1!"
-                        className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                        className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
                       />
                     </div>
 
@@ -3155,13 +3155,13 @@ function StationsPageContent() {
 
               {provisioningKey ? (
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm font-mono tracking-wider">
+                  <code className="flex-1 rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm font-mono tracking-wider">
                     {provisioningKeyVisible ? provisioningKey : '••••••••••••••••••••••••'}
                   </code>
                   <button
                     type="button"
                     onClick={() => setProvisioningKeyVisible(v => !v)}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                   >
                     {provisioningKeyVisible ? 'Скрыть' : 'Показать'}
                   </button>
@@ -3171,7 +3171,7 @@ function StationsPageContent() {
                       void navigator.clipboard?.writeText(provisioningKey).catch(() => null)
                       showFlash('ok', 'Ключ скопирован')
                     }}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10 hover:text-foreground"
                   >
                     Копировать
                   </button>
@@ -3196,7 +3196,7 @@ function StationsPageContent() {
       </div>
 
       <Dialog open={crudDialog !== null} onOpenChange={open => { if (!open) setCrudDialog(null) }}>
-        <DialogContent className="border-white/10 bg-card sm:max-w-md">
+        <DialogContent className="border-slate-200 dark:border-white/10 bg-card sm:max-w-md">
           {crudDialog?.kind === 'station' && (
             <>
               <DialogHeader>
@@ -3211,13 +3211,13 @@ function StationsPageContent() {
                   if (e.key === 'Enter') void handleCreateStation(crudDialog.zoneId)
                 }}
                 placeholder="Например, PS-1 или ПК-3"
-                className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
               />
               <DialogFooter className="gap-2 sm:gap-0">
                 <button
                   type="button"
                   onClick={() => setCrudDialog(null)}
-                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10"
+                  className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10"
                 >
                   Отмена
                 </button>
@@ -3245,16 +3245,16 @@ function StationsPageContent() {
                   value={newTariff.name}
                   onChange={e => setNewTariff(p => ({ ...p, name: e.target.value }))}
                   placeholder="Название (напр. 1 час, День пакет)"
-                  className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-xs text-muted-foreground">
                     <span className="mb-1 block">Минуты (для справки / продлений)</span>
-                    <input value={newTariff.duration_minutes} onChange={e => setNewTariff(p => ({ ...p, duration_minutes: e.target.value }))} type="number" min={1} className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                    <input value={newTariff.duration_minutes} onChange={e => setNewTariff(p => ({ ...p, duration_minutes: e.target.value }))} type="number" min={1} className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm" />
                   </label>
                   <label className="text-xs text-muted-foreground">
                     <span className="mb-1 block">Цена, ₸</span>
-                    <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} type="number" min={0} step="1" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                    <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} type="number" min={0} step="1" className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm" />
                   </label>
                 </div>
 
@@ -3269,21 +3269,21 @@ function StationsPageContent() {
                       ...(v === 'fixed' ? { window_start_time: '', window_end_time: '' } : {}),
                     }))
                   }}
-                  className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
                 >
                   <option value="fixed">Фиксированная длительность — доступно в любое время</option>
                   <option value="time_window">Пакет по окну времени (день / ночь / свой интервал)</option>
                 </select>
 
                 {newTariff.tariff_type === 'fixed' && (
-                  <p className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+                  <p className="rounded-lg border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
                     На точке оператор сможет начать сеанс в любой момент. Длительность = поле «Минуты» (например 60, 180, 300).
                   </p>
                 )}
 
                 {newTariff.tariff_type === 'time_window' && (
                   <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                    <p className="text-xs text-amber-200/90">
+                    <p className="text-xs text-amber-700 dark:text-amber-200/90">
                       Старт сессии только если текущее время внутри окна. Конец сессии — в указанное «до» (для ночи 22–10 конец до 10:00 следующего утра).
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -3296,7 +3296,7 @@ function StationsPageContent() {
                           window_end_time: '16:00',
                           name: p.name.trim() ? p.name : 'День пакет',
                         }))}
-                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white/15"
+                        className="rounded-lg border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/15"
                       >
                         День 10:00–16:00
                       </button>
@@ -3309,7 +3309,7 @@ function StationsPageContent() {
                           window_end_time: '10:00',
                           name: p.name.trim() ? p.name : 'Ночь пакет',
                         }))}
-                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white/15"
+                        className="rounded-lg border border-slate-200 dark:border-white/15 bg-slate-100 dark:bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-slate-200 dark:hover:bg-white/15"
                       >
                         Ночь 22:00–10:00
                       </button>
@@ -3321,7 +3321,7 @@ function StationsPageContent() {
                           value={newTariff.window_start_time}
                           onChange={e => setNewTariff(p => ({ ...p, window_start_time: e.target.value }))}
                           type="time"
-                          className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
                         />
                       </label>
                       <label className="text-xs text-muted-foreground">
@@ -3330,7 +3330,7 @@ function StationsPageContent() {
                           value={newTariff.window_end_time}
                           onChange={e => setNewTariff(p => ({ ...p, window_end_time: e.target.value }))}
                           type="time"
-                          className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                          className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-background px-3 py-2 text-sm"
                         />
                       </label>
                     </div>
@@ -3341,7 +3341,7 @@ function StationsPageContent() {
                 )}
               </div>
               <DialogFooter className="gap-2 sm:gap-0">
-                <button type="button" onClick={() => setCrudDialog(null)} className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10">
+                <button type="button" onClick={() => setCrudDialog(null)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10">
                   Отмена
                 </button>
                 <button
@@ -3364,7 +3364,7 @@ function StationsPageContent() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
-                <div className="rounded-lg border border-white/10 p-3 space-y-2">
+                <div className="rounded-lg border border-slate-200 dark:border-white/10 p-3 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Каталог игр проекта</p>
 
                   {/* Форма добавления */}
@@ -3372,12 +3372,12 @@ function StationsPageContent() {
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         {newGameLogo && (
-                          <img src={newGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          <img src={newGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         )}
                         <div className="flex-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                          <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
-                          <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
-                          <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs">
+                          <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название" className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs">
                             <option value="game">Игра</option>
                             <option value="browser">Браузер</option>
                             <option value="app">Программа</option>
@@ -3396,12 +3396,12 @@ function StationsPageContent() {
                       <p className="text-xs text-blue-400 font-medium">Редактировать игру</p>
                       <div className="flex gap-2">
                         {editGameLogo && (
-                          <img src={editGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          <img src={editGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         )}
                         <div className="flex-1 grid grid-cols-2 gap-1.5">
-                          <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
-                          <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
-                          <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs">
+                          <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs">
                             <option value="game">Игра</option>
                             <option value="browser">Браузер</option>
                             <option value="app">Программа</option>
@@ -3414,7 +3414,7 @@ function StationsPageContent() {
                       </div>
                       <div className="flex gap-1">
                         <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded bg-blue-600 px-2 py-1 text-xs text-white disabled:opacity-50">Сохранить</button>
-                        <button type="button" onClick={() => setEditingGame(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
+                        <button type="button" onClick={() => setEditingGame(null)} className="rounded bg-slate-100 dark:bg-white/10 px-2 py-1 text-xs">Отмена</button>
                       </div>
                     </div>
                   )}
@@ -3422,16 +3422,16 @@ function StationsPageContent() {
                   {/* Список игр */}
                   <div className="max-h-40 overflow-auto space-y-1">
                     {gamesCatalog.map((g) => (
-                      <div key={g.id} className="flex items-center gap-2 rounded bg-white/5 px-2 py-1 text-xs group">
+                      <div key={g.id} className="flex items-center gap-2 rounded bg-slate-50 dark:bg-white/5 px-2 py-1 text-xs group">
                         {g.logo_url
-                          ? <img src={g.logo_url} alt="" className="h-6 w-6 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                          : <div className="h-6 w-6 rounded bg-white/10 shrink-0" />
+                          ? <img src={g.logo_url} alt="" className="h-6 w-6 rounded object-cover bg-slate-100 dark:bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          : <div className="h-6 w-6 rounded bg-slate-100 dark:bg-white/10 shrink-0" />
                         }
                         <span className="flex-1 truncate">{g.title}</span>
                         <span className="text-muted-foreground/50 shrink-0">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Прог.'}</span>
                         {!g.is_active && <span className="text-red-400/70 shrink-0">выкл</span>}
                         <div className="hidden group-hover:flex gap-1 shrink-0">
-                          <button type="button" onClick={() => startEditGame(g)} className="rounded p-0.5 hover:bg-white/15 text-muted-foreground hover:text-white"><Pencil className="h-3 w-3" /></button>
+                          <button type="button" onClick={() => startEditGame(g)} className="rounded p-0.5 hover:bg-slate-200 dark:hover:bg-white/15 text-muted-foreground hover:text-slate-900 dark:hover:text-white"><Pencil className="h-3 w-3" /></button>
                           <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded p-0.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                         </div>
                       </div>
@@ -3439,12 +3439,12 @@ function StationsPageContent() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-white/10 p-3 space-y-2">
+                <div className="rounded-lg border border-slate-200 dark:border-white/10 p-3 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Привязка игры к станции</p>
                   <select
                     value={bindGameId}
                     onChange={(e) => setBindGameId(e.target.value)}
-                    className="w-full rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                    className="w-full rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs"
                   >
                     <option value="">Выберите игру</option>
                     {gamesCatalog.filter((g) => g.is_active).map((g) => (
@@ -3455,13 +3455,13 @@ function StationsPageContent() {
                     value={bindExePath}
                     onChange={(e) => setBindExePath(e.target.value)}
                     placeholder="Путь EXE (например D:\\Games\\CS2\\cs2.exe)"
-                    className="w-full rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                    className="w-full rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs"
                   />
                   <input
                     value={bindArgs}
                     onChange={(e) => setBindArgs(e.target.value)}
                     placeholder="Аргументы запуска (необязательно)"
-                    className="w-full rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                    className="w-full rounded border border-slate-200 dark:border-white/10 bg-background px-2 py-1.5 text-xs"
                   />
                   <button
                     type="button"
@@ -3477,7 +3477,7 @@ function StationsPageContent() {
                   {stationGames.filter((x) => x.station_id === crudDialog.stationId).map((x) => {
                     const game = gamesCatalog.find((g) => g.id === x.game_id)
                     return (
-                      <div key={x.id} className="rounded border border-white/10 bg-white/5 p-2 text-xs">
+                      <div key={x.id} className="rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-2 text-xs">
                         <p className="font-medium">{game?.title || x.game_id}</p>
                         <p className="text-muted-foreground truncate">{x.exe_path}</p>
                         {x.launch_args ? <p className="text-muted-foreground truncate">args: {x.launch_args}</p> : null}
@@ -3500,7 +3500,7 @@ function StationsPageContent() {
                 <button
                   type="button"
                   onClick={() => setCrudDialog(null)}
-                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10"
+                  className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-slate-100 dark:hover:bg-white/10"
                 >
                   Закрыть
                 </button>

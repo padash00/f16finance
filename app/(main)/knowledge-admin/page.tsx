@@ -313,7 +313,7 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-amber-400/80 focus:ring-2 focus:ring-amber-400/15 ${props.className ?? ''}`}
+      className={`w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-400/80 focus:ring-2 focus:ring-amber-400/15 dark:border-slate-700/70 dark:bg-slate-950/70 dark:text-slate-100 ${props.className ?? ''}`}
     />
   )
 }
@@ -797,7 +797,7 @@ export default function KnowledgeAdminPage() {
   ]
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#07111c] px-4 py-8 text-slate-100 sm:px-6">
+    <main className="min-h-screen overflow-x-hidden bg-white px-4 py-8 text-slate-900 dark:bg-[#07111c] dark:text-slate-100 sm:px-6">
       <section className="app-page-wide flex flex-col gap-6">
         <AdminPageHeader
           title="База знаний"
@@ -810,7 +810,7 @@ export default function KnowledgeAdminPage() {
               <button
                 onClick={() => load()}
                 disabled={loading || saving}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Обновить
@@ -852,13 +852,13 @@ export default function KnowledgeAdminPage() {
                   onClick={() => setTab(item.id)}
                   className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                     active
-                      ? 'border-amber-300/70 bg-amber-300/15 text-amber-100 shadow-lg shadow-amber-950/40'
-                      : 'border-slate-800 bg-slate-900/70 text-slate-400 hover:border-slate-600 hover:text-slate-100'
+                      ? 'border-amber-300/70 bg-amber-300/15 text-amber-700 shadow-lg shadow-amber-950/40 dark:text-amber-100'
+                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
                   {item.label}
-                  <span className="rounded-full bg-slate-950/80 px-2 py-0.5 text-xs">{item.count}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-950/80">{item.count}</span>
                 </button>
               )
             })}
@@ -879,7 +879,7 @@ export default function KnowledgeAdminPage() {
         )}
 
         {loading ? (
-          <div className="rounded-[2rem] border border-slate-800 bg-slate-900/50 p-10 text-center text-slate-400">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-10 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
             Загружаю базу знаний...
           </div>
         ) : (
@@ -893,13 +893,13 @@ export default function KnowledgeAdminPage() {
                   />
                   <div className="mb-4 flex flex-col gap-2">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                      <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                      <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
                         <Search className="h-4 w-4 text-slate-500" />
                         <input
                           value={query}
                           onChange={(event) => setQuery(event.target.value)}
                           placeholder="Поиск по FAQ, правилам, проблемам..."
-                          className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                          className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100"
                         />
                       </div>
                       {can('knowledge-admin.create') && (
@@ -949,7 +949,7 @@ export default function KnowledgeAdminPage() {
                           </option>
                         ))}
                       </SelectInput>
-                      <span className="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
                         Показано {filteredArticles.length} из {data.articles.length}
                       </span>
                     </div>
@@ -960,7 +960,7 @@ export default function KnowledgeAdminPage() {
                       <div key={group.id ?? 'none'} className="space-y-2">
                         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                           <span>{group.title}</span>
-                          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">{group.articles.length}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 dark:bg-slate-900 dark:text-slate-400">{group.articles.length}</span>
                         </div>
                         <div className="grid gap-3">
                           {group.articles.map((article) => (
@@ -999,8 +999,8 @@ export default function KnowledgeAdminPage() {
                   {!data.templates.length ? (
                     <div className="space-y-5">
                       <div className="rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6 text-center">
-                        <h3 className="text-xl font-black text-amber-100">Начните с готового чек-листа</h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-300">Один клик — и шаблон создан. Потом останется только добавить свои пункты.</p>
+                        <h3 className="text-xl font-black text-amber-700 dark:text-amber-100">Начните с готового чек-листа</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">Один клик — и шаблон создан. Потом останется только добавить свои пункты.</p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {can('knowledge-admin.manage_checklists') && CHECKLIST_PRESETS.map((preset) => (
@@ -1008,16 +1008,16 @@ export default function KnowledgeAdminPage() {
                             key={preset.title}
                             type="button"
                             onClick={() => applyChecklistPreset(preset)}
-                            className="group flex flex-col gap-2 rounded-3xl border border-slate-800 bg-slate-950/60 p-5 text-left transition hover:border-amber-300/60 hover:bg-amber-300/5"
+                            className="group flex flex-col gap-2 rounded-3xl border border-slate-200 bg-white p-5 text-left transition hover:border-amber-300/60 hover:bg-amber-300/5 dark:border-slate-800 dark:bg-slate-950/60"
                           >
                             <div className="flex items-center gap-3">
                               <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/15 text-amber-200">
                                 <ClipboardList className="h-5 w-5" />
                               </div>
-                              <h4 className="text-lg font-black text-slate-100 group-hover:text-amber-100">{preset.title}</h4>
+                              <h4 className="text-lg font-black text-slate-900 group-hover:text-amber-700 dark:text-slate-100 dark:group-hover:text-amber-100">{preset.title}</h4>
                             </div>
                             <p className="text-sm leading-6 text-slate-400">{preset.description}</p>
-                            <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-200 opacity-0 transition group-hover:opacity-100">
+                            <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-700 opacity-0 transition group-hover:opacity-100 dark:text-amber-200">
                               <Plus className="h-3 w-3" /> Создать
                             </span>
                           </button>
@@ -1028,7 +1028,7 @@ export default function KnowledgeAdminPage() {
                           <button
                             type="button"
                             onClick={openChecklistTemplateNew}
-                            className="text-sm font-semibold text-slate-400 underline-offset-4 hover:text-amber-200 hover:underline"
+                            className="text-sm font-semibold text-slate-500 underline-offset-4 hover:text-amber-700 hover:underline dark:text-slate-400 dark:hover:text-amber-200"
                           >
                             Или создать чек-лист с нуля
                           </button>
@@ -1038,13 +1038,13 @@ export default function KnowledgeAdminPage() {
                   ) : (
                     <>
                       <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                        <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                        <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
                           <Search className="h-4 w-4 text-slate-500" />
                           <input
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Поиск по чек-листам и пунктам…"
-                            className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                            className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100"
                           />
                         </div>
                         <SelectInput
@@ -1076,7 +1076,7 @@ export default function KnowledgeAdminPage() {
                           <div key={group.id} className="space-y-2">
                             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                               <span>{group.title}</span>
-                              <span className="rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">{group.templates.length}</span>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 dark:bg-slate-900 dark:text-slate-400">{group.templates.length}</span>
                             </div>
                             <div className="grid gap-3">
                               {group.templates.map((template) => (
@@ -1130,13 +1130,13 @@ export default function KnowledgeAdminPage() {
                   />
 
                   <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                    <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                    <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
                       <Search className="h-4 w-4 text-slate-500" />
                       <input
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="Поиск по оператору, точке, чек-листу…"
-                        className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                        className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100"
                       />
                     </div>
                     <SelectInput
@@ -1188,7 +1188,7 @@ export default function KnowledgeAdminPage() {
 
                   <div className="grid gap-3">
                     {filteredRuns.map((run) => (
-                      <article key={run.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+                      <article key={run.id} className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/50">
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                           <div className="min-w-0">
                             <div className="flex flex-wrap gap-2">
@@ -1197,9 +1197,9 @@ export default function KnowledgeAdminPage() {
                               {run.shift_type && <Badge>Смена: {run.shift_type}</Badge>}
                               {Number(run.failed_count || 0) > 0 && <Badge>Проблем: {run.failed_count}</Badge>}
                             </div>
-                            <h3 className="mt-3 break-words text-xl font-black text-slate-100">{run.template_title || 'Чек-лист'}</h3>
+                            <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-slate-100">{run.template_title || 'Чек-лист'}</h3>
                             <p className="mt-2 break-words text-sm leading-6 text-slate-400">
-                              Проходил: <span className="font-semibold text-slate-200">{run.run_by_name || 'не указан'}</span>
+                              Проходил: <span className="font-semibold text-slate-700 dark:text-slate-200">{run.run_by_name || 'не указан'}</span>
                               {' · '}
                               Начало: {formatDateTime(run.started_at)}
                               {' · '}
@@ -1221,8 +1221,8 @@ export default function KnowledgeAdminPage() {
                         </div>
 
                         {run.response_items?.length ? (
-                          <details className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-                            <summary className="cursor-pointer select-none text-sm font-black text-slate-200">
+                          <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                            <summary className="cursor-pointer select-none text-sm font-black text-slate-700 dark:text-slate-200">
                               Детали ответов: {run.response_items.length}
                             </summary>
                             <div className="mt-4 grid gap-2">
@@ -1233,7 +1233,7 @@ export default function KnowledgeAdminPage() {
                                     ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
                                     : item.failed
                                       ? 'border-red-400/30 bg-red-400/10 text-red-100'
-                                      : 'border-slate-700 bg-slate-800/70 text-slate-300'
+                                      : 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300'
                                 const displayValue =
                                   item.value === null || item.value === undefined || item.value === ''
                                     ? null
@@ -1242,7 +1242,7 @@ export default function KnowledgeAdminPage() {
                                       : String(item.value)
 
                                 return (
-                                  <div key={item.id} className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                  <div key={item.id} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/70">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                       <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -1256,7 +1256,7 @@ export default function KnowledgeAdminPage() {
                                           {item.requires_photo && <Badge>фото</Badge>}
                                           {item.severity !== 'normal' && <Badge>{SEVERITY_LABELS[item.severity]}</Badge>}
                                         </div>
-                                        <div className="mt-2 break-words text-sm font-bold text-slate-100">{item.title}</div>
+                                        <div className="mt-2 break-words text-sm font-bold text-slate-900 dark:text-slate-100">{item.title}</div>
                                         {displayValue && (
                                           <div className="mt-1 break-words text-xs leading-5 text-slate-400">
                                             Ответ: {displayValue}
@@ -1273,7 +1273,7 @@ export default function KnowledgeAdminPage() {
                                               <img
                                                 src={item.photo_data_url}
                                                 alt={item.photo_name || `Фото пункта ${index + 1}`}
-                                                className="max-h-44 rounded-2xl border border-slate-700 object-cover"
+                                                className="max-h-44 rounded-2xl border border-slate-200 object-cover dark:border-slate-700"
                                               />
                                             </a>
                                             <div className="mt-1 text-[11px] text-slate-500">
@@ -1342,7 +1342,7 @@ export default function KnowledgeAdminPage() {
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     {data.categories.map((category) => (
-                      <div key={category.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+                      <div key={category.id} className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/50">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap gap-2">
@@ -1350,10 +1350,10 @@ export default function KnowledgeAdminPage() {
                               <Badge>{category.company_id ? `Точка: ${companyById.get(category.company_id)?.name || ''}` : 'Все точки'}</Badge>
                               {!category.is_active && <Badge>черновик</Badge>}
                             </div>
-                            <h3 className="mt-3 break-words text-xl font-black">{category.title}</h3>
+                            <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-white">{category.title}</h3>
                             {category.description ? (
                               <div
-                                className="mt-2 break-words text-sm leading-6 text-slate-400 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-base [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1"
+                                className="mt-2 break-words text-sm leading-6 text-slate-400 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-base [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 dark:[&_code]:bg-slate-800/80 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1 dark:[&_th]:border-slate-700 dark:[&_th]:bg-slate-800 [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 dark:[&_td]:border-slate-700"
                                 dangerouslySetInnerHTML={{ __html: category.description }}
                               />
                             ) : (
@@ -1433,9 +1433,9 @@ export default function KnowledgeAdminPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-4">
-      <div className="text-3xl font-black">{value}</div>
-      <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{label}</div>
+    <div className="rounded-3xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.06]">
+      <div className="text-3xl font-black text-slate-900 dark:text-white">{value}</div>
+      <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</div>
     </div>
   )
 }
@@ -1446,22 +1446,22 @@ function MiniMetric({ label, value, tone = 'default' }: { label: string; value: 
       ? 'border-red-400/25 bg-red-500/10 text-red-100'
       : tone === 'success'
         ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100'
-        : 'border-slate-800 bg-slate-950/50 text-slate-100'
+        : 'border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-100'
 
   return (
     <div className={`min-w-0 rounded-3xl border p-4 ${toneClass}`}>
       <div className="break-words text-2xl font-black">{value}</div>
-      <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-slate-400">{label}</div>
+      <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</div>
     </div>
   )
 }
 
 function RunMetric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'danger' | 'success' }) {
   const valueClass =
-    tone === 'danger' ? 'text-red-200' : tone === 'success' ? 'text-emerald-200' : 'text-slate-100'
+    tone === 'danger' ? 'text-red-700 dark:text-red-200' : tone === 'success' ? 'text-emerald-700 dark:text-emerald-200' : 'text-slate-900 dark:text-slate-100'
 
   return (
-    <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/70">
       <div className="break-words text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
       <div className={`mt-1 break-words text-sm font-black ${valueClass}`}>{value}</div>
     </div>
@@ -1490,11 +1490,11 @@ function WorkflowGuide() {
   return (
     <div className="grid gap-3 lg:grid-cols-3">
       {steps.map((step) => (
-        <div key={step.number} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
-          <div className="mb-4 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-200">
+        <div key={step.number} className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="mb-4 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-700 dark:text-amber-200">
             Шаг {step.number}
           </div>
-          <h3 className="break-words text-lg font-black text-slate-100">{step.title}</h3>
+          <h3 className="break-words text-lg font-black text-slate-900 dark:text-slate-100">{step.title}</h3>
           <p className="mt-2 break-words text-sm leading-6 text-slate-400">{step.text}</p>
         </div>
       ))}
@@ -1505,20 +1505,20 @@ function WorkflowGuide() {
 function TabHint({ title, text }: { title: string; text: string }) {
   return (
     <div className="mb-5 rounded-3xl border border-sky-400/20 bg-sky-400/10 p-4">
-      <p className="break-words text-sm font-black text-sky-100">{title}</p>
-      <p className="mt-1 break-words text-sm leading-6 text-slate-300">{text}</p>
+      <p className="break-words text-sm font-black text-sky-700 dark:text-sky-100">{title}</p>
+      <p className="mt-1 break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{text}</p>
     </div>
   )
 }
 
 function Panel({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <section className="min-w-0 overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-900/55 p-5 shadow-2xl shadow-black/20">
+    <section className="min-w-0 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-black/10 dark:border-slate-800 dark:bg-slate-900/55 dark:shadow-black/20">
       <div className="mb-5 flex items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/10 text-amber-200">
+        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/10 text-amber-700 dark:text-amber-200">
           <Icon className="h-5 w-5" />
         </div>
-        <h2 className="min-w-0 break-words text-xl font-black">{title}</h2>
+        <h2 className="min-w-0 break-words text-xl font-black text-slate-900 dark:text-white">{title}</h2>
       </div>
       {children}
     </section>
@@ -1543,7 +1543,7 @@ function ArticleCard({
   canDelete?: boolean
 }) {
   return (
-    <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+    <article className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/50">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
@@ -1557,11 +1557,11 @@ function ArticleCard({
               <Badge key={aud}>{AUDIENCE_OPTIONS.find((o) => o.value === aud)?.label || aud}</Badge>
             ))}
           </div>
-          <h3 className="mt-3 break-words text-xl font-black">{article.title}</h3>
+          <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-white">{article.title}</h3>
           <p className="mt-2 break-words text-sm leading-6 text-slate-400">{article.summary || 'Без краткого описания'}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(article.tags ?? []).map((tag) => (
-              <span key={tag} className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
+              <span key={tag} className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 #{tag}
               </span>
             ))}
@@ -1574,7 +1574,7 @@ function ArticleCard({
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="max-w-full break-words rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs font-bold text-amber-100">{children}</span>
+  return <span className="max-w-full break-words rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-100">{children}</span>
 }
 
 function RowActions({
@@ -1591,7 +1591,7 @@ function RowActions({
   return (
     <div className="flex shrink-0 gap-2">
       {canEdit && (
-        <button onClick={onEdit} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 hover:border-amber-300/50 hover:text-amber-100">
+        <button onClick={onEdit} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:border-amber-300/50 hover:text-amber-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-amber-100">
           <Pencil className="h-4 w-4" />
         </button>
       )}
@@ -1605,7 +1605,7 @@ function RowActions({
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-sm text-slate-500">{text}</div>
+  return <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40">{text}</div>
 }
 
 function ChecklistTemplateCard({
@@ -1632,23 +1632,23 @@ function ChecklistTemplateCard({
   canManage?: boolean
 }) {
   return (
-    <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+    <article className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/50">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="break-words text-xl font-black">{template.title}</h3>
+          <h3 className="break-words text-xl font-black text-slate-900 dark:text-white">{template.title}</h3>
           <p className="mt-1 break-words text-sm leading-6 text-slate-400">{template.description || 'Описание пока не заполнено.'}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{companyName ? companyName : 'Все точки'}</span>
-            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</span>
-            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{items.length} {items.length === 1 ? 'пункт' : 'пунктов'}</span>
-            {template.blocks_shift ? <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 font-bold text-amber-100">блокирует смену</span> : null}
-            {!template.is_active ? <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-400">черновик</span> : null}
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{companyName ? companyName : 'Все точки'}</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{items.length} {items.length === 1 ? 'пункт' : 'пунктов'}</span>
+            {template.blocks_shift ? <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-100">блокирует смену</span> : null}
+            {!template.is_active ? <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">черновик</span> : null}
           </div>
         </div>
         <RowActions onEdit={onEdit} onDelete={onDelete} canEdit={canManage} canDelete={canManage} />
       </div>
 
-      <div className="mt-5 space-y-2 border-t border-slate-800 pt-4">
+      <div className="mt-5 space-y-2 border-t border-slate-200 pt-4 dark:border-slate-800">
         {items.map((item, index) => {
           const linkedArticle = item.knowledge_article_id ? articleById.get(item.knowledge_article_id) : null
           const meta: string[] = []
@@ -1658,15 +1658,15 @@ function ChecklistTemplateCard({
           if (item.bonus_amount) meta.push(`бонус ${formatMoney(item.bonus_amount)}`)
           if (linkedArticle) meta.push(`FAQ: ${linkedArticle.title}`)
           return (
-            <div key={item.id} className="flex min-w-0 items-start gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-3">
-              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-400/10 text-xs font-black text-emerald-100">
+            <div key={item.id} className="flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
+              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-400/10 text-xs font-black text-emerald-700 dark:text-emerald-100">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="break-words font-bold text-slate-100">{item.title}</p>
+                <p className="break-words font-bold text-slate-900 dark:text-slate-100">{item.title}</p>
                 {item.description ? (
                   <div
-                    className="mt-1 break-words text-xs leading-5 text-slate-500 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1"
+                    className="mt-1 break-words text-xs leading-5 text-slate-500 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 dark:[&_code]:bg-slate-800/80 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1 dark:[&_th]:border-slate-700 dark:[&_th]:bg-slate-800 [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 dark:[&_td]:border-slate-700"
                     dangerouslySetInnerHTML={{ __html: item.description }}
                   />
                 ) : null}
@@ -1682,7 +1682,7 @@ function ChecklistTemplateCard({
           <button
             type="button"
             onClick={onAddItem}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-400 transition hover:border-emerald-400/60 hover:text-emerald-200"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 transition hover:border-emerald-400/60 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400 dark:hover:text-emerald-200"
           >
             <Plus className="h-4 w-4" />
             {items.length ? 'Добавить пункт' : 'Добавить первый пункт'}

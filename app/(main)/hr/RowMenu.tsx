@@ -61,7 +61,7 @@ export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boole
         ref={btnRef}
         onClick={handleToggle}
         disabled={busy}
-        className={`p-1.5 rounded-lg border border-gray-700 bg-gray-800/50 hover:bg-gray-700 hover:border-gray-600 text-gray-400 hover:text-white transition disabled:opacity-50 ${open ? 'bg-gray-700 text-white border-gray-600' : ''}`}
+        className={`p-1.5 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 hover:bg-slate-100 dark:hover:bg-gray-700 hover:border-slate-300 dark:hover:border-gray-600 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-50 ${open ? 'bg-slate-100 dark:bg-gray-700 text-slate-900 dark:text-white border-slate-300 dark:border-gray-600' : ''}`}
         title="Действия"
       >
         {busy ? (
@@ -74,14 +74,14 @@ export function RowMenu({ actions, busy }: { actions: MenuAction[]; busy?: boole
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 200 }}
-          className="min-w-[180px] py-1 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl"
+          className="min-w-[180px] py-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl"
         >
           {visible.map((a, i) => {
             const Icon = a.icon
             const toneCls =
-              a.tone === 'danger' ? 'text-red-300 hover:bg-red-500/10'
-              : a.tone === 'success' ? 'text-emerald-300 hover:bg-emerald-500/10'
-              : 'text-gray-300 hover:bg-white/5 hover:text-white'
+              a.tone === 'danger' ? 'text-red-700 dark:text-red-300 hover:bg-red-500/10'
+              : a.tone === 'success' ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10'
+              : 'text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
             return (
               <button
                 key={i}
@@ -162,7 +162,7 @@ export function InlineRoleDropdown({
         ref={btnRef}
         onClick={handleToggle}
         disabled={disabled}
-        className={`text-[10px] uppercase px-1.5 py-0.5 rounded border border-gray-700 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-muted-foreground hover:text-indigo-300 transition cursor-pointer disabled:cursor-default disabled:hover:border-gray-700 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
+        className={`text-[10px] uppercase px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-700 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-300 transition cursor-pointer disabled:cursor-default disabled:hover:border-slate-200 dark:disabled:hover:border-gray-700 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
         title={disabled ? '' : 'Кликни для смены'}
       >
         {currentLabel} ▾
@@ -171,7 +171,7 @@ export function InlineRoleDropdown({
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 200 }}
-          className="min-w-[160px] max-h-[280px] overflow-y-auto py-1 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl"
+          className="min-w-[160px] max-h-[280px] overflow-y-auto py-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl"
         >
           {positions.length === 0 && (
             <div className="px-3 py-2 text-xs text-gray-500">Нет должностей</div>
@@ -183,8 +183,8 @@ export function InlineRoleDropdown({
                 setOpen(false)
                 if (p.name !== current) onChange(p.name)
               }}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition ${
-                p.name === current ? 'text-indigo-300 bg-indigo-500/5' : 'text-gray-300'
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition ${
+                p.name === current ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/5' : 'text-slate-700 dark:text-gray-300'
               }`}
             >
               {p.label || p.name}

@@ -27,7 +27,7 @@ type AuditTimelineEntry = {
 }
 type SearchResult = { type: string; title: string; subtitle: string; href: string; score: number }
 
-const card = 'rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/20'
+const card = 'rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
 
 const HUBS = [
   { href: '/store/stock', label: 'Склад', note: 'Остатки, витрина, движения, каталог', icon: Warehouse, color: 'text-emerald-300' },
@@ -119,14 +119,14 @@ export default function StoreOverviewPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Поиск по магазину: товар, штрихкод, заявка, приёмка…"
-              className="w-full rounded-xl border border-white/10 bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-white placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 py-2.5 pl-10 pr-3 text-sm text-slate-900 dark:text-white placeholder-slate-500 focus:border-emerald-400/50 focus:outline-none"
             />
             {(searching || searchResults.length > 0) && q.trim() && (
-              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur">
+              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 shadow-2xl backdrop-blur">
                 <div className="px-3 py-2 text-[11px] text-slate-500">{searching ? 'Ищу…' : `Найдено: ${searchResults.length}`}</div>
                 <div className="max-h-72 overflow-y-auto">
                   {searchResults.slice(0, 10).map((row, idx) => (
-                    <Link key={`${row.type}-${idx}`} href={row.href} className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-slate-200 hover:bg-white/5">
+                    <Link key={`${row.type}-${idx}`} href={row.href} className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5">
                       <span className="truncate">{row.title}</span>
                       <span className="shrink-0 text-xs text-slate-500">{row.subtitle}</span>
                     </Link>
@@ -155,15 +155,15 @@ export default function StoreOverviewPage() {
       {topLowStock.length > 0 && (
         <div className={`${card} p-4`}>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-white"><AlertTriangle className="h-4 w-4 text-amber-300" /> Скоро закончится</span>
-            <Link href="/store/sales" className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><AlertTriangle className="h-4 w-4 text-amber-300" /> Скоро закончится</span>
+            <Link href="/store/sales" className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="flex flex-wrap gap-2">
             {topLowStock.map((b) => (
-              <span key={`${b.location_id}-${b.item?.id || 'item'}`} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200">
+              <span key={`${b.location_id}-${b.item?.id || 'item'}`} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-200">
                 <Package className="h-3 w-3" />
                 {b.item?.name || 'Товар'} · <span className="font-semibold">{b.quantity}</span>
-                {b.location?.name ? <span className="text-amber-200/60">· {b.location.name}</span> : null}
+                {b.location?.name ? <span className="text-amber-700/60 dark:text-amber-200/60">· {b.location.name}</span> : null}
               </span>
             ))}
           </div>
@@ -175,11 +175,11 @@ export default function StoreOverviewPage() {
         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Разделы</div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {HUBS.map((h) => (
-            <Link key={h.href} href={h.href} className={`${card} group flex items-start gap-3 p-4 transition-colors hover:border-white/20 hover:bg-slate-900/80`}>
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5"><h.icon className={`h-5 w-5 ${h.color}`} /></div>
+            <Link key={h.href} href={h.href} className={`${card} group flex items-start gap-3 p-4 transition-colors hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-slate-900/80`}>
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5"><h.icon className={`h-5 w-5 ${h.color}`} /></div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1 text-sm font-medium text-white">{h.label}<ArrowRight className="h-3.5 w-3.5 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300" /></div>
-                <div className="mt-0.5 text-xs text-slate-400">{h.note}</div>
+                <div className="flex items-center gap-1 text-sm font-medium text-slate-900 dark:text-white">{h.label}<ArrowRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-300" /></div>
+                <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{h.note}</div>
               </div>
             </Link>
           ))}
@@ -188,7 +188,7 @@ export default function StoreOverviewPage() {
 
       {/* Последние действия */}
       <div className={`${card} overflow-hidden`}>
-        <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
           <History className="h-4 w-4 text-violet-300" /> Последние действия
         </div>
         {!loaded ? (
@@ -196,16 +196,16 @@ export default function StoreOverviewPage() {
         ) : timeline.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-slate-400">Действий пока нет.</div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-slate-100 dark:divide-white/5">
             {timeline.map((e) => {
               const m = activityMeta(e.entity_type, e.action)
               const actor = (e.actor_staff?.full_name || '').trim()
               const Icon = m.icon
               return (
                 <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/5"><Icon className={`h-4 w-4 ${m.color}`} /></span>
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 dark:bg-white/5"><Icon className={`h-4 w-4 ${m.color}`} /></span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-slate-200">{m.phrase}</div>
+                    <div className="truncate text-sm text-slate-700 dark:text-slate-200">{m.phrase}</div>
                     {actor ? <div className="text-[11px] text-slate-500">{actor}</div> : null}
                   </div>
                   <span className="shrink-0 text-xs text-slate-500">{new Date(e.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
@@ -254,9 +254,9 @@ function activityMeta(entity: string, action: string): { phrase: string; icon: a
 }
 
 function Kpi({ label, value, hint, tone, loaded, href }: { label: string; value: number; hint: string; tone: 'normal' | 'amber' | 'rose'; loaded: boolean; href?: string }) {
-  const valueColor = tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : 'text-white'
+  const valueColor = tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : 'text-slate-900 dark:text-white'
   const body = (
-    <div className={`${card} p-4 ${href ? 'transition-colors hover:border-white/20' : ''}`}>
+    <div className={`${card} p-4 ${href ? 'transition-colors hover:border-slate-300 dark:hover:border-white/20' : ''}`}>
       <p className="text-[11px] uppercase tracking-wider text-slate-500">{label}</p>
       <p className={`mt-1.5 text-2xl font-bold tabular-nums ${valueColor}`}>{loaded ? value : '—'}</p>
       <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>
