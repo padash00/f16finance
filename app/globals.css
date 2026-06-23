@@ -377,6 +377,45 @@
 }
 
 /* ─────────────────────────────────────────────
+   Recharts в СВЕТЛОЙ теме — графики хардкодят тёмные цвета inline
+   (contentStyle/stroke/fill). Перекрашиваем только в light через !important
+   (перебивает inline-стили recharts). Цвета ДАННЫХ (линии/области/бары) НЕ трогаем.
+   ───────────────────────────────────────────── */
+:root:not(.dark) .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  border-radius: 12px;
+  box-shadow: 0 12px 34px -16px rgba(15, 32, 56, 0.25);
+}
+:root:not(.dark) .recharts-tooltip-item,
+:root:not(.dark) .recharts-tooltip-item-name,
+:root:not(.dark) .recharts-tooltip-item-value {
+  color: #0f2038 !important;
+}
+:root:not(.dark) .recharts-tooltip-label {
+  color: #64748b !important;
+}
+:root:not(.dark) .recharts-cartesian-grid line {
+  stroke: #e2e8f0 !important;
+}
+:root:not(.dark) .recharts-cartesian-axis-line,
+:root:not(.dark) .recharts-cartesian-axis-tick-line {
+  stroke: #cbd5e1 !important;
+}
+:root:not(.dark) .recharts-cartesian-axis-tick-value,
+:root:not(.dark) .recharts-cartesian-axis-tick-value tspan {
+  fill: #64748b !important;
+}
+:root:not(.dark) .recharts-legend-item-text {
+  color: #475569 !important;
+}
+:root:not(.dark) .recharts-polar-grid line,
+:root:not(.dark) .recharts-polar-angle-axis-tick-value tspan {
+  stroke: #e2e8f0;
+  fill: #64748b !important;
+}
+
+/* ─────────────────────────────────────────────
    Print styles — оптимизация для печати/PDF
    ───────────────────────────────────────────── */
 @media print {
