@@ -5,7 +5,6 @@ import { useCashlessLabels } from '@/lib/client/use-cashless-labels'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { Card } from '@/components/ui/card'
 import { CardSkeleton, StatGridSkeleton } from '@/components/skeleton'
 import { Button } from '@/components/ui/button'
@@ -1100,7 +1099,6 @@ function HeaderBlock(props: {
         backHref="/"
         actions={
           <>
-            <ThemeToggle />
             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusStyle[props.insight.status]}`}>
               {props.insight.status === 'excellent' ? '🚀 Отлично' :
                props.insight.status === 'good' ? '✅ Хорошо' :
