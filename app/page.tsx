@@ -532,26 +532,26 @@ export default async function MarketingHomePage() {
               <div>
                 <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Продукт</div>
                 <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
-                  <Link href="#features" className="hover:text-[#16a34a]">Возможности</Link>
-                  <Link href="#pricing" className="hover:text-[#16a34a]">Тарифы</Link>
-                  <Link href="/club-management-system" className="hover:text-[#16a34a]">Для клубов</Link>
-                  <Link href="/login" className="hover:text-[#16a34a]">Войти</Link>
+                  <Link href="#features" className="transition-colors hover:text-[#16a34a]">Возможности</Link>
+                  <Link href="#pricing" className="transition-colors hover:text-[#16a34a]">Тарифы</Link>
+                  <Link href="/club-management-system" className="transition-colors hover:text-[#16a34a]">Для клубов</Link>
+                  <Link href="/login" className="transition-colors hover:text-[#16a34a]">Войти</Link>
                 </div>
               </div>
               <div>
                 <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Документы</div>
                 <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
-                  <Link href="/offer" className="hover:text-[#16a34a]">Оферта</Link>
-                  <Link href="/privacy" className="hover:text-[#16a34a]">Политика</Link>
-                  <Link href="/terms" className="hover:text-[#16a34a]">Соглашение</Link>
-                  <Link href="/sla" className="hover:text-[#16a34a]">SLA</Link>
+                  <Link href="/offer" className="transition-colors hover:text-[#16a34a]">Оферта</Link>
+                  <Link href="/privacy" className="transition-colors hover:text-[#16a34a]">Политика</Link>
+                  <Link href="/terms" className="transition-colors hover:text-[#16a34a]">Соглашение</Link>
+                  <Link href="/sla" className="transition-colors hover:text-[#16a34a]">SLA</Link>
                 </div>
               </div>
               <div>
                 <div className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Связь</div>
                 <div className="mt-3.5 flex flex-col gap-2.5 text-[14px] font-medium text-[#5b6b82]">
-                  <Link href="#contact" className="hover:text-[#16a34a]">Оставить заявку</Link>
-                  <Link href="/cookies" className="hover:text-[#16a34a]">Cookies</Link>
+                  <Link href="#contact" className="transition-colors hover:text-[#16a34a]">Оставить заявку</Link>
+                  <Link href="/cookies" className="transition-colors hover:text-[#16a34a]">Cookies</Link>
                 </div>
               </div>
             </div>
