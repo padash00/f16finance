@@ -144,7 +144,7 @@ export default async function MarketingHomePage() {
             <div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#16a34a] text-[15px] font-bold text-white">◇</div>
             <div>
               <div className="font-display text-[16px] font-bold tracking-[-0.02em] text-[#0f2038]">{PRODUCT}</div>
-              <div className="text-[11px] font-medium text-[#64748b]">Финансы, продажи и смены</div>
+              <div className="hidden text-[11px] font-medium text-[#64748b] sm:block">Финансы, продажи и смены</div>
             </div>
           </div>
           <nav className="flex items-center gap-1.5">
@@ -154,7 +154,7 @@ export default async function MarketingHomePage() {
             <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] sm:inline-flex">
               <Link href="#pricing">Тарифы</Link>
             </Button>
-            <Button asChild variant="ghost" className="hidden rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038] sm:inline-flex">
+            <Button asChild variant="ghost" className="rounded-[11px] text-[14px] font-medium text-[#56657d] hover:bg-[#f3f6fa] hover:text-[#0f2038]">
               <Link href="/login">Войти</Link>
             </Button>
             <Button asChild className="rounded-[12px] bg-[#16a34a] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#15803d]">
@@ -168,7 +168,7 @@ export default async function MarketingHomePage() {
       <section className="relative overflow-hidden bg-[radial-gradient(60%_60%_at_50%_0%,rgba(22,163,74,0.06),transparent)]">
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-24 right-[-6%] h-[440px] w-[440px] rounded-full bg-[#16a34a]/[0.08] blur-[130px]" />
-          <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#38bdf8]/[0.07] blur-[130px]" />
+          <div className="absolute top-[18%] left-[-8%] h-[380px] w-[380px] rounded-full bg-[#f97316]/[0.06] blur-[130px]" />
         </div>
         <div className="relative mx-auto max-w-[1600px] px-6 pb-20 pt-14 sm:px-10 lg:px-12 lg:pb-28 lg:pt-20">
           <div className="grid gap-14 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
@@ -320,7 +320,7 @@ export default async function MarketingHomePage() {
       </section>
 
       {/* AI */}
-      <section className="border-y border-[#e2e8f0] bg-[#eef2f8]">
+      <section className="border-y border-[#e2e8f0] bg-[#edf5ef]">
         <div className={sectionClass}>
           <Reveal>
             <div className="overflow-hidden rounded-[24px] border border-[#d6dde8] bg-white p-9 shadow-[0_20px_50px_-24px_rgba(15,32,56,0.2)] sm:p-12">
@@ -499,7 +499,7 @@ export default async function MarketingHomePage() {
               </div>
               <div className="rounded-[20px] border border-[#d6dde8] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]">
                 <h3 className="font-display text-[20px] font-bold text-[#0f2038]">Получить консультацию</h3>
-                <p className="mt-1.5 text-[13.5px] text-[#5b6b82]">Покажем на ваших данных и подскажем тариф.</p>
+                <p className="mt-1.5 text-[13.5px] text-[#5b6b82]">Ответим в течение рабочего дня. Без спама и звонков-роботов.</p>
                 <div className="mt-5"><ContactLeadForm /></div>
               </div>
             </div>
