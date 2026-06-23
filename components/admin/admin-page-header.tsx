@@ -12,22 +12,22 @@ const ACCENT = {
   emerald: {
     glow1: 'bg-emerald-500/15',
     glow2: 'bg-sky-500/10',
-    chip: 'from-emerald-400/30 to-sky-400/20 text-emerald-100',
+    chip: 'from-emerald-400/30 to-sky-400/20 text-emerald-700 dark:text-emerald-100',
   },
   amber: {
     glow1: 'bg-amber-500/15',
     glow2: 'bg-orange-500/10',
-    chip: 'from-amber-400/30 to-orange-400/20 text-amber-100',
+    chip: 'from-amber-400/30 to-orange-400/20 text-amber-700 dark:text-amber-100',
   },
   violet: {
     glow1: 'bg-violet-500/15',
     glow2: 'bg-fuchsia-500/10',
-    chip: 'from-violet-400/30 to-fuchsia-400/20 text-violet-100',
+    chip: 'from-violet-400/30 to-fuchsia-400/20 text-violet-700 dark:text-violet-100',
   },
   blue: {
     glow1: 'bg-sky-500/15',
     glow2: 'bg-indigo-500/10',
-    chip: 'from-sky-400/30 to-indigo-400/20 text-sky-100',
+    chip: 'from-sky-400/30 to-indigo-400/20 text-sky-700 dark:text-sky-100',
   },
 } as const
 
@@ -50,7 +50,7 @@ export function AdminPageHeader(props: {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 shadow-lg shadow-black/25 p-5',
+        'relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-900/60 dark:shadow-black/25 p-5',
         props.className,
       )}
     >
@@ -60,18 +60,18 @@ export function AdminPageHeader(props: {
         <div className="flex min-w-0 items-center gap-3.5">
           <Link
             href={back}
-            className="shrink-0 text-slate-400 transition hover:text-white"
+            className="shrink-0 text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             aria-label="Назад"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/10 bg-gradient-to-br', a.chip)}>
+          <div className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 dark:border-white/10 bg-gradient-to-br', a.chip)}>
             {props.icon}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-white">{props.title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">{props.title}</h1>
             {props.description ? (
-              <p className="mt-0.5 text-sm text-slate-400">{props.description}</p>
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{props.description}</p>
             ) : null}
           </div>
         </div>

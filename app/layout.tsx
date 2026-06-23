@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 
 import { ClientErrorReporter } from '@/components/client-error-reporter'
 import { GlobalAssistant } from '@/components/ai/global-assistant'
+import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 import './globals.css'
@@ -105,12 +106,14 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head />
-      <body className={`${inter.variable} ${manrope.variable} ${ibmPlexMono.variable} app-shell font-sans antialiased dark`}>
-        {children}
-        <GlobalAssistant />
-        <ClientErrorReporter />
-        <Toaster />
-        <Analytics />
+      <body className={`${inter.variable} ${manrope.variable} ${ibmPlexMono.variable} app-shell font-sans antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          {children}
+          <GlobalAssistant />
+          <ClientErrorReporter />
+          <Toaster />
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   )
