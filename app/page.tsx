@@ -457,7 +457,7 @@ export default async function MarketingHomePage() {
           {pricingPlans.map((plan) => (
             <StaggerItem key={plan.name}>
               <div className={plan.highlight
-                ? 'relative flex h-full flex-col rounded-[20px] border-2 border-[#16a34a]/45 bg-white p-7 shadow-[0_18px_44px_-18px_rgba(22,163,74,0.4)]'
+                ? 'relative flex h-full flex-col rounded-[20px] border-2 border-[#16a34a]/45 bg-white p-7 shadow-[0_24px_54px_-18px_rgba(22,163,74,0.45)] transition-transform duration-300 hover:-translate-y-4 lg:-translate-y-3'
                 : `flex h-full flex-col ${cardClass} transition duration-300 hover:-translate-y-1`}>
                 {plan.highlight && plan.badge ? <span className="absolute right-5 top-5 rounded-full bg-gradient-to-br from-[#fb923c] to-[#f97316] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.6)]">{plan.badge}</span> : null}
                 <div className={'text-[11px] font-semibold uppercase tracking-[0.12em] ' + (plan.highlight ? 'text-[#15803d]' : 'text-[#64748b]')}>{plan.levelLabel}</div>
