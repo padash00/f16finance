@@ -48,8 +48,8 @@ const eyebrowClass =
 const h1Class =
   'font-display text-[46px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0f2038] sm:text-[60px] lg:text-[72px]'
 const h2Class =
-  'font-display text-[34px] font-bold leading-[1.08] tracking-[-0.02em] text-[#0f2038] sm:text-[42px] lg:text-[48px]'
-const leadClass = 'text-[19px] leading-[1.6] text-[#56657d] sm:text-[21px]'
+  'font-display text-balance text-[34px] font-bold leading-[1.08] tracking-[-0.02em] text-[#0f2038] sm:text-[42px] lg:text-[48px]'
+const leadClass = 'text-pretty text-[19px] leading-[1.6] text-[#56657d] sm:text-[21px]'
 const sectionClass = 'mx-auto max-w-[1600px] px-6 py-20 sm:px-10 lg:py-24 lg:px-14'
 const cardClass = 'rounded-[20px] border border-[#d6dde8] bg-white p-7 shadow-[0_12px_34px_-16px_rgba(15,32,56,0.18)]'
 const btnPrimary =
