@@ -216,16 +216,6 @@ export const navSections: NavSection[] = [
       { href: '/debug', label: 'Диагностика', icon: Wrench, note: 'Проверки и отладка' },
     ],
   },
-  {
-    id: 'personal',
-    title: 'Личное',
-    subtitle: 'Личный распорядок дня',
-    accentColor: 'fuchsia',
-    icon: CalendarClock,
-    items: [
-      { href: '/planner', label: 'Распорядок дня', icon: CalendarClock, note: 'Личные задачи и напоминания', badge: 'new', badgeColor: 'purple', isNew: true },
-    ],
-  },
 ]
 
 export function getSectionById(sectionId: string) {

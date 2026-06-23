@@ -194,7 +194,6 @@ const OWNER_PATHS = [
   '/welcome',
   '/subscription',
   '/ai-cfo',
-  '/planner',
   '/point-devices',
   '/income',
   '/income/add',
