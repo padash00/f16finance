@@ -91,7 +91,7 @@ export default function ClubManagementSystemPage() {
             >
               <Link href="/">На главную</Link>
             </Button>
-            <Button asChild className="bg-[#16a34a] text-white hover:bg-[#15803d]">
+            <Button asChild className="bg-none bg-[#16a34a] text-white hover:bg-[#15803d]">
               <Link href="/login">
                 Войти
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -152,7 +152,7 @@ export default function ClubManagementSystemPage() {
           <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#0f2038]">{ctaTitle}</h2>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[#56657d]">{ctaText}</p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild size="lg" className="bg-[#16a34a] text-white hover:bg-[#15803d]">
+            <Button asChild size="lg" className="bg-none bg-[#16a34a] text-white hover:bg-[#15803d]">
               <Link href="/login">
                 Открыть систему
                 <ArrowRight className="ml-2 h-4 w-4" />

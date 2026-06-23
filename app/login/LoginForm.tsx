@@ -117,7 +117,7 @@ function TenantNotFound({ platformUrl }: { platformUrl: string }) {
             платформы или используйте корректный адрес вашей организации.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button asChild className="bg-[#16a34a] text-white hover:bg-[#15803d]">
+            <Button asChild className="bg-none bg-[#16a34a] text-white hover:bg-[#15803d]">
               <Link href={platformUrl}>Перейти на платформу</Link>
             </Button>
             <Button asChild variant="outline" className="border-[#c8d1de] bg-white text-[#0f2038] hover:bg-[#eef2f8]">
