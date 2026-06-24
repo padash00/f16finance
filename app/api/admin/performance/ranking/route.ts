@@ -43,6 +43,13 @@ const MIN_BASELINE_OBSERVATIONS = 3 // если в слоте < 3 наблюде
 const MIN_QUALIFYING_SHIFTS = 3      // меньше — оператор в "Cold start"
 const PI_CLIP_MIN = 0.5
 const PI_CLIP_MAX = 2.0
+const SHRINKAGE_K = 5                 // «виртуальных средних смен» для усадки малой выборки к 1.0
+const TREND_CLAMP_MIN = 0.5          // ограничитель детренд-фактора (защита от артефактов истории)
+const TREND_CLAMP_MAX = 2.0
+
+function clamp(x: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, x))
+}
 
 function getRevenue(row: IncomeRow): number {
   return (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0) + (row.online_amount || 0)
@@ -257,7 +264,7 @@ export async function GET(req: Request) {
       return { value: globalMedian, source: 'global' }
     }
 
-    // ── 5. Агрегируем target по сменам и считаем PI ───────────────────────
+    // ── 5. Агрегируем target по сменам ────────────────────────────────────
     const targetByOpShift = new Map<string, IncomeRow[]>()
     for (const row of target) {
       if (!row.operator_id || !row.company_id) continue
@@ -267,13 +274,29 @@ export async function GET(req: Request) {
       targetByOpShift.set(key, arr)
     }
 
-    // Сводим в смены и считаем PI каждой
+    // ── 5a. ДЕТРЕНД: общий уровень денег в периоде vs в базе ───────────────
+    // Ожидание считается по всей истории; если оборот вырос/упал, медиана базы
+    // смещена → у всех PI завышен/занижен. Масштабируем ожидание на фактор
+    // (медиана выручки/смену в периоде ÷ медиана в базе), с ограничителем.
+    const targetShiftActuals: number[] = []
+    for (const rows of targetByOpShift.values()) {
+      const a = rows.reduce((s, r) => s + getRevenue(r), 0)
+      if (a > 0) targetShiftActuals.push(a)
+    }
+    const baselineMedianRev = median(baselineShifts.map((s) => s.revenue))
+    const targetMedianRev = median(targetShiftActuals)
+    const trendFactor =
+      baselineMedianRev > 0 && targetMedianRev > 0
+        ? clamp(targetMedianRev / baselineMedianRev, TREND_CLAMP_MIN, TREND_CLAMP_MAX)
+        : 1.0
+
+    // ── 5b. PI каждой смены (с детрендом) + денежно-взвешенная агрегация ───
     type OperatorAgg = {
       operatorId: string
       shifts: number
       totalRevenue: number
-      piSum: number
-      piCount: number
+      sumExpected: number    // Σ ожидание (детрендованное) — знаменатель денежного PI
+      sumPiTimesExp: number  // Σ (pi_клип × ожидание) — числитель (= Σ клип.факт)
       shiftDetails: Array<{ date: string; shift: string; company: string; actual: number; expected: number; pi: number; source: string }>
     }
     const byOp = new Map<string, OperatorAgg>()
@@ -283,22 +306,18 @@ export async function GET(req: Request) {
       if (actual <= 0) continue
 
       const exp = getExpected(company, date, shift, operatorId)
-      const piRaw = exp.value > 0 ? actual / exp.value : 1.0
-      const pi = Math.max(PI_CLIP_MIN, Math.min(PI_CLIP_MAX, piRaw))
+      const expected = exp.value * trendFactor   // детренд
+      const piRaw = expected > 0 ? actual / expected : 1.0
+      const pi = clamp(piRaw, PI_CLIP_MIN, PI_CLIP_MAX)  // клип лотерейных всплесков
 
       const op = byOp.get(operatorId) || {
-        operatorId,
-        shifts: 0,
-        totalRevenue: 0,
-        piSum: 0,
-        piCount: 0,
-        shiftDetails: [],
+        operatorId, shifts: 0, totalRevenue: 0, sumExpected: 0, sumPiTimesExp: 0, shiftDetails: [],
       }
       op.shifts += 1
       op.totalRevenue += actual
-      op.piSum += pi
-      op.piCount += 1
-      op.shiftDetails.push({ date, shift, company, actual, expected: exp.value, pi, source: exp.source })
+      op.sumExpected += expected
+      op.sumPiTimesExp += pi * expected   // денежный вес: большая смена весит больше
+      op.shiftDetails.push({ date, shift, company, actual, expected, pi, source: exp.source })
       byOp.set(operatorId, op)
     }
 
@@ -311,13 +330,18 @@ export async function GET(req: Request) {
       total_revenue: number
       avg_revenue_per_shift: number
       pi: number
+      pi_raw: number
       qualifying: boolean
       shift_details: Array<{ date: string; shift: string; company_id: string; actual: number; expected: number; pi: number; source: string }>
     }
     const ranking: RankingItem[] = []
     for (const op of byOp.values()) {
       const operator = operatorMap.get(op.operatorId)
-      const pi = op.piCount > 0 ? op.piSum / op.piCount : 1.0
+      // Денежно-взвешенный PI = Σ(клип.факт) / Σ(ожидание). Большая смена весит больше.
+      const piRaw = op.sumExpected > 0 ? op.sumPiTimesExp / op.sumExpected : 1.0
+      // Усадка: мало смен → тянем к норме 1.0 пропорционально выборке.
+      const piShrunk = (piRaw * op.shifts + 1.0 * SHRINKAGE_K) / (op.shifts + SHRINKAGE_K)
+      const pi = clamp(piShrunk, PI_CLIP_MIN, PI_CLIP_MAX)
       ranking.push({
         operator_id: op.operatorId,
         operator_name: operator?.name || 'Неизвестный',
@@ -326,6 +350,7 @@ export async function GET(req: Request) {
         total_revenue: op.totalRevenue,
         avg_revenue_per_shift: op.shifts > 0 ? op.totalRevenue / op.shifts : 0,
         pi: Number(pi.toFixed(3)),
+        pi_raw: Number(piRaw.toFixed(3)),
         qualifying: op.shifts >= MIN_QUALIFYING_SHIFTS,
         shift_details: op.shiftDetails.map((d) => ({
           date: d.date,
@@ -355,6 +380,8 @@ export async function GET(req: Request) {
           shifts_count: baselineShifts.length,
           slots_count: baselineSlots.size,
           global_median: Math.round(globalMedian),
+          baseline_median_rev: Math.round(baselineMedianRev),
+          target_median_rev: Math.round(targetMedianRev),
         },
         period: { from, to },
         config: {
@@ -363,6 +390,8 @@ export async function GET(req: Request) {
           min_baseline_observations: MIN_BASELINE_OBSERVATIONS,
           min_qualifying_shifts: MIN_QUALIFYING_SHIFTS,
           pi_clip: [PI_CLIP_MIN, PI_CLIP_MAX],
+          trend_factor: Number(trendFactor.toFixed(3)),
+          shrinkage_k: SHRINKAGE_K,
         },
       },
     })

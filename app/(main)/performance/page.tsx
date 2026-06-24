@@ -43,6 +43,7 @@ type RankingItem = {
   total_revenue: number
   avg_revenue_per_shift: number
   pi: number
+  pi_raw?: number
   qualifying: boolean
   shift_details: ShiftDetail[]
 }
@@ -50,13 +51,15 @@ type RankingItem = {
 type ApiResponse = {
   data: {
     ranking: RankingItem[]
-    baseline: { from: string; to: string; shifts_count: number; slots_count: number; global_median: number }
+    baseline: { from: string; to: string; shifts_count: number; slots_count: number; global_median: number; baseline_median_rev?: number; target_median_rev?: number }
     period: { from: string; to: string }
     config: {
       baseline_days_actual: number
       baseline_earliest_income_date: string | null
       min_qualifying_shifts: number
       pi_clip: [number, number]
+      trend_factor?: number
+      shrinkage_k?: number
     }
   }
 }
@@ -289,13 +292,19 @@ export default function PerformancePage() {
         const matched = op.shift_details.filter((s) => s.shift === shiftFilter)
         if (matched.length === 0) return null
         const totalRev = matched.reduce((sum, s) => sum + s.actual, 0)
-        const piAvg = matched.reduce((sum, s) => sum + s.pi, 0) / matched.length
+        // Та же формула, что в API: денежный вес + усадка.
+        const sumExp = matched.reduce((sum, s) => sum + s.expected, 0)
+        const sumPiExp = matched.reduce((sum, s) => sum + s.pi * s.expected, 0)
+        const piRaw = sumExp > 0 ? sumPiExp / sumExp : 1.0
+        const K = data.config.shrinkage_k ?? 5
+        const piShrunk = (piRaw * matched.length + 1.0 * K) / (matched.length + K)
         return {
           ...op,
           shifts: matched.length,
           total_revenue: totalRev,
           avg_revenue_per_shift: matched.length > 0 ? totalRev / matched.length : 0,
-          pi: Number(piAvg.toFixed(3)),
+          pi: Number(piShrunk.toFixed(3)),
+          pi_raw: Number(piRaw.toFixed(3)),
           qualifying: matched.length >= (data.config.min_qualifying_shifts || 3),
           shift_details: matched,
         } as RankingItem
@@ -487,6 +496,13 @@ export default function PerformancePage() {
                 <strong className="text-amber-700 dark:text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-700 dark:text-amber-300">не входят в медиану</strong>.
                 Это убирает «само-смещение»: если оператор работал почти все пятничные ночи, его прошлые результаты не должны формировать его же норму. Сравниваем его только с тем что делали <strong>другие</strong> в таком же слоте.
               </p>
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
+                <strong className="text-violet-700 dark:text-violet-300">Детренд:</strong> ожидание масштабируется на общий рост/спад оборота
+                {data?.config.trend_factor && data.config.trend_factor !== 1 && (
+                  <> (сейчас ×<strong className="text-violet-700 dark:text-violet-300">{data.config.trend_factor.toFixed(2)}</strong>)</>
+                )}
+                . Если бизнес вырос — норма поднимается вместе с ним, чтобы операторы не выглядели «героями» просто из-за общего роста.
+              </p>
               <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
                 Пример: «Arena × пятница × ночь» — за период базы было 24 таких смены. Когда считаем ожидание для Айгерим, исключаем её 6 смен → медиана из оставшихся 18 = <span className="text-slate-900 dark:text-white font-semibold">280 000 ₸</span>. Сравниваем её с этим значением.
               </div>
@@ -521,12 +537,12 @@ export default function PerformancePage() {
           <div className="flex gap-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">3</div>
             <div className="flex-1">
-              <div className="font-semibold text-slate-900 dark:text-white mb-1">Берём среднее PI по всем сменам — это балл оператора</div>
+              <div className="font-semibold text-slate-900 dark:text-white mb-1">Собираем балл — по деньгам, а не по «среднему процентов»</div>
               <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                У оператора 8 смен за месяц → 8 PI. Их среднее и есть его рейтинговый балл.
+                Балл = <strong className="text-slate-700 dark:text-slate-200">вся выручка ÷ всё ожидание</strong> по сменам (денежный вес). Большая смена весит больше маленькой — как в жизни. Это честнее простого среднего: удачная «мёртвая» смена с маленькими суммами больше не задирает балл.
               </p>
               <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
-                <span className="text-slate-900 dark:text-white font-semibold">Айгерим:</span> 8 смен. PI = [1.05, 1.18, 0.92, 1.30, 1.12, 0.95, 1.20, 1.08]. Среднее = <span className="text-emerald-700 dark:text-emerald-300 font-semibold">1.10</span> — на <strong>10% выше нормы</strong> в среднем по всем своим сменам.
+                <span className="text-slate-900 dark:text-white font-semibold">Айгерим:</span> Σфакт = 865к, Σожидание = 880к → балл = 865/880 = <span className="text-emerald-700 dark:text-emerald-300 font-semibold">0.98</span>. Копеечный удачный вторник почти не виден — он мал и в сумме не тянет.
               </div>
             </div>
           </div>
@@ -567,6 +583,10 @@ export default function PerformancePage() {
             <div className="flex-1">
               <div className="font-semibold text-slate-900 dark:text-white mb-1">Защита от случайных всплесков</div>
               <ul className="text-slate-500 dark:text-slate-400 leading-relaxed space-y-1 list-disc pl-4">
+                <li>
+                  <strong className="text-slate-700 dark:text-slate-200">Усадка малой выборки:</strong> балл тянется к норме 1.0 тем сильнее, чем меньше смен (≈{data?.config.shrinkage_k ?? 5} «виртуальных средних смен»).
+                  3 удачных смены не обгоняют стабильного ветерана — нужно доказать результат объёмом.
+                </li>
                 <li>
                   <strong className="text-slate-700 dark:text-slate-200">Минимум 3 смены</strong> для попадания в основной рейтинг.
                   Меньше — оператор в секции «Накапливают данные».
@@ -746,6 +766,11 @@ function OperatorDetailModal({
             <div className="text-right">
               <div className={`text-3xl font-bold ${c.text} tabular-nums`}>{item.pi.toFixed(2)}</div>
               <div className={`text-[10px] uppercase tracking-wide ${c.text}`}>{c.label}</div>
+              {item.pi_raw !== undefined && Math.abs(item.pi_raw - item.pi) >= 0.01 && (
+                <div className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400 tabular-nums" title="Сырой денежный PI до усадки по числу смен">
+                  сырой {item.pi_raw.toFixed(2)} → усадка
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
