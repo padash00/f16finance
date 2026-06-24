@@ -910,15 +910,15 @@ export default function SmartDashboardPage() {
   // При смене периода/фильтра старый контент остаётся — обновление идёт silent.
   if (loading && companies.length === 0) {
     return (
-      <>
-          <div className="text-center">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-500/30 border-t-amber-500 mx-auto mb-6" />
-              <Brain className="w-8 h-8 text-amber-400 absolute top-4 left-1/2 -translate-x-1/2" />
-            </div>
-            <p className="text-slate-400">Грузы считаю. Не мешай калькулятору думать 😄</p>
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <div className="text-center">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-500/30 border-t-amber-500 mx-auto mb-6" />
+            <Brain className="w-8 h-8 text-amber-400 absolute top-4 left-1/2 -translate-x-1/2" />
           </div>
-      </>
+          <p className="text-slate-500 dark:text-slate-400">Грузы считаю. Не мешай калькулятору думать 😄</p>
+        </div>
+      </div>
     )
   }
 
