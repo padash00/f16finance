@@ -658,8 +658,8 @@ function ExpenseWizardPageContent() {
         <Card className="p-6 space-y-5">
           {!step1Valid && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-              <div className="text-sm font-semibold text-amber-300 mb-1">Что нужно заполнить:</div>
-              <ul className="text-xs text-amber-100/90 space-y-1">
+              <div className="text-sm font-semibold text-amber-700 dark:text-amber-300 mb-1">Что нужно заполнить:</div>
+              <ul className="text-xs text-amber-800 dark:text-amber-100/90 space-y-1">
                 {step1Errors.map((err) => (
                   <li key={err}>- {err}</li>
                 ))}
@@ -924,8 +924,8 @@ function ExpenseWizardPageContent() {
           <h3 className="font-semibold">Подтверждающий документ</h3>
           {!step2Valid && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-              <div className="text-sm font-semibold text-amber-300 mb-1">Что еще нужно:</div>
-              <ul className="text-xs text-amber-100/90 space-y-1">
+              <div className="text-sm font-semibold text-amber-700 dark:text-amber-300 mb-1">Что еще нужно:</div>
+              <ul className="text-xs text-amber-800 dark:text-amber-100/90 space-y-1">
                 {step2Errors.map((err) => (
                   <li key={err}>- {err}</li>
                 ))}
