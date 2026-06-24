@@ -274,7 +274,7 @@ export default function OperatorShiftsPage() {
 
       {issueDraft ? (
         <div className="fixed inset-0 z-50 flex items-end bg-slate-950/80 p-3 sm:items-center sm:justify-center">
-          <form onSubmit={submitIssue} className="w-full max-w-lg rounded-none border border-[#23262b] bg-[#0b1324] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
+          <form onSubmit={submitIssue} className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-none border border-[#23262b] bg-[#0b1324] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
             <div className="text-lg font-semibold text-zinc-100">Сообщить о проблеме со сменой</div>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               {issueDraft.companyName || 'Точка'} · {formatRuDate(issueDraft.shiftDate, 'full')} · {shiftLabel(issueDraft.shiftType)}

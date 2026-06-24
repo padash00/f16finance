@@ -745,7 +745,7 @@ export default function SupplierCardPage() {
 
       {transferOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={(e) => { if (e.target === e.currentTarget && !transferring) setTransferOpen(false) }}>
-          <Card className="w-full max-w-md border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 p-5">
+          <Card className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 p-5">
             <div className="mb-1 text-base font-semibold text-slate-900 dark:text-white">Перенести к другому поставщику</div>
             <p className="mb-4 text-xs text-muted-foreground">
               {transferMode === 'receipt'

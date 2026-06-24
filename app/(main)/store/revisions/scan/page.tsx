@@ -335,7 +335,7 @@ export default function ScanRevisionPage() {
       {/* Лист ввода количества */}
       {pending ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70" onClick={cancelQty}>
-          <div className="w-full max-w-md border-t border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto border-t border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-2">
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border border-amber-500/40 text-amber-700 dark:text-amber-300">
