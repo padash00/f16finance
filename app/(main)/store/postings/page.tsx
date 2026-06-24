@@ -472,7 +472,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
       {confirmOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget && !saving) setConfirmOpen(false) }}>
-          <Card className="w-full max-w-md border-amber-500/30 bg-card">
+          <Card className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-amber-500/30 bg-card">
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-300" />

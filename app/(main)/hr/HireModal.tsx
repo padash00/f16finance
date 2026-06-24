@@ -210,7 +210,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
         }}
       >
         <Card
-          className="w-full max-w-md p-6 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/80 dark:via-gray-900 dark:to-gray-900 border-emerald-500/30"
+          className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto p-6 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/80 dark:via-gray-900 dark:to-gray-900 border-emerald-500/30"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-col items-center text-center">

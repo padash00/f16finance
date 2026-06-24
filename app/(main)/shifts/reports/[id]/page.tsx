@@ -887,7 +887,7 @@ export default function ShiftReportDetailPage({
       {/* Принудительное закрытие смены */}
       {adminAction === 'closeForce' && shift && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
-          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-amber-500/30 p-5">
+          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-amber-500/30 p-5">
             <h3 className="text-base font-semibold">Закрыть смену принудительно</h3>
             <p className="mt-1 text-xs text-slate-400">
               Смена будет помечена как закрытая без отправки отчёта. Используется для тестов.
@@ -928,7 +928,7 @@ export default function ShiftReportDetailPage({
       {/* Полное удаление смены (только super-admin) */}
       {adminAction === 'purge' && shift && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[200] grid place-items-center bg-black/70 p-4" onClick={() => !adminBusy && setAdminAction(null)}>
-          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md border-rose-500/40 bg-rose-50 dark:bg-rose-950/30 p-5">
+          <Card onClick={(e) => e.stopPropagation()} className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto border-rose-500/40 bg-rose-50 dark:bg-rose-950/30 p-5">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-6 w-6 shrink-0 text-rose-600 dark:text-rose-300" />
               <div>
