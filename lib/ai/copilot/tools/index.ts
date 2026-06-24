@@ -43,6 +43,7 @@ import { listMyActionsTool } from './system/list-my-actions'
 import { findPageTool } from './system/find-page'
 import { getForecastTool } from './analytics/get-forecast'
 import { listOperatorsTool } from './analytics/list-operators'
+import { getSalaryAdjustmentsTool } from './salary/get-salary-adjustments'
 import { sendTelegramReportTool } from './system/send-telegram-report'
 import { getTeamInfoTool } from './system/get-team-info'
 import { getKpiStatusTool } from './analytics/get-kpi-status'
@@ -143,6 +144,7 @@ export function initializeCopilotTools(): void {
   registerTool(findPageTool)
   registerTool(getForecastTool)
   registerTool(listOperatorsTool)
+  registerTool(getSalaryAdjustmentsTool)
   registerTool(sendTelegramReportTool)
   registerTool(getTeamInfoTool)
 
