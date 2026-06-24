@@ -110,6 +110,7 @@ export default function AiCfoPage() {
   const [lastParams, setLastParams] = useState<{ days?: number; dateFrom?: string; dateTo?: string }>({ days: 90 })
   const [cached, setCached] = useState(false)
   const [tab, setTab] = useState<'money' | 'risks' | 'companies' | 'plan'>('money')
+  const [showCustom, setShowCustom] = useState(false)
 
   const run = async (params: { days?: number; dateFrom?: string; dateTo?: string }, selKey: string, force = false) => {
     setSel(selKey); setLastParams(params)
@@ -156,36 +157,51 @@ export default function AiCfoPage() {
           </button>
         }
         toolbar={
-          <>
-            {(data || cached) ? (
-              <p className={`text-xs ${C.sub}`}>
-                {data ? <span className="text-violet-600 dark:text-violet-300">период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
-                {cached ? <span className="ml-1 text-[#52525B]">· из кэша</span> : null}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Сегментированные пресеты */}
+            <div className="inline-flex items-center rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03] p-0.5">
               {[7, 30, 90, 365].map((d) => (
-                <button key={d} onClick={() => run({ days: d }, `d${d}`)} disabled={loading}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-slate-100 dark:hover:bg-white/[0.03]`}`}>
+                <button key={d} onClick={() => { setShowCustom(false); run({ days: d }, `d${d}`) }} disabled={loading}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${sel === `d${d}` ? 'bg-violet-500 text-white shadow-sm' : `${C.sub} hover:text-slate-900 dark:hover:text-white`}`}>
                   {d} дн
                 </button>
               ))}
-              <select value={sel.startsWith('m:') ? sel.slice(2) : ''} onChange={(e) => { const v = e.target.value; if (v) run(monthRange(v), `m:${v}`) }} disabled={loading}
-                className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-3 py-1.5 text-sm ${C.sub} disabled:opacity-50`}>
-                <option value="">Месяц…</option>
-                {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <div className="flex items-center gap-1">
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-2 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
+            </div>
+
+            {/* Месяц */}
+            <select value={sel.startsWith('m:') ? sel.slice(2) : ''} onChange={(e) => { const v = e.target.value; if (v) { setShowCustom(false); run(monthRange(v), `m:${v}`) } }} disabled={loading}
+              className={`rounded-xl border ${sel.startsWith('m:') ? 'border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-200' : `${C.border} bg-white dark:bg-[#111113] ${C.sub}`} px-3 py-1.5 text-sm font-medium disabled:opacity-50 cursor-pointer`}>
+              <option value="">Месяц…</option>
+              {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+
+            {/* Свой период — кнопка-тоггл */}
+            <button onClick={() => setShowCustom((v) => !v)} disabled={loading}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${showCustom || sel === 'custom' ? 'border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-slate-100 dark:hover:bg-white/[0.03]`}`}>
+              <CalendarDays className="h-3.5 w-3.5" /> Свой период
+            </button>
+
+            {/* Период текстом */}
+            {(data || cached) ? (
+              <p className={`text-xs ${C.sub} ml-auto`}>
+                {data ? <span className="text-violet-600 dark:text-violet-300">{fmtRange(data.dateFrom, data.dateTo)}</span> : null}
+                {cached ? <span className="ml-1">· из кэша</span> : null}
+              </p>
+            ) : null}
+
+            {/* Раскрывающийся выбор дат */}
+            {showCustom ? (
+              <div className="flex w-full items-center gap-2">
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-xl border ${C.border} bg-white dark:bg-[#111113] px-3 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
                 <span className={C.sub}>—</span>
-                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-2 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-xl border ${C.border} bg-white dark:bg-[#111113] px-3 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
                 <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-slate-100 dark:hover:bg-white/[0.03]`}`}>
-                  Период
+                  className="rounded-xl bg-violet-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-violet-600 disabled:opacity-40">
+                  Применить
                 </button>
               </div>
-            </div>
-          </>
+            ) : null}
+          </div>
         }
       />
 
