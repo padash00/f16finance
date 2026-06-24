@@ -41,6 +41,7 @@ import { updateTaskTool } from './tasks/update-task'
 import { saveMemoryTool } from './system/save-memory'
 import { listMyActionsTool } from './system/list-my-actions'
 import { findPageTool } from './system/find-page'
+import { getForecastTool } from './analytics/get-forecast'
 import { sendTelegramReportTool } from './system/send-telegram-report'
 import { getTeamInfoTool } from './system/get-team-info'
 import { getKpiStatusTool } from './analytics/get-kpi-status'
@@ -139,6 +140,7 @@ export function initializeCopilotTools(): void {
   registerTool(saveMemoryTool)
   registerTool(listMyActionsTool)
   registerTool(findPageTool)
+  registerTool(getForecastTool)
   registerTool(sendTelegramReportTool)
   registerTool(getTeamInfoTool)
 
