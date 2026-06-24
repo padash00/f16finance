@@ -370,6 +370,35 @@ export default function SmartDashboardPage() {
   const [overdueDismissed, setOverdueDismissed] = useState(false)
   const [realtimeKey, setRealtimeKey] = useState(0)
   const [widgetData, setWidgetData] = useState<DashboardWidgetData | null>(null)
+  const [monthPlans, setMonthPlans] = useState<{ revenue?: { target: number; fact: number; pct: number }; profit?: { target: number; fact: number; pct: number } } | null>(null)
+
+  // План текущего месяца (из /goals) — для блока «план vs факт».
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let mounted = true
+    ;(async () => {
+      try {
+        const year = new Date().getFullYear()
+        const res = await fetch(`/api/admin/kpi-plans?year=${year}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const body = await res.json()
+        const plans: Array<any> = body?.data?.plans || body?.plans || []
+        const today = DateUtils.todayISO()
+        const pick = (metric: string) =>
+          plans.find((p) => p.period_kind === 'month' && p.metric === metric && p.period_start <= today && p.period_end >= today)
+        const rev = pick('revenue')
+        const prof = pick('profit')
+        if (!mounted) return
+        setMonthPlans({
+          revenue: rev ? { target: rev.target_amount, fact: rev.fact_value, pct: rev.achievement_pct } : undefined,
+          profit: prof ? { target: prof.target_amount, fact: prof.fact_value, pct: prof.achievement_pct } : undefined,
+        })
+      } catch {
+        if (mounted) setMonthPlans(null)
+      }
+    })()
+    return () => { mounted = false }
+  }, [isAuthenticated])
 
   useEffect(() => {
     let mounted = true
@@ -913,6 +942,30 @@ export default function SmartDashboardPage() {
 
   const { current, previous, chartData, insight, topIncomeCategories, topExpenseCategories } = analytics
 
+  // Разбивка по точкам за выбранный период (из уже загруженных incomes/expenses)
+  const companyBreakdown = (() => {
+    const map = new Map<string, { id: string; name: string; revenue: number; expense: number }>()
+    const ensure = (id: string) => {
+      let e = map.get(id)
+      if (!e) { e = { id, name: companyName(id), revenue: 0, expense: 0 }; map.set(id, e) }
+      return e
+    }
+    for (const r of incomes) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
+      if (r.date < dateFrom || r.date > dateTo) continue
+      ensure(r.company_id).revenue += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0)
+    }
+    for (const r of expenses) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
+      if (r.date < dateFrom || r.date > dateTo) continue
+      ensure(r.company_id).expense += Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
+    }
+    return [...map.values()]
+      .map((e) => ({ ...e, profit: e.revenue - e.expense, margin: e.revenue > 0 ? (e.revenue - e.expense) / e.revenue * 100 : 0 }))
+      .filter((e) => e.revenue > 0 || e.expense > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+  })()
+
   return (
     <>
         <div className="app-page-wide space-y-6">
@@ -996,6 +1049,100 @@ export default function SmartDashboardPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Операционные KPI — данные уже грузились, теперь показываем */}
+          {widgetData && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {[
+                { label: 'Заявки ждут', value: widgetData.kpis.requestsPending, href: '/store/requests', attn: widgetData.kpis.requestsPending > 0, tone: 'amber' },
+                { label: 'Открытые смены', value: widgetData.kpis.openShifts, href: '/shifts', attn: false, tone: 'slate' },
+                { label: 'Низкий остаток', value: widgetData.kpis.lowStock, href: '/store/warehouse', attn: widgetData.kpis.lowStock > 0, tone: 'rose' },
+                { label: 'Неоплач. долги', value: widgetData.kpis.unpaidDebts, href: '/point-debts', attn: widgetData.kpis.unpaidDebts > 0, tone: 'amber' },
+                { label: 'Операторы', value: widgetData.kpis.activeOperators, href: '/operators', attn: false, tone: 'slate' },
+              ].map((k) => (
+                <Link key={k.label} href={k.href} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900/40 p-3 transition hover:border-amber-400/40 hover:bg-slate-50 dark:hover:bg-gray-900/60">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wide truncate">{k.label}</div>
+                  <div className={`mt-1 text-2xl font-bold tabular-nums ${k.attn && k.tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : k.attn && k.tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>{k.value}</div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {/* План месяца vs факт */}
+          {monthPlans && (monthPlans.revenue || monthPlans.profit) && (
+            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <Target className="w-4 h-4 text-amber-400" />
+                План месяца
+                <Link href="/goals" className="ml-auto text-xs font-normal text-amber-600 dark:text-amber-400 hover:underline">все цели →</Link>
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {([['Выручка', monthPlans.revenue], ['Прибыль', monthPlans.profit]] as const).map(([label, p]) => p ? (
+                  <div key={label}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+                      <span className="text-xs font-semibold tabular-nums text-slate-900 dark:text-white">{Math.round(p.pct)}%</span>
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                      {Formatters.moneyDetailed(p.fact)} <span className="text-xs font-normal text-slate-400">/ {Formatters.moneyDetailed(p.target)}</span>
+                    </div>
+                    <div className="mt-1.5 h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+                      <div className={`h-full rounded-full ${p.pct >= 100 ? 'bg-emerald-500' : p.pct >= 60 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${Math.min(100, Math.max(0, p.pct))}%` }} />
+                    </div>
+                  </div>
+                ) : null)}
+              </div>
+            </Card>
+          )}
+
+          {/* Сравнение точек */}
+          {companyBreakdown.length > 1 && (
+            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-emerald-400" />
+                Сравнение точек
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/8">
+                      <th className="px-2 py-2 text-left font-medium">Точка</th>
+                      <th className="px-2 py-2 text-right font-medium">Выручка</th>
+                      <th className="px-2 py-2 text-right font-medium">Прибыль</th>
+                      <th className="px-2 py-2 text-right font-medium">Маржа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companyBreakdown.map((c) => (
+                      <tr key={c.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
+                        <td className="px-2 py-2 font-medium text-slate-900 dark:text-white truncate max-w-[160px]">{c.name}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{Formatters.moneyDetailed(c.revenue)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums font-semibold ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{Formatters.moneyDetailed(c.profit)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${c.margin >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.margin >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{c.margin.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* Дни рождения */}
+          {widgetData?.birthdays && widgetData.birthdays.length > 0 && (
+            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                🎂 Дни рождения
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {widgetData.birthdays.map((b) => (
+                  <div key={b.id} className="rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-white/[0.02] px-3 py-1.5">
+                    <span className="text-sm font-medium text-slate-900 dark:text-white">{b.title}</span>
+                    {b.subtitle && <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{b.subtitle}</span>}
+                  </div>
+                ))}
+              </div>
+            </Card>
           )}
 
           <Tabs
