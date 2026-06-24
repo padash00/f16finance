@@ -120,12 +120,12 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
         const isExpired = doc.expiry_date && new Date(doc.expiry_date) < new Date()
         
         return (
-          <div key={doc.id} className="bg-gray-800/30 rounded-xl p-4 border border-white/5 hover:bg-gray-800/50 transition-colors">
+          <div key={doc.id} className="bg-slate-50 dark:bg-gray-800/30 rounded-xl p-4 border border-slate-200 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-gray-800/50 transition-colors">
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-400" />
                 <div>
-                  <span className="font-medium text-white">{doc.document_name}</span>
+                  <span className="font-medium text-slate-900 dark:text-white">{doc.document_name}</span>
                   <p className="text-xs text-gray-500">
                     {DOCUMENT_TYPE_LABELS[doc.document_type] || doc.document_type}
                   </p>
@@ -153,7 +153,7 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
             </div>
 
             {doc.document_number && (
-              <p className="text-xs text-gray-400 mb-1">Номер: {doc.document_number}</p>
+              <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Номер: {doc.document_number}</p>
             )}
 
             {(doc.issue_date || doc.expiry_date) && (
@@ -168,7 +168,7 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
                 size="sm"
                 variant="outline"
                 onClick={() => handleView(doc.document_url)}
-                className="border-white/10 text-xs h-7"
+                className="border-slate-200 dark:border-white/10 text-xs h-7"
               >
                 <Eye className="w-3 h-3 mr-1" />
                 Просмотр
@@ -177,7 +177,7 @@ export default function DocumentList({ documents, onVerify, onDelete, formatDate
                 size="sm"
                 variant="outline"
                 onClick={() => handleDownload(doc.document_url, doc.document_name)}
-                className="border-white/10 text-xs h-7"
+                className="border-slate-200 dark:border-white/10 text-xs h-7"
               >
                 <Download className="w-3 h-3 mr-1" />
                 Скачать

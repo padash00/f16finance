@@ -221,7 +221,7 @@ export function CameraScanner({
   const accentBtn = accent === 'emerald' ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/50 bg-amber-400/10 text-amber-300'
 
   return (
-    <div className={`relative w-full overflow-hidden border border-white/10 bg-black ${aspectClass}`}>
+    <div className={`relative w-full overflow-hidden border border-slate-200 bg-black dark:border-white/10 ${aspectClass}`}>
       <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
 
       {scanning ? (

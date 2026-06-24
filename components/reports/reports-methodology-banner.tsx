@@ -28,15 +28,15 @@ export function ReportsMethodologyBanner({
   }, [dateFrom, dateTo, companyId])
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-gray-900/30 backdrop-blur-sm overflow-hidden">
+    <div className="rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-gray-900/30 backdrop-blur-sm overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-300 hover:bg-white/5 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
       >
         {open ? <ChevronDown className="w-4 h-4 shrink-0 text-violet-400" /> : <ChevronRight className="w-4 h-4 shrink-0 text-violet-400" />}
         <Info className="w-4 h-4 shrink-0 text-violet-400" />
-        <span className="font-medium text-white">Как формируется отчёт</span>
+        <span className="font-medium text-slate-900 dark:text-white">Как формируется отчёт</span>
         {impreciseNightKaspiCount > 0 && (
           <span className="ml-auto text-xs text-amber-400 whitespace-nowrap">
             Ночных смен без «Безналичный до 00:00»: {impreciseNightKaspiCount}
@@ -44,15 +44,15 @@ export function ReportsMethodologyBanner({
         )}
       </button>
       {open && (
-        <div className="px-4 pb-4 pt-0 space-y-3 text-sm text-gray-400 border-t border-white/5">
+        <div className="px-4 pb-4 pt-0 space-y-3 text-sm text-slate-500 dark:text-gray-400 border-t border-slate-200 dark:border-white/5">
           <ul className="list-disc pl-5 space-y-1.5 pt-3">
             <li>
-              Сводка строится по строкам <strong className="text-gray-200">доходов</strong> и{' '}
-              <strong className="text-gray-200">расходов</strong> за выбранный период; при включённом сравнении второй столбец — предыдущий период той же длины
+              Сводка строится по строкам <strong className="text-slate-700 dark:text-gray-200">доходов</strong> и{' '}
+              <strong className="text-slate-700 dark:text-gray-200">расходов</strong> за выбранный период; при включённом сравнении второй столбец — предыдущий период той же длины
               {comparisonMode ? ' (включено).' : '.'}
             </li>
             <li>
-              Для <strong className="text-gray-200">ночных смен</strong> Безналичный в этом отчёте делится по календарным суткам: сумма до полуночи остаётся на дате смены, остаток переносится на следующий день (если заполнено поле «Безналичный до 00:00» в доходах).
+              Для <strong className="text-slate-700 dark:text-gray-200">ночных смен</strong> Безналичный в этом отчёте делится по календарным суткам: сумма до полуночи остаётся на дате смены, остаток переносится на следующий день (если заполнено поле «Безналичный до 00:00» в доходах).
             </li>
             <li>
               Если у ночной смены есть Безналичный, но нет разбивки до полуночи, суточное распределение Безналичный в отчёте может быть неточным — заполните поле в доходах.
@@ -61,7 +61,7 @@ export function ReportsMethodologyBanner({
           <div className="flex flex-wrap gap-2">
             <Link
               href={incomeHref}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-gray-800/60 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:border-white/10 dark:bg-gray-800/60 dark:text-white dark:hover:bg-white/10 px-3 py-1.5 text-xs font-medium"
             >
               Доходы за период
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />

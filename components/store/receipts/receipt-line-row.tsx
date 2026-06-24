@@ -70,14 +70,14 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
     }
     const up = change > 0
     return (
-      <p className={`text-[10px] ${up ? 'text-rose-300' : 'text-emerald-300'}`}>
+      <p className={`text-[10px] ${up ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300'}`}>
         {up ? '↑' : '↓'} {Math.round(abs * 10) / 10}% к прошлой ({line.last_unit_cost} ₸)
       </p>
     )
   }, [line.is_bonus, line.last_unit_cost, line.unit_cost])
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
       <div className="space-y-1.5 min-w-0">
         <Label>Товар</Label>
@@ -129,7 +129,7 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
 
       <div className="space-y-1.5 min-w-0">
         <Label>Штрихкод</Label>
-        <Input value={lineItem?.barcode || '—'} readOnly className="bg-white/[0.03] truncate" />
+        <Input value={lineItem?.barcode || '—'} readOnly className="bg-slate-50 dark:bg-white/[0.03] truncate" />
       </div>
 
       <div className="space-y-1.5">
@@ -170,7 +170,7 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
             }
             className="h-3.5 w-3.5 accent-emerald-500"
           />
-          <span className={line.is_bonus ? 'font-medium text-emerald-300' : 'text-muted-foreground'}>
+          <span className={line.is_bonus ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}>
             Бонус (подарок поставщика)
           </span>
         </label>

@@ -126,7 +126,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
       <Button
         onClick={() => setShowForm(true)}
         size="sm"
-        className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-400 border border-violet-500/30"
+        className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-600 dark:text-violet-400 border border-violet-500/30"
       >
         <Upload className="w-4 h-4 mr-2" />
         Загрузить документ
@@ -135,12 +135,12 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
   }
 
   return (
-    <div className="bg-gray-800/30 rounded-xl p-4 border border-white/5">
+    <div className="bg-slate-50 dark:bg-gray-800/30 rounded-xl p-4 border border-slate-200 dark:border-white/5">
       <div className="flex justify-between items-center mb-3">
         <h4 className="text-sm font-medium">Новый документ</h4>
         <button
           onClick={() => setShowForm(false)}
-          className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+          className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
@@ -153,7 +153,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
           <select
             value={documentType}
             onChange={(e) => setDocumentType(e.target.value)}
-            className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+            className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
           >
             <option value="">Выберите тип</option>
             {DOCUMENT_TYPES.map(type => (
@@ -176,7 +176,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
             />
             <label
               htmlFor="file-upload"
-              className="flex-1 px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm cursor-pointer hover:bg-gray-700/50 transition-colors"
+              className="flex-1 px-3 py-2 bg-slate-50 dark:bg-gray-800/50 border border-slate-300 dark:border-white/10 rounded-lg text-sm cursor-pointer hover:bg-slate-100 dark:hover:bg-gray-700/50 transition-colors"
             >
               {selectedFile ? selectedFile.name : 'Выберите файл'}
             </label>
@@ -190,7 +190,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
             type="text"
             value={documentNumber}
             onChange={(e) => setDocumentNumber(e.target.value)}
-            className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+            className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
             placeholder="Например: N 123456"
           />
         </div>
@@ -203,7 +203,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
               type="date"
               value={issueDate}
               onChange={(e) => setIssueDate(e.target.value)}
-              className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+              className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
             />
           </div>
           <div>
@@ -212,7 +212,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
               type="date"
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
-              className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+              className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
             />
           </div>
         </div>
@@ -223,7 +223,7 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
             size="sm"
             onClick={() => setShowForm(false)}
             variant="outline"
-            className="border-white/10"
+            className="border-slate-200 dark:border-white/10"
           >
             Отмена
           </Button>

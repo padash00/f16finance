@@ -70,12 +70,12 @@ export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome,
         </div>
         <div className="flex-1 min-w-0">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-violet-200">AI-комментарий</h3>
+            <h3 className="text-sm font-semibold text-violet-700 dark:text-violet-200">AI-комментарий</h3>
             <button
               type="button"
               onClick={() => void load(true)}
               disabled={loading}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-300 hover:bg-violet-500/20 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-600 dark:text-violet-300 hover:bg-violet-500/20 disabled:opacity-50"
               title="Перегенерировать"
             >
               <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
@@ -83,14 +83,14 @@ export function AIInsightCard({ dateFrom, dateTo, totals, totalsPrev, topIncome,
             </button>
           </div>
           {error ? (
-            <p className="text-xs text-rose-300">{error}</p>
+            <p className="text-xs text-rose-600 dark:text-rose-300">{error}</p>
           ) : loading && !text ? (
             <div className="space-y-2">
               <div className="h-3 w-3/4 animate-pulse rounded bg-violet-500/20" />
               <div className="h-3 w-2/3 animate-pulse rounded bg-violet-500/20" />
             </div>
           ) : (
-            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-100">{text}</p>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-800 dark:text-slate-100">{text}</p>
           )}
         </div>
       </div>

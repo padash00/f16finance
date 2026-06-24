@@ -606,15 +606,15 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         >
           {/* Grid lines */}
           <svg
-            className="absolute inset-0 pointer-events-none"
+            className="absolute inset-0 pointer-events-none text-slate-300 dark:text-white/5"
             width={GRID_W * CELL} height={GRID_H * CELL}
             style={{ zIndex: 0 }}
           >
             {Array.from({ length: GRID_W + 1 }, (_, i) => (
-              <line key={`v${i}`} x1={i * CELL} y1={0} x2={i * CELL} y2={GRID_H * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+              <line key={`v${i}`} x1={i * CELL} y1={0} x2={i * CELL} y2={GRID_H * CELL} stroke="currentColor" strokeWidth="1" />
             ))}
             {Array.from({ length: GRID_H + 1 }, (_, i) => (
-              <line key={`h${i}`} x1={0} y1={i * CELL} x2={GRID_W * CELL} y2={i * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+              <line key={`h${i}`} x1={0} y1={i * CELL} x2={GRID_W * CELL} y2={i * CELL} stroke="currentColor" strokeWidth="1" />
             ))}
           </svg>
 
@@ -1944,7 +1944,7 @@ function StationsPageContent() {
                   <button
                     type="button"
                     onClick={() => setAddingZone(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
+                    className="flex items-center gap-1.5 rounded-lg border border-primary/20 dark:border-white/10 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
                   >
                     <Plus className="h-4 w-4" /> Добавить зону
                   </button>
@@ -2458,7 +2458,7 @@ function StationsPageContent() {
         )}
 
         {activeTab === 'manage' && can('stations.top_up_balance') && (
-          <div className="rounded-xl border border-white/10 bg-card p-4 space-y-3">
+          <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-emerald-400" /> Пополнение баланса клиента
@@ -2487,7 +2487,7 @@ function StationsPageContent() {
                       <div
                         key={r.id}
                         onClick={() => setBalanceTargetId(r.id)}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/8'}`}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/[0.08]'}`}
                       >
                         <div>
                           <p className="font-medium">{r.name || '—'}</p>
@@ -2527,7 +2527,7 @@ function StationsPageContent() {
         {activeTab === 'catalog' && (
           <div className="space-y-6">
             {/* ─── Global Catalog ─── */}
-            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-semibold flex items-center gap-2"><Gamepad2 className="h-4 w-4 text-primary" /> Каталог игр</h2>
@@ -2625,7 +2625,7 @@ function StationsPageContent() {
 
             {/* ─── Zone Bulk Assignment ─── */}
             {can('stations.bulk_upsert_games') && (
-            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-5 space-y-4">
               <div>
                 <h2 className="text-base font-semibold flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Назначение по зонам</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">Выберите зону и укажите путь к EXE для каждой игры — все станции зоны получат эти настройки.</p>
@@ -2711,9 +2711,9 @@ function StationsPageContent() {
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата с" />
+              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата с" />
               <span className="text-muted-foreground">—</span>
-              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата по" />
+              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата по" />
               <button type="button" onClick={() => void loadAnalytics()} disabled={analyticsLoading} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">
                 {analyticsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Загрузить
               </button>
@@ -2757,7 +2757,7 @@ function StationsPageContent() {
                     { label: 'Наличка', value: formatPrice(totalCash), icon: Banknote, color: 'text-amber-400' },
                     { label: 'Безналичный', value: formatPrice(totalKaspi), icon: Banknote, color: 'text-cyan-400' },
                   ].map(({ label, value, icon: Icon, color }) => (
-                    <div key={label} className="rounded-xl border border-white/10 bg-card p-4">
+                    <div key={label} className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                       <div className={`flex items-center gap-1.5 text-xs mb-1 ${color}`}><Icon className="h-3.5 w-3.5" />{label}</div>
                       <p className="text-lg font-bold">{value}</p>
                     </div>
@@ -2765,7 +2765,7 @@ function StationsPageContent() {
                 </div>
 
                 {/* Payment method breakdown */}
-                <div className="rounded-xl border border-white/10 bg-card p-4">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                   <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Banknote className="h-4 w-4 text-amber-400" /> По способу оплаты</h3>
                   <div className="flex gap-4">
                     {[
@@ -2789,7 +2789,7 @@ function StationsPageContent() {
 
                 {/* Daily revenue chart */}
                 {dailyData.length > 1 && (
-                  <div className="rounded-xl border border-white/10 bg-card p-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                     <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-400" /> Динамика по дням</h3>
                     <div className="flex items-end gap-1" style={{ height: 80 }}>
                       {dailyData.map(d => (
@@ -2809,7 +2809,7 @@ function StationsPageContent() {
 
                 {/* By zone */}
                 {byZone.length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-card p-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                     <h3 className="mb-3 text-sm font-semibold flex items-center gap-2">
                       <span className="h-3.5 w-3.5 rounded-full bg-primary inline-block" /> По зонам
                     </h3>
@@ -2840,7 +2840,7 @@ function StationsPageContent() {
 
                 {/* By station with occupancy */}
                 {byStation.length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-card p-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                     <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Monitor className="h-4 w-4 text-primary" /> По станциям</h3>
                     <div className="space-y-2">
                       {byStation.map(({ station, count, revenue, occupancy }) => (
@@ -2862,7 +2862,7 @@ function StationsPageContent() {
 
                 {/* By tariff */}
                 {byTariff.length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-card p-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                     <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-violet-400" /> По тарифам</h3>
                     <div className="space-y-2">
                       {byTariff.map(({ tariff, count, revenue }) => (
@@ -2881,7 +2881,7 @@ function StationsPageContent() {
                 )}
 
                 {/* Peak hours */}
-                <div className="rounded-xl border border-white/10 bg-card p-4">
+                <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-4">
                   <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Загруженность по часам</h3>
                   <div className="flex items-end gap-0.5 h-20">
                     {hourBuckets.map(({ hour, count, revenue }) => (
@@ -2927,7 +2927,7 @@ function StationsPageContent() {
               </div>
             )}
 
-            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-5 space-y-4">
               <h2 className="text-sm font-semibold">Оформление страницы</h2>
 
               <div className="grid gap-3">
@@ -2994,7 +2994,7 @@ function StationsPageContent() {
             </div>
 
             {/* ─── Kiosk Branding ─────────────────────────────────────────── */}
-            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+            <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-card p-5 space-y-4">
               <h2 className="text-sm font-semibold">Оформление киоска</h2>
               <p className="text-xs text-muted-foreground -mt-2">Выберите станцию чтобы настроить внешний вид экрана приветствия и сессии.</p>
 
