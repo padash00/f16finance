@@ -35,7 +35,9 @@ export function getAllTools(): CopilotTool[] {
 export function getToolsForUser(ctx: CopilotContext): CopilotTool[] {
   const all = getAllTools()
   if (ctx.isSuperAdmin) return all
-  return all.filter((tool) => ctx.capabilities.has(tool.requiredCapability))
+  // requiredCapability === '*' → мета/справочные инструменты, доступны всем
+  // (что я могу, карта страниц и т.п. — они только читают и безопасны).
+  return all.filter((tool) => tool.requiredCapability === '*' || ctx.capabilities.has(tool.requiredCapability))
 }
 
 /**

@@ -39,6 +39,8 @@ import { addSupplierTool } from './inventory/add-supplier'
 import { updateOperatorTool } from './team/update-operator'
 import { updateTaskTool } from './tasks/update-task'
 import { saveMemoryTool } from './system/save-memory'
+import { listMyActionsTool } from './system/list-my-actions'
+import { findPageTool } from './system/find-page'
 import { sendTelegramReportTool } from './system/send-telegram-report'
 import { getTeamInfoTool } from './system/get-team-info'
 import { getKpiStatusTool } from './analytics/get-kpi-status'
@@ -135,6 +137,8 @@ export function initializeCopilotTools(): void {
 
   // Системные
   registerTool(saveMemoryTool)
+  registerTool(listMyActionsTool)
+  registerTool(findPageTool)
   registerTool(sendTelegramReportTool)
   registerTool(getTeamInfoTool)
 
