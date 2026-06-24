@@ -341,14 +341,18 @@ async function askForParam(
     if (!session.pendingOptions) session.pendingOptions = {}
     session.pendingOptions[param.name] = visible
 
+    // На ВЕБЕ нет лимита размера callback → шлём РЕАЛЬНОЕ значение (не #индекс),
+    // чтобы выбор не зависел от session.pendingOptions (которая на serverless
+    // может потеряться между запросами → «Сессия устарела»). В Telegram — #индекс.
+    const tg = ctx.source === 'telegram'
     return {
-      text: truncated
+      text: truncated && tg
         ? `${param.label}? (всего ${options.length}; показано ${visible.length} — если нужного нет, введи текстом)`
         : `${param.label}? (всего ${options.length})`,
       buttons: [
         ...visible.map((opt, idx) => ({
           label: opt.label + (opt.hint ? ` · ${opt.hint}` : ''),
-          callbackData: `param:${param.name}:#${idx}`,
+          callbackData: tg ? `param:${param.name}:#${idx}` : `param:${param.name}:${String(opt.value)}`,
           style: 'secondary' as const,
         })),
         { label: '❌ Отмена', callbackData: 'cancel', style: 'secondary' as const },
