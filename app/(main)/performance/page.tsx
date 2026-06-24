@@ -9,15 +9,19 @@ import {
   ChevronDown,
   Clock,
   Crown,
+  Download,
+  Gift,
   Info,
   Medal,
   Minus,
   RefreshCw,
+  Search,
   TrendingDown,
   TrendingUp,
   Trophy,
   Users,
   X,
+  Zap,
 } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
@@ -167,6 +171,25 @@ function rankBadge(rank: number) {
   return <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{rank}</span>
 }
 
+const WEEKDAY_NAMES = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+
+// Σ ожидание по сменам оператора (норма за период в тенге).
+function expectedTotal(item: RankingItem): number {
+  return item.shift_details.reduce((s, sh) => s + sh.expected, 0)
+}
+// Сколько он принёс СВЕРХ нормы (или ниже) — для обоснования бонуса.
+function aboveNorm(item: RankingItem): number {
+  return item.total_revenue - expectedTotal(item)
+}
+// Номер недели (для личного тренда внутри периода).
+function weekKey(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, (m || 1) - 1, d || 1)
+  const day = dt.getDay() === 0 ? 7 : dt.getDay()
+  dt.setDate(dt.getDate() - day + 1) // понедельник недели
+  return toISO(dt)
+}
+
 // Дельта PI к прошлому периоду: ↑/↓/— с цветом. undefined prev → «новый».
 function DeltaBadge({ pi, prev }: { pi: number; prev: number | undefined }) {
   if (prev === undefined) {
@@ -186,6 +209,20 @@ function DeltaBadge({ pi, prev }: { pi: number; prev: number | undefined }) {
       {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
       {up ? '+' : ''}{d.toFixed(2)}
     </span>
+  )
+}
+
+// Горизонтальная PI-шкала 0.5..2.0 с маркером — положение видно одним взглядом.
+function PiBar({ pi }: { pi: number }) {
+  const lo = 0.5, hi = 2.0
+  const pos = Math.max(0, Math.min(100, ((Math.max(lo, Math.min(hi, pi)) - lo) / (hi - lo)) * 100))
+  const normPos = ((1 - lo) / (hi - lo)) * 100
+  const col = pi >= 1.05 ? 'bg-emerald-500' : pi >= 0.95 ? 'bg-slate-400' : pi >= 0.85 ? 'bg-amber-500' : 'bg-rose-500'
+  return (
+    <div className="relative h-1.5 w-full rounded-full bg-slate-200 dark:bg-white/10 overflow-visible">
+      <div className="absolute top-0 bottom-0 w-px bg-slate-400 dark:bg-white/30" style={{ left: `${normPos}%` }} title="Норма (1.0)" />
+      <div className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-2.5 w-2.5 rounded-full ${col} ring-2 ring-white dark:ring-slate-900`} style={{ left: `${pos}%` }} />
+    </div>
   )
 }
 
@@ -209,6 +246,59 @@ function PiSparkline({ values }: { values: number[] }) {
   )
 }
 
+// Проблемные слоты: агрегируем все смены всех операторов по (точка·день·смена),
+// ищем где факт систематически ниже нормы за период.
+type SlotStat = { key: string; company: string; weekday: number; shift: string; actual: number; expected: number; count: number; ratio: number }
+function computeProblemSlots(ranking: RankingItem[]): SlotStat[] {
+  const map = new Map<string, SlotStat>()
+  for (const op of ranking) {
+    for (const sh of op.shift_details) {
+      const wd = weekday(sh.date)
+      const key = `${sh.company_id}|${wd}|${sh.shift}`
+      const cur = map.get(key) || { key, company: sh.company_id, weekday: wd, shift: sh.shift, actual: 0, expected: 0, count: 0, ratio: 1 }
+      cur.actual += sh.actual
+      cur.expected += sh.expected
+      cur.count += 1
+      map.set(key, cur)
+    }
+  }
+  const arr = [...map.values()].filter((s) => s.count >= 2 && s.expected > 0)
+  for (const s of arr) s.ratio = s.actual / s.expected
+  return arr.filter((s) => s.ratio < 0.92).sort((a, b) => a.ratio - b.ratio).slice(0, 6)
+}
+function weekday(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1).getDay()
+}
+
+// CSV-экспорт рейтинга (открывается в Excel).
+function exportCsv(rows: RankingItem[], bonusPct: number) {
+  const head = ['Оператор', 'Смен', 'Выручка', 'Норма', 'Сверх нормы', 'PI', bonusPct > 0 ? 'Бонус' : '']
+    .filter(Boolean)
+  const lines = rows.map((r) => {
+    const exp = Math.round(expectedTotal(r))
+    const above = Math.round(aboveNorm(r))
+    const cells = [
+      `"${(r.operator_short_name || r.operator_name).replace(/"/g, '""')}"`,
+      r.shifts,
+      Math.round(r.total_revenue),
+      exp,
+      above,
+      r.pi.toFixed(2),
+    ]
+    if (bonusPct > 0) cells.push(Math.round(Math.max(0, above) * bonusPct / 100))
+    return cells.join(',')
+  })
+  const csv = '﻿' + [head.join(','), ...lines].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'performance.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function PerformancePage() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
@@ -224,6 +314,10 @@ export default function PerformancePage() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<RankingItem | null>(null)
   const [methodOpen, setMethodOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'pi' | 'aboveNorm' | 'revenue' | 'shifts'>('pi')
+  const [bonusPct, setBonusPct] = useState(0)        // % от суммы сверх нормы; 0 = выкл
+  const [candidateThreshold] = useState(1.10)        // PI ≥ → кандидат на бонус
   const reqId = useRef(0)
 
   const range = useMemo(() => PERIOD_PRESETS[period].getRange(), [period])
@@ -316,6 +410,18 @@ export default function PerformancePage() {
   const qualifying = filteredRanking.filter((r) => r.qualifying)
   const coldStart = filteredRanking.filter((r) => !r.qualifying)
   const selectedCompany = companies.find((c) => c.id === companyId)
+  const companyName = (id: string) => companies.find((c) => c.id === id)?.name ?? '—'
+
+  // Поиск + сортировка для отображаемого списка (сводка/лидер — по полному набору qualifying)
+  const q = search.trim().toLowerCase()
+  const viewQualifying = [...qualifying]
+    .filter((r) => !q || (r.operator_short_name || r.operator_name).toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (sortBy === 'revenue') return b.total_revenue - a.total_revenue
+      if (sortBy === 'shifts') return b.shifts - a.shifts
+      if (sortBy === 'aboveNorm') return aboveNorm(b) - aboveNorm(a)
+      return b.pi - a.pi
+    })
 
   // Сводка по квалифицированным операторам (обычный расчёт — дешёво, после early-return хук нельзя)
   const summary = qualifying.length === 0 ? null : {
@@ -325,6 +431,8 @@ export default function PerformancePage() {
     norm: qualifying.filter((r) => r.pi >= 0.95 && r.pi < 1.05).length,
     leader: qualifying[0],
   }
+
+  const problemSlots = computeProblemSlots(filteredRanking)
 
   return (
     <div className="app-page-wide space-y-6">
@@ -407,6 +515,51 @@ export default function PerformancePage() {
                   {shiftFilter === 'day' ? '☀️ Только дневные смены' : '🌙 Только ночные смены'}
                 </span>
               )}
+            </div>
+
+            {/* Поиск · сортировка · бонус · экспорт */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Поиск оператора…"
+                  className="w-44 bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:border-violet-400"
+                />
+              </div>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 dark:text-white outline-none cursor-pointer"
+              >
+                <option value="pi" className="bg-white dark:bg-zinc-900">Сортировка: PI</option>
+                <option value="aboveNorm" className="bg-white dark:bg-zinc-900">Сверх нормы ₸</option>
+                <option value="revenue" className="bg-white dark:bg-zinc-900">Выручка</option>
+                <option value="shifts" className="bg-white dark:bg-zinc-900">Смены</option>
+              </select>
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Бонус</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={bonusPct || ''}
+                  onChange={(e) => setBonusPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                  placeholder="0"
+                  className="w-12 bg-transparent text-xs font-semibold text-slate-900 dark:text-white outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">% сверх нормы</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => exportCsv(viewQualifying, bonusPct)}
+                disabled={viewQualifying.length === 0}
+                className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/50 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-900/70 disabled:opacity-40"
+                title="Скачать CSV (Excel)"
+              >
+                <Download className="w-3.5 h-3.5" />Экспорт
+              </button>
             </div>
           </>
         }
@@ -604,7 +757,7 @@ export default function PerformancePage() {
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <Award className="w-4 h-4 text-emerald-400" />
-            Основной рейтинг ({qualifying.length})
+            Основной рейтинг ({q ? `${viewQualifying.length} из ${qualifying.length}` : qualifying.length})
           </h3>
           {refreshing && <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500 dark:text-slate-400" />}
         </div>
@@ -614,40 +767,59 @@ export default function PerformancePage() {
             <RefreshCw className="w-4 h-4 animate-spin" />
             <span className="text-sm">Считаем рейтинг…</span>
           </div>
-        ) : qualifying.length === 0 ? (
+        ) : viewQualifying.length === 0 ? (
           <div className="text-center py-12 text-slate-500 text-sm">
-            Нет операторов с {data?.config.min_qualifying_shifts || 3}+ сменами за этот период.
+            {qualifying.length === 0
+              ? `Нет операторов с ${data?.config.min_qualifying_shifts || 3}+ сменами за этот период.`
+              : 'Никто не найден по поиску.'}
           </div>
         ) : (
           <div className="space-y-2">
-            {qualifying.map((op, i) => {
+            {viewQualifying.map((op, i) => {
               const c = piColor(op.pi)
+              const above = aboveNorm(op)
+              const isCandidate = op.pi >= candidateThreshold
+              const bonus = bonusPct > 0 ? Math.max(0, above) * bonusPct / 100 : 0
               return (
                 <button
                   key={op.operator_id}
                   type="button"
                   onClick={() => setSelected(op)}
-                  className="w-full text-left rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-900/60 p-4 transition hover:border-emerald-400/30 hover:bg-slate-100 dark:hover:bg-gray-900/80"
+                  className={`w-full text-left rounded-xl border p-4 transition hover:bg-slate-100 dark:hover:bg-gray-900/80 ${
+                    isCandidate
+                      ? 'border-emerald-400/50 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06] ring-1 ring-emerald-400/30'
+                      : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-900/60 hover:border-emerald-400/30'
+                  }`}
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-                      {rankBadge(i + 1)}
+                      {sortBy === 'pi' && !q ? rankBadge(i + 1) : <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{i + 1}</span>}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-slate-900 dark:text-white">{op.operator_short_name || op.operator_name}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3">
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {op.shifts} смен
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <TrendingUp className="w-3 h-3" />
-                          {moneyShort(op.total_revenue)}
-                        </span>
-                        <span>{moneyShort(op.avg_revenue_per_shift)} / смена</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-900 dark:text-white">{op.operator_short_name || op.operator_name}</span>
+                        {isCandidate && (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                            <Gift className="w-3 h-3" />кандидат
+                          </span>
+                        )}
                       </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3 flex-wrap">
+                        <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{op.shifts} смен</span>
+                        <span className="inline-flex items-center gap-1"><TrendingUp className="w-3 h-3" />{moneyShort(op.total_revenue)}</span>
+                        <span className="text-slate-400 dark:text-slate-500">норма {moneyShort(expectedTotal(op))}</span>
+                        <span className={`font-semibold ${above >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {above >= 0 ? '+' : ''}{moneyShort(above)} к норме
+                        </span>
+                        {bonus > 0 && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+                            <Gift className="w-3 h-3" />бонус {moneyFmt(bonus)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 max-w-[260px]"><PiBar pi={op.pi} /></div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
                         <div className={`text-2xl font-bold ${c.text} tabular-nums`}>{op.pi.toFixed(2)}</div>
                         <div className="flex items-center justify-end gap-1.5">
@@ -699,11 +871,41 @@ export default function PerformancePage() {
         </Card>
       )}
 
+      {/* Проблемные слоты — где факт систематически ниже нормы (сигнал владельцу) */}
+      {problemSlots.length > 0 && (
+        <Card className="p-5 bg-white dark:bg-gray-900/40 backdrop-blur-xl border-slate-200 dark:border-white/5">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+            <TrendingDown className="w-4 h-4 text-rose-400" />
+            Проблемные слоты ({problemSlots.length})
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Где факт ниже нормы за период — смотреть расписание/процесс, а не одного человека.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {problemSlots.map((s) => {
+              const pct = Math.round((s.ratio - 1) * 100)
+              return (
+                <div key={s.key} className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                      {companyName(s.company)} · {WEEKDAY_NAMES[s.weekday]} · {s.shift === 'night' ? '🌙 ночь' : '☀️ день'}
+                    </div>
+                    <span className="text-sm font-bold text-rose-600 dark:text-rose-400 tabular-nums shrink-0">{pct}%</span>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    факт {moneyShort(s.actual)} / норма {moneyShort(s.expected)} · {s.count} смен
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {selected && (
         <OperatorDetailModal
           item={selected}
           onClose={() => setSelected(null)}
           periodLabel={PERIOD_PRESETS[period].label}
+          bonusPct={bonusPct}
         />
       )}
     </div>
@@ -714,16 +916,30 @@ function OperatorDetailModal({
   item,
   onClose,
   periodLabel,
+  bonusPct,
 }: {
   item: RankingItem
   onClose: () => void
   periodLabel: string
+  bonusPct: number
 }) {
   useModalEscape(true, onClose)
   if (typeof document === 'undefined') return null
 
   const sortedShifts = [...item.shift_details].sort((a, b) => b.date.localeCompare(a.date))
   const c = piColor(item.pi)
+  const above = aboveNorm(item)
+  const bonus = bonusPct > 0 ? Math.max(0, above) * bonusPct / 100 : 0
+  // Недельный тренд PI (денежный вес внутри недели) — личная динамика за период.
+  const weekMap = new Map<string, { exp: number; piExp: number }>()
+  for (const sh of item.shift_details) {
+    const k = weekKey(sh.date)
+    const w = weekMap.get(k) || { exp: 0, piExp: 0 }
+    w.exp += sh.expected
+    w.piExp += sh.pi * sh.expected
+    weekMap.set(k, w)
+  }
+  const weeklyPi = [...weekMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, w]) => (w.exp > 0 ? w.piExp / w.exp : 1))
 
   return createPortal(
     <div
@@ -761,11 +977,17 @@ function OperatorDetailModal({
           </div>
 
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-            <Stat label="Смен" value={String(item.shifts)} />
             <Stat label="Выручка" value={moneyShort(item.total_revenue)} />
-            <Stat label="Средняя за смену" value={moneyShort(item.avg_revenue_per_shift)} />
-            <Stat label="PI" value={item.pi.toFixed(2)} />
+            <Stat label="Норма за период" value={moneyShort(expectedTotal(item))} />
+            <Stat label={above >= 0 ? 'Сверх нормы' : 'Ниже нормы'} value={`${above >= 0 ? '+' : ''}${moneyShort(above)}`} />
+            <Stat label={bonus > 0 ? `Бонус (${bonusPct}%)` : 'Смен'} value={bonus > 0 ? moneyFmt(bonus) : String(item.shifts)} />
           </div>
+          {weeklyPi.length >= 2 && (
+            <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+              <span>PI по неделям</span>
+              <PiSparkline values={weeklyPi} />
+            </div>
+          )}
         </div>
 
         {/* Shift table */}
@@ -796,9 +1018,13 @@ function OperatorDetailModal({
                 {sortedShifts.map((sh, idx) => {
                   const piC = piColor(sh.pi)
                   const diff = sh.actual - sh.expected
+                  // Аномалия: PI упёрся в потолок/пол (экстремальное отклонение от нормы) — проверить.
+                  const anomaly = sh.pi >= 1.99 || sh.pi <= 0.51
                   return (
                     <tr key={idx} className="border-b border-slate-100 dark:border-white/5 last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{sh.date}</td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        {anomaly && <Zap className="inline w-3 h-3 mr-1 text-amber-500" />}{sh.date}
+                      </td>
                       <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
                         {sh.shift === 'night' ? '🌙 ночь' : '☀️ день'}
                       </td>
