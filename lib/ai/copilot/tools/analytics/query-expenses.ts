@@ -29,8 +29,8 @@ export const queryExpensesTool: CopilotTool = {
       name: 'period',
       label: 'Период',
       type: 'select',
-      required: true,
-      description: 'За какой период',
+      required: false,
+      description: 'Готовый период. ИЛИ используй точные даты from/to для конкретного диапазона.',
       getOptions: async () => [
         { value: 'today', label: 'Сегодня' },
         { value: 'yesterday', label: 'Вчера' },
@@ -38,6 +38,8 @@ export const queryExpensesTool: CopilotTool = {
         { value: 'month', label: 'Месяц' },
       ],
     },
+    { name: 'from', label: 'С даты', type: 'string', required: false, description: 'Начало периода YYYY-MM-DD (для произвольного диапазона, напр. "за 15-21 июня").' },
+    { name: 'to', label: 'По дату', type: 'string', required: false, description: 'Конец периода YYYY-MM-DD.' },
     {
       name: 'company_id',
       label: 'Точка',
@@ -48,15 +50,22 @@ export const queryExpensesTool: CopilotTool = {
     },
   ],
   handler: async (input, ctx) => {
-    const period = String(input.period || 'today')
+    const period = String(input.period || '')
     const companyId = String(input.company_id || '')
     const today = todayISO()
+    const reIso = /^\d{4}-\d{2}-\d{2}$/
 
+    // Приоритет — точные даты from/to (для запросов вида «за 15-21 июня»).
     let from = today
     let to = today
-    if (period === 'yesterday') from = to = addDaysISO(today, -1)
+    const inFrom = String(input.from || '').trim()
+    const inTo = String(input.to || '').trim()
+    if (reIso.test(inFrom) && reIso.test(inTo)) {
+      from = inFrom; to = inTo
+    } else if (period === 'yesterday') from = to = addDaysISO(today, -1)
     else if (period === 'week') from = addDaysISO(today, -6)
     else if (period === 'month') from = addDaysISO(today, -29)
+    else if (period === 'today' || !period) { /* today */ }
 
     let query = ctx.supabase
       .from('expenses')
@@ -89,7 +98,8 @@ export const queryExpensesTool: CopilotTool = {
     const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
 
     const periodLabel: Record<string, string> = { today: 'сегодня', yesterday: 'вчера', week: 'неделя', month: 'месяц' }
-    const lines = [`💸 Расходы за ${periodLabel[period] || period}:`, `Итого: ${fmt(total)}`, '', 'Топ категорий:']
+    const label = from === to ? from : `${from} — ${to}`
+    const lines = [`💸 Расходы за ${period && from !== inFrom ? periodLabel[period] : label}:`, `Итого: ${fmt(total)}`, '', 'Топ категорий:']
     for (const [cat, sum] of top) {
       const pct = total > 0 ? ((sum / total) * 100).toFixed(1) : '0'
       lines.push(`  • ${cat}: ${fmt(sum)} (${pct}%)`)

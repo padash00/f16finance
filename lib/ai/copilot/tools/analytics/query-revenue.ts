@@ -29,8 +29,8 @@ export const queryRevenueTool: CopilotTool = {
       name: 'period',
       label: 'Период',
       type: 'select',
-      required: true,
-      description: 'Период за который считаем выручку',
+      required: false,
+      description: 'Готовый период. ИЛИ используй точные даты from/to для конкретного диапазона.',
       getOptions: async () => [
         { value: 'today', label: 'Сегодня' },
         { value: 'yesterday', label: 'Вчера' },
@@ -38,6 +38,8 @@ export const queryRevenueTool: CopilotTool = {
         { value: 'month', label: 'Этот месяц (30 дней)' },
       ],
     },
+    { name: 'from', label: 'С даты', type: 'string', required: false, description: 'Начало YYYY-MM-DD (для произвольного диапазона, напр. «за 15-21 июня»).' },
+    { name: 'to', label: 'По дату', type: 'string', required: false, description: 'Конец YYYY-MM-DD.' },
     {
       name: 'company_id',
       label: 'Точка',
@@ -48,13 +50,18 @@ export const queryRevenueTool: CopilotTool = {
     },
   ],
   handler: async (input, ctx) => {
-    const period = String(input.period || 'today')
+    const period = String(input.period || '')
     const companyId = String(input.company_id || '')
     const today = todayISO()
+    const reIso = /^\d{4}-\d{2}-\d{2}$/
 
     let from = today
     let to = today
-    if (period === 'yesterday') {
+    const inFrom = String(input.from || '').trim()
+    const inTo = String(input.to || '').trim()
+    if (reIso.test(inFrom) && reIso.test(inTo)) {
+      from = inFrom; to = inTo
+    } else if (period === 'yesterday') {
       from = addDaysISO(today, -1)
       to = from
     } else if (period === 'week') {
@@ -108,10 +115,11 @@ export const queryRevenueTool: CopilotTool = {
       week: 'неделя',
       month: 'месяц',
     }
+    const label = reIso.test(inFrom) && reIso.test(inTo) ? (from === to ? from : `${from} — ${to}`) : (periodLabel[period] || 'сегодня')
 
     return {
       ok: true,
-      message: `📊 Выручка за ${periodLabel[period] || period}${companyLabel}:
+      message: `📊 Выручка за ${label}${companyLabel}:
 Итого: ${fmtMoney(total)}
   💵 Наличные: ${fmtMoney(cash)}
   💳 Безналичный: ${fmtMoney(kaspi)}
