@@ -51,12 +51,14 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const bottomRef = useRef<HTMLDivElement | null>(null)
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll к низу: скроллит реальный контейнер Radix-Viewport (родитель
+  // scrollRef), а не сам контент. Плюс якорь снизу как страховка.
   useEffect(() => {
-    if (!scrollRef.current) return
-    const el = scrollRef.current
-    el.scrollTop = el.scrollHeight
+    const viewport = scrollRef.current?.parentElement // Radix ScrollArea Viewport
+    if (viewport) viewport.scrollTop = viewport.scrollHeight
+    bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages, busy])
 
   async function callCopilot(payload: { text?: string; callbackData?: string }) {
@@ -152,7 +154,7 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-4">
+      <ScrollArea className="flex-1 min-h-0 px-4">
         <div ref={scrollRef} className="space-y-4 py-4">
           {messages.length === 0 && (
             <EmptyState onPrompt={handleSend} prompts={suggestedPrompts} />
@@ -221,6 +223,7 @@ export function CopilotPanel({ currentPath, className, suggestedPrompts = DEFAUL
               Думаю...
             </div>
           )}
+          <div ref={bottomRef} />
         </div>
       </ScrollArea>
 
