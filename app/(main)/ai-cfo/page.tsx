@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Brain, Loader2, AlertTriangle, ShieldAlert, TrendingUp, Lightbulb, Target, CalendarDays, RefreshCw } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Brain, Loader2, ShieldAlert, TrendingUp, TrendingDown, Lightbulb, Target, CalendarDays, RefreshCw } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
@@ -46,7 +46,14 @@ type Resp = {
 }
 
 const fmt = (v: number) => new Intl.NumberFormat('ru-RU').format(Math.round(v || 0))
+const money = (v: number) => fmt(v) + ' ₸'
+// Убираем шум [ФАКТ]/[ОЦЕНКА]/[ГИПОТЕЗА] из текста
+const clean = (s?: string | null) => String(s || '').replace(/\[(ФАКТ|ОЦЕНКА|ГИПОТЕЗА)\]\s*/gi, '').trim()
+// Первая фраза — для «коротко»
+const firstSentence = (s?: string | null) => { const c = clean(s); const i = c.search(/[.!?]\s/); return i > 0 ? c.slice(0, i + 1) : c }
+
 const C = { card: 'bg-white dark:bg-[#111113]', border: 'border-slate-200 dark:border-[#27272A]', sub: 'text-slate-500 dark:text-[#A1A1AA]' }
+const cardCls = `rounded-xl border ${C.border} ${C.card} p-5`
 
 const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 function lastMonthOptions(count = 12) {
@@ -82,27 +89,14 @@ function Metric({ label, value, unit = '₸', delta, big = false }: { label: str
   return (
     <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
       <p className={`text-xs ${C.sub}`}>{label}</p>
-      <p className={`mt-1 font-bold text-slate-900 dark:text-[#FAFAFA] ${big ? 'text-3xl' : 'text-2xl'}`}>{fmt(value)} {unit}</p>
+      <p className={`mt-1 font-bold text-slate-900 dark:text-[#FAFAFA] ${big ? 'text-2xl' : 'text-xl'}`}>{fmt(value)} {unit}</p>
       {delta ? <div className="mt-1">{delta}</div> : null}
     </div>
   )
 }
 
-const STATUS_STYLE: Record<string, { c: string; l: string }> = {
-  'ФАКТ': { c: '#22C55E', l: 'ФАКТ' },
-  'ОЦЕНКА': { c: '#3B82F6', l: 'ОЦЕНКА' },
-  'ГИПОТЕЗА': { c: '#F59E0B', l: 'ГИПОТЕЗА' },
-}
-function Tag({ status }: { status: string }) {
-  const s = STATUS_STYLE[(status || '').toUpperCase()] || STATUS_STYLE['ОЦЕНКА']
-  return <span className="rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ background: `${s.c}1a`, color: s.c }}>{s.l}</span>
-}
-
-const BAND: Record<string, { c: string; l: string }> = {
-  high: { c: '#22C55E', l: 'Высокая' }, medium: { c: '#F59E0B', l: 'Средняя' }, low: { c: '#EF4444', l: 'Низкая' },
-}
 const LEVEL: Record<string, { c: string; l: string }> = {
-  critical: { c: '#EF4444', l: '🔴 Критический' }, high: { c: '#F97316', l: '🟠 Высокий' }, medium: { c: '#F59E0B', l: '🟡 Средний' }, low: { c: '#3B82F6', l: 'Низкий' },
+  critical: { c: '#EF4444', l: 'Критический' }, high: { c: '#F97316', l: 'Высокий' }, medium: { c: '#F59E0B', l: 'Средний' }, low: { c: '#3B82F6', l: 'Низкий' },
 }
 
 export default function AiCfoPage() {
@@ -115,6 +109,7 @@ export default function AiCfoPage() {
   const [customTo, setCustomTo] = useState('')
   const [lastParams, setLastParams] = useState<{ days?: number; dateFrom?: string; dateTo?: string }>({ days: 90 })
   const [cached, setCached] = useState(false)
+  const [tab, setTab] = useState<'money' | 'risks' | 'companies' | 'plan'>('money')
 
   const run = async (params: { days?: number; dateFrom?: string; dateTo?: string }, selKey: string, force = false) => {
     setSel(selKey); setLastParams(params)
@@ -143,8 +138,8 @@ export default function AiCfoPage() {
 
   const ai = data?.ai
   const ex = data?.executive
-  const dq = data?.dataQuality
-  const band = ai?.dataQuality?.band || (dq ? (dq.percent >= 90 ? 'high' : dq.percent >= 70 ? 'medium' : 'low') : 'medium')
+  const cs = data?.costStructure
+  const sm = ai?.summary
 
   return (
     <div className="app-page-wide space-y-5 text-slate-900 dark:text-[#FAFAFA]">
@@ -196,12 +191,6 @@ export default function AiCfoPage() {
 
       {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
 
-      {loading && loaded ? (
-        <div className="flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-200">
-          <Loader2 className="h-4 w-4 animate-spin" /> Пересчитываю и анализирую период…
-        </div>
-      ) : null}
-
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-500 dark:text-[#A1A1AA]">
           <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
@@ -209,306 +198,298 @@ export default function AiCfoPage() {
         </div>
       ) : !data || !ex ? null : (
         <div className={loading ? 'space-y-5 opacity-40 transition-opacity' : 'space-y-5'}>
-          {/* Health Score */}
-          {ai?.healthScore ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className={`text-xs ${C.sub}`}>Индекс здоровья бизнеса</p>
-                  <p className="text-3xl font-bold" style={{ color: ai.healthScore.score >= 80 ? '#22C55E' : ai.healthScore.score >= 60 ? '#F59E0B' : '#EF4444' }}>
-                    {ai.healthScore.score}/100
-                    <span className="ml-2 text-sm font-medium">{ai.healthScore.band === 'healthy' ? 'Здоровый' : ai.healthScore.band === 'attention' ? 'Требует внимания' : 'Проблемный'}</span>
+
+          {/* ВЕРДИКТ */}
+          <div className="rounded-2xl border border-violet-200 dark:border-violet-500/20 bg-gradient-to-br from-violet-50 via-white to-white dark:from-violet-900/20 dark:via-[#111113] dark:to-[#111113] p-5">
+            <div className="flex flex-wrap items-center gap-4">
+              {ai?.healthScore ? (
+                <div className="shrink-0">
+                  <p className={`text-xs ${C.sub}`}>Здоровье бизнеса</p>
+                  <p className="text-4xl font-bold tabular-nums" style={{ color: ai.healthScore.score >= 80 ? '#22C55E' : ai.healthScore.score >= 60 ? '#F59E0B' : '#EF4444' }}>{ai.healthScore.score}<span className="text-lg text-slate-400">/100</span></p>
+                  <p className="text-xs font-medium" style={{ color: ai.healthScore.score >= 80 ? '#22C55E' : ai.healthScore.score >= 60 ? '#F59E0B' : '#EF4444' }}>
+                    {ai.healthScore.band === 'healthy' ? 'Здоровый' : ai.healthScore.band === 'attention' ? 'Требует внимания' : 'Проблемный'}
                   </p>
                 </div>
-                {ai.healthScore.breakdown ? (
-                  <div className="flex flex-wrap gap-2 text-[11px]">
-                    {Object.entries(ai.healthScore.breakdown).map(([k, v]) => (
-                      <span key={k} className={`rounded-md border ${C.border} px-2 py-1 ${C.sub}`}>
-                        {({ profitability: 'Рентаб.', money: 'Деньги', risks: 'Риски', dynamics: 'Динамика', data: 'Данные' } as any)[k] || k}: <b className="text-slate-900 dark:text-[#FAFAFA]">{v}</b>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              {ai.healthScore.missing?.length ? <p className="mt-2 text-[11px] text-[#F59E0B]">Не хватило данных: {ai.healthScore.missing.join(', ')}</p> : null}
-            </div>
-          ) : null}
-
-          {/* Качество данных */}
-          {dq ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} flex flex-wrap items-center justify-between gap-3 p-4`}>
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className={`text-xs ${C.sub}`}>Качество данных</p>
-                  <p className="text-lg font-bold" style={{ color: BAND[band]?.c }}>{dq.percent}% · {BAND[band]?.l}</p>
-                </div>
-                <div className={`text-xs ${C.sub}`}>
-                  продажи {dq.salesCompleteness}% ({dq.daysWithSales}/{dq.daysInPeriod} дн) · расходы {dq.expenseCompleteness}%
-                </div>
-              </div>
-              {ai?.dataQuality?.limitations?.length ? (
-                <p className="max-w-md text-right text-[11px] text-[#F59E0B]">{ai.dataQuality.limitations.join(' · ')}</p>
               ) : null}
+              <div className="min-w-[240px] flex-1">
+                <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+                  {firstSentence(sm?.where_earn) && firstSentence(sm?.where_losing)
+                    ? `За период прибыль ${money(ex.profit)} при выручке ${money(ex.revenue)}, маржа ${ex.margin.toFixed(0)}%.`
+                    : `Прибыль ${money(ex.profit)}, выручка ${money(ex.revenue)}, маржа ${ex.margin.toFixed(0)}%.`}
+                </p>
+              </div>
             </div>
-          ) : null}
-
-          {/* Executive Summary */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-            <Metric label="Прибыль" value={ex.profit} delta={<Delta value={ex.profitDeltaPct} />} big />
-            <Metric label="Выручка" value={ex.revenue} delta={<Delta value={ex.revenueDeltaPct} />} />
-            <Metric label="Маржа" value={ex.margin} unit="%" delta={<Delta value={ex.marginDeltaPp} pp />} />
-            <Metric label="Расходы" value={ex.expenses} delta={<Delta value={ex.expensesDeltaPct} goodWhenUp={false} />} />
-            <Metric label="Доля ФОТ" value={data.fotShare} unit="%" />
-            <Metric label="Денежный поток" value={ex.cashflow} delta={<Delta value={ex.profitDeltaPct} />} />
           </div>
 
-          {/* Устойчивость и структура затрат */}
-          {data.costStructure ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-3 text-sm font-semibold">Устойчивость и структура затрат <span className={`text-[11px] font-normal ${C.sub}`}>[ФАКТ]</span></h2>
-              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
-                <div><p className={`text-xs ${C.sub}`}>Точка безубыточности</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.breakevenRevenue)} ₸</p></div>
-                <div>
-                  <p className={`text-xs ${C.sub}`}>Запас прочности</p>
-                  <p className="mt-0.5 font-semibold" style={{ color: data.costStructure.safetyMarginPct >= 50 ? '#22C55E' : data.costStructure.safetyMarginPct >= 30 ? '#F59E0B' : '#EF4444' }}>{data.costStructure.safetyMarginPct}%</p>
-                </div>
-                <div><p className={`text-xs ${C.sub}`}>Операц. прибыль</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.operatingProfit)} ₸</p></div>
-                <div><p className={`text-xs ${C.sub}`}>Постоянные</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.fixedExpenses)} ₸</p></div>
-                <div><p className={`text-xs ${C.sub}`}>Переменные</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.variableExpenses)} ₸</p></div>
-                <div><p className={`text-xs ${C.sub}`}>CAPEX / разовые</p><p className="mt-0.5 font-semibold">{fmt(data.costStructure.capex)} ₸</p></div>
-              </div>
+          {/* ГЛАВНОЕ СЕЙЧАС */}
+          {sm ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <MainCard tone="rose" icon={<TrendingDown className="h-4 w-4" />} title="Где теряем деньги" text={firstSentence(sm.where_losing)} />
+              <MainCard tone="emerald" icon={<TrendingUp className="h-4 w-4" />} title="Где заработать больше" text={firstSentence(sm.where_earn)} extra={sm.extra_profit ? `+${clean(sm.extra_profit)}` : undefined} />
+              <MainCard tone="amber" icon={<ShieldAlert className="h-4 w-4" />} title="Главный риск" text={firstSentence(sm.main_risk)} />
             </div>
           ) : null}
 
-          {/* Состояние бизнеса */}
-          {ai?.state ? (
-            <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.05] p-5">
-              <p className="text-[15px] leading-relaxed">{ai.state}</p>
-            </div>
-          ) : null}
-
-          {/* Итог одним экраном */}
-          {ai?.summary ? (
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
-                <p className="text-xs font-medium text-[#EF4444]">Где теряем деньги</p>
-                <p className="mt-1 text-sm">{ai.summary.where_losing}</p>
-              </div>
-              <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
-                <p className="text-xs font-medium text-[#22C55E]">Где заработать больше</p>
-                <p className="mt-1 text-sm">{ai.summary.where_earn}</p>
-                {ai.summary.extra_profit ? <p className="mt-1 text-xs text-[#22C55E]">+{ai.summary.extra_profit}</p> : null}
-              </div>
-              <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
-                <p className="text-xs font-medium text-[#F59E0B]">Главный риск</p>
-                <p className="mt-1 text-sm">{ai.summary.main_risk}</p>
-              </div>
-            </div>
-          ) : null}
-
-          {ai?.summary?.three_actions?.length ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Target className="h-4 w-4 text-violet-400" /> 3 действия с максимальным эффектом</h2>
-              <ol className="space-y-2">
-                {ai.summary.three_actions.map((a, i) => (<li key={i} className="flex gap-2 text-sm"><span className="text-violet-400">{i + 1}.</span>{a}</li>))}
+          {/* ЧТО ДЕЛАТЬ */}
+          {sm?.three_actions?.length ? (
+            <div className={cardCls}>
+              <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Target className="h-4 w-4 text-violet-500" />Что делать в первую очередь</h3>
+              <ol className="space-y-2.5">
+                {sm.three_actions.slice(0, 3).map((a, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-violet-500 text-xs font-bold text-white">{i + 1}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{clean(a)}</span>
+                  </li>
+                ))}
               </ol>
             </div>
           ) : null}
 
-          {/* Компании + рейтинг */}
-          {data.companies.length > 0 ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">Компании</h2>
-                {data.ranking ? (
-                  <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    {data.ranking.profitLeader ? <span className="rounded-md bg-[#22C55E]/10 px-2 py-0.5 text-[#22C55E]">🏆 Прибыль: {data.ranking.profitLeader}</span> : null}
-                    {data.ranking.efficiencyLeader ? <span className="rounded-md bg-[#3B82F6]/10 px-2 py-0.5 text-[#3B82F6]">⚡ Маржа: {data.ranking.efficiencyLeader}</span> : null}
-                    {data.ranking.worst ? <span className="rounded-md bg-[#EF4444]/10 px-2 py-0.5 text-[#EF4444]">⚠ Слабая: {data.ranking.worst}</span> : null}
+          {/* KPI */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <Metric label="Прибыль" value={ex.profit} delta={<Delta value={ex.profitDeltaPct} />} />
+            <Metric label="Выручка" value={ex.revenue} delta={<Delta value={ex.revenueDeltaPct} />} />
+            <Metric label="Маржа" value={ex.margin} unit="%" delta={<Delta value={ex.marginDeltaPp} pp />} />
+            <Metric label="Расходы" value={ex.expenses} delta={<Delta value={ex.expensesDeltaPct} goodWhenUp={false} />} />
+            <Metric label="Доля ФОТ" value={data.fotShare} unit="%" />
+            <Metric label="Денежный поток" value={ex.cashflow} />
+          </div>
+
+          {/* ВКЛАДКИ */}
+          <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-white/8 pb-px">
+            {([['money', '💰 Деньги'], ['risks', '⚠️ Риски'], ['companies', '🏪 Точки'], ['plan', '📅 План']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)}
+                className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${tab === k ? 'bg-violet-500/15 text-violet-700 dark:text-violet-200 border-b-2 border-violet-500' : `${C.sub} hover:text-slate-900 dark:hover:text-white`}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Деньги ── */}
+          {tab === 'money' && (
+            <div className="space-y-4">
+              {cs ? (
+                <div className={cardCls}>
+                  <h3 className="mb-4 text-sm font-semibold">Структура и устойчивость</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
+                    <Cell label="Безубыточность" value={money(cs.breakevenRevenue)} />
+                    <Cell label="Запас прочности" value={`${cs.safetyMarginPct.toFixed(0)}%`} tone={cs.safetyMarginPct >= 0 ? 'emerald' : 'rose'} />
+                    <Cell label="Операц. прибыль" value={money(cs.operatingProfit)} />
+                    <Cell label="Постоянные" value={money(cs.fixedExpenses)} />
+                    <Cell label="Переменные" value={money(cs.variableExpenses)} />
+                    <Cell label="CAPEX / разовые" value={money(cs.capex)} />
                   </div>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {ai?.losses?.length ? (
+                  <ListCard icon={<TrendingDown className="h-4 w-4 text-rose-500" />} title="Где утекают деньги"
+                    items={ai.losses.map((l) => ({ amount: clean(l.amount), text: firstSentence(l.text), tone: 'rose' as const }))} />
+                ) : null}
+                {ai?.missedProfit?.length ? (
+                  <ListCard icon={<TrendingUp className="h-4 w-4 text-emerald-500" />} title="Упущенная прибыль"
+                    items={ai.missedProfit.map((l) => ({ amount: clean(l.potential), text: firstSentence(l.text), tone: 'emerald' as const }))} />
                 ) : null}
               </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {data.companies.map((c) => (
-                  <div key={c.name} className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-4`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">{c.name}</span>
-                      <span className={`text-xs ${C.sub}`}>{c.profitShare}% прибыли</span>
-                    </div>
-                    <p className="mt-2 text-2xl font-bold">{fmt(c.profit)} ₸</p>
-                    <div className="mt-0.5"><Delta value={c.profitDeltaPct} /></div>
-                    <div className={`mt-2 flex justify-between border-t ${C.border} pt-2 text-xs ${C.sub}`}>
-                      <span>Выручка {fmt(c.revenue)}</span><span>Маржа {c.margin}%</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
-          {/* Что изменилось */}
-          {(data.expenseChanges.length > 0 || ai?.changes?.length) ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-3 text-sm font-semibold">Что изменилось</h2>
-              {ai?.changes?.length ? (
-                <ul className="mb-3 space-y-1.5">
-                  {ai.changes.map((ch, i) => (<li key={i} className="flex items-start gap-2 text-sm"><Tag status={ch.status} /><span>{ch.text}</span></li>))}
-                </ul>
+              {ai?.opportunities?.length ? (
+                <div className={cardCls}>
+                  <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Lightbulb className="h-4 w-4 text-amber-500" />Возможности заработать</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {ai.opportunities.map((o, i) => (
+                      <div key={i} className="rounded-lg border border-slate-200 dark:border-white/8 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">{clean(o.title)}</p>
+                          {o.effect ? <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">+{clean(o.effect)}</span> : null}
+                        </div>
+                        <p className={`mt-1 text-xs ${C.sub}`}>{firstSentence(o.action)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : null}
-              {data.expenseChanges.length > 0 ? (
-                <div className="space-y-1.5 border-t border-slate-200 dark:border-[#27272A] pt-3">
-                  {data.expenseChanges.map((ch) => (
-                    <div key={ch.label} className="flex items-center justify-between text-sm">
-                      <span className={C.sub}>{ch.label}</span>
-                      <span className="flex items-center gap-3"><span>{fmt(ch.current)} ₸</span><Delta value={ch.deltaPct} goodWhenUp={false} /></span>
-                    </div>
-                  ))}
+
+              {data.expenseChanges?.length ? (
+                <div className={cardCls}>
+                  <h3 className="mb-3 text-sm font-semibold">Что изменилось в расходах</h3>
+                  <div className="space-y-1.5">
+                    {data.expenseChanges.slice(0, 8).map((c, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-700 dark:text-slate-300 truncate">{c.label}</span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="tabular-nums text-slate-900 dark:text-white">{money(c.current)}</span>
+                          <Delta value={c.deltaPct} goodWhenUp={false} />
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>
-          ) : null}
+          )}
 
-          {/* Корневые причины */}
-          {ai?.rootCauses?.length ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-3 text-sm font-semibold">Корневые причины</h2>
-              <ul className="space-y-2">
-                {ai.rootCauses.map((rc, i) => (<li key={i} className="flex items-start gap-2 text-sm"><Tag status={rc.status} /><span>{rc.text}</span></li>))}
-              </ul>
-            </div>
-          ) : null}
-
-          {/* Риски */}
-          {ai?.risks?.length ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><ShieldAlert className="h-4 w-4 text-[#EF4444]" /> Основные риски</h2>
-              <div className="space-y-2">
-                {ai.risks.map((r, i) => (
-                  <div key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-black/20 px-3 py-2 text-sm">
-                    <span className="flex-1">{r.risk}</span>
-                    <span className={`text-xs ${C.sub}`}>вер. {r.probability} · влияние {r.impact}</span>
-                    <span className="text-xs font-medium" style={{ color: LEVEL[r.level]?.c || '#F59E0B' }}>{LEVEL[r.level]?.l || r.level}</span>
+          {/* ── Риски ── */}
+          {tab === 'risks' && (
+            <div className="space-y-4">
+              {ai?.risks?.length ? (
+                <div className={cardCls}>
+                  <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-rose-500" />Основные риски</h3>
+                  <div className="space-y-2">
+                    {ai.risks.map((r, i) => {
+                      const lv = LEVEL[(r.level || '').toLowerCase()] || LEVEL.medium
+                      return (
+                        <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 dark:border-white/8 p-3">
+                          <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">{firstSentence(r.risk)}</p>
+                          <span className="shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium" style={{ color: lv.c, backgroundColor: lv.c + '22' }}>{lv.l}</span>
+                        </div>
+                      )
+                    })}
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Потери и упущенная прибыль */}
-          {(ai?.losses?.length || ai?.missedProfit?.length) ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#EF4444]"><ArrowDownRight className="h-4 w-4" /> Потери — деньги утекают</h2>
-                {ai?.losses?.length ? (
-                  <ul className="space-y-2">
-                    {ai.losses.map((l, i) => (
-                      <li key={i} className="text-sm">
-                        <div className="flex items-center gap-2"><Tag status={l.status} />{l.amount ? <span className="font-medium text-[#EF4444]">{l.amount}</span> : null}</div>
-                        <p className={`mt-0.5 ${C.sub}`}>{l.text}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className={`text-sm ${C.sub}`}>Явных потерь не выявлено.</p>}
-              </div>
-              <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#22C55E]"><ArrowUpRight className="h-4 w-4" /> Упущенная прибыль — не захватываем</h2>
-                {ai?.missedProfit?.length ? (
-                  <ul className="space-y-2">
-                    {ai.missedProfit.map((m, i) => (
-                      <li key={i} className="text-sm">
-                        <div className="flex items-center gap-2"><Tag status={m.status} />{m.potential ? <span className="font-medium text-[#22C55E]">{m.potential}</span> : null}</div>
-                        <p className={`mt-0.5 ${C.sub}`}>{m.text}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className={`text-sm ${C.sub}`}>Явной упущенной прибыли не выявлено.</p>}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Возможности */}
-          {ai?.opportunities?.length ? (
-            <div>
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-[#22C55E]" /> Возможности заработать</h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                {ai.opportunities.map((o, i) => (
-                  <div key={i} className={`rounded-xl border ${C.border} ${C.card} p-4`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-semibold">{o.title}</h3>
-                      <Tag status={o.status} />
-                    </div>
-                    <p className={`mt-1 text-xs ${C.sub}`}>{o.action}</p>
-                    <p className="mt-2 text-sm font-medium text-[#22C55E]">{o.effect}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Прогноз */}
-          {ai?.forecast ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <TrendingUp className="h-4 w-4 text-violet-400" /> Прогноз
-                <span className="text-[11px]" style={{ color: BAND[ai.forecast.band]?.c }}>уверенность: {BAND[ai.forecast.band]?.l || ai.forecast.band}</span>
-              </h2>
-              <p className="text-sm">{ai.forecast.text}</p>
-              {(ai.forecast.base || ai.forecast.optimistic || ai.forecast.pessimistic) ? (
-                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                  <div className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-3`}><p className="text-xs text-[#EF4444]">Пессимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.pessimistic || '—'}</p></div>
-                  <div className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-3`}><p className={`text-xs ${C.sub}`}>Базовый</p><p className="mt-0.5 font-semibold">{ai.forecast.base || '—'}</p></div>
-                  <div className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-3`}><p className="text-xs text-[#22C55E]">Оптимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.optimistic || '—'}</p></div>
                 </div>
               ) : null}
-              {ai.forecast.warning ? <p className="mt-2 flex items-center gap-1.5 text-xs text-[#F59E0B]"><AlertTriangle className="h-3.5 w-3.5" /> {ai.forecast.warning}</p> : null}
+              {ai?.rootCauses?.length ? (
+                <div className={cardCls}>
+                  <h3 className="mb-3 text-sm font-semibold">Корневые причины</h3>
+                  <ul className="space-y-2">
+                    {ai.rootCauses.map((c, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
+                        <span>{firstSentence(c.text)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          )}
 
-          {/* Сценарии «что если» */}
-          {ai?.scenarios?.length ? (
-            <div>
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Target className="h-4 w-4 text-violet-400" /> Сценарии «что если»</h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                {ai.scenarios.map((s, i) => (
-                  <div key={i} className={`rounded-xl border ${C.border} ${C.card} p-4`}>
+          {/* ── Точки ── */}
+          {tab === 'companies' && (
+            <div className={cardCls}>
+              <h3 className="mb-4 text-sm font-semibold">Точки</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {data.companies.map((c, i) => (
+                  <div key={i} className="rounded-lg border border-slate-200 dark:border-white/8 p-4">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-semibold">{s.name}</h3>
-                      <Tag status={s.status} />
+                      <p className="text-sm font-semibold">{c.name}</p>
+                      <span className={`text-xs ${C.sub}`}>{c.profitShare.toFixed(0)}% прибыли</span>
                     </div>
-                    <p className="mt-1 text-lg font-bold" style={{ color: String(s.effect).includes('-') || String(s.effect).includes('−') ? '#EF4444' : '#22C55E' }}>{s.effect}</p>
-                    <p className={`mt-1 text-xs ${C.sub}`}>{s.assumption}</p>
-                    {s.note ? <p className={`mt-1 text-xs ${C.sub}`}>{s.note}</p> : null}
+                    <p className={`mt-1 text-xl font-bold tabular-nums ${c.profit >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.profit)}</p>
+                    <div className="mt-1"><Delta value={c.profitDeltaPct} /></div>
+                    <div className={`mt-2 flex items-center justify-between text-xs ${C.sub}`}>
+                      <span>Выручка {fmt(c.revenue)}</span>
+                      <span>Маржа {c.margin.toFixed(0)}%</span>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : null}
+          )}
 
-          {/* План действий */}
-          {ai?.actionPlan ? (
-            <div className={`rounded-xl border ${C.border} ${C.card} p-5`}>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><CalendarDays className="h-4 w-4 text-violet-400" /> План действий</h2>
-              <div className="grid gap-4 md:grid-cols-3">
-                {([['today', 'Сегодня'], ['week', 'На этой неделе'], ['month', 'В этом месяце']] as const).map(([k, label]) => {
-                  const items = (ai.actionPlan as any)?.[k] as string[] | undefined
-                  return (
-                    <div key={k}>
-                      <p className="mb-2 text-xs font-medium text-violet-600 dark:text-violet-300">{label}</p>
-                      <ul className="space-y-1.5">
-                        {(items || []).map((it, i) => (<li key={i} className={`text-sm ${C.sub}`}>• {it}</li>))}
-                        {!items?.length ? <li className="text-xs text-[#52525B]">—</li> : null}
-                      </ul>
-                    </div>
-                  )
-                })}
-              </div>
+          {/* ── План ── */}
+          {tab === 'plan' && (
+            <div className="space-y-4">
+              {ai?.actionPlan ? (
+                <div className={cardCls}>
+                  <h3 className="mb-4 text-sm font-semibold flex items-center gap-2"><CalendarDays className="h-4 w-4 text-violet-500" />План действий</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {([['Сегодня', ai.actionPlan.today], ['На этой неделе', ai.actionPlan.week], ['В этом месяце', ai.actionPlan.month]] as const).map(([t, arr]) => (
+                      <div key={t}>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">{t}</p>
+                        <ul className="space-y-1.5">
+                          {(arr || []).map((x, i) => (
+                            <li key={i} className="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
+                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-violet-400" /><span>{firstSentence(x)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {ai?.forecast ? (
+                <div className={cardCls}>
+                  <h3 className="mb-2 text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" />Прогноз прибыли (30 дней)</h3>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{firstSentence(ai.forecast.text)}</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <ForecastCell label="Пессимистичный" value={ai.forecast.pessimistic} tone="rose" />
+                    <ForecastCell label="Базовый" value={ai.forecast.base} tone="slate" />
+                    <ForecastCell label="Оптимистичный" value={ai.forecast.optimistic} tone="emerald" />
+                  </div>
+                </div>
+              ) : null}
+
+              {ai?.scenarios?.length ? (
+                <div className={cardCls}>
+                  <h3 className="mb-3 text-sm font-semibold">Сценарии «что если»</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {ai.scenarios.map((s, i) => (
+                      <div key={i} className="rounded-lg border border-slate-200 dark:border-white/8 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">{clean(s.name)}</p>
+                          {s.effect ? <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{clean(s.effect)}</span> : null}
+                        </div>
+                        <p className={`mt-1 text-xs ${C.sub}`}>{firstSentence(s.assumption)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          )}
 
           {loading ? <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-violet-400" /></div> : null}
           {ai?.error ? <p className="text-xs text-[#F59E0B]">AI-анализ недоступен ({ai.error}), но цифры посчитаны.</p> : null}
         </div>
       )}
+    </div>
+  )
+}
+
+function MainCard({ tone, icon, title, text, extra }: { tone: 'rose' | 'emerald' | 'amber'; icon: React.ReactNode; title: string; text: string; extra?: string }) {
+  const map = { rose: 'text-rose-600 dark:text-rose-400', emerald: 'text-emerald-600 dark:text-emerald-400', amber: 'text-amber-600 dark:text-amber-400' }
+  return (
+    <div className={cardCls}>
+      <div className={`flex items-center gap-2 text-sm font-semibold ${map[tone]}`}>{icon}{title}</div>
+      <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{text || '—'}</p>
+      {extra ? <p className={`mt-2 text-base font-bold ${map[tone]} tabular-nums`}>{extra}</p> : null}
+    </div>
+  )
+}
+
+function Cell({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'rose' }) {
+  return (
+    <div>
+      <p className={`text-xs ${C.sub}`}>{label}</p>
+      <p className={`mt-0.5 font-semibold tabular-nums ${tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>{value}</p>
+    </div>
+  )
+}
+
+function ListCard({ icon, title, items }: { icon: React.ReactNode; title: string; items: Array<{ amount: string; text: string; tone: 'rose' | 'emerald' }> }) {
+  return (
+    <div className={cardCls}>
+      <h3 className="mb-3 text-sm font-semibold flex items-center gap-2">{icon}{title}</h3>
+      <div className="space-y-3">
+        {items.map((it, i) => (
+          <div key={i}>
+            {it.amount ? <p className={`text-sm font-bold tabular-nums ${it.tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{it.amount}</p> : null}
+            <p className={`text-xs ${C.sub} leading-relaxed`}>{it.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ForecastCell({ label, value, tone }: { label: string; value?: string; tone: 'rose' | 'emerald' | 'slate' }) {
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-white/8 py-2">
+      <p className={`text-[11px] ${C.sub}`}>{label}</p>
+      <p className={`text-sm font-bold tabular-nums ${tone === 'rose' ? 'text-rose-600 dark:text-rose-400' : tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>{value ? clean(value) : '—'}</p>
     </div>
   )
 }
