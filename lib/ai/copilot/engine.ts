@@ -737,7 +737,28 @@ async function runReadTool(name: string, args: Record<string, unknown>, ctx: Cop
   if (!isReadOnlyTool(name)) return 'Это действие меняет данные — в авто-режиме не выполняется, нужно подтверждение пользователя.'
   if (!ctx.isSuperAdmin && !ctx.capabilities.has(tool.requiredCapability)) return 'Нет прав на это действие.'
   try {
-    const result = await tool.handler(args || {}, ctx)
+    // РЕЗОЛВ select-параметров: модель часто передаёт ИМЯ ("F16 Arena", "Айгерим"),
+    // а handler ждёт точное value (UUID). Сопоставляем имя→value через getOptions
+    // (точное совпадение или fuzzy по label) — иначе фильтр по точке/оператору не сработает.
+    const resolved: Record<string, unknown> = { ...(args || {}) }
+    for (const p of tool.params) {
+      if ((p.type !== 'select' && p.type !== 'multiselect') || !p.getOptions) continue
+      const raw = resolved[p.name]
+      if (raw == null || raw === '') continue
+      try {
+        const options = await p.getOptions(ctx)
+        const valueStr = String(raw)
+        if (options.some((o) => String(o.value) === valueStr)) continue // уже валидный value
+        const match = fuzzyFindBest(valueStr, options.map((o) => ({ item: o, haystack: o.label })))
+        if (match) {
+          resolved[p.name] = match.item.value
+        } else {
+          // Имя не нашлось среди вариантов — убираем, чтобы не отфильтровать в пустоту/мусор.
+          delete resolved[p.name]
+        }
+      } catch { /* getOptions упал — оставляем как есть */ }
+    }
+    const result = await tool.handler(resolved, ctx)
     if (!result.ok) return `Ошибка: ${result.message}`
     let out = result.message || ''
     if (result.data != null) {
