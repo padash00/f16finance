@@ -235,18 +235,18 @@ const PRESET_LABELS: Record<DatePreset, string> = {
 }
 
 const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: string; icon: typeof TrendingUp }> = {
-  success: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: TrendingUp },
-  warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
-  danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertTriangle },
-  opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Lightbulb },
-  info: { bg: 'bg-slate-50 dark:bg-slate-800/30', border: 'border-slate-200 dark:border-white/5', text: 'text-slate-500 dark:text-slate-400', icon: Activity },
+  success: { bg: 'bg-emerald-50 dark:bg-emerald-500/5', border: 'border-emerald-200 dark:border-emerald-500/20', text: 'text-emerald-600 dark:text-emerald-400', icon: TrendingUp },
+  warning: { bg: 'bg-amber-50 dark:bg-amber-500/5', border: 'border-amber-200 dark:border-amber-500/20', text: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle },
+  danger: { bg: 'bg-rose-50 dark:bg-rose-500/5', border: 'border-rose-200 dark:border-rose-500/20', text: 'text-rose-600 dark:text-rose-400', icon: AlertTriangle },
+  opportunity: { bg: 'bg-blue-50 dark:bg-blue-500/5', border: 'border-blue-200 dark:border-blue-500/20', text: 'text-blue-600 dark:text-blue-400', icon: Lightbulb },
+  info: { bg: 'bg-slate-50 dark:bg-white/[0.03]', border: 'border-slate-200 dark:border-white/10', text: 'text-slate-500 dark:text-slate-400', icon: Activity },
 }
 
 const SEVERITY_STYLES: Record<Severity, { bg: string; border: string; text: string }> = {
-  critical: { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-400' },
-  high: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400' },
-  medium: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400' },
-  low: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400' },
+  critical: { bg: 'bg-rose-50 dark:bg-rose-500/10', border: 'border-rose-200 dark:border-rose-500/30', text: 'text-rose-600 dark:text-rose-400' },
+  high: { bg: 'bg-rose-50 dark:bg-rose-500/5', border: 'border-rose-200 dark:border-rose-500/20', text: 'text-rose-600 dark:text-rose-400' },
+  medium: { bg: 'bg-amber-50 dark:bg-amber-500/5', border: 'border-amber-200 dark:border-amber-500/20', text: 'text-amber-600 dark:text-amber-400' },
+  low: { bg: 'bg-blue-50 dark:bg-blue-500/5', border: 'border-blue-200 dark:border-blue-500/20', text: 'text-blue-600 dark:text-blue-400' },
 }
 
 const SEVERITY_LABELS: Record<Severity, string> = {
@@ -563,34 +563,31 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   color?: 'blue' | 'green' | 'red' | 'amber'
   onClick?: () => void
 }) => {
-  const colors: Record<string, string> = {
-    blue: 'from-amber-500 to-amber-600',
-    green: 'from-emerald-500 to-teal-500',
-    red: 'from-rose-500 to-pink-500',
-    amber: 'from-amber-500 to-amber-600',
+  const iconTone: Record<string, string> = {
+    blue: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    red: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   }
-  
+
   return (
-    <div 
+    <div
       onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-5 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:shadow-sm ${onClick ? 'cursor-pointer' : ''}`}
     >
-      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
-            <Icon className="w-5 h-5 text-slate-900 dark:text-white" />
-          </div>
-          {trend !== undefined && (
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : trend < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-500/20 text-slate-400'}`}>
-              {trend > 0 ? '+' : ''}{trend}%
-            </span>
-          )}
+      <div className="flex items-center justify-between mb-4">
+        <div className={`grid place-items-center h-9 w-9 rounded-xl ${iconTone[color]}`}>
+          <Icon className="w-5 h-5" />
         </div>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">{title}</p>
-        <p className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
-        {subValue && <p className="text-xs text-slate-500">{subValue}</p>}
+        {trend !== undefined && (
+          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : trend < 0 ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-slate-500/10 text-slate-500 dark:text-slate-400'}`}>
+            {trend > 0 ? '+' : ''}{trend}%
+          </span>
+        )}
       </div>
+      <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">{title}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{value}</p>
+      {subValue && <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{subValue}</p>}
     </div>
   )
 })
@@ -601,18 +598,18 @@ const InsightCard = memo(({ insight }: { insight: AIInsight }) => {
   const Icon = styles.icon
   
   return (
-    <div 
-      className={`relative overflow-hidden rounded-2xl border p-4 ${styles.bg} ${styles.border}`}
+    <div
+      className={`rounded-2xl border p-4 ${styles.bg} ${styles.border}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
+        <div className={`grid place-items-center h-8 w-8 shrink-0 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-900 dark:text-white mb-1">{insight.title}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{insight.description}</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">{insight.title}</p>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{insight.description}</p>
           {insight.metric && (
-            <p className={`text-lg font-bold mt-2 ${styles.text}`}>{insight.metric}</p>
+            <p className={`text-lg font-bold tabular-nums mt-2 ${styles.text}`}>{insight.metric}</p>
           )}
         </div>
       </div>
@@ -625,10 +622,10 @@ const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
   const styles = SEVERITY_STYLES[anomaly.severity]
   
   return (
-    <div 
+    <div
       className={`flex items-center gap-4 p-4 rounded-xl border ${styles.bg} ${styles.border}`}
     >
-      <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
+      <div className={`grid place-items-center h-9 w-9 shrink-0 rounded-lg ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
         {anomaly.severity === 'critical' || anomaly.severity === 'high' ? 
           <AlertTriangle className="w-5 h-5" /> : 
           <Lightbulb className="w-5 h-5" />
@@ -638,7 +635,7 @@ const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
         <p className="text-sm text-slate-900 dark:text-white font-medium">{anomaly.description}</p>
         <p className="text-xs text-slate-500 mt-1">{anomaly.date}</p>
       </div>
-      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
+      <span className={`shrink-0 text-[11px] px-2.5 py-1 rounded-full font-semibold ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
         {SEVERITY_LABELS[anomaly.severity]}
       </span>
     </div>
@@ -1896,8 +1893,8 @@ function ReportsContent() {
           {/* Toast */}
           {toast && (
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
-              toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-              toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+              toast.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400' :
+              toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' :
               'bg-white dark:bg-slate-900/80 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white'
             }`}>
               <div className="text-sm font-medium">{toast.message}</div>
@@ -1916,7 +1913,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${comparisonMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : ''}`}
+                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${comparisonMode ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
                   onClick={() => setComparisonMode(!comparisonMode)}
                   title="Режим сравнения"
                 >
@@ -1926,7 +1923,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] ${refreshing ? 'animate-spin' : ''}`}
                   onClick={() => loadData(true)}
                   title="Обновить"
                 >
@@ -1937,13 +1934,13 @@ function ReportsContent() {
                   <div className="relative group">
                     <Button
                       variant="outline"
-                      className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10"
+                      className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Экспорт
                       <ChevronDown className="w-4 h-4 ml-2" />
                     </Button>
-                    <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                       <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5 flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4" />
                         Скачать PDF
@@ -1959,7 +1956,7 @@ function ReportsContent() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06]"
                   onClick={handleShare}
                   title="Поделиться"
                 >
@@ -1968,7 +1965,7 @@ function ReportsContent() {
 
                 <Button
                   variant="outline"
-                  className="no-print rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/50 backdrop-blur-xl hover:bg-slate-100 dark:hover:bg-white/10 gap-2"
+                  className="no-print rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] gap-2"
                   onClick={handlePrintPDF}
                   title="PDF / Печать"
                 >
@@ -1978,13 +1975,13 @@ function ReportsContent() {
               </>
             }
             toolbar={
-              <div className="flex w-fit bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl p-1 border border-slate-200 dark:border-white/10">
+              <div className="inline-flex w-fit items-center rounded-xl p-0.5 border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/[0.03]">
                 {(['overview', 'analytics', 'details', 'companies'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                      activeTab === tab ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white shadow-lg' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    className={`px-3 lg:px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      activeTab === tab ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {tab === 'overview' && 'Обзор'}
@@ -2074,47 +2071,49 @@ function ReportsContent() {
           />
 
           {/* Filters Bar (sticky) */}
-          <div className="sticky top-2 z-30 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-xl border border-slate-200 dark:border-white/10 p-4 space-y-4 shadow-2xl shadow-black/10 dark:shadow-black/40">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
+          <div className="sticky top-2 z-30 rounded-2xl bg-white/95 dark:bg-[#111113]/95 backdrop-blur-sm border border-slate-200 dark:border-white/10 p-4 space-y-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-2 mr-1">
                 <Filter className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                <span className="text-sm text-slate-500 dark:text-slate-400">Быстрые фильтры:</span>
+                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Фильтры</span>
               </div>
-              
-              <select 
+
+              <select
                 value={datePreset}
                 onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
-                className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/50"
+                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 {Object.entries(PRESET_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
 
-              <input 
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value)
-                  setDatePreset('custom')
-                }}
-                className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/50"
-              />
-              <span className="text-slate-500">—</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value)
-                  setDatePreset('custom')
-                }}
-                className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/50"
-              />
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2 py-1">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value)
+                    setDatePreset('custom')
+                  }}
+                  className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                />
+                <span className="text-slate-400 dark:text-slate-500">—</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value)
+                    setDatePreset('custom')
+                  }}
+                  className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                />
+              </div>
 
-              <select 
+              <select
                 value={companyFilter}
                 onChange={(e) => setCompanyFilter(e.target.value)}
-                className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/50"
+                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 <option value="all">Все компании</option>
                 {companies.map(c => (
@@ -2122,10 +2121,10 @@ function ReportsContent() {
                 ))}
               </select>
 
-              <select 
+              <select
                 value={groupMode}
                 onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-                className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/50"
+                className="cursor-pointer bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
               >
                 <option value="day">По дням</option>
                 <option value="week">По неделям</option>
@@ -2133,18 +2132,18 @@ function ReportsContent() {
                 <option value="year">По годам</option>
               </select>
 
-              <button 
+              <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-sm hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${showFilters ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06]'}`}
               >
                 <Filter className="w-4 h-4" />
                 Расширенные
                 <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
 
-              <button 
+              <button
                 onClick={resetFilters}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="ml-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                 title="Сбросить фильтры"
               >
                 <X className="w-4 h-4" />
@@ -2152,13 +2151,13 @@ function ReportsContent() {
             </div>
 
             {showFilters && (
-              <div className="pt-4 border-t border-slate-200 dark:border-white/5 grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="pt-4 border-t border-slate-200 dark:border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs text-slate-500 mb-1.5 block">Смена</label>
-                  <select 
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Смена</label>
+                  <select
                     value={shiftFilter}
                     onChange={(e) => setShiftFilter(e.target.value as 'all' | Shift)}
-                    className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/50"
+                    className="w-full bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500/40"
                   >
                     <option value="all">Все смены</option>
                     <option value="day">День</option>
@@ -2167,24 +2166,24 @@ function ReportsContent() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 mb-1.5 block">Сумма от</label>
-                  <Input 
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Сумма от</label>
+                  <Input
                     type="number"
                     placeholder="0"
                     value={minAmountFilter}
                     onChange={(e) => setMinAmountFilter(e.target.value)}
-                    className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+                    className="bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500 mb-1.5 block">Сумма до</label>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Сумма до</label>
                   <Input
                     type="number"
                     placeholder="∞"
                     value={maxAmountFilter}
                     onChange={(e) => setMaxAmountFilter(e.target.value)}
-                    className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+                    className="bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/10"
                   />
                 </div>
 
@@ -2205,26 +2204,26 @@ function ReportsContent() {
 
           {/* Forecast Banner */}
           {forecast && (
-            <div className="rounded-2xl bg-gradient-to-r from-amber-600/20 to-amber-600/20 border border-amber-500/20 p-4 flex items-center justify-between">
+            <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/[0.07] border border-amber-200 dark:border-amber-500/20 p-5 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-amber-500/20 text-amber-400">
+                <div className="grid place-items-center h-12 w-12 shrink-0 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
                   <TrendingUp className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-sm text-amber-700 dark:text-amber-200">Прогноз на конец периода (точность {forecast.confidence.toFixed(0)}%)</p>
-                  <div className="flex items-center gap-6 mt-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Прогноз на конец периода · точность {forecast.confidence.toFixed(0)}%</p>
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mt-1.5">
                     <span className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Выручка: <span className="text-emerald-400">{formatMoneyFull(forecast.forecastIncome)}</span>
+                      Выручка: <span className="tabular-nums text-emerald-600 dark:text-emerald-400">{formatMoneyFull(forecast.forecastIncome)}</span>
                     </span>
                     <span className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Прибыль: <span className={forecast.forecastProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                      Прибыль: <span className={`tabular-nums ${forecast.forecastProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                         {formatMoneyFull(forecast.forecastProfit)}
                       </span>
                     </span>
                     <span className="text-sm text-slate-500 dark:text-slate-400">Осталось {forecast.remainingDays} дн.</span>
                   </div>
                   {'note' in forecast && forecast.note ? (
-                    <p className="text-xs text-slate-500 mt-2 max-w-3xl leading-relaxed">{forecast.note}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-3xl leading-relaxed">{forecast.note}</p>
                   ) : null}
                 </div>
               </div>
@@ -2275,25 +2274,25 @@ function ReportsContent() {
               {/* Payment Types Breakdown */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400' },
-                  { label: cashLabels.providerName, value: totals.incomeKaspi, color: 'text-blue-400' },
-                  { label: 'Online', value: totals.incomeOnline, color: 'text-amber-400' },
-                  { label: 'Card', value: totals.incomeCard, color: 'text-amber-400' },
+                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-600 dark:text-emerald-400' },
+                  { label: cashLabels.providerName, value: totals.incomeKaspi, color: 'text-blue-600 dark:text-blue-400' },
+                  { label: 'Online', value: totals.incomeOnline, color: 'text-amber-600 dark:text-amber-400' },
+                  { label: 'Card', value: totals.incomeCard, color: 'text-amber-600 dark:text-amber-400' },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-4">
-                    <p className="text-xs text-slate-500 mb-1">{item.label}</p>
-                    <p className={`text-xl font-bold ${item.color}`}>{formatMoneyFull(item.value)}</p>
-                    <p className="text-xs text-slate-500 mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                  <div key={item.label} className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-4">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{item.label}</p>
+                    <p className={`text-xl font-bold tabular-nums ${item.color}`}>{formatMoneyFull(item.value)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
                   </div>
                 ))}
               </div>
 
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
+                <div className="lg:col-span-2 rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                       Динамика финансовых показателей
                     </h3>
                     <div className="flex items-center gap-4 text-sm">
@@ -2318,9 +2317,9 @@ function ReportsContent() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                      <PieChartIcon className="w-5 h-5 text-rose-400" />
+                  <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                      <PieChartIcon className="w-5 h-5 text-rose-500 dark:text-rose-400" />
                       Структура расходов
                     </h3>
                     
@@ -2351,9 +2350,9 @@ function ReportsContent() {
 
               {/* Bottom Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                    <Store className="w-5 h-5 text-amber-400" />
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                    <Store className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     Выручка по компаниям
                   </h3>
                   
@@ -2362,9 +2361,9 @@ function ReportsContent() {
                   </ChartShell>
                 </div>
 
-                <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-400" />
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400" />
                     Аномалии и рекомендации
                   </h3>
 
@@ -2395,8 +2394,8 @@ function ReportsContent() {
           {activeTab === 'analytics' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Сравнение периодов</h3>
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Сравнение периодов</h3>
                   <div className="space-y-6">
                     {[
                       { label: 'Выручка', current: totals.totalIncome, previous: totalsPrev.totalIncome, color: 'bg-emerald-500' },
@@ -2430,7 +2429,7 @@ function ReportsContent() {
                             </div>
                           </div>
                           <div className="flex justify-end">
-                            <span className={`text-sm font-medium ${change > 0 ? 'text-emerald-400' : change < 0 ? 'text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <span className={`text-sm font-semibold tabular-nums ${change > 0 ? 'text-emerald-600 dark:text-emerald-400' : change < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
                               {change > 0 ? '+' : ''}{change.toFixed(1)}%
                             </span>
                           </div>
@@ -2440,8 +2439,8 @@ function ReportsContent() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Распределение по типам платежей</h3>
+                <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Распределение по типам платежей</h3>
                   <div className="space-y-4">
                     {[
                       { label: 'Наличные', value: totals.incomeCash, color: 'bg-emerald-500' },
@@ -2469,8 +2468,8 @@ function ReportsContent() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Тепловая карта активности</h3>
+              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Тепловая карта активности</h3>
                 <div className="grid grid-cols-7 gap-2">
                   {Array.from({ length: 35 }, (_, i) => {
                     const date = addDaysISO(dateFrom, i)
@@ -2496,7 +2495,7 @@ function ReportsContent() {
                       >
                         <span className="text-slate-500 text-[10px]">{date.slice(8)}</span>
                         {profit !== 0 && (
-                          <span className={profit > 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                          <span className={`tabular-nums ${profit > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                             {formatMoneyCompact(profit)}
                           </span>
                         )}
@@ -2547,7 +2546,7 @@ function ReportsContent() {
                   </select>
                   <span className="text-sm text-slate-500">записей</span>
                   {useVirtualization && (
-                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
                       <Zap className="w-3 h-3" />
                       Виртуализация активна
                     </span>
@@ -2555,7 +2554,7 @@ function ReportsContent() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 overflow-hidden">
+              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 overflow-hidden">
                 <div className="overflow-x-auto" ref={tableContainerRef}>
                   <table className="w-full">
                     <thead>
@@ -2622,7 +2621,7 @@ function ReportsContent() {
                                   <div className="flex-1 px-4 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</div>
                                   <div className="flex-1 px-4">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                      row.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                      row.type === 'income' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                                     }`}>
                                       {row.type === 'income' ? 'Доход' : 'Расход'}
                                     </span>
@@ -2630,7 +2629,7 @@ function ReportsContent() {
                                   <div className="flex-1 px-4 text-sm text-slate-900 dark:text-white">{row.companyName}</div>
                                   <div className="flex-1 px-4 text-sm text-slate-700 dark:text-slate-300">{row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}</div>
                                   <div className="flex-1 px-4 text-sm text-right">
-                                    <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    <div className={`font-semibold tabular-nums ${row.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                       {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
                                     </div>
                                   </div>
@@ -2658,7 +2657,7 @@ function ReportsContent() {
                             <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                row.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                row.type === 'income' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                               }`}>
                                 {row.type === 'income' ? 'Доход' : 'Расход'}
                               </span>
@@ -2668,7 +2667,7 @@ function ReportsContent() {
                               {row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}
                             </td>
                             <td className="px-4 py-3 text-sm text-right">
-                              <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              <div className={`font-semibold tabular-nums ${row.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                 {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
                               </div>
                               <div className="text-xs text-slate-500 mt-1">
@@ -2770,7 +2769,7 @@ function ReportsContent() {
                 {companyComparisonData.map((company) => (
                   <div 
                     key={company.id} 
-                    className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6 hover:border-slate-300 dark:hover:border-white/10 transition-all cursor-pointer group"
+                    className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6 hover:border-slate-300 dark:hover:border-white/10 transition-all cursor-pointer group"
                     onClick={() => {
                       setCompanyFilter(company.id)
                       setActiveTab('overview')
@@ -2781,8 +2780,8 @@ function ReportsContent() {
                         <h4 className="text-lg font-semibold text-slate-900 dark:text-white group-hover:text-amber-400 transition-colors">{company.name}</h4>
                         <p className="text-sm text-slate-500">{company.transactions} операций</p>
                       </div>
-                      <div className={`p-2 rounded-lg ${
-                        company.profit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      <div className={`grid place-items-center h-9 w-9 rounded-lg ${
+                        company.profit >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                       }`}>
                         {company.profit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                       </div>
@@ -2795,20 +2794,20 @@ function ReportsContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500 dark:text-slate-400">Расходы</span>
-                        <span className="text-rose-400">{formatMoneyFull(company.expense)}</span>
+                        <span className="tabular-nums text-rose-600 dark:text-rose-400">{formatMoneyFull(company.expense)}</span>
                       </div>
                       <div className="h-px bg-slate-200 dark:bg-white/5 my-3" />
                       <div className="flex justify-between items-center">
                         <span className="text-slate-500 dark:text-slate-400">Прибыль</span>
-                        <span className={`text-lg font-bold ${company.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <span className={`text-lg font-bold tabular-nums ${company.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                           {formatMoneyFull(company.profit)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">Маржа</span>
-                        <span className={`font-medium ${
-                          company.margin >= 30 ? 'text-emerald-400' : 
-                          company.margin >= 15 ? 'text-amber-400' : 'text-rose-400'
+                        <span className="text-slate-500 dark:text-slate-400">Маржа</span>
+                        <span className={`font-semibold tabular-nums ${
+                          company.margin >= 30 ? 'text-emerald-600 dark:text-emerald-400' :
+                          company.margin >= 15 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
                         }`}>
                           {company.margin.toFixed(1)}%
                         </span>
@@ -2829,8 +2828,8 @@ function ReportsContent() {
                 ))}
               </div>
 
-              <div className="rounded-2xl bg-white dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 p-6">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Сравнительная таблица</h3>
+              <div className="rounded-2xl bg-white dark:bg-[#111113] border border-slate-200 dark:border-white/10 p-6">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-6">Сравнительная таблица</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -2849,16 +2848,16 @@ function ReportsContent() {
                       {companyComparisonData.map((c) => (
                         <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
                           <td className="py-4 pl-4 font-medium text-slate-900 dark:text-white">{c.name}</td>
-                          <td className="py-4 text-right text-emerald-400">{formatMoneyFull(c.income)}</td>
-                          <td className="py-4 text-right text-rose-400">{formatMoneyFull(c.expense)}</td>
-                          <td className={`py-4 text-right font-bold ${c.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <td className="py-4 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{formatMoneyFull(c.income)}</td>
+                          <td className="py-4 text-right tabular-nums text-rose-600 dark:text-rose-400">{formatMoneyFull(c.expense)}</td>
+                          <td className={`py-4 text-right font-bold tabular-nums ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                             {formatMoneyFull(c.profit)}
                           </td>
                           <td className="py-4 text-right">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              c.margin >= 30 ? 'bg-emerald-500/20 text-emerald-400' :
-                              c.margin >= 15 ? 'bg-amber-500/20 text-amber-400' :
-                              'bg-rose-500/20 text-rose-400'
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              c.margin >= 30 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
+                              c.margin >= 15 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' :
+                              'bg-rose-500/15 text-rose-600 dark:text-rose-400'
                             }`}>
                               {c.margin.toFixed(1)}%
                             </span>
