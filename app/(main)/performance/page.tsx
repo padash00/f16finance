@@ -1,19 +1,22 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AlertCircle,
   Award,
   Calendar,
+  ChevronDown,
   Clock,
   Crown,
   Info,
   Medal,
+  Minus,
   RefreshCw,
   TrendingDown,
   TrendingUp,
   Trophy,
+  Users,
   X,
 } from 'lucide-react'
 
@@ -127,6 +130,18 @@ function toISO(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+// Предыдущий период той же длины, вплотную перед текущим (для тренда PI).
+function prevRange(from: string, to: string): { from: string; to: string } {
+  const f = new Date(from)
+  const t = new Date(to)
+  const lenDays = Math.round((t.getTime() - f.getTime()) / 86_400_000) + 1
+  const prevTo = new Date(f)
+  prevTo.setDate(f.getDate() - 1)
+  const prevFrom = new Date(prevTo)
+  prevFrom.setDate(prevTo.getDate() - (lenDays - 1))
+  return { from: toISO(prevFrom), to: toISO(prevTo) }
+}
+
 function moneyFmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU') + ' ₸'
 }
@@ -152,6 +167,48 @@ function rankBadge(rank: number) {
   return <span className="text-xs font-mono text-slate-500 dark:text-slate-400">#{rank}</span>
 }
 
+// Дельта PI к прошлому периоду: ↑/↓/— с цветом. undefined prev → «новый».
+function DeltaBadge({ pi, prev }: { pi: number; prev: number | undefined }) {
+  if (prev === undefined) {
+    return <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">новый</span>
+  }
+  const d = pi - prev
+  if (Math.abs(d) < 0.005) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+        <Minus className="w-3 h-3" />0.00
+      </span>
+    )
+  }
+  const up = d > 0
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums ${up ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} title={`Прошлый период: PI ${prev.toFixed(2)}`}>
+      {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+      {up ? '+' : ''}{d.toFixed(2)}
+    </span>
+  )
+}
+
+// Мини-спарклайн PI по сменам (для модалки): линия 0.5..2.0, без осей.
+function PiSparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null
+  const w = 140, h = 32, pad = 3
+  const lo = 0.5, hi = 2.0
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2)
+    const cl = Math.max(lo, Math.min(hi, v))
+    const y = h - pad - ((cl - lo) / (hi - lo)) * (h - pad * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  const baselineY = h - pad - ((1 - lo) / (hi - lo)) * (h - pad * 2)
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <line x1={pad} y1={baselineY} x2={w - pad} y2={baselineY} stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" className="text-slate-300 dark:text-white/15" />
+      <polyline points={pts.join(' ')} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" className="text-violet-500 dark:text-violet-400" />
+    </svg>
+  )
+}
+
 export default function PerformancePage() {
   const [isClient, setIsClient] = useState(false)
   useEffect(() => setIsClient(true), [])
@@ -161,10 +218,13 @@ export default function PerformancePage() {
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
   const [companies, setCompanies] = useState<Company[]>([])
   const [data, setData] = useState<ApiResponse['data'] | null>(null)
+  const [prevPi, setPrevPi] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<RankingItem | null>(null)
+  const [methodOpen, setMethodOpen] = useState(false)
+  const reqId = useRef(0)
 
   const range = useMemo(() => PERIOD_PRESETS[period].getRange(), [period])
 
@@ -177,21 +237,40 @@ export default function PerformancePage() {
   }, [])
 
   const load = async (silent = false) => {
+    const myReq = ++reqId.current   // защита от гонки: учитываем только последний запрос
     if (silent) setRefreshing(true)
     else setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ from: range.from, to: range.to })
-      if (companyId) params.set('company_id', companyId)
-      const res = await fetch(`/api/admin/performance/ranking?${params}`, { cache: 'no-store' })
+      const mk = (from: string, to: string) => {
+        const p = new URLSearchParams({ from, to })
+        if (companyId) p.set('company_id', companyId)
+        return `/api/admin/performance/ranking?${p}`
+      }
+      const prev = prevRange(range.from, range.to)
+      // Текущий период + предыдущий (для тренда) — параллельно. Предыдущий не критичен.
+      const [res, prevRes] = await Promise.all([
+        fetch(mk(range.from, range.to), { cache: 'no-store' }),
+        fetch(mk(prev.from, prev.to), { cache: 'no-store' }).catch(() => null),
+      ])
       const body = (await res.json()) as ApiResponse | { error: string }
+      if (myReq !== reqId.current) return   // пришёл устаревший ответ — игнорируем
       if (!res.ok) throw new Error(('error' in body && body.error) || 'Не удалось загрузить рейтинг')
       setData((body as ApiResponse).data)
+
+      const map: Record<string, number> = {}
+      if (prevRes && prevRes.ok) {
+        const pj = (await prevRes.json()) as ApiResponse
+        for (const op of pj.data?.ranking || []) map[op.operator_id] = op.pi
+      }
+      if (myReq === reqId.current) setPrevPi(map)
     } catch (e: any) {
-      setError(e?.message || 'Ошибка загрузки')
+      if (myReq === reqId.current) setError(e?.message || 'Ошибка загрузки')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (myReq === reqId.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }
 
@@ -234,6 +313,15 @@ export default function PerformancePage() {
   const qualifying = filteredRanking.filter((r) => r.qualifying)
   const coldStart = filteredRanking.filter((r) => !r.qualifying)
   const selectedCompany = companies.find((c) => c.id === companyId)
+
+  // Сводка по квалифицированным операторам (обычный расчёт — дешёво, после early-return хук нельзя)
+  const summary = qualifying.length === 0 ? null : {
+    avgPi: qualifying.reduce((s, r) => s + r.pi, 0) / qualifying.length,
+    above: qualifying.filter((r) => r.pi >= 1.05).length,
+    below: qualifying.filter((r) => r.pi < 0.95).length,
+    norm: qualifying.filter((r) => r.pi >= 0.95 && r.pi < 1.05).length,
+    leader: qualifying[0],
+  }
 
   return (
     <div className="app-page-wide space-y-6">
@@ -330,12 +418,54 @@ export default function PerformancePage() {
         </Card>
       )}
 
-      {/* Объяснение метода */}
+      {/* Сводка */}
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <SummaryCard
+            icon={<Users className="w-4 h-4" />}
+            label="Средний PI команды"
+            value={summary.avgPi.toFixed(2)}
+            tone={summary.avgPi >= 1.05 ? 'emerald' : summary.avgPi >= 0.95 ? 'slate' : 'rose'}
+            hint={`${qualifying.length} операторов в рейтинге`}
+          />
+          <SummaryCard
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="Выше нормы"
+            value={String(summary.above)}
+            tone="emerald"
+            hint="PI ≥ 1.05"
+          />
+          <SummaryCard
+            icon={<TrendingDown className="w-4 h-4" />}
+            label="Ниже нормы"
+            value={String(summary.below)}
+            tone={summary.below > 0 ? 'rose' : 'slate'}
+            hint="PI < 0.95"
+          />
+          <SummaryCard
+            icon={<Crown className="w-4 h-4" />}
+            label="Лидер периода"
+            value={summary.leader.operator_short_name || summary.leader.operator_name}
+            tone="amber"
+            hint={`PI ${summary.leader.pi.toFixed(2)}`}
+            small
+          />
+        </div>
+      )}
+
+      {/* Объяснение метода — сворачиваемое (справочник, по умолчанию скрыто) */}
       <Card className="bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/8 overflow-hidden">
-        <div className="border-b border-slate-200 dark:border-white/5 bg-blue-500/[0.04] px-5 py-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setMethodOpen((v) => !v)}
+          className="w-full border-b border-slate-200 dark:border-white/5 bg-blue-500/[0.04] px-5 py-3 flex items-center gap-2 text-left hover:bg-blue-500/[0.07] transition-colors"
+        >
           <Info className="w-4 h-4 text-blue-400" />
           <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Как формируется рейтинг</span>
-        </div>
+          <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">PI = факт ÷ ожидание по слоту (точка · день недели · день/ночь)</span>
+          <ChevronDown className={`ml-auto w-4 h-4 text-slate-400 transition-transform ${methodOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {methodOpen && (
         <div className="p-5 space-y-5 text-sm">
           {/* Шаг 1 */}
           <div className="flex gap-3">
@@ -463,6 +593,7 @@ export default function PerformancePage() {
             </div>
           )}
         </div>
+        )}
       </Card>
 
       {/* Основной рейтинг */}
@@ -516,7 +647,10 @@ export default function PerformancePage() {
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <div className={`text-2xl font-bold ${c.text} tabular-nums`}>{op.pi.toFixed(2)}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wide">PI</div>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">PI</span>
+                          <DeltaBadge pi={op.pi} prev={prevPi[op.operator_id]} />
+                        </div>
                       </div>
                       <div className={`rounded-md border ${c.border} ${c.bg} px-2 py-1 text-[11px] font-medium ${c.text} whitespace-nowrap`}>
                         {c.label}
@@ -548,7 +682,13 @@ export default function PerformancePage() {
               >
                 <div className="font-medium text-slate-700 dark:text-slate-200 text-sm truncate">{op.operator_short_name || op.operator_name}</div>
                 <div className="text-xs text-slate-500 mt-0.5">
-                  {op.shifts} смен · {moneyShort(op.total_revenue)}
+                  {op.shifts}/{data?.config.min_qualifying_shifts || 3} смен · {moneyShort(op.total_revenue)}
+                </div>
+                <div className="mt-1.5 h-1 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-amber-400 dark:bg-amber-500"
+                    style={{ width: `${Math.min(100, (op.shifts / (data?.config.min_qualifying_shifts || 3)) * 100)}%` }}
+                  />
                 </div>
               </button>
             ))}
@@ -627,9 +767,17 @@ function OperatorDetailModal({
 
         {/* Shift table */}
         <div className="p-5">
-          <h4 className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 font-semibold mb-3">
-            Разбор по сменам
-          </h4>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h4 className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 font-semibold">
+              Разбор по сменам
+            </h4>
+            {item.shift_details.length >= 2 && (
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                <span>динамика PI</span>
+                <PiSparkline values={[...item.shift_details].sort((a, b) => a.date.localeCompare(b.date)).map((s) => s.pi)} />
+              </div>
+            )}
+          </div>
           <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/8">
             <table className="w-full text-sm">
               <thead>
@@ -689,5 +837,28 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{value}</div>
     </div>
+  )
+}
+
+const SUMMARY_TONE: Record<'emerald' | 'rose' | 'amber' | 'slate', { icon: string; val: string }> = {
+  emerald: { icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300', val: 'text-emerald-700 dark:text-emerald-300' },
+  rose: { icon: 'bg-rose-500/15 text-rose-600 dark:text-rose-300', val: 'text-rose-700 dark:text-rose-300' },
+  amber: { icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-300', val: 'text-amber-700 dark:text-amber-300' },
+  slate: { icon: 'bg-slate-500/15 text-slate-600 dark:text-slate-300', val: 'text-slate-900 dark:text-white' },
+}
+
+function SummaryCard({
+  icon, label, value, hint, tone, small,
+}: { icon: React.ReactNode; label: string; value: string; hint: string; tone: 'emerald' | 'rose' | 'amber' | 'slate'; small?: boolean }) {
+  const t = SUMMARY_TONE[tone]
+  return (
+    <Card className="p-4 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/8">
+      <div className="flex items-center gap-2">
+        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${t.icon}`}>{icon}</div>
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 leading-tight">{label}</div>
+      </div>
+      <div className={`mt-2 font-bold tabular-nums ${t.val} ${small ? 'text-base truncate' : 'text-2xl'}`}>{value}</div>
+      <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{hint}</div>
+    </Card>
   )
 }
