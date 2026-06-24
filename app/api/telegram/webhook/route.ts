@@ -2691,13 +2691,13 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        // gpt-5 — reasoning-модель: temperature НЕ поддерживается (упадёт с ошибкой),
-        // зато тратит токены на размышление → даём больше бюджета + reasoning_effort='low'
-        // (быстрый выбор инструмента). Обычные модели — низкая temperature для детерминизма.
+        // gpt-5 — reasoning-модель: temperature НЕ поддерживается; reasoning_effort
+        // несовместим с function-tools на /v1/chat/completions (gpt-5.4 → ошибка),
+        // поэтому для gpt-5 не передаём ни то, ни другое. Обычные модели — низкая temperature.
         body: JSON.stringify({
           model: OPENAI_MODEL,
           max_completion_tokens: OPENAI_MODEL.startsWith('gpt-5') ? 4000 : 1800,
-          ...(OPENAI_MODEL.startsWith('gpt-5') ? { reasoning_effort: 'low' } : { temperature: 0.3 }),
+          ...(OPENAI_MODEL.startsWith('gpt-5') ? {} : { temperature: 0.3 }),
           messages,
           tools,
           tool_choice: 'auto',

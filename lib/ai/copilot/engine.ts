@@ -653,13 +653,11 @@ async function callLLM(
         // ответ/выбор инструмента не оставалось → бот «молчал/тупил».
         // Даём больше бюджета для gpt-5; для обычных моделей хватает меньше.
         max_completion_tokens: MODEL.startsWith('gpt-5') ? 4000 : 1000,
-        // gpt-5: temperature не поддерживается (только дефолт), зато есть
-        // reasoning_effort. Для выбора инструмента глубокое размышление не нужно —
-        // 'low' = быстрее, дешевле и оставляет токены на сам ответ.
+        // gpt-5: temperature не поддерживается; reasoning_effort НЕЛЬЗЯ вместе с
+        // function-tools на /v1/chat/completions (gpt-5.4 падает с ошибкой) — поэтому
+        // для gpt-5 не передаём ни то, ни другое (дефолтный reasoning).
         // Обычные модели — низкая температура для точного tool-calling.
-        ...(MODEL.startsWith('gpt-5')
-          ? { reasoning_effort: 'low' }
-          : { temperature: 0.1 }),
+        ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0.1 }),
         messages,
         tools: openaiTools,
         tool_choice: 'auto',
