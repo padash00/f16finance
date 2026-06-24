@@ -79,6 +79,13 @@ async function logIncomeAudit(event: {
 export default function AddIncomePage() {
   const router = useRouter()
 
+  // Встроенный режим (внутри модалки на странице доходов через iframe ?embedded=1):
+  // прячем шапку и при сохранении шлём сообщение родителю вместо редиректа.
+  const [embedded, setEmbedded] = useState(false)
+  useEffect(() => {
+    setEmbedded(new URLSearchParams(window.location.search).get('embedded') === '1')
+  }, [])
+
   const [date, setDate] = useState(getTodayISO())
 
   const [companies, setCompanies] = useState<Company[]>([])
@@ -343,6 +350,12 @@ export default function AddIncomePage() {
       }
 
       setShowSuccess(true)
+      if (embedded) {
+        if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'income-wizard-created' }, window.location.origin)
+        }
+        return
+      }
       setTimeout(() => router.push('/income'), 800)
     } catch (err: any) {
       await logIncomeAudit({
@@ -417,15 +430,17 @@ export default function AddIncomePage() {
 
   return (
     <>
-        <div className="app-page-tight max-w-4xl">
-          <AdminPageHeader
-            title="Новая запись дохода"
-            description="AI-помощник внесения выручки"
-            icon={<Brain className="h-5 w-5" />}
-            accent="emerald"
-            backHref="/income"
-            className="mb-6"
-          />
+        <div className={embedded ? 'p-4 sm:p-6 max-w-4xl mx-auto' : 'app-page-tight max-w-4xl'}>
+          {!embedded && (
+            <AdminPageHeader
+              title="Новая запись дохода"
+              description="AI-помощник внесения выручки"
+              icon={<Brain className="h-5 w-5" />}
+              accent="emerald"
+              backHref="/income"
+              className="mb-6"
+            />
+          )}
 
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-sm flex items-center gap-3">

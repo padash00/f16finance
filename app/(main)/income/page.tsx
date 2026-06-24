@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 import { useCapabilities } from '@/lib/client/use-capabilities'
@@ -28,6 +29,7 @@ import {
   Check,
   Pencil,
   Wallet,
+  Loader2,
   Globe,
   Sparkles,
   Calendar,
@@ -377,6 +379,37 @@ export default function IncomePage() {
   useEffect(() => {
     setRows(serverRows)
   }, [serverRows])
+
+  // Модалка добавления дохода (iframe на /income-embed/add — как у расхода)
+  const router = useRouter()
+  const [showAddIncomeModal, setShowAddIncomeModal] = useState(false)
+  const [incomeModalLoading, setIncomeModalLoading] = useState(false)
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      if ((event.data as any)?.type !== 'income-wizard-created') return
+      setShowAddIncomeModal(false)
+      setIncomeModalLoading(false)
+      router.refresh() // перечитать серверные данные — новый доход появится в списке
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [router])
+
+  useEffect(() => {
+    if (!showAddIncomeModal) return
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') { setShowAddIncomeModal(false); setIncomeModalLoading(false) }
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [showAddIncomeModal])
 
   useEffect(() => {
     const loadSessionRole = async () => {
@@ -975,11 +1008,13 @@ export default function IncomePage() {
                   )}
 
                   {canCreateIncome ? (
-                    <Link href="/income/add">
-                      <Button size="sm" className="bg-gradient-to-r from-amber-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-white shadow-lg shadow-amber-500/25">
-                        <Plus className="w-4 h-4 mr-1" /> Добавить
-                      </Button>
-                    </Link>
+                    <Button
+                      size="sm"
+                      onClick={() => { setIncomeModalLoading(true); setShowAddIncomeModal(true) }}
+                      className="bg-gradient-to-r from-amber-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-white shadow-lg shadow-amber-500/25"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Добавить
+                    </Button>
                   ) : null}
               </>
             )}
@@ -1385,6 +1420,45 @@ export default function IncomePage() {
                   </Button>
                 </div>
               </Card>
+            </div>,
+            document.body
+          )}
+
+          {showAddIncomeModal && typeof window !== 'undefined' && createPortal(
+            <div
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
+              onClick={() => { setShowAddIncomeModal(false); setIncomeModalLoading(false) }}
+            >
+              <div
+                className="w-full max-w-[1280px] h-[92vh] rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 overflow-hidden shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="h-12 border-b border-slate-200 dark:border-white/10 flex items-center justify-between px-3">
+                  <div className="text-sm text-slate-900 dark:text-white">Добавление дохода</div>
+                  <button
+                    onClick={() => { setShowAddIncomeModal(false); setIncomeModalLoading(false) }}
+                    className="rounded-md p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="relative h-[calc(92vh-48px)]">
+                  {incomeModalLoading ? (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 dark:bg-slate-950/90">
+                      <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-gray-300">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Открываю форму дохода...
+                      </div>
+                    </div>
+                  ) : null}
+                  <iframe
+                    src="/income-embed/add?embedded=1"
+                    className="w-full h-full bg-white dark:bg-slate-950"
+                    title="Добавление дохода"
+                    onLoad={() => setIncomeModalLoading(false)}
+                  />
+                </div>
+              </div>
             </div>,
             document.body
           )}
