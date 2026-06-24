@@ -32,6 +32,25 @@
   --chart-4: #f97316;
   --chart-5: #e11d48;
   --radius: 1rem;
+
+  /* ════════════════════════════════════════════════════════════════
+     БРЕНД-АКЦЕНТ — ЕДИНОЕ МЕСТО. Все классы amber-* по проекту берут цвет
+     отсюда (переназначены в @theme ниже). Чтобы сменить акцент (напр.
+     жёлтый → зелёный) — поменяйте ТОЛЬКО значения этого блока, код страниц
+     трогать НЕ нужно. Сейчас = стандартный amber (визуально без изменений).
+     Зелёный вариант (раскомментировать вместо amber): emerald-шкала.
+     ════════════════════════════════════════════════════════════════ */
+  --brand-50: #fffbeb;
+  --brand-100: #fef3c7;
+  --brand-200: #fde68a;
+  --brand-300: #fcd34d;
+  --brand-400: #fbbf24;
+  --brand-500: #f59e0b;
+  --brand-600: #d97706;
+  --brand-700: #b45309;
+  --brand-800: #92400e;
+  --brand-900: #78350f;
+  --brand-950: #451a03;
 }
 
 .dark {
@@ -110,6 +129,23 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Переназначаем палитру amber-* на бренд-переменные (не-inline, чтобы
+   утилиты ссылались на var() в рантайме). Меняешь --brand-* выше —
+   меняется весь акцент по проекту. */
+@theme {
+  --color-amber-50: var(--brand-50);
+  --color-amber-100: var(--brand-100);
+  --color-amber-200: var(--brand-200);
+  --color-amber-300: var(--brand-300);
+  --color-amber-400: var(--brand-400);
+  --color-amber-500: var(--brand-500);
+  --color-amber-600: var(--brand-600);
+  --color-amber-700: var(--brand-700);
+  --color-amber-800: var(--brand-800);
+  --color-amber-900: var(--brand-900);
+  --color-amber-950: var(--brand-950);
 }
 
 @layer base {
