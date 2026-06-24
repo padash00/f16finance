@@ -12,17 +12,29 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
 type Company = { id: string; name: string; code?: string | null }
 
-type MonthAgg = { month: string; income: number; fixed: number; variable: number; oneOff: number; expense: number; profit: number; isPartial: boolean }
+type MonthAgg = { month: string; income: number; cash: number; kaspi: number; card: number; online: number; fixed: number; variable: number; oneOff: number; expense: number; profit: number; marginPct: number; isPartial: boolean }
 type Forecast = {
   months: MonthAgg[]
   targetMonth: string
   targetMonthLabel: string
   income: { expected: number; low: number; high: number; recentAvg: number; momGrowthPct: number; seasonalIndex: number; runRate: number | null }
+  channels: { cash: number; kaspi: number; card: number; online: number }
   expense: { expected: number; fixed: number; variable: number; variableRatePct: number; oneOffAvg: number }
-  profit: { expected: number; low: number; high: number }
+  profit: { expected: number; low: number; high: number; marginPct: number }
   scenarios: { best: number; expected: number; worst: number }
+  breakeven: { revenue: number; safetyMarginPct: number }
+  current: { month: string; factToDate: number; projected: number | null; dayOfMonth: number; daysInMonth: number } | null
+  backtest: { month: string; predictedIncome: number; actualIncome: number; incomeErrorPct: number } | null
   expenseByGroup: Array<{ group: string; label: string; amount: number; bucket: 'fixed' | 'variable' }>
+  explanation: string[]
   confidence: { score: number; monthsOfData: number; seasonalityAvailable: boolean; volatilityPct: number; notes: string[] }
+}
+type ByCompany = Array<{ id: string; name: string; income: number; expense: number; profit: number; marginPct: number }>
+
+function monthLabelFull(ym: string) {
+  const names = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+  const [y, m] = ym.split('-').map(Number)
+  return `${names[(m - 1) % 12]} ${y}`
 }
 
 function money(n: number) { return Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ₸' }
@@ -42,6 +54,7 @@ export default function AnalysisPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState('')
   const [data, setData] = useState<Forecast | null>(null)
+  const [byCompany, setByCompany] = useState<ByCompany | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ai, setAi] = useState<string | null>(null)
@@ -63,6 +76,7 @@ export default function AnalysisPage() {
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error || 'Не удалось построить прогноз')
       setData(body.forecast as Forecast)
+      setByCompany((body.byCompany as ByCompany) || null)
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {
@@ -154,6 +168,49 @@ export default function AnalysisPage() {
             </div>
           </Card>
 
+          {/* Почему такой прогноз */}
+          <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-blue-400" />Почему такой прогноз</h3>
+            <ul className="space-y-1.5">
+              {data.explanation.map((e, i) => (
+                <li key={i} className={`text-sm leading-relaxed flex gap-2 ${e.startsWith('→') ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                  {!e.startsWith('→') && <span className="text-slate-300 dark:text-slate-600 mt-1.5 w-1 h-1 rounded-full bg-current shrink-0" />}
+                  <span>{e}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          {/* Текущий месяц: факт vs прогноз + Backtest + Безубыточность */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {data.current && (
+              <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Текущий месяц (день {data.current.dayOfMonth}/{data.current.daysInMonth})</div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{money(data.current.factToDate)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">факт на сегодня</div>
+                {data.current.projected !== null && (
+                  <div className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">→ к концу ~{money(data.current.projected)} <span className="text-slate-400">(run-rate)</span></div>
+                )}
+              </Card>
+            )}
+            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5" />Точка безубыточности</div>
+              <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{money(data.breakeven.revenue)}</div>
+              <div className={`text-xs mt-0.5 ${data.breakeven.safetyMarginPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                запас прочности {data.breakeven.safetyMarginPct >= 0 ? '+' : ''}{data.breakeven.safetyMarginPct.toFixed(0)}%
+              </div>
+            </Card>
+            {data.backtest && (
+              <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Точность (backtest, {monthLabelFull(data.backtest.month).split(' ')[0]})</div>
+                <div className={`text-xl font-bold tabular-nums ${data.backtest.incomeErrorPct <= 15 ? 'text-emerald-600 dark:text-emerald-400' : data.backtest.incomeErrorPct <= 30 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  ошибка {data.backtest.incomeErrorPct.toFixed(0)}%
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">прогноз {moneyShort(data.backtest.predictedIncome)} / факт {moneyShort(data.backtest.actualIncome)}</div>
+              </Card>
+            )}
+          </div>
+
           {/* История по месяцам */}
           <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">История по месяцам</h3>
@@ -179,6 +236,41 @@ export default function AnalysisPage() {
               </div>
             )}
           </Card>
+
+          {/* Таблица по месяцам */}
+          {data.months.length > 0 && (
+            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Детали по месяцам</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/8">
+                      <th className="px-2 py-2 text-left font-medium">Месяц</th>
+                      <th className="px-2 py-2 text-right font-medium">Доход</th>
+                      <th className="px-2 py-2 text-right font-medium">Постоянные</th>
+                      <th className="px-2 py-2 text-right font-medium">Переменные</th>
+                      <th className="px-2 py-2 text-right font-medium">Разовые</th>
+                      <th className="px-2 py-2 text-right font-medium">Прибыль</th>
+                      <th className="px-2 py-2 text-right font-medium">Маржа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...data.months].reverse().map((m) => (
+                      <tr key={m.month} className="border-b border-slate-100 dark:border-white/5 last:border-0">
+                        <td className="px-2 py-2 text-slate-900 dark:text-white whitespace-nowrap">{monthLabelFull(m.month)}{m.isPartial && <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">тек.</span>}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{money(m.income)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{money(m.fixed)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{money(m.variable)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-400 dark:text-slate-500">{m.oneOff > 0 ? money(m.oneOff) : '—'}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums font-semibold ${m.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(m.profit)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${m.marginPct >= 20 ? 'text-emerald-600 dark:text-emerald-400' : m.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{m.marginPct.toFixed(0)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
           {/* Как собран прогноз */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -231,6 +323,54 @@ export default function AnalysisPage() {
               <div className="mt-3 flex gap-4 text-[11px] text-slate-500">
                 <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />постоянные</span>
                 <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />переменные (% от дохода)</span>
+              </div>
+            </Card>
+          )}
+
+          {/* Прогноз дохода по каналам */}
+          <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Прогноз дохода по каналам</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {([['Наличные', data.channels.cash], ['Безнал (Kaspi)', data.channels.kaspi], ['Карта', data.channels.card], ['Онлайн', data.channels.online]] as const).map(([l, v]) => {
+                const pct = data.income.expected > 0 ? v / data.income.expected * 100 : 0
+                return (
+                  <div key={l} className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-3">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{l}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-900 dark:text-white tabular-nums">{money(v)}</div>
+                    <div className="text-[11px] text-slate-400">{pct.toFixed(0)}%</div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+
+          {/* Прогноз по точкам */}
+          {byCompany && byCompany.length > 0 && (
+            <Card className="p-5 bg-white dark:bg-gray-900/40 border-slate-200 dark:border-white/5">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">Прогноз по точкам ({data.targetMonthLabel})</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/8">
+                      <th className="px-2 py-2 text-left font-medium">Точка</th>
+                      <th className="px-2 py-2 text-right font-medium">Доход</th>
+                      <th className="px-2 py-2 text-right font-medium">Расход</th>
+                      <th className="px-2 py-2 text-right font-medium">Прибыль</th>
+                      <th className="px-2 py-2 text-right font-medium">Маржа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byCompany.map((c) => (
+                      <tr key={c.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
+                        <td className="px-2 py-2 font-medium text-slate-900 dark:text-white truncate max-w-[160px]">{c.name}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{money(c.income)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{money(c.expense)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums font-semibold ${c.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.profit)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${c.marginPct >= 20 ? 'text-emerald-600 dark:text-emerald-400' : c.marginPct >= 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-600 dark:text-rose-400'}`}>{c.marginPct.toFixed(0)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </Card>
           )}

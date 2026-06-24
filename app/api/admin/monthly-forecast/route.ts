@@ -70,15 +70,34 @@ export async function GET(req: Request) {
       fetchAll(supabase, 'expenses', 'date, company_id, category, cash_amount, kaspi_amount', from, to, allowed),
     ])
 
-    const incomes: ForecastIncomeRow[] = incomeRows.map((r) => ({
-      date: r.date, cash: r.cash_amount || 0, kaspi: r.kaspi_amount || 0, card: r.card_amount || 0, online: r.online_amount || 0,
-    }))
-    const expenses: ForecastExpenseRow[] = expenseRows.map((r) => ({
-      date: r.date, category: r.category ?? null, cash: r.cash_amount || 0, kaspi: r.kaspi_amount || 0,
-    }))
+    const mapInc = (r: any): ForecastIncomeRow => ({ date: r.date, cash: r.cash_amount || 0, kaspi: r.kaspi_amount || 0, card: r.card_amount || 0, online: r.online_amount || 0 })
+    const mapExp = (r: any): ForecastExpenseRow => ({ date: r.date, category: r.category ?? null, cash: r.cash_amount || 0, kaspi: r.kaspi_amount || 0 })
 
-    const forecast = buildMonthlyForecast(incomes, expenses, to)
-    return json({ forecast })
+    const forecast = buildMonthlyForecast(incomeRows.map(mapInc), expenseRows.map(mapExp), to)
+
+    // Прогноз по каждой точке (когда не выбрана конкретная) — для блока сравнения.
+    let byCompany: Array<{ id: string; name: string; income: number; expense: number; profit: number; marginPct: number }> | null = null
+    if (!companyId || companyId === 'all') {
+      const { data: comps } = await supabase.from('companies').select('id, name')
+      const nameOf = new Map((comps || []).map((c: any) => [c.id, c.name]))
+      const ids = new Set<string>()
+      for (const r of incomeRows) if (r.company_id) ids.add(r.company_id)
+      byCompany = []
+      for (const id of ids) {
+        const inc = incomeRows.filter((r) => r.company_id === id).map(mapInc)
+        const exp = expenseRows.filter((r) => r.company_id === id).map(mapExp)
+        if (!inc.length) continue
+        const f = buildMonthlyForecast(inc, exp, to)
+        byCompany.push({
+          id, name: nameOf.get(id) || '—',
+          income: f.income.expected, expense: f.expense.expected, profit: f.profit.expected, marginPct: f.profit.marginPct,
+        })
+      }
+      byCompany.sort((a, b) => b.income - a.income)
+      if (byCompany.length < 2) byCompany = null
+    }
+
+    return json({ forecast, byCompany })
   } catch (error: any) {
     if (error?.message === 'company-out-of-scope') return json({ error: 'Компания недоступна' }, 403)
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/monthly-forecast GET', message: error?.message || 'error' })
