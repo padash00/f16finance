@@ -67,7 +67,7 @@ const SUB_STATUS_LABELS: Record<string, string> = {
   active: 'Активна', trialing: 'Пробный', past_due: 'Просрочена', canceled: 'Отменена', suspended: 'Заморожена',
 }
 const SUB_STATUS_COLORS: Record<string, string> = {
-  active: 'text-emerald-300', trialing: 'text-violet-300', past_due: 'text-red-300', canceled: 'text-slate-400', suspended: 'text-slate-400',
+  active: 'text-emerald-600 dark:text-emerald-300', trialing: 'text-violet-600 dark:text-violet-300', past_due: 'text-red-600 dark:text-red-300', canceled: 'text-slate-400', suspended: 'text-slate-400',
 }
 
 const ORG_STATUSES = ['active', 'suspended']
@@ -345,17 +345,17 @@ export default function OrgDetailPage() {
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <div className="mb-6 flex items-center gap-3">
-        <button onClick={() => router.push('/platform/organizations')} className="text-slate-400 hover:text-white">
+        <button onClick={() => router.push('/platform/organizations')} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-sm font-bold text-violet-300">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-sm font-bold text-violet-700 dark:text-violet-300">
             {org.name.slice(0, 2).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">{org.name}</h1>
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-white">{org.name}</h1>
             <a href={org.appUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-300">
               {org.primaryDomain} <ExternalLink className="h-3 w-3" />
             </a>
@@ -365,23 +365,23 @@ export default function OrgDetailPage() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Basic info */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-white">Основная информация</h2>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-900 dark:text-white">Основная информация</h2>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-400">Название</label>
-              <Input value={name} onChange={e => setName(e.target.value)} className="border-white/10 bg-slate-900/60 text-white" />
+              <Input value={name} onChange={e => setName(e.target.value)} className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-400">Поддомен</label>
-              <p className="rounded-lg border border-white/10 bg-slate-900/30 px-3 py-2 text-sm text-slate-300">{org.primaryDomain}</p>
+              <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-white/10 dark:bg-slate-900/30 dark:text-slate-300">{org.primaryDomain}</p>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-400">Статус организации</label>
               <select
                 value={orgStatus}
                 onChange={e => setOrgStatus(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white"
               >
                 {ORG_STATUSES.map(s => <option key={s} value={s}>{ORG_STATUS_LABELS[s] || s}</option>)}
               </select>
@@ -390,14 +390,14 @@ export default function OrgDetailPage() {
         </div>
 
         {/* Subscription */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-white">Подписка</h2>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+          <h2 className="mb-4 text-sm font-semibold text-slate-900 dark:text-white">Подписка</h2>
           {org.subscription ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs text-slate-500">Тариф</p>
-                  <p className="font-medium text-white">{org.subscription.plan?.name || '—'}</p>
+                  <p className="font-medium text-slate-900 dark:text-white">{org.subscription.plan?.name || '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Статус</p>
@@ -408,13 +408,13 @@ export default function OrgDetailPage() {
                 {org.subscription.startsAt && (
                   <div>
                     <p className="text-xs text-slate-500">Начало</p>
-                    <p className="text-slate-300">{new Date(org.subscription.startsAt).toLocaleDateString('ru-RU')}</p>
+                    <p className="text-slate-700 dark:text-slate-300">{new Date(org.subscription.startsAt).toLocaleDateString('ru-RU')}</p>
                   </div>
                 )}
                 {org.subscription.endsAt && (
                   <div>
                     <p className="text-xs text-slate-500">Окончание</p>
-                    <p className="text-slate-300">{new Date(org.subscription.endsAt).toLocaleDateString('ru-RU')}</p>
+                    <p className="text-slate-700 dark:text-slate-300">{new Date(org.subscription.endsAt).toLocaleDateString('ru-RU')}</p>
                   </div>
                 )}
               </div>
@@ -434,8 +434,8 @@ export default function OrgDetailPage() {
                           disabled={savingPkg}
                           className={`rounded-xl border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${
                             active
-                              ? 'border-violet-500/50 bg-violet-500/10 text-white'
-                              : 'border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.04]'
+                              ? 'border-violet-500/50 bg-violet-500/10 text-slate-900 dark:text-white'
+                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-300 dark:hover:bg-white/[0.04]'
                           }`}
                         >
                           <div className="font-medium">{p.name}</div>
@@ -446,7 +446,7 @@ export default function OrgDetailPage() {
                   </div>
                 )}
                 {org.packageCode && (
-                  <p className="text-[11px] text-emerald-400/80">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400/80">
                     Активный пакет: {packages.find((p) => p.code === org.packageCode)?.name || org.packageCode} — его функции включены автоматически.
                   </p>
                 )}
@@ -457,7 +457,7 @@ export default function OrgDetailPage() {
                 <select
                   value={subAction}
                   onChange={e => setSubAction(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white"
                 >
                   <option value="">— без изменений —</option>
                   <option value="activate">Активировать</option>
@@ -476,15 +476,15 @@ export default function OrgDetailPage() {
         </div>
 
         {/* Companies */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
             <Building2 className="h-4 w-4 text-violet-400" />
             Точки ({org.companies.length})
           </h2>
           <div className="space-y-1.5">
             {org.companies.map(c => (
-              <div key={c.id} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
-                <span className="text-slate-200">{c.name}</span>
+              <div key={c.id} className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-white/[0.03]">
+                <span className="text-slate-700 dark:text-slate-200">{c.name}</span>
                 {c.code && <span className="text-xs text-slate-500">{c.code}</span>}
               </div>
             ))}
@@ -493,8 +493,8 @@ export default function OrgDetailPage() {
         </div>
 
         {/* Stats */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
             <Users className="h-4 w-4 text-violet-400" />
             Статистика
           </h2>
@@ -503,9 +503,9 @@ export default function OrgDetailPage() {
               { label: 'Точек', value: org.companyCount },
               { label: 'Участников', value: org.memberCount },
             ].map(item => (
-              <div key={item.label} className="rounded-lg bg-white/[0.03] p-3">
+              <div key={item.label} className="rounded-lg bg-slate-100 p-3 dark:bg-white/[0.03]">
                 <p className="text-xs text-slate-500">{item.label}</p>
-                <p className="mt-0.5 text-xl font-bold text-white">{item.value}</p>
+                <p className="mt-0.5 text-xl font-bold text-slate-900 dark:text-white">{item.value}</p>
               </div>
             ))}
           </div>
@@ -513,8 +513,8 @@ export default function OrgDetailPage() {
       </div>
 
       {/* Доступ к функциям (entitlements) */}
-      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <Sparkles className="h-4 w-4 text-violet-400" />
           Доступ к функциям
         </h2>
@@ -522,7 +522,7 @@ export default function OrgDetailPage() {
           Эффективные права организации (из пакета, add-ons и legacy). Можно выдать функцию вручную.
         </p>
         {org.legacyGrants ? (
-          <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-300">
             🛡 Legacy-гранты активны: {org.legacyGrants}
           </div>
         ) : null}
@@ -548,9 +548,9 @@ export default function OrgDetailPage() {
                       ? 'из add-on'
                       : 'вручную'
               return (
-                <div key={f.code} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                <div key={f.code} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-white/[0.02]">
                   <div className="min-w-0">
-                    <p className="truncate text-sm text-white">{f.name}</p>
+                    <p className="truncate text-sm text-slate-900 dark:text-white">{f.name}</p>
                     <p className="text-[11px] text-slate-500">{f.code} · {sourceLabel}</p>
                   </div>
                   <button
@@ -558,7 +558,7 @@ export default function OrgDetailPage() {
                     onClick={() => handleFeatureGrant(f.code, !isManual)}
                     disabled={busy || lockedByPackage}
                     title={lockedByPackage ? 'Выдано пакетом/legacy — меняется через пакет' : isManual ? 'Снять ручную выдачу' : 'Выдать вручную'}
-                    className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-40 ${enabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-40 ${enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                   >
                     <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`} />
                   </button>
@@ -573,8 +573,8 @@ export default function OrgDetailPage() {
       </div>
 
       {/* Пакет и модули */}
-      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <Package className="h-4 w-4 text-violet-400" />
           Дополнительные модули
         </h2>
@@ -586,9 +586,9 @@ export default function OrgDetailPage() {
             const on = (org.addonCodes || []).includes(a.code)
             const busy = savingAddon === a.code
             return (
-              <div key={a.code} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+              <div key={a.code} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-white/5 dark:bg-white/[0.02]">
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-white">{a.name}</p>
+                  <p className="truncate text-sm text-slate-900 dark:text-white">{a.name}</p>
                   <p className="text-[11px] text-slate-500">
                     {a.price_kzt.toLocaleString('ru')} ₸ · {a.billing_unit === 'company' ? 'за точку' : a.billing_unit === 'device' ? 'за устройство' : 'за орг'}
                   </p>
@@ -597,7 +597,7 @@ export default function OrgDetailPage() {
                   type="button"
                   onClick={() => handleToggleAddon(a.code, !on)}
                   disabled={busy}
-                  className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${on ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${on ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
                   title={on ? 'Выключить' : 'Включить'}
                 >
                   <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
@@ -608,7 +608,7 @@ export default function OrgDetailPage() {
         </div>
 
         {org.effectiveFeatures && org.effectiveFeatures.length > 0 ? (
-          <div className="mt-4 border-t border-white/5 pt-3">
+          <div className="mt-4 border-t border-slate-200 pt-3 dark:border-white/5">
             <p className="mb-2 text-[11px] text-slate-500">Итоговые права (company_features): {org.effectiveFeatures.length}</p>
             <div className="flex flex-wrap gap-1.5">
               {org.effectiveFeatures.map((ef) => {
@@ -619,8 +619,8 @@ export default function OrgDetailPage() {
                     title={`источник: ${ef.sources.join(', ')}`}
                     className={`rounded-md border px-1.5 py-0.5 text-[11px] ${
                       isLegacy
-                        ? 'border-amber-500/20 bg-amber-500/10 text-amber-300'
-                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                        ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                     }`}
                   >
                     {ef.code}
@@ -636,13 +636,13 @@ export default function OrgDetailPage() {
       </div>
 
       {/* Создать аккаунт владельца */}
-      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-1 text-sm font-semibold text-white">Аккаунт владельца</h2>
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+        <h2 className="mb-1 text-sm font-semibold text-slate-900 dark:text-white">Аккаунт владельца</h2>
         <p className="mb-3 text-xs text-slate-500">Создаёт логин владельца этой организации (роль owner). Под ним клиент видит только свои данные.</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <Input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="Email" className="border-white/10 bg-slate-900/60 text-white" />
-          <Input value={ownerFullName} onChange={(e) => setOwnerFullName(e.target.value)} placeholder="Имя (необяз.)" className="border-white/10 bg-slate-900/60 text-white" />
-          <Input value={ownerPwd} onChange={(e) => setOwnerPwd(e.target.value)} placeholder="Пароль (или сгенерируем)" className="border-white/10 bg-slate-900/60 text-white" />
+          <Input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="Email" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+          <Input value={ownerFullName} onChange={(e) => setOwnerFullName(e.target.value)} placeholder="Имя (необяз.)" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+          <Input value={ownerPwd} onChange={(e) => setOwnerPwd(e.target.value)} placeholder="Пароль (или сгенерируем)" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
         </div>
         <div className="mt-2">
           <Button onClick={handleCreateOwner} disabled={creatingOwner || !ownerEmail.trim()} className="bg-emerald-600 text-white hover:bg-emerald-500">
@@ -651,22 +651,22 @@ export default function OrgDetailPage() {
           </Button>
         </div>
         {createdOwner ? (
-          <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3 text-sm text-emerald-100">
+          <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3 text-sm text-emerald-700 dark:text-emerald-100">
             <div className="font-medium">Аккаунт создан — передайте клиенту:</div>
-            <div className="mt-1 font-mono text-xs text-white">Email: {createdOwner.email}</div>
+            <div className="mt-1 font-mono text-xs text-slate-900 dark:text-white">Email: {createdOwner.email}</div>
             {createdOwner.password ? (
-              <div className="font-mono text-xs text-white">Пароль: {createdOwner.password}</div>
+              <div className="font-mono text-xs text-slate-900 dark:text-white">Пароль: {createdOwner.password}</div>
             ) : (
-              <div className="text-xs text-emerald-200/80">Пароль задан вручную (виден только вам).</div>
+              <div className="text-xs text-emerald-600/80 dark:text-emerald-200/80">Пароль задан вручную (виден только вам).</div>
             )}
-            <div className="mt-1 text-[11px] text-emerald-200/70">Вход: ordaops.kz/login. При первом входе попросит сменить пароль.</div>
+            <div className="mt-1 text-[11px] text-emerald-600/70 dark:text-emerald-200/70">Вход: ordaops.kz/login. При первом входе попросит сменить пароль.</div>
           </div>
         ) : null}
       </div>
 
       {/* Счета (ручной биллинг) */}
-      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <CreditCard className="h-4 w-4 text-violet-400" />
           Счета
         </h2>
@@ -676,10 +676,10 @@ export default function OrgDetailPage() {
           const addonsTotal = (org.addonCodes || []).reduce((s, c) => s + (addons.find((a) => a.code === c)?.price_kzt || 0), 0)
           const suggested = (pkg?.price_kzt || 0) + addonsTotal
           return (
-            <div className="mb-4 rounded-2xl border border-white/5 bg-black/20 p-3">
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/5 dark:bg-black/20">
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-[11px] text-slate-500">К оплате по тарифу:</span>
-                <span className="text-xs text-slate-300">{suggested.toLocaleString('ru')} ₸/мес</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300">{suggested.toLocaleString('ru')} ₸/мес</span>
                 {suggested > 0 ? (
                   <button type="button" onClick={() => setInvAmount(String(suggested))} className="text-[11px] text-violet-400 hover:text-violet-300">
                     подставить
@@ -687,13 +687,13 @@ export default function OrgDetailPage() {
                 ) : null}
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Input type="number" value={invAmount} onChange={(e) => setInvAmount(e.target.value)} placeholder="Сумма ₸" className="border-white/10 bg-slate-900/60 text-white" />
-                <Input type="date" value={invPeriodStart} onChange={(e) => setInvPeriodStart(e.target.value)} title="Период с" className="border-white/10 bg-slate-900/60 text-white" />
-                <Input type="date" value={invPeriodEnd} onChange={(e) => setInvPeriodEnd(e.target.value)} title="Период по" className="border-white/10 bg-slate-900/60 text-white" />
-                <Input type="date" value={invDueDate} onChange={(e) => setInvDueDate(e.target.value)} title="Срок оплаты" className="border-white/10 bg-slate-900/60 text-white" />
+                <Input type="number" value={invAmount} onChange={(e) => setInvAmount(e.target.value)} placeholder="Сумма ₸" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+                <Input type="date" value={invPeriodStart} onChange={(e) => setInvPeriodStart(e.target.value)} title="Период с" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+                <Input type="date" value={invPeriodEnd} onChange={(e) => setInvPeriodEnd(e.target.value)} title="Период по" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
+                <Input type="date" value={invDueDate} onChange={(e) => setInvDueDate(e.target.value)} title="Срок оплаты" className="border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
               </div>
               <div className="mt-2 flex gap-2">
-                <Input value={invNote} onChange={(e) => setInvNote(e.target.value)} placeholder="Комментарий (необяз.)" className="flex-1 border-white/10 bg-slate-900/60 text-white" />
+                <Input value={invNote} onChange={(e) => setInvNote(e.target.value)} placeholder="Комментарий (необяз.)" className="flex-1 border-slate-200 bg-white text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:text-white" />
                 <Button onClick={handleCreateInvoice} disabled={savingInvoice} className="bg-violet-600 text-white hover:bg-violet-500">
                   {savingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Выставить счёт
@@ -708,11 +708,11 @@ export default function OrgDetailPage() {
             {org.invoices.map((inv) => {
               const busy = invoiceBusy === inv.id
               const statusLabel = inv.status === 'paid' ? 'Оплачен' : inv.status === 'void' ? 'Аннулирован' : inv.status === 'overdue' ? 'Просрочен' : 'Выставлен'
-              const statusColor = inv.status === 'paid' ? 'text-emerald-300' : inv.status === 'void' ? 'text-slate-500' : inv.status === 'overdue' ? 'text-red-300' : 'text-amber-300'
+              const statusColor = inv.status === 'paid' ? 'text-emerald-600 dark:text-emerald-300' : inv.status === 'void' ? 'text-slate-500' : inv.status === 'overdue' ? 'text-red-600 dark:text-red-300' : 'text-amber-600 dark:text-amber-300'
               return (
-                <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm">
+                <div key={inv.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/5 dark:bg-white/[0.02]">
                   <div className="min-w-0">
-                    <p className={inv.status === 'void' ? 'text-slate-500 line-through' : 'text-white'}>
+                    <p className={inv.status === 'void' ? 'text-slate-500 line-through' : 'text-slate-900 dark:text-white'}>
                       {Number(inv.amount).toLocaleString('ru')} {inv.currency || '₸'} · <span className={statusColor}>{statusLabel}</span>
                     </p>
                     <p className="text-[11px] text-slate-500">
@@ -727,7 +727,7 @@ export default function OrgDetailPage() {
                         type="button"
                         onClick={() => handleInvoiceAction(inv.id, 'paid')}
                         disabled={busy}
-                        className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                        className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 transition hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
                       >
                         Оплачен
                       </button>
@@ -736,7 +736,7 @@ export default function OrgDetailPage() {
                         onClick={() => handleInvoiceAction(inv.id, 'void')}
                         disabled={busy}
                         title="Аннулировать"
-                        className="rounded-lg p-1 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+                        className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-300"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -752,8 +752,8 @@ export default function OrgDetailPage() {
       </div>
 
       {/* История биллинга */}
-      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <CreditCard className="h-4 w-4 text-violet-400" />
           История биллинга
         </h2>
@@ -762,16 +762,16 @@ export default function OrgDetailPage() {
             {org.billingEvents.map((e, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/5 dark:bg-white/[0.02]"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-white">{BILLING_EVENT_LABELS[e.eventType] || e.eventType}</p>
+                  <p className="truncate text-slate-900 dark:text-white">{BILLING_EVENT_LABELS[e.eventType] || e.eventType}</p>
                   <p className="text-[11px] text-slate-500">
                     {e.createdAt ? new Date(e.createdAt).toLocaleString('ru-RU') : '—'}
                   </p>
                 </div>
                 {e.amount ? (
-                  <span className="shrink-0 font-medium text-slate-200">
+                  <span className="shrink-0 font-medium text-slate-700 dark:text-slate-200">
                     {Number(e.amount).toLocaleString('ru')} {e.currency || '₸'}
                   </span>
                 ) : null}

@@ -26,11 +26,11 @@ type OrgRow = {
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    active: 'bg-emerald-500/15 text-emerald-300',
-    trialing: 'bg-violet-500/15 text-violet-300',
-    past_due: 'bg-red-500/15 text-red-300',
-    suspended: 'bg-slate-500/15 text-slate-400',
-    canceled: 'bg-slate-500/15 text-slate-400',
+    active: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+    trialing: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+    past_due: 'bg-red-500/15 text-red-700 dark:text-red-300',
+    suspended: 'bg-slate-500/15 text-slate-500 dark:text-slate-400',
+    canceled: 'bg-slate-500/15 text-slate-500 dark:text-slate-400',
   }
   const labels: Record<string, string> = {
     active: 'Активна',
@@ -40,7 +40,7 @@ function statusBadge(status: string) {
     canceled: 'Отменена',
   }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${map[status] || 'bg-slate-500/15 text-slate-400'}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${map[status] || 'bg-slate-500/15 text-slate-500 dark:text-slate-400'}`}>
       {labels[status] || status}
     </span>
   )
@@ -81,10 +81,10 @@ export default function OrganizationsPage() {
   )
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Организации</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Организации</h1>
           <p className="mt-1 text-sm text-slate-400">{orgs.length} организаций на платформе</p>
         </div>
         <Link
@@ -101,7 +101,7 @@ export default function OrganizationsPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Поиск по названию..."
-          className="border-white/10 bg-slate-900/60 pl-9 text-white placeholder:text-slate-600"
+          className="border-slate-200 bg-white pl-9 text-slate-900 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:placeholder:text-slate-600"
         />
       </div>
 
@@ -110,10 +110,10 @@ export default function OrganizationsPage() {
           <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-white/10">
+        <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.02]">
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Организация</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Домен</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Подписка</th>
@@ -124,25 +124,25 @@ export default function OrganizationsPage() {
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.04]">
+            <tbody className="divide-y divide-slate-200 dark:divide-white/[0.04]">
               {filtered.map(org => (
-                <tr key={org.id} className="hover:bg-white/[0.02]">
+                <tr key={org.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-xs font-bold text-violet-300">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-xs font-bold text-violet-700 dark:text-violet-300">
                         {org.name.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-medium text-white">{org.name}</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{org.name}</p>
                         <p className="text-xs text-slate-500">{org.slug}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400">{org.primaryDomain || `${org.slug}.ordaops.kz`}</td>
                   <td className="px-4 py-3">{statusBadge(org.subscription?.status || org.status)}</td>
-                  <td className="px-4 py-3 text-slate-300">{org.subscription?.plan?.name || '—'}</td>
-                  <td className="px-3 py-3 text-center text-slate-300">{org.companyCount}</td>
-                  <td className="px-3 py-3 text-center text-slate-300">{org.memberCount}</td>
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{org.subscription?.plan?.name || '—'}</td>
+                  <td className="px-3 py-3 text-center text-slate-700 dark:text-slate-300">{org.companyCount}</td>
+                  <td className="px-3 py-3 text-center text-slate-700 dark:text-slate-300">{org.memberCount}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {org.createdAt ? new Date(org.createdAt).toLocaleDateString('ru-RU') : '—'}
                   </td>
@@ -151,12 +151,12 @@ export default function OrganizationsPage() {
                       <button
                         onClick={() => handleEnter(org.id)}
                         disabled={enteringId === org.id}
-                        className="inline-flex items-center gap-1 text-xs text-emerald-400 transition hover:text-emerald-300 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 text-xs text-emerald-600 transition hover:text-emerald-700 disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
                       >
                         {enteringId === org.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogIn className="h-3 w-3" />}
                         Войти
                       </button>
-                      <Link href={`/platform/organizations/${org.id}`} className="text-xs text-violet-400 hover:text-violet-300">
+                      <Link href={`/platform/organizations/${org.id}`} className="text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">
                         Управлять →
                       </Link>
                     </div>

@@ -495,9 +495,9 @@ function OperatorSalaryDetailPageContent() {
                         <th className="px-4 py-3 text-left">Дата</th>
                         <th className="px-4 py-3 text-center">Смена</th>
                         <th className="px-4 py-3 text-left">Точка</th>
-                        <th className="px-4 py-3 text-right text-green-400">Нал</th>
-                        <th className="px-4 py-3 text-right text-blue-400">Безналичный</th>
-                        <th className="px-4 py-3 text-right text-purple-400">Карта</th>
+                        <th className="px-4 py-3 text-right text-green-600 dark:text-green-400">Нал</th>
+                        <th className="px-4 py-3 text-right text-blue-600 dark:text-blue-400">Безналичный</th>
+                        <th className="px-4 py-3 text-right text-purple-600 dark:text-purple-400">Карта</th>
                         <th className="px-4 py-3 text-right">Выручка</th>
                         <th className="px-4 py-3 text-left">Комментарий</th>
                       </tr>
@@ -509,7 +509,7 @@ function OperatorSalaryDetailPageContent() {
                         <tr key={shift.id} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                           <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-slate-300">{formatRuDate(shift.date)}</td>
                           <td className="px-4 py-3 text-center">
-                            {shift.shift === 'day' ? <Sun className="inline h-4 w-4 text-yellow-400" /> : <Moon className="inline h-4 w-4 text-blue-400" />}
+                            {shift.shift === 'day' ? <Sun className="inline h-4 w-4 text-yellow-600 dark:text-yellow-400" /> : <Moon className="inline h-4 w-4 text-blue-600 dark:text-blue-400" />}
                           </td>
                           <td className="px-4 py-3 text-xs text-slate-400">{shift.companyName || shift.companyCode || '—'}</td>
                           <td className={`px-4 py-3 text-right font-mono text-xs ${shift.cash ? 'text-slate-900 dark:text-white' : 'text-slate-600'}`}>{shift.cash ? money(shift.cash) : '—'}</td>

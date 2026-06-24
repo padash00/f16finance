@@ -143,10 +143,10 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white">Тарифы</h1>
-        <p className="mt-1 text-sm text-slate-400">Планы платформы, их лимиты и функции. Нажми карандаш чтобы редактировать.</p>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Тарифы</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Планы платформы, их лимиты и функции. Нажми карандаш чтобы редактировать.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -155,8 +155,8 @@ export default function BillingPage() {
           const es = isEditing ? editState! : null
 
           return (
-            <div key={plan.id} className={`rounded-xl border bg-white/[0.02] p-5 transition ${
-              savedId === plan.id ? 'border-emerald-500/40' : 'border-white/10'
+            <div key={plan.id} className={`rounded-xl border bg-slate-50 dark:bg-white/[0.02] p-5 transition ${
+              savedId === plan.id ? 'border-emerald-500/40' : 'border-slate-200 dark:border-white/10'
             }`}>
               {/* Header */}
               <div className="mb-4 flex items-start justify-between gap-2">
@@ -164,21 +164,21 @@ export default function BillingPage() {
                   <Input
                     value={es!.name}
                     onChange={e => setEditState(prev => prev ? { ...prev, name: e.target.value } : prev)}
-                    className="border-white/10 bg-slate-900/60 text-white font-semibold"
+                    className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white font-semibold"
                   />
                 ) : (
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-white">{plan.name}</p>
+                      <p className="font-semibold text-slate-900 dark:text-white">{plan.name}</p>
                       {savedId === plan.id && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
                     </div>
-                    {plan.description && <p className="mt-0.5 text-xs text-slate-400">{plan.description}</p>}
+                    {plan.description && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{plan.description}</p>}
                   </div>
                 )}
                 {!isEditing && (
                   <button
                     onClick={() => startEdit(plan)}
-                    className="shrink-0 rounded-lg p-1.5 text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
+                    className="shrink-0 rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:text-slate-900 dark:hover:text-white"
                   >
                     <Edit2 className="h-3.5 w-3.5" />
                   </button>
@@ -192,7 +192,7 @@ export default function BillingPage() {
                     value={es!.description}
                     onChange={e => setEditState(prev => prev ? { ...prev, description: e.target.value } : prev)}
                     placeholder="Описание тарифа"
-                    className="border-white/10 bg-slate-900/60 text-white text-xs"
+                    className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white text-xs"
                   />
                 </div>
               )}
@@ -203,7 +203,7 @@ export default function BillingPage() {
                   <select
                     value={es!.status}
                     onChange={e => setEditState(prev => prev ? { ...prev, status: e.target.value } : prev)}
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs text-white"
+                    className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-3 py-1.5 text-xs text-slate-900 dark:text-white"
                   >
                     <option value="active">Активен</option>
                     <option value="archived">Архив</option>
@@ -212,7 +212,7 @@ export default function BillingPage() {
               )}
 
               {/* Price */}
-              <div className="mb-4 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+              <div className="mb-4 rounded-lg bg-slate-50 dark:bg-white/[0.03] px-3 py-2 text-sm">
                 {isEditing ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
@@ -221,7 +221,7 @@ export default function BillingPage() {
                         value={es!.priceMonthly}
                         onChange={e => setEditState(prev => prev ? { ...prev, priceMonthly: e.target.value } : prev)}
                         placeholder="Цена/мес"
-                        className="border-white/10 bg-slate-900/60 text-white text-xs"
+                        className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white text-xs"
                       />
                       <span className="shrink-0 text-xs text-slate-500">₸/мес</span>
                     </div>
@@ -231,7 +231,7 @@ export default function BillingPage() {
                         value={es!.priceYearly}
                         onChange={e => setEditState(prev => prev ? { ...prev, priceYearly: e.target.value } : prev)}
                         placeholder="Цена/год"
-                        className="border-white/10 bg-slate-900/60 text-white text-xs"
+                        className="border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 text-slate-900 dark:text-white text-xs"
                       />
                       <span className="shrink-0 text-xs text-slate-500">₸/год</span>
                     </div>
@@ -239,8 +239,8 @@ export default function BillingPage() {
                 ) : (
                   <>
                     {plan.priceMonthly != null
-                      ? <p className="text-white">{plan.priceMonthly.toLocaleString('ru')} {plan.currency}/мес</p>
-                      : <p className="text-slate-400">Цена не задана</p>}
+                      ? <p className="text-slate-900 dark:text-white">{plan.priceMonthly.toLocaleString('ru')} {plan.currency}/мес</p>
+                      : <p className="text-slate-500 dark:text-slate-400">Цена не задана</p>}
                     {plan.priceYearly != null && (
                       <p className="text-xs text-slate-500">{plan.priceYearly.toLocaleString('ru')} {plan.currency}/год</p>
                     )}
@@ -255,7 +255,7 @@ export default function BillingPage() {
                   const val = (plan.limits as any)?.[key]
                   return (
                     <div key={key} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-400">{LIMIT_LABELS[key]}</span>
+                      <span className="text-slate-500 dark:text-slate-400">{LIMIT_LABELS[key]}</span>
                       {isEditing ? (
                         <Input
                           type="number"
@@ -264,10 +264,10 @@ export default function BillingPage() {
                             ...prev,
                             limits: { ...prev.limits, [key]: e.target.value },
                           } : prev)}
-                          className="h-6 w-20 border-white/10 bg-slate-900/60 px-2 text-right text-xs text-white"
+                          className="h-6 w-20 border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 px-2 text-right text-xs text-slate-900 dark:text-white"
                         />
                       ) : (
-                        <span className="text-white">
+                        <span className="text-slate-900 dark:text-white">
                           {val === null || val === undefined ? '∞' : String(val)}
                         </span>
                       )}
@@ -293,15 +293,15 @@ export default function BillingPage() {
                           className={`h-4 w-4 shrink-0 rounded border transition ${
                             enabled
                               ? 'border-emerald-500 bg-emerald-500'
-                              : 'border-slate-600 bg-transparent'
+                              : 'border-slate-300 dark:border-slate-600 bg-transparent'
                           }`}
                         />
                       ) : (
                         enabled
                           ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                          : <XCircle className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                          : <XCircle className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-600" />
                       )}
-                      <span className={enabled ? 'text-slate-200' : 'text-slate-500'}>
+                      <span className={enabled ? 'text-slate-700 dark:text-slate-200' : 'text-slate-500'}>
                         {FEATURE_LABELS[key]}
                       </span>
                     </div>
@@ -330,7 +330,7 @@ export default function BillingPage() {
                       variant="outline"
                       onClick={cancelEdit}
                       disabled={saving}
-                      className="border-white/10 text-white hover:bg-white/[0.04]"
+                      className="border-slate-200 dark:border-white/10 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-white/[0.04]"
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -344,61 +344,61 @@ export default function BillingPage() {
         {plans.length === 0 && (
           <div className="col-span-3 py-10 text-center text-sm text-slate-500">
             Тарифы не настроены. Добавьте планы в таблицу{' '}
-            <code className="text-slate-400">subscription_plans</code>.
+            <code className="text-slate-500 dark:text-slate-400">subscription_plans</code>.
           </div>
         )}
       </div>
 
       {/* Отраслевые пакеты */}
       <div className="mb-4 mt-10">
-        <h2 className="text-xl font-semibold text-white">Отраслевые пакеты</h2>
-        <p className="mt-1 text-sm text-slate-400">Что продаём клиенту наружу. Назначаются организации в её карточке (раздел «Пакет и модули»).</p>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Отраслевые пакеты</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Что продаём клиенту наружу. Назначаются организации в её карточке (раздел «Пакет и модули»).</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {packages.map((p: any) => (
-          <div key={p.code} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+          <div key={p.code} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-white">{p.name}</h3>
-              {p.vertical && <span className="shrink-0 rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-300">{p.vertical}</span>}
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">{p.name}</h3>
+              {p.vertical && <span className="shrink-0 rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-600 dark:text-violet-300">{p.vertical}</span>}
             </div>
-            {p.description && <p className="mt-1 text-sm text-slate-400">{p.description}</p>}
-            <div className="mt-3 text-lg font-bold text-white">{Number(p.price_kzt || 0).toLocaleString('ru')} ₸<span className="text-xs font-normal text-slate-500">/мес</span></div>
+            {p.description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{p.description}</p>}
+            <div className="mt-3 text-lg font-bold text-slate-900 dark:text-white">{Number(p.price_kzt || 0).toLocaleString('ru')} ₸<span className="text-xs font-normal text-slate-500">/мес</span></div>
             {Array.isArray(p.feature_codes) && p.feature_codes.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {p.feature_codes.map((c: string) => (
-                  <span key={c} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-300">{c}</span>
+                  <span key={c} className="rounded border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-600 dark:text-slate-300">{c}</span>
                 ))}
               </div>
             )}
           </div>
         ))}
-        {packages.length === 0 && <div className="col-span-3 py-6 text-center text-sm text-slate-500">Пакеты не настроены (таблица <code className="text-slate-400">packages</code>).</div>}
+        {packages.length === 0 && <div className="col-span-3 py-6 text-center text-sm text-slate-500">Пакеты не настроены (таблица <code className="text-slate-500 dark:text-slate-400">packages</code>).</div>}
       </div>
 
       {/* Дополнительные модули */}
       <div className="mb-4 mt-10">
-        <h2 className="text-xl font-semibold text-white">Дополнительные модули (add-ons)</h2>
-        <p className="mt-1 text-sm text-slate-400">Докупаются к любому пакету.</p>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Дополнительные модули (add-ons)</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Докупаются к любому пакету.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {addons.map((a: any) => (
-          <div key={a.code} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+          <div key={a.code} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-white">{a.name}</h3>
-              {a.billing_unit && <span className="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-slate-400">{a.billing_unit}</span>}
+              <h3 className="text-base font-semibold text-slate-900 dark:text-white">{a.name}</h3>
+              {a.billing_unit && <span className="shrink-0 rounded-md border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-2 py-0.5 text-[11px] text-slate-500 dark:text-slate-400">{a.billing_unit}</span>}
             </div>
-            {a.description && <p className="mt-1 text-sm text-slate-400">{a.description}</p>}
-            <div className="mt-3 text-lg font-bold text-white">{Number(a.price_kzt || 0).toLocaleString('ru')} ₸</div>
+            {a.description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{a.description}</p>}
+            <div className="mt-3 text-lg font-bold text-slate-900 dark:text-white">{Number(a.price_kzt || 0).toLocaleString('ru')} ₸</div>
             {Array.isArray(a.feature_codes) && a.feature_codes.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {a.feature_codes.map((c: string) => (
-                  <span key={c} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-300">{c}</span>
+                  <span key={c} className="rounded border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-600 dark:text-slate-300">{c}</span>
                 ))}
               </div>
             )}
           </div>
         ))}
-        {addons.length === 0 && <div className="col-span-3 py-6 text-center text-sm text-slate-500">Модули не настроены (таблица <code className="text-slate-400">addons</code>).</div>}
+        {addons.length === 0 && <div className="col-span-3 py-6 text-center text-sm text-slate-500">Модули не настроены (таблица <code className="text-slate-500 dark:text-slate-400">addons</code>).</div>}
       </div>
     </div>
   )

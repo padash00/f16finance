@@ -29,16 +29,16 @@ export default function PlatformSettingsPage() {
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Настройки платформы</h1>
-        <Link href="/platform/billing" className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 px-3 py-1.5 text-sm text-violet-300 hover:bg-violet-500/10">
+        <Link href="/platform/billing" className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 px-3 py-1.5 text-sm text-violet-600 dark:text-violet-300 hover:bg-violet-500/10">
           <CreditCard className="h-4 w-4" /> Редактировать тарифы
         </Link>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><CreditCard className="h-4 w-4 text-violet-400" /> Тарифы ({plans.length})</h2>
           <div className="space-y-1.5">
             {plans.map((p) => (
@@ -51,7 +51,7 @@ export default function PlatformSettingsPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Package className="h-4 w-4 text-violet-400" /> Пакеты ({packages.length})</h2>
           <div className="space-y-1.5">
             {packages.map((p) => (
@@ -64,7 +64,7 @@ export default function PlatformSettingsPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-5">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-violet-400" /> Модули ({addons.length})</h2>
           <div className="space-y-1.5">
             {addons.map((a) => (
@@ -78,12 +78,12 @@ export default function PlatformSettingsPage() {
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Lock className="h-4 w-4 text-slate-400" /> Зарезервированные поддомены</h2>
+      <div className="mt-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Lock className="h-4 w-4 text-slate-500 dark:text-slate-400" /> Зарезервированные поддомены</h2>
         <p className="mb-2 text-xs text-slate-500">Эти слаги нельзя выдать клиенту (системные поддомены).</p>
         <div className="flex flex-wrap gap-1.5">
           {RESERVED_SLUGS.map((s) => (
-            <span key={s} className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-0.5 text-xs text-slate-300">{s}</span>
+            <span key={s} className="rounded-md border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-2 py-0.5 text-xs text-slate-700 dark:text-slate-300">{s}</span>
           ))}
         </div>
       </div>

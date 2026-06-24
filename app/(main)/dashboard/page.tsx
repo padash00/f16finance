@@ -870,9 +870,9 @@ export default function SmartDashboardPage() {
       window.location.replace('/login')
     }
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl">
-        <Sparkles className="h-5 w-5 text-amber-300" />
-        <span className="text-sm text-slate-300">Перенаправление на вход...</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55">
+        <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+        <span className="text-sm text-slate-700 dark:text-slate-300">Перенаправление на вход...</span>
       </div>
     )
   }
@@ -902,7 +902,7 @@ export default function SmartDashboardPage() {
             <p className="text-slate-400 mb-6">{error}</p>
             <Button
               onClick={() => window.location.reload()}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30"
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 border border-red-500/30"
             >
               Перезагрузить
             </Button>
@@ -935,15 +935,15 @@ export default function SmartDashboardPage() {
           {overdueCount !== null && !overdueDismissed && (
             <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
               <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-              <p className="text-sm text-amber-200 flex-1">
+              <p className="text-sm text-amber-700 dark:text-amber-200 flex-1">
                 <span className="font-semibold">{overdueCount} просроченных задач</span> — дедлайн прошёл, но статус не закрыт.
               </p>
-              <Link href="/tasks" className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2 shrink-0">
+              <Link href="/tasks" className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 underline underline-offset-2 shrink-0">
                 Открыть задачи →
               </Link>
               <button
                 onClick={() => setOverdueDismissed(true)}
-                className="text-amber-500 hover:text-amber-300 transition-colors shrink-0 ml-1"
+                className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors shrink-0 ml-1"
                 aria-label="Скрыть"
               >
                 ✕
@@ -1083,10 +1083,10 @@ function HeaderBlock(props: {
   onToggleExtra: () => void
 }) {
   const statusStyle: Record<AIInsight['status'], string> = {
-    excellent: 'bg-green-500/15 border-green-500/30 text-green-300',
-    good: 'bg-amber-500/15 border-amber-500/30 text-amber-300',
-    warning: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-300',
-    critical: 'bg-red-500/15 border-red-500/30 text-red-300',
+    excellent: 'bg-green-500/15 border-green-500/30 text-green-700 dark:text-green-300',
+    good: 'bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300',
+    warning: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-700 dark:text-yellow-300',
+    critical: 'bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-300',
   }
 
   return (
@@ -1107,7 +1107,7 @@ function HeaderBlock(props: {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white border-slate-200 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700">
               <Sparkles className="w-4 h-4 text-yellow-400" />
               <span className="text-slate-600 dark:text-slate-300 text-sm">Прогноз:</span>
-              <span className="font-medium text-amber-300 text-sm">{props.insight.predictions.confidence}%</span>
+              <span className="font-medium text-amber-600 dark:text-amber-300 text-sm">{props.insight.predictions.confidence}%</span>
             </div>
           </>
         }
@@ -1340,7 +1340,7 @@ function MetricCard(props: {
         <span className="text-slate-500">к прошлому периоду</span>
       </div>
       {props.selected && (
-        <div className="mt-4 text-xs text-amber-300 flex items-center gap-1">
+        <div className="mt-4 text-xs text-amber-600 dark:text-amber-300 flex items-center gap-1">
           <Activity className="w-3 h-3" /> на графике
         </div>
       )}
@@ -1362,7 +1362,7 @@ function ChartCard(props: {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-500/20 rounded-xl">
-            <LineChart className="w-5 h-5 text-amber-300" />
+            <LineChart className="w-5 h-5 text-amber-600 dark:text-amber-300" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Динамика: {metricName}</h3>
@@ -1508,7 +1508,7 @@ function AnomaliesCard({ anomalies }: { anomalies: AIInsight['anomalies'] }) {
     <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-yellow-500/20 rounded-xl">
-          <AlertTriangle className="w-5 h-5 text-yellow-300" />
+          <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-300" />
         </div>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Аномалии</h3>
         {!!anomalies.length && <span className="px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-200 text-xs rounded-full">{anomalies.length}</span>}
@@ -1550,7 +1550,7 @@ function FeedCard(props: {
       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-500/20 rounded-xl">
-            <Activity className="w-5 h-5 text-amber-300" />
+            <Activity className="w-5 h-5 text-amber-600 dark:text-amber-300" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Лента</h3>
@@ -1581,7 +1581,7 @@ function FeedCard(props: {
                   {props.companyName(it.company_id)} • {DateUtils.formatShort(it.date)}
                 </div>
               </div>
-              <div className={`text-xs font-bold font-mono whitespace-nowrap ml-2 ${it.kind === 'income' ? 'text-green-300' : 'text-red-300'}`}>
+              <div className={`text-xs font-bold font-mono whitespace-nowrap ml-2 ${it.kind === 'income' ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'}`}>
                 {it.kind === 'income' ? '+' : '-'}
                 {Formatters.moneyDetailed(it.amount)}
               </div>
@@ -1615,7 +1615,7 @@ function PredictionWide({ insight, currentProfit }: { insight: AIInsight; curren
           </div>
           <div className="text-3xl font-bold text-slate-900 dark:text-white">{Formatters.moneyDetailed(insight.predictions.nextMonthProfit)}</div>
           <div className="text-xs text-slate-400 mt-1">
-            Достоверность: <span className="text-amber-300 font-medium">{insight.predictions.confidence}%</span> • {insight.predictions.recommendation}
+            Достоверность: <span className="text-amber-600 dark:text-amber-300 font-medium">{insight.predictions.confidence}%</span> • {insight.predictions.recommendation}
           </div>
         </div>
 
@@ -1738,7 +1738,7 @@ function Forecast({ insight }: { insight: AIInsight }) {
     <div className="space-y-6">
       <Card className="p-6 border border-slate-200 bg-white dark:border-0 dark:bg-slate-800/50 backdrop-blur-sm">
         <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-5 h-5 text-amber-300" />
+          <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-300" />
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Что делать дальше</h3>
         </div>
 

@@ -306,12 +306,12 @@ export default function CategoriesPage() {
                                     : 'bg-emerald-400'
                             const textColor =
                               pct >= 100
-                                ? 'text-red-400'
+                                ? 'text-red-500 dark:text-red-400'
                                 : pct >= 90
-                                  ? 'text-red-300'
+                                  ? 'text-red-500 dark:text-red-300'
                                   : pct >= 70
-                                    ? 'text-amber-400'
-                                    : 'text-emerald-400'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-emerald-600 dark:text-emerald-400'
                             return (
                               <div className="mt-2 space-y-1">
                                 <div className="flex items-center justify-between text-[11px]">
@@ -329,7 +329,7 @@ export default function CategoriesPage() {
                                   />
                                 </div>
                                 {overBy > 0 ? (
-                                  <p className="text-[10px] text-red-400">
+                                  <p className="text-[10px] text-red-500 dark:text-red-400">
                                     Превышение на {overBy.toLocaleString('ru-RU')} ₸
                                   </p>
                                 ) : null}
@@ -410,7 +410,7 @@ export default function CategoriesPage() {
               </form>
 
               {error && (
-                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400 flex items-center gap-2">
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4" /> {error}
                 </div>
               )}

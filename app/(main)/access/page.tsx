@@ -70,10 +70,10 @@ function fmtDate(iso: string | null) {
 
 function accountStateLabel(state: AccountInfo['accountState']) {
   switch (state) {
-    case 'active': return { label: 'Активен', color: 'text-emerald-300', dot: 'bg-emerald-400' }
-    case 'invited': return { label: 'Приглашён', color: 'text-amber-300', dot: 'bg-amber-400' }
+    case 'active': return { label: 'Активен', color: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-400' }
+    case 'invited': return { label: 'Приглашён', color: 'text-amber-700 dark:text-amber-300', dot: 'bg-amber-400' }
     case 'no_account': return { label: 'Нет аккаунта', color: 'text-slate-400', dot: 'bg-slate-500' }
-    case 'no_email': return { label: 'Нет email', color: 'text-rose-300', dot: 'bg-rose-400' }
+    case 'no_email': return { label: 'Нет email', color: 'text-rose-700 dark:text-rose-300', dot: 'bg-rose-400' }
   }
 }
 
@@ -394,8 +394,8 @@ export default function AccessPage() {
           {posTableExists === false && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-5">
               <div className="mb-3 flex items-center gap-2">
-                <Shield className="h-4 w-4 text-amber-300" />
-                <h2 className="text-sm font-semibold text-amber-200">Требуются таблицы в Supabase</h2>
+                <Shield className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Требуются таблицы в Supabase</h2>
               </div>
               <div className="relative">
                 <pre className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950/70 p-4 text-xs leading-relaxed text-slate-700 dark:text-slate-300">{SQL_POSITIONS}</pre>
@@ -413,7 +413,7 @@ export default function AccessPage() {
           {can('access.create_role') && (
           <div className={`${card} p-5`}>
             <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300"><Plus className="h-4 w-4" /></span>
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"><Plus className="h-4 w-4" /></span>
               Создать должность
             </h2>
             <div className="flex flex-wrap gap-3">
@@ -465,7 +465,7 @@ export default function AccessPage() {
                 </select>
               )}
               {newPosSeed === 'open' && (
-                <span className="text-xs text-amber-300/90">⚠ роль получит все права</span>
+                <span className="text-xs text-amber-700/90 dark:text-amber-300/90">⚠ роль получит все права</span>
               )}
             </div>
           </div>
@@ -499,7 +499,7 @@ export default function AccessPage() {
                         {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                         Сохранить
                       </button>
-                      <button onClick={() => setEditingPos(null)} className="text-slate-500 hover:text-slate-300">
+                      <button onClick={() => setEditingPos(null)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                         <X className="h-4 w-4" />
                       </button>
                     </div>
@@ -537,7 +537,7 @@ export default function AccessPage() {
                           <button
                             onClick={() => handleDeletePosition(pos)}
                             disabled={deletingId === pos.id}
-                            className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-2 text-rose-300 transition-colors hover:bg-rose-500/20 disabled:opacity-50"
+                            className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-2 text-rose-600 dark:text-rose-300 transition-colors hover:bg-rose-500/20 disabled:opacity-50"
                           >
                             {deletingId === pos.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           </button>
@@ -600,7 +600,7 @@ export default function AccessPage() {
                                 <button onClick={() => saveEmail(s.id)} disabled={savingEmailId === s.id} className={btnPrimary}>
                                   {savingEmailId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Сохранить'}
                                 </button>
-                                <button onClick={() => setEditingEmailId(null)} className="text-slate-500 hover:text-slate-300">
+                                <button onClick={() => setEditingEmailId(null)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                                   <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
@@ -633,7 +633,7 @@ export default function AccessPage() {
                                   ))}
                                 </select>
                                 {savingRoleId === s.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
-                                <button onClick={() => setChangingRoleId(null)} className="text-slate-500 hover:text-slate-300">
+                                <button onClick={() => setChangingRoleId(null)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                                   <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
@@ -703,7 +703,7 @@ export default function AccessPage() {
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                             <span className="text-xs font-medium text-emerald-700 dark:text-emerald-200">Новый пароль установлен</span>
                           </div>
-                          <button onClick={() => setGeneratedPasswords(prev => prev.filter(p => p.staffId !== s.id))} className="text-slate-500 hover:text-slate-300">
+                          <button onClick={() => setGeneratedPasswords(prev => prev.filter(p => p.staffId !== s.id))} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                             <X className="h-3.5 w-3.5" />
                           </button>
                         </div>

@@ -2341,7 +2341,7 @@ function WeeklyReportContent() {
                           {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">{cashLabels.providerName}</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
                           {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Online</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
                           {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Карта</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
-                          <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
+                          <div className="flex justify-between text-xs border-t border-slate-200 dark:border-white/5 pt-1 mt-1">
                             <span className="text-slate-700 dark:text-slate-300 font-medium">Итого доход</span>
                             <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
                           </div>

@@ -2417,13 +2417,13 @@ function ReportsContent() {
                           </div>
                           <div className="h-8 bg-slate-100 dark:bg-slate-800/50 rounded-lg overflow-hidden flex">
                             <div 
-                              className={`${item.color} opacity-60 flex items-center justify-end px-2 text-xs text-white font-medium transition-all duration-500`}
+                              className={`${item.color} opacity-60 flex items-center justify-end px-2 text-xs text-slate-900 dark:text-white font-medium transition-all duration-500`}
                               style={{ width: `${(item.previous / max) * 100}%` }}
                             >
                               {item.previous > max * 0.15 && formatMoneyCompact(item.previous)}
                             </div>
                             <div 
-                              className={`${item.color} flex items-center justify-end px-2 text-xs text-white font-medium transition-all duration-500`}
+                              className={`${item.color} flex items-center justify-end px-2 text-xs text-slate-900 dark:text-white font-medium transition-all duration-500`}
                               style={{ width: `${(item.current / max) * 100}%` }}
                             >
                               {formatMoneyCompact(item.current)}

@@ -58,8 +58,8 @@ function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
     <div
       className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${
         ok
-          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-          : 'bg-red-500/10 border-red-500/20 text-red-400'
+          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+          : 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
       }`}
     >
       {ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
@@ -96,7 +96,7 @@ function SectionToggle({
           </div>
           <span className="text-sm font-semibold text-slate-900 dark:text-white">{title}</span>
           {badge && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
               {badge}
             </span>
           )}
@@ -345,7 +345,7 @@ create table if not exists telegram_allowed_users (
 
                 {status?.botInfo && (
                   <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     Бот:{' '}
                     <span className="text-slate-900 dark:text-white font-medium">@{status.botInfo.username}</span>
                     <span className="text-slate-500">({status.botInfo.first_name})</span>
@@ -359,7 +359,7 @@ create table if not exists telegram_allowed_users (
                 )}
 
                 {status?.webhookInfo?.last_error_message && (
-                  <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                  <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg p-3">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     {status.webhookInfo.last_error_message}
                   </div>
@@ -446,7 +446,7 @@ create table if not exists telegram_allowed_users (
                 </button>
               </div>
               {addError && (
-                <p className="text-xs text-red-400">{addError}</p>
+                <p className="text-xs text-red-600 dark:text-red-400">{addError}</p>
               )}
               <p className="text-xs text-slate-600">
                 Свой Telegram ID: напишите боту <span className="text-slate-500 dark:text-slate-400">@userinfobot</span> — он вернёт числовой ID
@@ -473,7 +473,7 @@ create table if not exists telegram_allowed_users (
                   >
                     <div className={`p-1.5 rounded-lg ${user.can_finance ? 'bg-emerald-500/10' : 'bg-slate-100 dark:bg-slate-700'}`}>
                       {user.can_finance ? (
-                        <UserCheck className="w-4 h-4 text-emerald-400" />
+                        <UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       ) : (
                         <UserX className="w-4 h-4 text-slate-500" />
                       )}
@@ -488,7 +488,7 @@ create table if not exists telegram_allowed_users (
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full border ${
                           user.can_finance
-                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                             : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500'
                         }`}
                       >
@@ -510,7 +510,7 @@ create table if not exists telegram_allowed_users (
                       {can('telegram.delete_user') && (
                         <button
                           onClick={() => handleDeleteUser(user.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           title="Удалить"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -594,7 +594,7 @@ create table if not exists telegram_allowed_users (
                           </>
                         ) : (
                           <>
-                            <span className={`text-xs font-mono ${member.telegram_chat_id ? 'text-amber-400' : 'text-slate-600'}`}>
+                            <span className={`text-xs font-mono ${member.telegram_chat_id ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600'}`}>
                               {member.telegram_chat_id || 'не привязан'}
                             </span>
                             {can('telegram.edit_staff_telegram') && (
@@ -612,7 +612,7 @@ create table if not exists telegram_allowed_users (
                   )
                 })}
                 {staffSaveMsg && (
-                  <div className={`text-xs rounded-lg px-3 py-2 ${staffSaveMsg.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                  <div className={`text-xs rounded-lg px-3 py-2 ${staffSaveMsg.ok ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
                     {staffSaveMsg.text}
                   </div>
                 )}
@@ -646,7 +646,7 @@ create table if not exists telegram_allowed_users (
                 )}
               </div>
               {setupMsg && (
-                <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${setupMsg.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${setupMsg.ok ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
                   {setupMsg.text}
                 </div>
               )}
@@ -682,7 +682,7 @@ create table if not exists telegram_allowed_users (
                 )}
               </div>
               {reportMsg && (
-                <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${reportMsg.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                <div className={`mt-3 text-xs rounded-lg px-3 py-2 ${reportMsg.ok ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'}`}>
                   {reportMsg.text}
                 </div>
               )}
@@ -704,12 +704,12 @@ create table if not exists telegram_allowed_users (
                 { cmd: '#123 готово', desc: 'Ответ по задаче — завершил', locked: false },
               ].map(({ cmd, desc, locked }) => (
                 <div key={cmd} className="flex items-center gap-3 py-1.5 border-b border-slate-200/60 dark:border-slate-800/40 last:border-0">
-                  <code className="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono w-32 shrink-0 truncate">
+                  <code className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono w-32 shrink-0 truncate">
                     {cmd}
                   </code>
                   <span className="text-sm text-slate-600 dark:text-slate-400 flex-1">{desc}</span>
                   {locked && (
-                    <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded whitespace-nowrap">
+                    <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded whitespace-nowrap">
                       🔒 доступ
                     </span>
                   )}

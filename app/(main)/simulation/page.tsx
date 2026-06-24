@@ -316,7 +316,7 @@ export default function SimulationPage() {
           </div>
           <div className="mt-3 overflow-auto rounded-xl border border-slate-200 dark:border-white/10">
             <table className="w-full text-sm">
-              <thead className="bg-white/[0.03] text-xs text-muted-foreground">
+              <thead className="bg-slate-50 dark:bg-white/[0.03] text-xs text-muted-foreground">
                 <tr className="text-left">
                   <th className="px-3 py-2 font-normal">Зона</th>
                   <th className="px-3 py-2 text-right font-normal">Устройств</th>

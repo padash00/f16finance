@@ -55,44 +55,44 @@ export default function PlatformAnalyticsPage() {
   if (!data) return <div className="p-6 text-sm text-slate-500">Нет данных.</div>
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <h1 className="mb-5 text-2xl font-semibold">Аналитика платформы</h1>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.05] p-4">
-          <p className="text-xs text-slate-400">MRR</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">MRR</p>
           <p className="mt-1 text-2xl font-bold">{fmt(data.totals.mrr)} ₸</p>
         </div>
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
-          <p className="text-xs text-slate-400">Активных подписок</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Активных подписок</p>
           <p className="mt-1 text-2xl font-bold">{data.totals.activeSubscriptions}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-          <p className="text-xs text-slate-400">Организаций</p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-4">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Организаций</p>
           <p className="mt-1 text-2xl font-bold">{data.totals.organizations}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-          <p className="text-xs text-slate-400">Оплачено всего</p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-4">
+          <p className="text-xs text-slate-500 dark:text-slate-400">Оплачено всего</p>
           <p className="mt-1 text-2xl font-bold">{fmt(data.totals.paidInvoicesTotal)} ₸</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-5">
           <h2 className="mb-4 text-sm font-semibold">Новые организации по месяцам</h2>
           <Bars months={data.months} values={data.newOrgsByMonth} color="bg-violet-500/60" />
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-5">
           <h2 className="mb-4 text-sm font-semibold">Выручка (оплачено) по месяцам, ₸</h2>
           <Bars months={data.months} values={data.revenueByMonth} color="bg-emerald-500/60" />
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] p-5">
         <h2 className="mb-3 text-sm font-semibold">Организации по статусу</h2>
         <div className="flex flex-wrap gap-2">
           {Object.entries(data.statusBreakdown).map(([k, v]) => (
-            <span key={k} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm">
+            <span key={k} className="rounded-lg border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] px-3 py-1.5 text-sm">
               {STATUS_LABELS[k] || k}: <b>{v}</b>
             </span>
           ))}

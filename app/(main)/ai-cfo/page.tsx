@@ -156,7 +156,7 @@ export default function AiCfoPage() {
         backHref="/"
         actions={
           <button onClick={() => run(lastParams, sel, true)} disabled={loading}
-            className={`inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-white/[0.03] disabled:opacity-50`}>
+            className={`inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-slate-100 dark:hover:bg-white/[0.03] disabled:opacity-50`}>
             <RefreshCw className="h-3.5 w-3.5" /> Обновить
           </button>
         }
@@ -171,7 +171,7 @@ export default function AiCfoPage() {
             <div className="flex flex-wrap items-center gap-2">
               {[7, 30, 90, 365].map((d) => (
                 <button key={d} onClick={() => run({ days: d }, `d${d}`)} disabled={loading}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-slate-100 dark:hover:bg-white/[0.03]`}`}>
                   {d} дн
                 </button>
               ))}
@@ -185,7 +185,7 @@ export default function AiCfoPage() {
                 <span className={C.sub}>—</span>
                 <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-2 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
                 <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-slate-100 dark:hover:bg-white/[0.03]`}`}>
                   Период
                 </button>
               </div>

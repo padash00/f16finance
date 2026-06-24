@@ -77,13 +77,13 @@ function MegaMenuItem({
             </span>
           ) : null}
           {item.isNew ? (
-            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
               new
             </span>
           ) : null}
         </div>
         {item.note ? (
-          <p className={cn('mt-0.5 line-clamp-1 text-xs', active ? 'text-slate-400' : 'text-slate-500 group-hover:text-slate-400')}>
+          <p className={cn('mt-0.5 line-clamp-1 text-xs', active ? 'text-slate-500 dark:text-slate-400' : 'text-slate-500 group-hover:text-slate-500 dark:group-hover:text-slate-400')}>
             {item.note}
           </p>
         ) : null}
@@ -207,7 +207,7 @@ function SectionButton({
           isOpen && !active && 'bg-slate-100 text-slate-900 dark:bg-white/5 dark:text-white',
         )}
       >
-        <SectionIcon className={cn('h-4 w-4', active ? style.text : 'text-slate-400')} />
+        <SectionIcon className={cn('h-4 w-4', active ? style.text : 'text-slate-500 dark:text-slate-400')} />
         <span className="hidden lg:inline">{section.title}</span>
         <ChevronDown
           className={cn(
@@ -375,7 +375,7 @@ function UserMenu({
               <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">online</span>
             </div>
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 dark:border-white/5 dark:bg-slate-800 px-2 py-1">
-              <Shield className="h-3 w-3 text-slate-400" />
+              <Shield className="h-3 w-3 text-slate-500 dark:text-slate-400" />
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{roleLabel || 'control'}</span>
             </div>
           </div>

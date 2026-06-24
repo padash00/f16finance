@@ -255,7 +255,7 @@ export default function SalesMonitorPage() {
         </div>
       )}
 
-      {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">{error}</div>}
+      {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-200">{error}</div>}
 
       {tab === 'abc' ? <AbcEmbed embedded /> :
        tab === 'forecast' ? <ForecastEmbed embedded /> :
@@ -281,15 +281,15 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
     <>
       {/* 3 верхние карточки: Продажи / Возврат / Приёмка */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard label="Продажи" icon={<TrendingUp className="h-4 w-4" />} color="text-emerald-300" amount={t!.amount} count={t!.count} delta={data.prev.delta_pct} />
-        <StatCard label="Возврат" icon={<RotateCcw className="h-4 w-4" />} color="text-rose-300" amount={data.returns.amount} count={data.returns.count} />
-        <StatCard label="Приёмка" icon={<Truck className="h-4 w-4" />} color="text-sky-300" amount={data.receipts.amount} count={data.receipts.count} />
+        <StatCard label="Продажи" icon={<TrendingUp className="h-4 w-4" />} color="text-emerald-600 dark:text-emerald-300" amount={t!.amount} count={t!.count} delta={data.prev.delta_pct} />
+        <StatCard label="Возврат" icon={<RotateCcw className="h-4 w-4" />} color="text-rose-600 dark:text-rose-300" amount={data.returns.amount} count={data.returns.count} />
+        <StatCard label="Приёмка" icon={<Truck className="h-4 w-4" />} color="text-sky-600 dark:text-sky-300" amount={data.receipts.amount} count={data.receipts.count} />
       </div>
 
       {/* График по часам + сетка KPI */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className={`${card} p-4 lg:col-span-2`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Clock className="h-4 w-4 text-sky-300" /> Продажи {useDaily ? 'по дням' : 'по часам'}</div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Clock className="h-4 w-4 text-sky-600 dark:text-sky-300" /> Продажи {useDaily ? 'по дням' : 'по часам'}</div>
           {(t!.amount === 0) ? (
             <div className="flex h-44 items-center justify-center text-sm text-slate-500">Нет данных для отображения</div>
           ) : useDaily ? (
@@ -318,17 +318,17 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Kpi label="Выручка" value={`${fmt(t!.amount)} ₸`} icon={<TrendingUp className="h-4 w-4" />} accent="text-emerald-300" />
-          <Kpi label="Чистая прибыль" value={`${fmt(t!.net_profit)} ₸`} icon={<Coins className="h-4 w-4" />} accent={t!.net_profit >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+          <Kpi label="Выручка" value={`${fmt(t!.amount)} ₸`} icon={<TrendingUp className="h-4 w-4" />} accent="text-emerald-600 dark:text-emerald-300" />
+          <Kpi label="Чистая прибыль" value={`${fmt(t!.net_profit)} ₸`} icon={<Coins className="h-4 w-4" />} accent={t!.net_profit >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'} />
           <Kpi label="Средний чек" value={`${fmt(t!.avg_check)} ₸`} icon={<Activity className="h-4 w-4" />} accent="text-slate-900 dark:text-white" />
-          <Kpi label="За последний час" value={`${fmt(data.last_hour.amount)} ₸`} sub={`${data.last_hour.count} продаж`} icon={<Clock className="h-4 w-4" />} accent="text-amber-300" />
+          <Kpi label="За последний час" value={`${fmt(data.last_hour.amount)} ₸`} sub={`${data.last_hour.count} продаж`} icon={<Clock className="h-4 w-4" />} accent="text-amber-600 dark:text-amber-300" />
         </div>
       </div>
 
       {/* Информация о сотрудниках + товары по категориям */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white"><Users className="h-4 w-4 text-violet-300" /> Информация о сотрудниках</div>
+          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white"><Users className="h-4 w-4 text-violet-600 dark:text-violet-300" /> Информация о сотрудниках</div>
           {data.by_operator.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -343,7 +343,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
                     <td className="px-4 py-2.5 text-slate-900 dark:text-white">{o.name}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{o.count}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{fmt(o.avg_check)} ₸</td>
-                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-300">{fmt(o.amount)} ₸</td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-300">{fmt(o.amount)} ₸</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -351,7 +351,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
           )}
         </div>
         <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white"><Tags className="h-4 w-4 text-amber-300" /> Товары по категориям</div>
+          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white"><Tags className="h-4 w-4 text-amber-600 dark:text-amber-300" /> Товары по категориям</div>
           {data.by_category.length === 0 ? <div className="px-4 py-10 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -364,7 +364,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
                   <tr key={c.name} className="transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-slate-900 dark:text-white">{c.name}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{fmt(c.qty)}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-300">{fmt(c.revenue)} ₸</td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-600 dark:text-amber-300">{fmt(c.revenue)} ₸</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -405,7 +405,7 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className={`${card} overflow-hidden`}>
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 px-4 py-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Activity className="h-4 w-4 text-emerald-300" /> Лента продаж</span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Activity className="h-4 w-4 text-emerald-600 dark:text-emerald-300" /> Лента продаж</span>
             <span className="text-xs text-slate-500">последние {data.recent.length}</span>
           </div>
           <div className="max-h-[420px] divide-y divide-slate-100 dark:divide-white/5 overflow-y-auto">
@@ -428,14 +428,14 @@ function MonitorView({ data, loading, flashIds }: { data: MonData | null; loadin
           </div>
         </div>
         <div className={`${card} p-4`}>
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Trophy className="h-4 w-4 text-amber-300" /> Топ товары</div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Trophy className="h-4 w-4 text-amber-600 dark:text-amber-300" /> Топ товары</div>
           {data.top_items.length === 0 ? <div className="py-6 text-center text-sm text-slate-400">Нет данных</div> : (
             <div className="space-y-1.5">{data.top_items.map((it, i) => (
               <div key={it.name} className="flex items-center gap-3 text-sm">
                 <span className="w-5 shrink-0 text-center text-xs text-slate-500">{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">{it.name}</span>
                 <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{it.qty} шт</span>
-                <span className="w-24 shrink-0 text-right font-medium tabular-nums text-emerald-300">{fmt(it.revenue)} ₸</span>
+                <span className="w-24 shrink-0 text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-300">{fmt(it.revenue)} ₸</span>
               </div>
             ))}</div>
           )}
@@ -495,28 +495,28 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
     <>
       {tab === 'stock' ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi label="Возможные продажи" value={`${fmt(data.stock_totals.possible_sales)} ₸`} accent="text-sky-300" icon={<TrendingUp className="h-4 w-4" />} />
-          <Kpi label="Возможная прибыль" value={`${fmt(data.stock_totals.possible_profit)} ₸`} accent="text-emerald-300" icon={<Coins className="h-4 w-4" />} />
-          <Kpi label="Сумма закупки" value={`${fmt(data.stock_totals.purchase_sum)} ₸`} accent="text-amber-300" icon={<Coins className="h-4 w-4" />} />
+          <Kpi label="Возможные продажи" value={`${fmt(data.stock_totals.possible_sales)} ₸`} accent="text-sky-600 dark:text-sky-300" icon={<TrendingUp className="h-4 w-4" />} />
+          <Kpi label="Возможная прибыль" value={`${fmt(data.stock_totals.possible_profit)} ₸`} accent="text-emerald-600 dark:text-emerald-300" icon={<Coins className="h-4 w-4" />} />
+          <Kpi label="Сумма закупки" value={`${fmt(data.stock_totals.purchase_sum)} ₸`} accent="text-amber-600 dark:text-amber-300" icon={<Coins className="h-4 w-4" />} />
           <Kpi label="Количество товаров" value={`${fmt(data.stock_totals.total_qty)} шт`} accent="text-slate-900 dark:text-white" icon={<Package className="h-4 w-4" />} />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Kpi label="Выручка" value={`${fmt(data.sales_totals.revenue)} ₸`} accent="text-sky-300" icon={<TrendingUp className="h-4 w-4" />} big />
-          <Kpi label="Чистая прибыль" value={`${fmt(data.sales_totals.profit)} ₸`} accent="text-emerald-300" icon={<Coins className="h-4 w-4" />} big />
+          <Kpi label="Выручка" value={`${fmt(data.sales_totals.revenue)} ₸`} accent="text-sky-600 dark:text-sky-300" icon={<TrendingUp className="h-4 w-4" />} big />
+          <Kpi label="Чистая прибыль" value={`${fmt(data.sales_totals.profit)} ₸`} accent="text-emerald-600 dark:text-emerald-300" icon={<Coins className="h-4 w-4" />} big />
           <Kpi label="Количество продаж" value={`${fmt(data.sales_totals.qty)} шт`} accent="text-slate-900 dark:text-white" icon={<Receipt className="h-4 w-4" />} big />
         </div>
       )}
 
       {tab === 'profit' && (data.no_cost?.sold ?? 0) > 0 && (
-        <a href="/store/stock" className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-100 transition-colors hover:bg-amber-500/15">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+        <a href="/store/stock" className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-500/15">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
           <span><b>{data.no_cost!.sold}</b> проданных товаров без закупочной цены — прибыль завышена. Заполнить в каталоге →</span>
         </a>
       )}
       {tab === 'stock' && (data.no_cost?.stock ?? 0) > 0 && (
-        <a href="/store/stock" className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-100 transition-colors hover:bg-amber-500/15">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300" />
+        <a href="/store/stock" className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-500/15">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
           <span><b>{data.no_cost!.stock}</b> товаров на остатке без закупочной цены — оценка неточная. Заполнить в каталоге →</span>
         </a>
       )}
@@ -563,7 +563,7 @@ function ProductView({ data, loading, tab, category, setCategory, q }: { data: P
                         <td className="px-4 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{it.barcode || '—'}</td>
                         <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.category || '—'}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">{fmt(it.qty)} {it.unit}</td>
-                        <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${tab === 'profit' ? 'text-emerald-300' : 'text-sky-300'}`}>{fmt(tab === 'profit' ? it.profit : it.revenue)} ₸{tab === 'profit' && <span className="ml-1 text-[11px] text-slate-500">{it.margin_percent}%</span>}</td>
+                        <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${tab === 'profit' ? 'text-emerald-600 dark:text-emerald-300' : 'text-sky-600 dark:text-sky-300'}`}>{fmt(tab === 'profit' ? it.profit : it.revenue)} ₸{tab === 'profit' && <span className="ml-1 text-[11px] text-slate-500">{it.margin_percent}%</span>}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-slate-400">{fmt(it.stock)}</td>
                       </>
                     )}

@@ -45,16 +45,16 @@ type OrgRow = {
 
 function StatCard({ label, value, sub, color = 'violet' }: { label: string; value: string | number; sub?: string; color?: string }) {
   const colors: Record<string, string> = {
-    violet: 'from-violet-500/10 border-violet-500/20 text-violet-300',
-    emerald: 'from-emerald-500/10 border-emerald-500/20 text-emerald-300',
-    amber: 'from-amber-500/10 border-amber-500/20 text-amber-300',
-    red: 'from-red-500/10 border-red-500/20 text-red-300',
-    blue: 'from-blue-500/10 border-blue-500/20 text-blue-300',
+    violet: 'from-violet-500/10 border-violet-500/20 text-violet-700 dark:text-violet-300',
+    emerald: 'from-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300',
+    amber: 'from-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300',
+    red: 'from-red-500/10 border-red-500/20 text-red-700 dark:text-red-300',
+    blue: 'from-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300',
   }
   return (
     <div className={`rounded-xl border bg-gradient-to-br ${colors[color]} p-4`}>
       <p className="text-xs font-medium opacity-70">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+      <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
       {sub && <p className="mt-0.5 text-xs opacity-60">{sub}</p>}
     </div>
   )
@@ -62,11 +62,11 @@ function StatCard({ label, value, sub, color = 'violet' }: { label: string; valu
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    active: 'bg-emerald-500/15 text-emerald-300',
-    trialing: 'bg-violet-500/15 text-violet-300',
-    past_due: 'bg-red-500/15 text-red-300',
-    suspended: 'bg-slate-500/15 text-slate-400',
-    canceled: 'bg-slate-500/15 text-slate-400',
+    active: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+    trialing: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+    past_due: 'bg-red-500/15 text-red-700 dark:text-red-300',
+    suspended: 'bg-slate-500/15 text-slate-500 dark:text-slate-400',
+    canceled: 'bg-slate-500/15 text-slate-500 dark:text-slate-400',
   }
   const labels: Record<string, string> = {
     active: 'Активна',
@@ -76,7 +76,7 @@ function statusBadge(status: string) {
     canceled: 'Отменена',
   }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${map[status] || 'bg-slate-500/15 text-slate-400'}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${map[status] || 'bg-slate-500/15 text-slate-500 dark:text-slate-400'}`}>
       {labels[status] || status}
     </span>
   )
@@ -108,10 +108,10 @@ export default function PlatformOverviewPage() {
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white">Обзор платформы</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Обзор платформы</h1>
         <p className="mt-1 text-sm text-slate-400">Все организации, подписки и активность в одном месте.</p>
       </div>
 
@@ -151,7 +151,7 @@ export default function PlatformOverviewPage() {
       {/* Требуют внимания */}
       {attention.length > 0 && (
         <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-300">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
             <AlertTriangle className="h-4 w-4" /> Требуют внимания ({attention.length})
           </h2>
           <div className="space-y-1.5">
@@ -159,12 +159,12 @@ export default function PlatformOverviewPage() {
               <Link
                 key={a.id}
                 href={`/platform/organizations/${a.id}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-sm transition hover:bg-white/[0.04]"
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition hover:bg-slate-100 dark:border-white/5 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
               >
-                <span className="font-medium text-white">{a.name}</span>
+                <span className="font-medium text-slate-900 dark:text-white">{a.name}</span>
                 <span className="flex flex-wrap items-center justify-end gap-1.5">
                   {a.reasons.map((r) => (
-                    <span key={r} className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-300">{r}</span>
+                    <span key={r} className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">{r}</span>
                   ))}
                 </span>
               </Link>
@@ -178,23 +178,23 @@ export default function PlatformOverviewPage() {
         <Link href="/platform/new" className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 transition hover:bg-emerald-500/10">
           <PlusCircle className="h-5 w-5 text-emerald-400" />
           <div>
-            <p className="text-sm font-medium text-white">Создать организацию</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-white">Создать организацию</p>
             <p className="text-xs text-slate-400">Новый клиент на платформе</p>
           </div>
           <ArrowRight className="ml-auto h-4 w-4 text-slate-500" />
         </Link>
-        <Link href="/platform/organizations" className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 transition hover:bg-white/[0.04]">
+        <Link href="/platform/organizations" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]">
           <Building2 className="h-5 w-5 text-violet-400" />
           <div>
-            <p className="text-sm font-medium text-white">Все организации</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-white">Все организации</p>
             <p className="text-xs text-slate-400">Управление и настройка</p>
           </div>
           <ArrowRight className="ml-auto h-4 w-4 text-slate-500" />
         </Link>
-        <Link href="/platform/billing" className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 transition hover:bg-white/[0.04]">
+        <Link href="/platform/billing" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]">
           <CreditCard className="h-5 w-5 text-amber-400" />
           <div>
-            <p className="text-sm font-medium text-white">Тарифы</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-white">Тарифы</p>
             <p className="text-xs text-slate-400">Планы, лимиты, фичи</p>
           </div>
           <ArrowRight className="ml-auto h-4 w-4 text-slate-500" />
@@ -204,15 +204,15 @@ export default function PlatformOverviewPage() {
       {/* Recent orgs */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Последние организации</h2>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Последние организации</h2>
           <Link href="/platform/organizations" className="text-xs text-violet-400 hover:text-violet-300">
             Все →
           </Link>
         </div>
-        <div className="overflow-hidden rounded-xl border border-white/10">
+        <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.02]">
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400">Организация</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400">Статус</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-400">Тариф</th>
@@ -221,24 +221,24 @@ export default function PlatformOverviewPage() {
                 <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-400"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.04]">
+            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
               {orgs.map(org => (
-                <tr key={org.id} className="hover:bg-white/[0.02]">
+                <tr key={org.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-xs font-bold text-violet-300">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-xs font-bold text-violet-700 dark:text-violet-300">
                         {org.name.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-medium text-white">{org.name}</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{org.name}</p>
                         <p className="text-xs text-slate-500">{org.slug}.ordaops.kz</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">{statusBadge(org.subscription?.status || org.status)}</td>
-                  <td className="px-4 py-3 text-slate-300">{org.subscription?.plan?.name || '—'}</td>
-                  <td className="px-3 py-3 text-center text-slate-300">{org.companyCount}</td>
-                  <td className="px-3 py-3 text-center text-slate-300">{org.memberCount}</td>
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{org.subscription?.plan?.name || '—'}</td>
+                  <td className="px-3 py-3 text-center text-slate-700 dark:text-slate-300">{org.companyCount}</td>
+                  <td className="px-3 py-3 text-center text-slate-700 dark:text-slate-300">{org.memberCount}</td>
                   <td className="px-4 py-3 text-right">
                     <Link href={`/platform/organizations/${org.id}`} className="text-xs text-violet-400 hover:text-violet-300">
                       Открыть →

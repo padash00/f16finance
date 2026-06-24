@@ -342,7 +342,7 @@ export default function PerformancePage() {
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">1</div>
             <div className="flex-1">
               <div className="font-semibold text-slate-900 dark:text-white mb-1">Считаем «ожидание» для каждой смены</div>
-              <p className="text-slate-400 leading-relaxed">
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
                 Берём <strong className="text-slate-700 dark:text-slate-200">всю историю проекта</strong>
                 {data?.baseline.from && (
                   <> с <strong className="text-slate-700 dark:text-slate-200">{data.baseline.from}</strong> ({data.config.baseline_days_actual} дн.)</>
@@ -353,7 +353,7 @@ export default function PerformancePage() {
                 Окно автоматически расширяется по мере накопления данных — мы не теряем ранние смены и точно знаем,
                 сколько в среднем делается в каждый понедельник, пятницу, ночь и т.д.
               </p>
-              <p className="text-slate-400 leading-relaxed mt-2">
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
                 <strong className="text-amber-700 dark:text-amber-300">Важно (leave-one-out):</strong> когда мы считаем ожидание для смены оператора Х — его собственные прошлые смены <strong className="text-amber-700 dark:text-amber-300">не входят в медиану</strong>.
                 Это убирает «само-смещение»: если оператор работал почти все пятничные ночи, его прошлые результаты не должны формировать его же норму. Сравниваем его только с тем что делали <strong>другие</strong> в таком же слоте.
               </p>
@@ -368,7 +368,7 @@ export default function PerformancePage() {
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">2</div>
             <div className="flex-1">
               <div className="font-semibold text-slate-900 dark:text-white mb-1">Считаем PI каждой смены оператора</div>
-              <p className="text-slate-400 leading-relaxed">
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
                 Для каждой смены берём фактическую выручку и делим на ожидание этого слота:
               </p>
               <div className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3 font-mono text-sm text-emerald-700 dark:text-emerald-200">
@@ -392,7 +392,7 @@ export default function PerformancePage() {
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">3</div>
             <div className="flex-1">
               <div className="font-semibold text-slate-900 dark:text-white mb-1">Берём среднее PI по всем сменам — это балл оператора</div>
-              <p className="text-slate-400 leading-relaxed">
+              <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
                 У оператора 8 смен за месяц → 8 PI. Их среднее и есть его рейтинговый балл.
               </p>
               <div className="mt-2 rounded-lg border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20 p-3 text-xs text-slate-500 dark:text-slate-400">
@@ -472,7 +472,7 @@ export default function PerformancePage() {
             <Award className="w-4 h-4 text-emerald-400" />
             Основной рейтинг ({qualifying.length})
           </h3>
-          {refreshing && <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+          {refreshing && <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500 dark:text-slate-400" />}
         </div>
 
         {loading && !data ? (

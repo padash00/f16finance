@@ -997,13 +997,13 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
           )}
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Сумма всех приёмок</p>
+          <p className="text-[10px] uppercase tracking-widest text-emerald-600 dark:text-emerald-300/70">Сумма всех приёмок</p>
           {loading ? <Skeleton className="mt-1 h-7 w-28" /> : (
             <p className="mt-1 truncate text-xl font-semibold text-emerald-700 dark:text-emerald-200" title={formatMoney(totalReceiptsAmount)}>{formatMoney(totalReceiptsAmount)}</p>
           )}
         </Card>
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Поставщиков</p>
+          <p className="text-[10px] uppercase tracking-widest text-amber-600 dark:text-amber-300/70">Поставщиков</p>
           {loading ? <Skeleton className="mt-1 h-7 w-12" /> : (
             <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-200">{(data?.suppliers || []).length}</p>
           )}
@@ -1059,7 +1059,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
       {(data?.drafts || []).length > 0 ? (
         <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
-          <p className="text-[11px] uppercase tracking-wider text-amber-300/80 mb-2">Черновики приемки</p>
+          <p className="text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-300/80 mb-2">Черновики приемки</p>
           <div className="flex flex-wrap gap-2">
             {(data?.drafts || []).map((draft) => (
               <div key={draft.id} className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-slate-100 dark:bg-black/20 px-3 py-1 text-xs">

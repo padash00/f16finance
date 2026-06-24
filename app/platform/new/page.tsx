@@ -99,9 +99,9 @@ export default function NewOrganizationPage() {
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20">
           <CheckCircle2 className="h-8 w-8 text-emerald-400" />
         </div>
-        <h2 className="text-2xl font-semibold text-white">Организация создана</h2>
+        <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Организация создана</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Поддомен <span className="text-violet-300">{createdOrg.primaryDomain}</span> активирован.
+          Поддомен <span className="text-violet-600 dark:text-violet-300">{createdOrg.primaryDomain}</span> активирован.
           После DNS-пропагации клиент сможет войти.
         </p>
         {createdOrg.appUrl && (
@@ -109,7 +109,7 @@ export default function NewOrganizationPage() {
             href={createdOrg.appUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             Открыть рабочее пространство
@@ -117,16 +117,16 @@ export default function NewOrganizationPage() {
         )}
         {createdOrg.ownerEmail && (
           <div className="mt-5 w-full max-w-md rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-left">
-            <p className="mb-2 text-xs font-medium text-amber-300">Доступ владельца (передайте клиенту)</p>
+            <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">Доступ владельца (передайте клиенту)</p>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between gap-3">
                 <span className="text-slate-400">Email</span>
-                <span className="font-mono text-white">{createdOrg.ownerEmail}</span>
+                <span className="font-mono text-slate-900 dark:text-white">{createdOrg.ownerEmail}</span>
               </div>
               {createdOrg.ownerPassword ? (
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-400">Пароль</span>
-                  <span className="font-mono text-white">{createdOrg.ownerPassword}</span>
+                  <span className="font-mono text-slate-900 dark:text-white">{createdOrg.ownerPassword}</span>
                 </div>
               ) : (
                 <p className="text-xs text-slate-500">Аккаунт с таким email уже существовал — пароль не менялся.</p>
@@ -141,7 +141,7 @@ export default function NewOrganizationPage() {
           <Button
             variant="outline"
             onClick={() => router.push('/platform/organizations')}
-            className="border-white/10 text-white hover:bg-white/[0.04]"
+            className="border-slate-200 text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/[0.04]"
           >
             К списку организаций
           </Button>
@@ -157,13 +157,13 @@ export default function NewOrganizationPage() {
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <div className="mb-6 flex items-center gap-3">
-        <button onClick={() => router.push('/platform')} className="text-slate-400 hover:text-white">
+        <button onClick={() => router.push('/platform')} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h1 className="text-2xl font-semibold text-white">Новая организация</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Новая организация</h1>
           <p className="mt-0.5 text-sm text-slate-400">Шаг {step} из 2</p>
         </div>
       </div>
@@ -171,7 +171,7 @@ export default function NewOrganizationPage() {
       {/* Progress */}
       <div className="mb-8 flex gap-2">
         {[1, 2].map(s => (
-          <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= step ? 'bg-violet-500' : 'bg-white/10'}`} />
+          <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= step ? 'bg-violet-500' : 'bg-slate-200 dark:bg-white/10'}`} />
         ))}
       </div>
 
@@ -184,7 +184,7 @@ export default function NewOrganizationPage() {
                 value={name}
                 onChange={e => handleNameChange(e.target.value)}
                 placeholder="F16 Arena"
-                className="border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600"
+                className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:placeholder:text-slate-600"
                 autoFocus
               />
             </div>
@@ -195,18 +195,18 @@ export default function NewOrganizationPage() {
                   value={slug}
                   onChange={e => { setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')); setSlugManual(true) }}
                   placeholder="f16"
-                  className="border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600"
+                  className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:placeholder:text-slate-600"
                 />
                 <span className="shrink-0 text-sm text-slate-500">.ordaops.kz</span>
               </div>
               {slug && (
                 <p className="text-xs text-slate-500">
-                  Клиент зайдёт по адресу: <span className="text-violet-300">{slug}.ordaops.kz</span>
+                  Клиент зайдёт по адресу: <span className="text-violet-600 dark:text-violet-300">{slug}.ordaops.kz</span>
                 </p>
               )}
             </div>
 
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Владелец (необязательно)</p>
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-500">Имя и фамилия</label>
@@ -214,7 +214,7 @@ export default function NewOrganizationPage() {
                   value={ownerFullName}
                   onChange={e => setOwnerFullName(e.target.value)}
                   placeholder="Алибек Сейткали"
-                  className="border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600"
+                  className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:placeholder:text-slate-600"
                 />
               </div>
               <div className="space-y-1.5">
@@ -224,7 +224,7 @@ export default function NewOrganizationPage() {
                   value={ownerEmail}
                   onChange={e => setOwnerEmail(e.target.value)}
                   placeholder="alibek@example.com"
-                  className="border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600"
+                  className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 dark:border-white/10 dark:bg-slate-900/60 dark:text-white dark:placeholder:text-slate-600"
                 />
               </div>
             </div>
@@ -237,7 +237,7 @@ export default function NewOrganizationPage() {
                 onChange={e => setTrialDays(e.target.value)}
                 min={0}
                 max={90}
-                className="border-white/10 bg-slate-900/60 text-white w-28"
+                className="border-slate-200 bg-white text-slate-900 w-28 dark:border-white/10 dark:bg-slate-900/60 dark:text-white"
               />
             </div>
             <Button
@@ -262,11 +262,11 @@ export default function NewOrganizationPage() {
                   className={`w-full rounded-xl border p-4 text-left transition ${
                     planCode === plan.code
                       ? 'border-violet-500/50 bg-violet-500/10'
-                      : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04]'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-white">{plan.name}</p>
+                    <p className="font-medium text-slate-900 dark:text-white">{plan.name}</p>
                     <p className="text-xs text-slate-400">{plan.price}</p>
                   </div>
                   <p className="mt-1 text-xs text-slate-400">{plan.description}</p>
@@ -275,29 +275,29 @@ export default function NewOrganizationPage() {
             </div>
 
             {/* Summary */}
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm space-y-1">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm space-y-1 dark:border-white/[0.06] dark:bg-white/[0.02]">
               <div className="flex justify-between text-slate-400">
-                <span>Организация</span><span className="text-white">{name}</span>
+                <span>Организация</span><span className="text-slate-900 dark:text-white">{name}</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Поддомен</span><span className="text-violet-300">{slug}.ordaops.kz</span>
+                <span>Поддомен</span><span className="text-violet-600 dark:text-violet-300">{slug}.ordaops.kz</span>
               </div>
               {ownerEmail && (
                 <div className="flex justify-between text-slate-400">
-                  <span>Владелец</span><span className="text-white">{ownerFullName || ownerEmail}</span>
+                  <span>Владелец</span><span className="text-slate-900 dark:text-white">{ownerFullName || ownerEmail}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-400">
-                <span>Пробный период</span><span className="text-white">{trialDays} дней</span>
+                <span>Пробный период</span><span className="text-slate-900 dark:text-white">{trialDays} дней</span>
               </div>
             </div>
 
             {error && (
-              <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+              <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p>
             )}
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(1)} className="border-white/10 text-white hover:bg-white/[0.04]">
+              <Button variant="outline" onClick={() => setStep(1)} className="border-slate-200 text-slate-900 hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/[0.04]">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Назад
               </Button>
               <Button

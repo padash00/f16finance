@@ -441,7 +441,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
                   key={s}
                   type="button"
                   onClick={() => setScope(s)}
-                  className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white dark:bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {s === 'all' ? 'Все' : s === 'warehouse' ? 'Подсобка' : 'Витрина'}
                 </button>

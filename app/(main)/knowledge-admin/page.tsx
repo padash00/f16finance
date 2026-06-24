@@ -899,7 +899,7 @@ export default function KnowledgeAdminPage() {
                           value={query}
                           onChange={(event) => setQuery(event.target.value)}
                           placeholder="Поиск по FAQ, правилам, проблемам..."
-                          className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100"
+                          className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400"
                         />
                       </div>
                       {can('knowledge-admin.create') && (
@@ -1044,7 +1044,7 @@ export default function KnowledgeAdminPage() {
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Поиск по чек-листам и пунктам…"
-                            className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100"
+                            className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400"
                           />
                         </div>
                         <SelectInput
@@ -1136,7 +1136,7 @@ export default function KnowledgeAdminPage() {
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="Поиск по оператору, точке, чек-листу…"
-                        className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100"
+                        className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400"
                       />
                     </div>
                     <SelectInput

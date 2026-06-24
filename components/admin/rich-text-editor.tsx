@@ -193,7 +193,7 @@ export function RichTextEditor({ value, onChange, className }: Props) {
               onClick={() => editor.chain().focus().setColor(color.value).run()}
               title={`Цвет текста: ${color.label}`}
             >
-              <span className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: color.value }} />
+              <span className="h-4 w-4 rounded-full border border-slate-200 dark:border-white/20" style={{ backgroundColor: color.value }} />
             </ToolButton>
           ))}
           <ToolButton onClick={() => editor.chain().focus().unsetColor().run()} title="Сбросить цвет">
@@ -209,7 +209,7 @@ export function RichTextEditor({ value, onChange, className }: Props) {
               onClick={() => editor.chain().focus().toggleHighlight({ color: color.value }).run()}
               title={color.label}
             >
-              <span className="h-4 w-4 rounded border border-white/20" style={{ backgroundColor: color.value }} />
+              <span className="h-4 w-4 rounded border border-slate-200 dark:border-white/20" style={{ backgroundColor: color.value }} />
             </ToolButton>
           ))}
           <ToolButton onClick={() => editor.chain().focus().unsetHighlight().run()} title="Убрать маркер">

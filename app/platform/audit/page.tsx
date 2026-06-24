@@ -35,7 +35,7 @@ export default function PlatformAuditPage() {
   }, [])
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-slate-900 dark:text-white">
       <h1 className="mb-5 text-2xl font-semibold">Аудит платформы</h1>
 
       {loading ? (
@@ -45,10 +45,10 @@ export default function PlatformAuditPage() {
       ) : (
         <div className="space-y-1">
           {rows.map((e) => (
-            <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-sm">
+            <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.02] px-4 py-2.5 text-sm">
               <div className="flex items-center gap-2">
-                <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] text-violet-300">{ENTITY_LABELS[e.entity_type] || e.entity_type}</span>
-                <span className="text-slate-200">{e.action}</span>
+                <span className="rounded-md bg-violet-500/15 px-2 py-0.5 text-[11px] text-violet-600 dark:text-violet-300">{ENTITY_LABELS[e.entity_type] || e.entity_type}</span>
+                <span className="text-slate-700 dark:text-slate-200">{e.action}</span>
               </div>
               <span className="text-[11px] text-slate-500">{fmtDt(e.created_at)}</span>
             </div>

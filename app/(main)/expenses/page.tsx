@@ -621,7 +621,7 @@ export default function ExpensesPage() {
 
   const trendIcon = analytics.trend === 'up' ? <TrendingUp className="w-4 h-4 text-red-400" /> : 
                    analytics.trend === 'down' ? <TrendingDown className="w-4 h-4 text-green-400" /> : 
-                   <MinusIcon className="w-4 h-4 text-gray-400" />
+                   <MinusIcon className="w-4 h-4 text-slate-500 dark:text-gray-400" />
 
   const assistantSnapshot = useMemo<PageSnapshot>(() => {
     const money = (value: number) => `${Math.round(value || 0).toLocaleString('ru-RU')} ₸`
@@ -1699,7 +1699,7 @@ export default function ExpensesPage() {
               {previewUrl.toLowerCase().includes('.pdf') || previewUrl.toLowerCase().includes('pdf') ? (
                 <iframe
                   src={previewUrl}
-                  className="w-full h-[60vh] rounded-lg border border-white/10"
+                  className="w-full h-[60vh] rounded-lg border border-slate-200 dark:border-white/10"
                   title="PDF вложение"
                 />
               ) : (
@@ -1710,7 +1710,7 @@ export default function ExpensesPage() {
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none'
                     const p = document.createElement('p')
-                    p.className = 'text-gray-400 text-sm'
+                    p.className = 'text-slate-500 dark:text-gray-400 text-sm'
                     p.textContent = 'Не удалось загрузить изображение'
                     ;(e.target as HTMLImageElement).parentNode?.appendChild(p)
                   }}
@@ -1794,7 +1794,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
             </div>
             <div className="flex items-center gap-2">
               {trendIcon}
-              <span className={`text-xs ${analytics.trend === 'up' ? 'text-red-400' : analytics.trend === 'down' ? 'text-green-400' : 'text-gray-400'}`}>
+              <span className={`text-xs ${analytics.trend === 'up' ? 'text-red-400' : analytics.trend === 'down' ? 'text-green-400' : 'text-slate-500 dark:text-gray-400'}`}>
                 {analytics.trend === 'up' ? 'Рост' : analytics.trend === 'down' ? 'Снижение' : 'Стабильно'}
               </span>
             </div>
@@ -2188,7 +2188,7 @@ function ListTab({
                     idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/50 dark:bg-gray-900/20'
                   } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/30' : ''}`}
                 >
-                  <td className="px-4 py-3 whitespace-nowrap text-gray-400 font-mono text-xs">
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-500 dark:text-gray-400 font-mono text-xs">
                     {DateUtils.formatDate(row.date)}
                   </td>
                   <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-700 dark:text-gray-300">
@@ -2222,7 +2222,7 @@ function ListTab({
                     {Formatters.moneyDetailed(total)}
                   </td>
                   {showControlColumns ? (
-                    <td className="px-4 py-3 text-xs text-gray-400">
+                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-gray-400">
                       {docLabel}
                       {row.one_off_payee ? <div className="text-[10px] text-gray-500 truncate max-w-[120px]">{row.one_off_payee}</div> : null}
                     </td>
@@ -2319,7 +2319,7 @@ function MetricCard({ label, value, icon, color, trend, trendIcon, percentage }:
         <div className="text-xs text-gray-500">{percentage.toFixed(1)}% от общего</div>
       )}
       {trend && (
-        <div className={`text-xs flex items-center gap-1 ${trend === 'up' ? 'text-red-400' : trend === 'down' ? 'text-green-400' : 'text-gray-400'}`}>
+        <div className={`text-xs flex items-center gap-1 ${trend === 'up' ? 'text-red-400' : trend === 'down' ? 'text-green-400' : 'text-slate-500 dark:text-gray-400'}`}>
           {trendIcon}
           {trend === 'up' ? 'Рост расходов' : trend === 'down' ? 'Снижение' : 'Стабильно'}
         </div>

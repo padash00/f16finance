@@ -270,9 +270,9 @@ function staffAdjustmentKindLabel(kind: StaffAdjustment['kind']) {
 }
 
 function staffAdjustmentTone(kind: StaffAdjustment['kind']) {
-  if (kind === 'bonus') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-  if (kind === 'advance') return 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-  return 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+  if (kind === 'bonus') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+  if (kind === 'advance') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+  return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
 }
 
 function buildStaffTimelineEvents(params: {
@@ -327,7 +327,7 @@ const selectCls = 'h-11 w-full rounded-xl border border-slate-200 dark:border-wh
 const textarea = 'min-h-[96px] w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
-const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-300' }
+const statusMeta = (s: WeeklyOperator['week']['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300' }
 
 function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   useModalEscape(true, props.onClose)
@@ -1182,7 +1182,7 @@ export default function SalaryPage() {
                     ) : null}
                     {broadcastTotal > 0 && !broadcastSending ? (
                       <span
-                        className={`rounded-full border px-3 py-1 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}
+                        className={`rounded-full border px-3 py-1 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}
                       >
                         {broadcastDone}/{broadcastTotal}
                       </span>
@@ -1193,17 +1193,17 @@ export default function SalaryPage() {
             }
           />
 
-          {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
+          {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">{error}</Card> : null}
 
           {/* ── OPERATORS TAB ───────────────────────────────────────────────── */}
           {tab === 'operators' && (<>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2 text-amber-300"><CreditCard className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
-            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-700 dark:text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-700 dark:text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-700 dark:text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2 text-amber-700 dark:text-amber-300"><CreditCard className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
+            <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-700 dark:text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
@@ -1286,9 +1286,9 @@ export default function SalaryPage() {
                                   <div className="truncate font-medium text-slate-900 dark:text-white">{title}</div>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                                     {item.operator.position ? <span>{item.operator.position}</span> : null}
-                                    {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">неактивен</span> : null}
+                                    {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">неактивен</span> : null}
                                     <span>{item.operator.documents_count} док.</span>
-                                    {item.operator.expiring_documents > 0 ? <span className="text-amber-300">{item.operator.expiring_documents} скоро истекут</span> : null}
+                                    {item.operator.expiring_documents > 0 ? <span className="text-amber-700 dark:text-amber-300">{item.operator.expiring_documents} скоро истекут</span> : null}
                                   </div>
                                 </div>
                               </Link>
@@ -1296,10 +1296,10 @@ export default function SalaryPage() {
                           </td>
                           <td className="px-4 py-4 text-center"><div className="inline-flex flex-col items-center gap-0.5"><span className="text-base font-semibold text-slate-900 dark:text-white">{item.week.shiftsCount}</span><span className="text-[10px] text-slate-500">смен</span></div></td>
                           <td className="px-4 py-4 text-right font-medium text-slate-900 dark:text-white">{money(item.week.grossAmount)}</td>
-                          <td className="px-4 py-4 text-right text-violet-300">{item.week.autoBonusTotal > 0 ? money(item.week.autoBonusTotal) : <span className="text-slate-600">—</span>}</td>
-                          <td className="px-4 py-4 text-right text-emerald-300">{money(item.week.bonusAmount)}</td>
-                          <td className="px-4 py-4 text-right text-rose-300">{money(item.week.fineAmount)}</td>
-                          <td className="px-4 py-4 text-right text-rose-300">
+                          <td className="px-4 py-4 text-right text-violet-700 dark:text-violet-300">{item.week.autoBonusTotal > 0 ? money(item.week.autoBonusTotal) : <span className="text-slate-600">—</span>}</td>
+                          <td className="px-4 py-4 text-right text-emerald-700 dark:text-emerald-300">{money(item.week.bonusAmount)}</td>
+                          <td className="px-4 py-4 text-right text-rose-700 dark:text-rose-300">{money(item.week.fineAmount)}</td>
+                          <td className="px-4 py-4 text-right text-rose-700 dark:text-rose-300">
                             <div className="flex flex-col items-end gap-1">
                               <span>{money(item.week.debtAmount)}</span>
                               {item.week.debtAmount > 0 ? (
@@ -1307,24 +1307,24 @@ export default function SalaryPage() {
                                   type="button"
                                   disabled={markDebtSaving && markDebtId === item.operator.id}
                                   onClick={() => void markDebtsPaid(item)}
-                                  className="text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 whitespace-nowrap"
+                                  className="text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 whitespace-nowrap"
                                 >
                                   {markDebtSaving && markDebtId === item.operator.id ? '...' : 'Оплатил долг'}
                                 </button>
                               ) : null}
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-right text-amber-300">{money(item.week.advanceAmount)}</td>
-                          <td className="px-4 py-4 text-right text-sky-300">{money(item.week.paidAmount)}</td>
+                          <td className="px-4 py-4 text-right text-amber-700 dark:text-amber-300">{money(item.week.advanceAmount)}</td>
+                          <td className="px-4 py-4 text-right text-sky-700 dark:text-sky-300">{money(item.week.paidAmount)}</td>
                           <td className="px-4 py-4 text-right text-lg font-semibold text-slate-900 dark:text-white">{money(item.week.remainingAmount)}</td>
                           <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${st.className}`}>{st.label}</span></td>
                           <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2">{canCreateAdvance && <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button>}{canCreatePayment && <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button>}<Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-white/10">Детали</Link></div></td>
                           <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2">{canUpdateChatId && <Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button>}<Button type="button" variant="outline" className="rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-700 dark:text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
                         </tr>
                         {open ? <tr className="border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950/30"><td colSpan={13} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr]">
-                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-slate-900 dark:text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-slate-900 dark:text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
-                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-slate-900 dark:text-white"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-slate-500 dark:text-slate-400">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-slate-500 dark:text-slate-400">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-slate-900 dark:text-white">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
-                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-900 dark:text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Нал: {money(p.cash_amount)} • {cashLabels.providerName}: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button>}</div></div>)}</div>}</Card>
+                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white"><Building2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-slate-900 dark:text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-700 dark:text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-700 dark:text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-700 dark:text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-slate-900 dark:text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card>
+                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center justify-between gap-2 text-sm font-medium text-slate-900 dark:text-white"><span>Смены ({item.week.shiftsCount})</span><span className="text-xs text-slate-500 dark:text-slate-400">{item.week.seniorityBonusTotal ? `Стаж: ${money(item.week.seniorityBonusTotal)}` : item.week.autoBonusTotal > 0 ? `Авто-бонус: ${money(item.week.autoBonusTotal)}` : ''}</span></div>{item.week.shifts.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">Смен за эту неделю нет.</div> : <div className="overflow-x-auto"><table className="min-w-[680px] text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Дата</th><th className="pb-3 text-left font-medium">Смена</th><th className="pb-3 text-left font-medium">Точка</th><th className="pb-3 text-right font-medium">Выручка</th><th className="pb-3 text-right font-medium">База</th><th className="pb-3 text-right font-medium">Стаж</th><th className="pb-3 text-right font-medium">Авто</th><th className="pb-3 text-right font-medium">Роль</th><th className="pb-3 text-right font-medium">Итого</th></tr></thead><tbody>{item.week.shifts.map((s) => <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200"><td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{formatRuDate(s.date)}</td><td className="py-2 pr-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.shift === 'day' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'}`}>{s.shift === 'day' ? 'день' : 'ночь'}</span></td><td className="py-2 pr-3 text-slate-500 dark:text-slate-400">{s.companyName || s.companyCode || '—'}</td><td className="py-2 text-right">{money(s.totalIncome)}</td><td className="py-2 text-right">{money(s.baseSalary)}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{(s.seniorityBonus || 0) > 0 ? money(s.seniorityBonus || 0) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-violet-700 dark:text-violet-300">{s.autoBonus > 0 ? money(s.autoBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right text-cyan-700 dark:text-cyan-300">{s.roleBonus > 0 ? money(s.roleBonus) : <span className="text-slate-600">—</span>}</td><td className="py-2 text-right font-medium text-slate-900 dark:text-white">{money(s.salary)}</td></tr>)}</tbody></table></div>}</Card>
+                          <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-900 dark:text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-6 text-sm text-slate-500 dark:text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-900 dark:text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Нал: {money(p.cash_amount)} • {cashLabels.providerName}: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button>}</div></div>)}</div>}</Card>
                           </div></td></tr> : null}
                       </Fragment>
                     )
@@ -1336,7 +1336,7 @@ export default function SalaryPage() {
           {canCreateAdjustment && (
           <Card className="border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] p-5">
             <div className="mb-5 flex items-center gap-3">
-              <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-300">
+              <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-700 dark:text-emerald-300">
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
@@ -1364,7 +1364,7 @@ export default function SalaryPage() {
               </Button>
               <input className={`${input} md:col-span-2 xl:col-span-6`} type="text" placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
             </form>
-            {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
+            {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
           </Card>
           )}
 
@@ -1375,7 +1375,7 @@ export default function SalaryPage() {
             <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04]">
               <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 p-5">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-blue-500/15 p-3 text-blue-300">
+                  <div className="rounded-2xl bg-blue-500/15 p-3 text-blue-700 dark:text-blue-300">
                     <CalendarDays className="h-5 w-5" />
                   </div>
                   <div>
@@ -1465,13 +1465,13 @@ export default function SalaryPage() {
                           <span>События</span>
                           <span className="text-right text-slate-900 dark:text-white">{row.events}</span>
                           <span>К выплате</span>
-                          <span className="text-right text-emerald-300">{money(row.toPay)}</span>
+                          <span className="text-right text-emerald-700 dark:text-emerald-300">{money(row.toPay)}</span>
                           <span>Выплачено</span>
-                          <span className="text-right text-sky-300">{money(row.paid)}</span>
+                          <span className="text-right text-sky-700 dark:text-sky-300">{money(row.paid)}</span>
                           <span>Штрафы+долги</span>
-                          <span className="text-right text-rose-300">{money(row.deductions)}</span>
+                          <span className="text-right text-rose-700 dark:text-rose-300">{money(row.deductions)}</span>
                           <span>Авансы</span>
-                          <span className="text-right text-amber-300">{money(row.advances)}</span>
+                          <span className="text-right text-amber-700 dark:text-amber-300">{money(row.advances)}</span>
                         </div>
                       </div>
                     ))}
@@ -1497,14 +1497,14 @@ export default function SalaryPage() {
                         {events.map((ev) => {
                           const tone =
                             ev.kind === 'week_total'
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                               : ev.kind === 'payment'
-                                ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                                ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
                                 : ev.kind === 'bonus'
-                                  ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
+                                  ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300'
                                   : ev.kind === 'advance'
-                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                                    : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                                    : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
                           const label =
                             ev.kind === 'week_total'
                               ? 'итог недели'
@@ -1573,18 +1573,18 @@ export default function SalaryPage() {
           <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04]">
             <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 p-5">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-violet-500/15 p-3 text-violet-300"><Users className="h-5 w-5" /></div>
+                <div className="rounded-2xl bg-violet-500/15 p-3 text-violet-700 dark:text-violet-300"><Users className="h-5 w-5" /></div>
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Зарплатная ведомость Административных сотрудников</h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400">Фиксированный оклад, выплата 1-го и 15-го. Бонусы, штрафы, долги, авансы, доп. выходы.</p>
                   {staffSalary?.consistency?.has_issues ? (
-                    <p className="mt-2 text-xs text-amber-300">
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
                       Проверка консистентности: отсутствуют/лишние расходы по зарплате ({staffSalary.consistency.missing_payment_expense_count}
                       /{staffSalary.consistency.orphan_payment_expense_count}) и авансам ({staffSalary.consistency.missing_advance_expense_count}
                       /{staffSalary.consistency.orphan_advance_expense_count}).
                     </p>
                   ) : (
-                    <p className="mt-2 text-xs text-emerald-300">Проверка консистентности: выплаты и авансы синхронизированы с расходами.</p>
+                    <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">Проверка консистентности: выплаты и авансы синхронизированы с расходами.</p>
                   )}
                 </div>
               </div>
@@ -1682,7 +1682,7 @@ export default function SalaryPage() {
                             <div className="flex items-center gap-2">
                               <div className="font-semibold text-slate-900 dark:text-white">{s.full_name}</div>
                               {isDismissed ? (
-                                <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+                                <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-200">
                                   Уволен{dismissedDateLabel ? ` · ${dismissedDateLabel}` : ''}
                                 </span>
                               ) : null}
@@ -1701,7 +1701,7 @@ export default function SalaryPage() {
                             <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           )}
                           {!isDismissed && !isOperatorBased && canEditStaffSalary && calc.debts > 0 && (
-                            <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
+                            <Button type="button" variant="outline" className="h-9 rounded-xl border-rose-400/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-200 hover:bg-rose-500/20" onClick={() => openPayDebt(s, calc.debts)}>
                               <Wallet className="mr-1.5 h-3.5 w-3.5" />
                               Оплата долга ({money(calc.debts)})
                             </Button>
@@ -1712,13 +1712,13 @@ export default function SalaryPage() {
                         </div>
                       </div>
                       {isMonthClosed ? (
-                        <div className="mt-2 text-xs text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
+                        <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
                       ) : null}
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{money(calc.half)}</div></div>
-                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-300">+{money(calc.bonuses)}</div></div>
-                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
-                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-amber-400/70">Авансы</div><div className="mt-1 text-sm font-semibold text-amber-300">−{money(calc.advances)}</div></div>
+                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">+{money(calc.bonuses)}</div></div>
+                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-700 dark:text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-700 dark:text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-amber-700 dark:text-amber-400/70">Авансы</div><div className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-300">−{money(calc.advances)}</div></div>
                         <div className="rounded-2xl border border-slate-200 dark:border-white/15 bg-slate-50 dark:bg-white/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">К выплате</div><div className="mt-1 text-base font-bold text-slate-900 dark:text-white">{money(calc.toPay)}</div></div>
                       </div>
                       {activeAdjs.length > 0 ? (
@@ -1727,7 +1727,7 @@ export default function SalaryPage() {
                           {activeAdjs.map(adj => (
                             <div key={adj.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${adj.kind === 'bonus' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : adj.kind === 'advance' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`}>
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${adj.kind === 'bonus' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : adj.kind === 'advance' ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
                                   {staffAdjustmentKindLabel(adj.kind)}
                                 </span>
                                 <span className="font-medium text-slate-900 dark:text-white">{money(adj.amount)}</span>
@@ -1735,13 +1735,13 @@ export default function SalaryPage() {
                                 {adj.comment ? <span className="text-slate-500 dark:text-slate-400">{adj.comment}</span> : null}
                               </div>
                               {!adj.id.startsWith('operator-debt:') && canEditStaffSalary ? (
-                                <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
+                                <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
                               ) : null}
                             </div>
                           ))}
                         </div>
                       ) : recentlyClosedAdjustmentsCount > 0 ? (
-                        <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-200">
+                        <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-700 dark:text-sky-200">
                           Долги и другие корректировки не пропали: они закрыты выплатой и показаны ниже в последних выплатах.
                         </div>
                       ) : null}
@@ -1755,13 +1755,13 @@ export default function SalaryPage() {
                               {debtPays.map((p) => (
                                 <div key={p.id} className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 text-xs">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">оплата долга</span>
-                                    <span className="font-medium text-white">{money(p.amount)}</span>
+                                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">оплата долга</span>
+                                    <span className="font-medium text-slate-900 dark:text-white">{money(p.amount)}</span>
                                     <span className="text-slate-500">{String(p.paid_at || '').slice(0, 10)}</span>
                                     {p.comment ? <span className="text-slate-400">{p.comment}</span> : null}
                                   </div>
                                   {canEditStaffSalary ? (
-                                    <button type="button" title="Аннулировать оплату долга" disabled={voidDebtPayId === p.id} className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
+                                    <button type="button" title="Аннулировать оплату долга" disabled={voidDebtPayId === p.id} className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-600 dark:hover:text-rose-300 disabled:opacity-50" onClick={() => void voidStaffDebtPayment(p.id)}>
                                       {voidDebtPayId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
                                     </button>
                                   ) : null}
@@ -1832,7 +1832,7 @@ export default function SalaryPage() {
             <Card className="overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04]">
               <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-white/10 p-5">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-300">
+                  <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-700 dark:text-cyan-300">
                     <CalendarDays className="h-5 w-5" />
                   </div>
                   <div>
@@ -1924,12 +1924,12 @@ export default function SalaryPage() {
                         {events.map((ev) => {
                           const isPayment = ev.kind === 'payment'
                           const tone = isPayment
-                            ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                            ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
                             : ev.kind === 'bonus'
-                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                               : ev.kind === 'advance'
-                                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                                ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                                : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'
                           const label = isPayment
                             ? 'выплата'
                             : ev.kind === 'bonus'
@@ -1944,7 +1944,7 @@ export default function SalaryPage() {
                               <div className="flex min-w-0 items-center gap-2">
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
                                 <span className="text-slate-700 dark:text-slate-300">{ev.staff_name}</span>
-                                {ev.status === 'paid' ? <span className="text-sky-400">(закрыто выплатой)</span> : null}
+                                {ev.status === 'paid' ? <span className="text-sky-600 dark:text-sky-400">(закрыто выплатой)</span> : null}
                                 {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
                                 {ev.comment ? <span className="truncate text-slate-500 dark:text-slate-400">{ev.comment}</span> : null}
                               </div>
@@ -2033,7 +2033,7 @@ export default function SalaryPage() {
               const showAdvanceRow = overpayment > 0.009
               return (
                 <>
-                  <label className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
+                  <label className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-700 dark:text-amber-100">
                     <input
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 accent-amber-400"
@@ -2041,8 +2041,8 @@ export default function SalaryPage() {
                       onChange={(e) => setPayAllowOverpayment(e.target.checked)}
                     />
                     <span>
-                      <span className="font-semibold text-white">Выдать сверх остатка как аванс</span>
-                      <span className="block text-xs text-amber-200/80 mt-0.5">
+                      <span className="font-semibold text-slate-900 dark:text-white">Выдать сверх остатка как аванс</span>
+                      <span className="block text-xs text-amber-700 dark:text-amber-200/80 mt-0.5">
                         Если сумма выплаты превышает {money(remaining)} — разница уйдёт авансом и вычтется со следующей недели.
                       </span>
                     </span>
@@ -2057,7 +2057,7 @@ export default function SalaryPage() {
                       <span>{money(Math.min(total, remaining))}</span>
                     </div>
                     {showAdvanceRow ? (
-                      <div className="mt-1 flex justify-between text-xs text-amber-200">
+                      <div className="mt-1 flex justify-between text-xs text-amber-700 dark:text-amber-200">
                         <span>Аванс на следующую неделю:</span>
                         <span className="font-semibold">{money(overpayment)}</span>
                       </div>
@@ -2091,7 +2091,7 @@ export default function SalaryPage() {
           <div className="space-y-4">
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-center">
               <div className="text-[11px] uppercase tracking-wide text-rose-400/70">Сумма долга к оплате</div>
-              <div className="mt-1 text-2xl font-bold text-rose-200">{money(payDebtModal.amount)}</div>
+              <div className="mt-1 text-2xl font-bold text-rose-700 dark:text-rose-200">{money(payDebtModal.amount)}</div>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Долг будет помечен оплаченным и убран из вычета зарплаты. Запись появится в «Оплаченные долги» — её можно аннулировать (долг вернётся активным).

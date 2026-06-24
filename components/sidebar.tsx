@@ -261,7 +261,7 @@ function OrganizationSwitcher({
         className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-amber-500/20 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-white/10 dark:bg-slate-900/70 dark:hover:border-amber-500/20 dark:hover:bg-slate-900"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-          <Building2 className="h-4 w-4 text-amber-300" />
+          <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-300" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Организация</p>

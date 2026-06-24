@@ -868,7 +868,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
             <TableSkeleton rows={8} cols={5} />
           </div>
         ) : error ? (
-          <div className="flex h-60 items-center justify-center gap-2 text-rose-400">
+          <div className="flex h-60 items-center justify-center gap-2 text-rose-600 dark:text-rose-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm">{error}</span>
           </div>
@@ -1045,12 +1045,12 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                 </form>
 
                 {barcodeResult === 'found' && (
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Товар найден в каталоге
                   </p>
                 )}
                 {barcodeResult === 'not-found' && !newItemDialog && (
-                  <p className="flex items-center gap-1.5 text-xs text-amber-400">
+                  <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
                     <AlertCircle className="h-3.5 w-3.5" /> Товар не найден в каталоге
                   </p>
                 )}
@@ -1138,7 +1138,7 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                           <p className="truncate font-medium">{item.name}</p>
                           <p className="text-[10px] text-muted-foreground">{item.barcode}</p>
                         </div>
-                        <Plus className="ml-2 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                        <Plus className="ml-2 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                       </button>
                     ))
                   )}
@@ -1152,12 +1152,12 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                   onClick={() => fileRef.current?.click()}
                   className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/20 bg-white dark:bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-slate-50 dark:hover:bg-white/[0.04]"
                 >
-                  <FileSpreadsheet className="h-8 w-8 text-amber-400" />
+                  <FileSpreadsheet className="h-8 w-8 text-amber-600 dark:text-amber-400" />
                   <p className="text-xs font-medium text-foreground">Нажмите чтобы загрузить файл</p>
                   <p className="text-[10px] text-muted-foreground">.xlsx / .xls / .csv / .docx</p>
                 </div>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.docx" className="hidden" onChange={handleExcelFile} />
-                {excelError && <p className="text-xs text-rose-400">{excelError}</p>}
+                {excelError && <p className="text-xs text-rose-600 dark:text-rose-400">{excelError}</p>}
               </div>
             )}
 
@@ -1221,9 +1221,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
                   </p>
                 </div>
 
-                {saveError && <p className="text-xs text-rose-400">{saveError}</p>}
+                {saveError && <p className="text-xs text-rose-600 dark:text-rose-400">{saveError}</p>}
                 {saveSuccess && (
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {stockMode === 'set' ? 'Каталог обновлён!' : 'Добавлено в каталог!'}
                   </p>
@@ -1280,9 +1280,9 @@ export default function WarehousePage({ embedded = false }: { embedded?: boolean
               </p>
             )}
 
-            {warehouseFileError && <p className="text-xs text-rose-400">{warehouseFileError}</p>}
+            {warehouseFileError && <p className="text-xs text-rose-600 dark:text-rose-400">{warehouseFileError}</p>}
             {warehouseFileDone && (
-              <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="h-3.5 w-3.5" /> {warehouseFileDone}
               </p>
             )}
