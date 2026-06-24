@@ -60,41 +60,41 @@ export function SupplierDebtsWidget() {
   }, [])
 
   return (
-    <Card className="border-white/10 bg-slate-950/60 p-4">
+    <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-300">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
             <Wallet className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-white">Долги поставщикам</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-white">Долги поставщикам</div>
             <div className="text-xs text-muted-foreground">Открытые обязательства</div>
           </div>
         </div>
         <Link
           href="/store/billing"
-          className="text-xs text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1"
+          className="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 dark:hover:text-emerald-200 inline-flex items-center gap-1"
         >
           Перейти <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] p-3">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Открыто</div>
-          <div className="mt-1 text-lg font-semibold text-amber-300">
+          <div className="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-300">
             {loading ? '—' : openCount}
           </div>
           <div className="text-xs text-muted-foreground">
             {loading ? '—' : `${formatMoney(openSum)} ₸`}
           </div>
         </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] p-3">
           <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
             {overdueCount > 0 ? <AlertCircle className="h-3 w-3 text-red-400" /> : null}
             Просрочено
           </div>
-          <div className={`mt-1 text-lg font-semibold ${overdueCount > 0 ? 'text-red-300' : 'text-slate-300'}`}>
+          <div className={`mt-1 text-lg font-semibold ${overdueCount > 0 ? 'text-red-500 dark:text-red-300' : 'text-slate-500 dark:text-slate-300'}`}>
             {loading ? '—' : overdueCount}
           </div>
           <div className="text-xs text-muted-foreground">

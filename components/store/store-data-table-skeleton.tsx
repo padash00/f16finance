@@ -11,7 +11,7 @@ export function StoreDataTableSkeleton({ rows = 8, columns = 7, className }: Pro
   return (
     <div className={className ?? 'min-h-[240px]'}>
       <div
-        className="grid border-b border-white/[0.06] bg-[#0f172a]/60 px-4 py-2.5"
+        className="grid border-b border-slate-200 bg-white dark:border-white/[0.06] dark:bg-[#0f172a]/60 px-4 py-2.5"
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))` }}
       >
         {Array.from({ length: columns }).map((_, i) => (
@@ -21,7 +21,7 @@ export function StoreDataTableSkeleton({ rows = 8, columns = 7, className }: Pro
       {Array.from({ length: rows }).map((_, ri) => (
         <div
           key={ri}
-          className="grid items-center gap-2 border-b border-white/[0.04] px-4 py-2.5"
+          className="grid items-center gap-2 border-b border-slate-200 dark:border-white/[0.04] px-4 py-2.5"
           style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))` }}
         >
           {Array.from({ length: columns }).map((_, ci) => (

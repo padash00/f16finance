@@ -46,7 +46,7 @@ type Resp = {
 }
 
 const fmt = (v: number) => new Intl.NumberFormat('ru-RU').format(Math.round(v || 0))
-const C = { card: 'bg-[#111113]', border: 'border-[#27272A]', sub: 'text-[#A1A1AA]' }
+const C = { card: 'bg-white dark:bg-[#111113]', border: 'border-slate-200 dark:border-[#27272A]', sub: 'text-slate-500 dark:text-[#A1A1AA]' }
 
 const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 function lastMonthOptions(count = 12) {
@@ -68,7 +68,7 @@ const MONTH_OPTIONS = lastMonthOptions(12)
 const fmtRange = (a?: string, b?: string) => (a && b ? `${a.split('-').reverse().join('.')} — ${b.split('-').reverse().join('.')}` : '')
 
 function Delta({ value, goodWhenUp = true, pp = false }: { value: number; goodWhenUp?: boolean; pp?: boolean }) {
-  if (!value) return <span className="text-xs text-[#A1A1AA]">0{pp ? ' п.п.' : '%'}</span>
+  if (!value) return <span className="text-xs text-slate-500 dark:text-[#A1A1AA]">0{pp ? ' п.п.' : '%'}</span>
   const up = value > 0
   const color = up === goodWhenUp ? '#22C55E' : '#EF4444'
   const Icon = up ? ArrowUpRight : ArrowDownRight
@@ -82,7 +82,7 @@ function Metric({ label, value, unit = '₸', delta, big = false }: { label: str
   return (
     <div className={`rounded-xl border ${C.border} ${C.card} p-4`}>
       <p className={`text-xs ${C.sub}`}>{label}</p>
-      <p className={`mt-1 font-bold text-[#FAFAFA] ${big ? 'text-3xl' : 'text-2xl'}`}>{fmt(value)} {unit}</p>
+      <p className={`mt-1 font-bold text-slate-900 dark:text-[#FAFAFA] ${big ? 'text-3xl' : 'text-2xl'}`}>{fmt(value)} {unit}</p>
       {delta ? <div className="mt-1">{delta}</div> : null}
     </div>
   )
@@ -147,7 +147,7 @@ export default function AiCfoPage() {
   const band = ai?.dataQuality?.band || (dq ? (dq.percent >= 90 ? 'high' : dq.percent >= 70 ? 'medium' : 'low') : 'medium')
 
   return (
-    <div className="app-page-wide space-y-5 text-[#FAFAFA]">
+    <div className="app-page-wide space-y-5 text-slate-900 dark:text-[#FAFAFA]">
       <AdminPageHeader
         title="AI Финдиректор"
         description="Где теряете деньги, где заработать больше и что делать."
@@ -164,28 +164,28 @@ export default function AiCfoPage() {
           <>
             {(data || cached) ? (
               <p className={`text-xs ${C.sub}`}>
-                {data ? <span className="text-violet-300">период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
+                {data ? <span className="text-violet-600 dark:text-violet-300">период {fmtRange(data.dateFrom, data.dateTo)}</span> : null}
                 {cached ? <span className="ml-1 text-[#52525B]">· из кэша</span> : null}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
               {[7, 30, 90, 365].map((d) => (
                 <button key={d} onClick={() => run({ days: d }, `d${d}`)} disabled={loading}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === `d${d}` ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
                   {d} дн
                 </button>
               ))}
               <select value={sel.startsWith('m:') ? sel.slice(2) : ''} onChange={(e) => { const v = e.target.value; if (v) run(monthRange(v), `m:${v}`) }} disabled={loading}
-                className={`rounded-lg border ${C.border} bg-[#111113] px-3 py-1.5 text-sm ${C.sub} disabled:opacity-50`}>
+                className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-3 py-1.5 text-sm ${C.sub} disabled:opacity-50`}>
                 <option value="">Месяц…</option>
                 {MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               <div className="flex items-center gap-1">
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
+                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-2 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
                 <span className={C.sub}>—</span>
-                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-[#111113] px-2 py-1.5 text-sm text-[#FAFAFA] [color-scheme:dark]`} />
+                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-lg border ${C.border} bg-white dark:bg-[#111113] px-2 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
                 <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
-                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-50 ${sel === 'custom' ? 'border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-200' : `${C.border} ${C.sub} hover:bg-white/[0.03]`}`}>
                   Период
                 </button>
               </div>
@@ -197,13 +197,13 @@ export default function AiCfoPage() {
       {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
 
       {loading && loaded ? (
-        <div className="flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+        <div className="flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-200">
           <Loader2 className="h-4 w-4 animate-spin" /> Пересчитываю и анализирую период…
         </div>
       ) : null}
 
       {loading && !loaded ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-[#A1A1AA]">
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-500 dark:text-[#A1A1AA]">
           <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
           <p className="text-sm">Финансовый директор анализирует период…</p>
         </div>
@@ -224,7 +224,7 @@ export default function AiCfoPage() {
                   <div className="flex flex-wrap gap-2 text-[11px]">
                     {Object.entries(ai.healthScore.breakdown).map(([k, v]) => (
                       <span key={k} className={`rounded-md border ${C.border} px-2 py-1 ${C.sub}`}>
-                        {({ profitability: 'Рентаб.', money: 'Деньги', risks: 'Риски', dynamics: 'Динамика', data: 'Данные' } as any)[k] || k}: <b className="text-[#FAFAFA]">{v}</b>
+                        {({ profitability: 'Рентаб.', money: 'Деньги', risks: 'Риски', dynamics: 'Динамика', data: 'Данные' } as any)[k] || k}: <b className="text-slate-900 dark:text-[#FAFAFA]">{v}</b>
                       </span>
                     ))}
                   </div>
@@ -330,7 +330,7 @@ export default function AiCfoPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {data.companies.map((c) => (
-                  <div key={c.name} className={`rounded-lg border ${C.border} bg-black/20 p-4`}>
+                  <div key={c.name} className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-4`}>
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">{c.name}</span>
                       <span className={`text-xs ${C.sub}`}>{c.profitShare}% прибыли</span>
@@ -356,7 +356,7 @@ export default function AiCfoPage() {
                 </ul>
               ) : null}
               {data.expenseChanges.length > 0 ? (
-                <div className="space-y-1.5 border-t border-[#27272A] pt-3">
+                <div className="space-y-1.5 border-t border-slate-200 dark:border-[#27272A] pt-3">
                   {data.expenseChanges.map((ch) => (
                     <div key={ch.label} className="flex items-center justify-between text-sm">
                       <span className={C.sub}>{ch.label}</span>
@@ -384,7 +384,7 @@ export default function AiCfoPage() {
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><ShieldAlert className="h-4 w-4 text-[#EF4444]" /> Основные риски</h2>
               <div className="space-y-2">
                 {ai.risks.map((r, i) => (
-                  <div key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#27272A] bg-black/20 px-3 py-2 text-sm">
+                  <div key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-[#27272A] bg-slate-50 dark:bg-black/20 px-3 py-2 text-sm">
                     <span className="flex-1">{r.risk}</span>
                     <span className={`text-xs ${C.sub}`}>вер. {r.probability} · влияние {r.impact}</span>
                     <span className="text-xs font-medium" style={{ color: LEVEL[r.level]?.c || '#F59E0B' }}>{LEVEL[r.level]?.l || r.level}</span>
@@ -455,9 +455,9 @@ export default function AiCfoPage() {
               <p className="text-sm">{ai.forecast.text}</p>
               {(ai.forecast.base || ai.forecast.optimistic || ai.forecast.pessimistic) ? (
                 <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                  <div className={`rounded-lg border ${C.border} bg-black/20 p-3`}><p className="text-xs text-[#EF4444]">Пессимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.pessimistic || '—'}</p></div>
-                  <div className={`rounded-lg border ${C.border} bg-black/20 p-3`}><p className={`text-xs ${C.sub}`}>Базовый</p><p className="mt-0.5 font-semibold">{ai.forecast.base || '—'}</p></div>
-                  <div className={`rounded-lg border ${C.border} bg-black/20 p-3`}><p className="text-xs text-[#22C55E]">Оптимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.optimistic || '—'}</p></div>
+                  <div className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-3`}><p className="text-xs text-[#EF4444]">Пессимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.pessimistic || '—'}</p></div>
+                  <div className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-3`}><p className={`text-xs ${C.sub}`}>Базовый</p><p className="mt-0.5 font-semibold">{ai.forecast.base || '—'}</p></div>
+                  <div className={`rounded-lg border ${C.border} bg-slate-50 dark:bg-black/20 p-3`}><p className="text-xs text-[#22C55E]">Оптимистичный</p><p className="mt-0.5 font-semibold">{ai.forecast.optimistic || '—'}</p></div>
                 </div>
               ) : null}
               {ai.forecast.warning ? <p className="mt-2 flex items-center gap-1.5 text-xs text-[#F59E0B]"><AlertTriangle className="h-3.5 w-3.5" /> {ai.forecast.warning}</p> : null}
@@ -493,7 +493,7 @@ export default function AiCfoPage() {
                   const items = (ai.actionPlan as any)?.[k] as string[] | undefined
                   return (
                     <div key={k}>
-                      <p className="mb-2 text-xs font-medium text-violet-300">{label}</p>
+                      <p className="mb-2 text-xs font-medium text-violet-600 dark:text-violet-300">{label}</p>
                       <ul className="space-y-1.5">
                         {(items || []).map((it, i) => (<li key={i} className={`text-sm ${C.sub}`}>• {it}</li>))}
                         {!items?.length ? <li className="text-xs text-[#52525B]">—</li> : null}

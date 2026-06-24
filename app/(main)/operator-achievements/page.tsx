@@ -481,7 +481,7 @@ function OperatorAchievementsModal({
 
         {/* Footer */}
         <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/5 rounded-b-2xl p-4 flex justify-end">
-          <Button variant="outline" size="sm" onClick={onClose} className="border-white/10">
+          <Button variant="outline" size="sm" onClick={onClose} className="border-slate-200 dark:border-white/10">
             Закрыть
           </Button>
         </div>

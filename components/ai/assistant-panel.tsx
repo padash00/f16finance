@@ -33,8 +33,8 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
         className={cn(
           'max-w-[90%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed',
           isUser
-            ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-white border border-amber-500/20'
-            : 'bg-white/5 text-slate-200 border border-white/10',
+            ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-slate-900 dark:text-white border border-amber-500/20'
+            : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10',
         )}
       >
         {message.content || (!isUser ? '...' : '')}
@@ -170,15 +170,15 @@ export function AssistantPanel({
   }
 
   return (
-    <Card className={cn('border-white/10 bg-slate-950/60 text-white', className)}>
+    <Card className={cn('border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/60 text-slate-900 dark:text-white', className)}>
       <CardHeader className="gap-3">
         <div className="flex items-start gap-3">
           <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/20 to-orange-500/10 p-3">
             <Bot className="h-5 w-5 text-amber-300" />
           </div>
           <div className="min-w-0 flex-1">
-            <CardTitle className="text-lg text-white">{title}</CardTitle>
-            <CardDescription className="text-slate-400">{subtitle}</CardDescription>
+            <CardTitle className="text-lg text-slate-900 dark:text-white">{title}</CardTitle>
+            <CardDescription className="text-slate-500 dark:text-slate-400">{subtitle}</CardDescription>
           </div>
         </div>
 
@@ -190,7 +190,7 @@ export function AssistantPanel({
                 type="button"
                 onClick={() => void sendPrompt(item)}
                 disabled={loading}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 transition hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {item}
               </button>
@@ -200,14 +200,14 @@ export function AssistantPanel({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-white/8 bg-black/20">
+        <div className="rounded-2xl border border-slate-200 dark:border-white/8 bg-slate-50 dark:bg-black/20">
           <ScrollArea className="h-[320px]">
             <div className="space-y-3 p-4">
               {messages.length > 0 ? (
                 messages.map((message, index) => <MessageBubble key={`${message.role}-${index}`} message={message} />)
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
-                  <div className="mb-2 flex items-center gap-2 text-slate-300">
+                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.03] p-4 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="mb-2 flex items-center gap-2 text-slate-700 dark:text-slate-300">
                     <Sparkles className="h-4 w-4 text-amber-300" />
                     {emptyStateTitle}
                   </div>
@@ -216,7 +216,7 @@ export function AssistantPanel({
               )}
 
               {loading ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.03] px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
                   Консультант печатает...
                 </div>
@@ -226,7 +226,7 @@ export function AssistantPanel({
         </div>
 
         {error ? (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
             {error}
           </div>
         ) : null}
@@ -237,7 +237,7 @@ export function AssistantPanel({
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             placeholder="Спроси про деньги, риски, узкие места или действия на 30 дней..."
-            className="min-h-24 border-white/10 bg-white/[0.03] text-white placeholder:text-slate-500"
+            className="min-h-24 border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-slate-900 dark:text-white placeholder:text-slate-500"
             onKeyDown={(event) => {
               if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
                 event.preventDefault()

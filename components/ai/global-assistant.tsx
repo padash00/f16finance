@@ -67,7 +67,7 @@ export function GlobalAssistant() {
       </SheetTrigger>
       <SheetContent
         side="right"
-        className="w-full border-white/10 bg-slate-950 p-0 sm:max-w-[520px] flex flex-col"
+        className="w-full border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950 p-0 sm:max-w-[520px] flex flex-col"
       >
         <SheetHeader className="sr-only">
           <SheetTitle>AI Copilot</SheetTitle>

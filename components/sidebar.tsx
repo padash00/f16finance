@@ -58,8 +58,8 @@ function SidebarItem({
       className={cn(
         'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-all duration-200',
         active
-          ? 'bg-white/[0.07] text-white ring-1 ring-white/10'
-          : 'text-slate-400 hover:bg-white/5 hover:text-white',
+          ? 'bg-slate-100 text-slate-900 ring-1 ring-slate-200 dark:bg-white/[0.07] dark:text-white dark:ring-white/10'
+          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white',
       )}
     >
       {active ? (
@@ -70,8 +70,8 @@ function SidebarItem({
         className={cn(
           'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200',
           active
-            ? 'bg-emerald-500/15 text-emerald-300'
-            : 'bg-white/5 text-slate-500 group-hover:bg-white/10 group-hover:text-slate-300',
+            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+            : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-slate-700 dark:bg-white/5 dark:text-slate-500 dark:group-hover:bg-white/10 dark:group-hover:text-slate-300',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -79,7 +79,7 @@ function SidebarItem({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cn('truncate text-sm font-medium', active ? 'text-white' : 'text-slate-300 group-hover:text-white')}>
+          <span className={cn('truncate text-sm font-medium', active ? 'text-slate-900 dark:text-white' : 'text-slate-600 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-white')}>
             {item.label}
           </span>
           {item.badge ? (
@@ -88,13 +88,13 @@ function SidebarItem({
             </span>
           ) : null}
           {item.isNew ? (
-            <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300">
+            <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-300">
               new
             </span>
           ) : null}
         </div>
         {item.note ? (
-          <p className={cn('mt-0.5 text-xs', active ? 'text-slate-400' : 'text-slate-500 group-hover:text-slate-400')}>
+          <p className={cn('mt-0.5 text-xs', active ? 'text-slate-500 dark:text-slate-400' : 'text-slate-500 group-hover:text-slate-500 dark:group-hover:text-slate-400')}>
             {item.note}
           </p>
         ) : null}
@@ -124,14 +124,14 @@ function SidebarSection({
 
   return (
     <div className="relative">
-      <div className="relative rounded-2xl border border-white/10 bg-slate-900/60 p-3 shadow-lg shadow-black/10 transition-colors duration-200 hover:border-white/15">
+      <div className="relative rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-lg shadow-black/5 transition-colors duration-200 hover:border-slate-300 dark:border-white/10 dark:bg-slate-900/60 dark:shadow-black/10 dark:hover:border-white/15">
         <button type="button" onClick={onToggle} className="flex w-full items-center gap-3">
           <div
             className={cn(
               'flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-300',
               style.bg,
               style.border,
-              hasActiveItem && 'ring-2 ring-offset-2 ring-offset-slate-900',
+              hasActiveItem && 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-900',
               hasActiveItem && style.activeRing,
             )}
           >
@@ -140,7 +140,7 @@ function SidebarSection({
 
           <div className="min-w-0 flex-1 text-left">
             <div className="flex items-center gap-2">
-              <p className="text-base font-semibold text-white">{section.title}</p>
+              <p className="text-base font-semibold text-slate-900 dark:text-white">{section.title}</p>
               {hasActiveItem ? (
                 <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.bg, style.border, style.text)}>
                   active
@@ -150,7 +150,7 @@ function SidebarSection({
             <p className="mt-0.5 text-xs text-slate-500">{section.subtitle}</p>
           </div>
 
-          <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300', open ? style.bg : 'bg-slate-800/50')}>
+          <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300', open ? style.bg : 'bg-slate-100 dark:bg-slate-800/50')}>
             <ChevronDown className={cn('h-4 w-4 transition-transform duration-300', open ? cn('rotate-180', style.text) : 'text-slate-500')} />
           </div>
         </button>
@@ -189,34 +189,34 @@ function UserCard({
 }) {
   return (
     <div className="relative">
-      <div className="relative rounded-2xl border border-white/10 bg-slate-900/60 p-4 shadow-lg shadow-black/20">
+      <div className="relative rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-lg shadow-black/5 dark:border-white/10 dark:bg-slate-900/60 dark:shadow-black/20">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-emerald-400/25 to-sky-400/15 text-emerald-200">
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-gradient-to-br from-emerald-400/25 to-sky-400/15 text-emerald-600 dark:border-white/10 dark:text-emerald-200">
               <User className="h-5 w-5" />
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
+            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{displayName || 'Панель управления'}</p>
             <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
-            <LifeBuoy className="h-3 w-3 text-emerald-400" />
-            <span className="text-xs font-medium text-emerald-400">online</span>
+            <LifeBuoy className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">online</span>
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-white/5 bg-slate-800 px-2 py-1">
-            <Shield className="h-3 w-3 text-slate-400" />
-            <span className="text-xs font-medium text-slate-300">{roleLabel || 'control'}</span>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 dark:border-white/5 dark:bg-slate-800">
+            <Shield className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{roleLabel || 'control'}</span>
           </div>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Link
             href="/profile"
-            className="flex items-center justify-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-sm text-slate-300 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-300"
+            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 transition-all duration-300 hover:border-violet-500/20 hover:bg-violet-500/10 hover:text-violet-600 dark:border-white/5 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:border-violet-500/20 dark:hover:bg-violet-500/10 dark:hover:text-violet-300"
           >
             <Settings className="h-4 w-4" />
             Профиль
@@ -224,7 +224,7 @@ function UserCard({
           <Button
             variant="ghost"
             onClick={onLogout}
-            className="justify-center rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
+            className="justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-600 dark:border-white/5 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:border-red-500/20 dark:hover:bg-red-500/10 dark:hover:text-red-400"
           >
             <span className="flex items-center gap-2 text-sm">
               <LogOut className="h-4 w-4" />
@@ -258,14 +258,14 @@ function OrganizationSwitcher({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-3 text-left transition hover:border-amber-500/20 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
+        className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-amber-500/20 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-white/10 dark:bg-slate-900/70 dark:hover:border-amber-500/20 dark:hover:bg-slate-900"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
           <Building2 className="h-4 w-4 text-amber-300" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Организация</p>
-          <p className="truncate text-sm font-semibold text-white">
+          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
             {activeOrganization?.name || organizations[0]?.name || 'Не выбрана'}
           </p>
           <p className="truncate text-xs text-slate-500">
@@ -276,7 +276,7 @@ function OrganizationSwitcher({
       </button>
 
       {open ? (
-        <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
+        <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
           <div className="mb-1 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Доступные организации</div>
           <div className="space-y-1">
             {organizations.map((organization) => {
@@ -294,13 +294,13 @@ function OrganizationSwitcher({
                     'flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition',
                     isActive
                       ? 'border-emerald-500/20 bg-emerald-500/10'
-                      : 'border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]',
+                      : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100 dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]',
                     (disabled || isActive) && 'cursor-default',
                   )}
                 >
-                  <div className={cn('mt-0.5 h-2.5 w-2.5 rounded-full', isActive ? 'bg-emerald-400' : 'bg-slate-600')} />
+                  <div className={cn('mt-0.5 h-2.5 w-2.5 rounded-full', isActive ? 'bg-emerald-400' : 'bg-slate-400 dark:bg-slate-600')} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">{organization.name}</p>
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{organization.name}</p>
                     <p className="truncate text-xs text-slate-500">
                       {organization.slug} · {organization.accessRole}
                     </p>
@@ -323,14 +323,14 @@ function ActiveOrganizationCard({
   if (!activeOrganization) return null
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-3">
+    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-white/10 dark:bg-slate-900/70">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
-          <Building2 className="h-4 w-4 text-emerald-300" />
+          <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ваша организация</p>
-          <p className="truncate text-sm font-semibold text-white">{activeOrganization.name}</p>
+          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{activeOrganization.name}</p>
           <p className="truncate text-xs text-slate-500">
             {activeOrganization.slug} · {activeOrganization.accessRole}
           </p>
@@ -351,16 +351,16 @@ function SearchBar({
 }) {
   return (
     <div className="group relative w-full">
-      <div className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2.5 text-left text-sm text-slate-400 transition-colors duration-200 focus-within:border-emerald-400/40 focus-within:bg-slate-950/70">
-        <Search className="h-4 w-4 text-slate-500" />
+      <div className="relative flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-500 transition-colors duration-200 focus-within:border-emerald-400/40 focus-within:bg-slate-50 dark:border-white/10 dark:bg-slate-950/50 dark:text-slate-400 dark:focus-within:border-emerald-400/40 dark:focus-within:bg-slate-950/70">
+        <Search className="h-4 w-4 text-slate-400 dark:text-slate-500" />
         <input
           ref={inputRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Поиск по меню..."
-          className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-500 outline-none"
+          className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none dark:text-slate-200 dark:placeholder:text-slate-500"
         />
-        <div className="flex items-center gap-1 rounded-md border border-white/5 bg-slate-700 px-1.5 py-0.5">
+        <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 dark:border-white/5 dark:bg-slate-700">
           <Command className="h-3 w-3 text-slate-400" />
           <span className="text-xs text-slate-400">K</span>
         </div>
@@ -610,19 +610,19 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
   }
 
   const navContent = (
-    <div className="flex h-full flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+    <div className="flex h-full flex-col bg-gradient-to-b from-white via-slate-50 to-white text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-white/5">
         <div className="flex items-center gap-3">
           <AppLogoMark />
           <div>
-            <h1 className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-lg font-bold text-transparent">
+            <h1 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-bold text-transparent dark:from-white dark:to-slate-300">
               {SITE_NAME}
             </h1>
             <p className="text-xs text-slate-500">v2.0.1</p>
           </div>
         </div>
         <button
-          className="rounded-xl border border-white/5 bg-white/5 p-2 text-slate-400 transition-all duration-300 hover:bg-white/10 hover:text-white md:hidden"
+          className="rounded-xl border border-slate-200 bg-slate-100 p-2 text-slate-500 transition-all duration-300 hover:bg-slate-200 hover:text-slate-900 md:hidden dark:border-white/5 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
           onClick={() => setIsOpen(false)}
         >
           <X className="h-4 w-4" />
@@ -637,7 +637,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
         }}
         className="flex-1 overflow-y-auto px-4 py-4"
       >
-        <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-white via-white/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl dark:from-slate-950 dark:via-slate-950/95 dark:to-transparent">
           <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
         </div>
 
@@ -654,14 +654,14 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
               />
             ))
           ) : (
-            <div className="rounded-2xl border border-white/10 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500 dark:border-white/10 dark:bg-slate-900/50 dark:text-slate-400">
               По запросу ничего не найдено.
             </div>
           )}
         </div>
       </div>
 
-      <div className="border-t border-white/5 bg-gradient-to-t from-slate-950 to-transparent px-4 py-4">
+      <div className="border-t border-slate-200 bg-gradient-to-t from-white to-transparent px-4 py-4 dark:border-white/5 dark:from-slate-950 dark:to-transparent">
         <UserCard onLogout={handleLogout} email={userEmail} displayName={displayName} roleLabel={roleLabel} />
       </div>
     </div>
@@ -669,11 +669,11 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
 
   return (
     <>
-      <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-4 backdrop-blur-xl md:hidden">
+      <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-4 backdrop-blur-xl md:hidden dark:border-white/5 dark:bg-slate-950/80">
         <div className="flex items-center gap-3">
           <AppLogoMark />
           <div>
-            <p className="text-sm font-semibold text-white">{SITE_NAME}</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">{SITE_NAME}</p>
             <p className="text-xs text-slate-500">workspace</p>
           </div>
         </div>
@@ -682,7 +682,7 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
           variant="ghost"
           size="icon"
           onClick={() => setIsOpen(true)}
-          className="rounded-xl border border-white/5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
+          className="rounded-xl border border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 dark:border-white/5 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -695,14 +695,14 @@ export function Sidebar({ desktopEnabled = true }: { desktopEnabled?: boolean } 
             onClick={() => setIsOpen(false)}
             aria-hidden
           />
-          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[20rem] border-r border-white/5 shadow-2xl orda-drawer-panel">
+          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[20rem] border-r border-slate-200 shadow-2xl orda-drawer-panel dark:border-white/5">
             {navContent}
           </div>
         </div>
       ) : null}
 
       {desktopEnabled ? (
-        <aside className="sticky top-0 hidden h-[100dvh] max-h-screen w-[300px] shrink-0 border-r border-white/5 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 md:block xl:w-[320px]">
+        <aside className="sticky top-0 hidden h-[100dvh] max-h-screen w-[300px] shrink-0 border-r border-slate-200 bg-gradient-to-b from-white via-slate-50 to-white md:block xl:w-[320px] dark:border-white/5 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
           {navContent}
         </aside>
       ) : null}

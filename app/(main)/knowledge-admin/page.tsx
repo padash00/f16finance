@@ -866,14 +866,14 @@ export default function KnowledgeAdminPage() {
         </div>
 
         {error && (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+          <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-100">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {error}
           </div>
         )}
 
         {notice && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-100">
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-100">
             {notice}
           </div>
         )}
@@ -992,7 +992,7 @@ export default function KnowledgeAdminPage() {
             {tab === 'checklists' && (
               <div className="min-w-0">
                 <Panel title="Чек-листы для операторов" icon={ClipboardList}>
-                  <p className="mb-5 text-sm leading-6 text-slate-400">
+                  <p className="mb-5 text-sm leading-6 text-slate-500 dark:text-slate-400">
                     Чек-лист — это шаги, которые оператор должен пройти за смену. Например: проверить кассу, чистоту, технику. Создайте чек-лист, потом добавьте в него пункты.
                   </p>
 
@@ -1011,12 +1011,12 @@ export default function KnowledgeAdminPage() {
                             className="group flex flex-col gap-2 rounded-3xl border border-slate-200 bg-white p-5 text-left transition hover:border-amber-300/60 hover:bg-amber-300/5 dark:border-slate-800 dark:bg-slate-950/60"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/15 text-amber-200">
+                              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/15 text-amber-600 dark:text-amber-200">
                                 <ClipboardList className="h-5 w-5" />
                               </div>
                               <h4 className="text-lg font-black text-slate-900 group-hover:text-amber-700 dark:text-slate-100 dark:group-hover:text-amber-100">{preset.title}</h4>
                             </div>
-                            <p className="text-sm leading-6 text-slate-400">{preset.description}</p>
+                            <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">{preset.description}</p>
                             <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-700 opacity-0 transition group-hover:opacity-100 dark:text-amber-200">
                               <Plus className="h-3 w-3" /> Создать
                             </span>
@@ -1198,7 +1198,7 @@ export default function KnowledgeAdminPage() {
                               {Number(run.failed_count || 0) > 0 && <Badge>Проблем: {run.failed_count}</Badge>}
                             </div>
                             <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-slate-100">{run.template_title || 'Чек-лист'}</h3>
-                            <p className="mt-2 break-words text-sm leading-6 text-slate-400">
+                            <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">
                               Проходил: <span className="font-semibold text-slate-700 dark:text-slate-200">{run.run_by_name || 'не указан'}</span>
                               {' · '}
                               Начало: {formatDateTime(run.started_at)}
@@ -1230,9 +1230,9 @@ export default function KnowledgeAdminPage() {
                                 const statusLabel = item.passed === true ? 'Ок' : item.failed ? 'Проблема' : 'Нет ответа'
                                 const statusClass =
                                   item.passed === true
-                                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
+                                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-700 dark:text-emerald-100'
                                     : item.failed
-                                      ? 'border-red-400/30 bg-red-400/10 text-red-100'
+                                      ? 'border-red-400/30 bg-red-400/10 text-red-700 dark:text-red-100'
                                       : 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300'
                                 const displayValue =
                                   item.value === null || item.value === undefined || item.value === ''
@@ -1258,12 +1258,12 @@ export default function KnowledgeAdminPage() {
                                         </div>
                                         <div className="mt-2 break-words text-sm font-bold text-slate-900 dark:text-slate-100">{item.title}</div>
                                         {displayValue && (
-                                          <div className="mt-1 break-words text-xs leading-5 text-slate-400">
+                                          <div className="mt-1 break-words text-xs leading-5 text-slate-500 dark:text-slate-400">
                                             Ответ: {displayValue}
                                           </div>
                                         )}
                                         {item.note && (
-                                          <div className="mt-1 break-words text-xs leading-5 text-slate-400">
+                                          <div className="mt-1 break-words text-xs leading-5 text-slate-500 dark:text-slate-400">
                                             Комментарий: {item.note}
                                           </div>
                                         )}
@@ -1282,24 +1282,24 @@ export default function KnowledgeAdminPage() {
                                             </div>
                                           </div>
                                         ) : item.requires_photo ? (
-                                          <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                                          <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-100">
                                             Фото требовалось, но не приложено.
                                           </div>
                                         ) : null}
                                       </div>
                                       <div className="flex shrink-0 flex-wrap gap-2 text-xs font-black">
                                         {item.photo_data_url && (
-                                          <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-sky-100">
+                                          <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-sky-700 dark:text-sky-100">
                                             Есть фото
                                           </span>
                                         )}
                                         {Number(item.fine_amount || 0) > 0 && (
-                                          <span className="rounded-full border border-red-400/30 bg-red-400/10 px-2 py-1 text-red-100">
+                                          <span className="rounded-full border border-red-400/30 bg-red-400/10 px-2 py-1 text-red-700 dark:text-red-100">
                                             Штраф {formatMoneyText(item.fine_amount)}
                                           </span>
                                         )}
                                         {Number(item.bonus_amount || 0) > 0 && (
-                                          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-emerald-100">
+                                          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-emerald-700 dark:text-emerald-100">
                                             Бонус {formatMoneyText(item.bonus_amount)}
                                           </span>
                                         )}
@@ -1325,7 +1325,7 @@ export default function KnowledgeAdminPage() {
             {tab === 'categories' && (
               <div className="min-w-0">
                 <Panel title="Категории базы знаний" icon={Layers3}>
-                  <p className="mb-5 text-sm leading-6 text-slate-400">
+                  <p className="mb-5 text-sm leading-6 text-slate-500 dark:text-slate-400">
                     Категории группируют материалы: правила клуба, зарплата и премии, штрафы, FAQ, проблемы техники, магазин и касса.
                   </p>
                   <div className="mb-5 flex justify-end">
@@ -1443,9 +1443,9 @@ function StatCard({ label, value }: { label: string; value: number }) {
 function MiniMetric({ label, value, tone = 'default' }: { label: string; value: number | string; tone?: 'default' | 'danger' | 'success' }) {
   const toneClass =
     tone === 'danger'
-      ? 'border-red-400/25 bg-red-500/10 text-red-100'
+      ? 'border-red-400/25 bg-red-500/10 text-red-700 dark:text-red-100'
       : tone === 'success'
-        ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100'
+        ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-100'
         : 'border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-100'
 
   return (
@@ -1495,7 +1495,7 @@ function WorkflowGuide() {
             Шаг {step.number}
           </div>
           <h3 className="break-words text-lg font-black text-slate-900 dark:text-slate-100">{step.title}</h3>
-          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{step.text}</p>
+          <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{step.text}</p>
         </div>
       ))}
     </div>
@@ -1558,7 +1558,7 @@ function ArticleCard({
             ))}
           </div>
           <h3 className="mt-3 break-words text-xl font-black text-slate-900 dark:text-white">{article.title}</h3>
-          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{article.summary || 'Без краткого описания'}</p>
+          <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{article.summary || 'Без краткого описания'}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(article.tags ?? []).map((tag) => (
               <span key={tag} className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -1596,7 +1596,7 @@ function RowActions({
         </button>
       )}
       {canDelete && (
-        <button onClick={onDelete} className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/30 bg-red-950/20 text-red-200 hover:bg-red-950/40">
+        <button onClick={onDelete} className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/30 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-200 dark:hover:bg-red-950/40">
           <Trash2 className="h-4 w-4" />
         </button>
       )}
@@ -1636,7 +1636,7 @@ function ChecklistTemplateCard({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="break-words text-xl font-black text-slate-900 dark:text-white">{template.title}</h3>
-          <p className="mt-1 break-words text-sm leading-6 text-slate-400">{template.description || 'Описание пока не заполнено.'}</p>
+          <p className="mt-1 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">{template.description || 'Описание пока не заполнено.'}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{companyName ? companyName : 'Все точки'}</span>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</span>

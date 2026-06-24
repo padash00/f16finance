@@ -151,26 +151,26 @@ export function LabelPrintDialog({ items, onClose }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <div className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/40">
+      <div className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-black/40 dark:border-white/10 dark:bg-slate-900">
         {/* Шапка */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Printer className="h-4 w-4 text-amber-300" /> Печать ценников</h2>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button>
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-white/10">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white"><Printer className="h-4 w-4 text-amber-300" /> Печать ценников</h2>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"><X className="h-4 w-4" /></button>
         </div>
 
         {/* Копии */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-          <span className="text-sm text-slate-400">Копий каждого ценника</span>
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-white/10">
+          <span className="text-sm text-slate-500 dark:text-slate-400">Копий каждого ценника</span>
           <div className="flex items-center gap-2">
             <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.max(1, c - 1))} disabled={copies <= 1}><Minus className="h-3 w-3" /></Button>
-            <span className="w-6 text-center text-sm font-semibold text-white">{copies}</span>
+            <span className="w-6 text-center text-sm font-semibold text-slate-900 dark:text-white">{copies}</span>
             <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCopies((c) => Math.min(20, c + 1))} disabled={copies >= 20}><Plus className="h-3 w-3" /></Button>
           </div>
         </div>
 
         {/* Предпросмотр ценника */}
         {items[0] ? (
-          <div className="flex items-center justify-center border-b border-white/10 bg-slate-950/40 px-5 py-4">
+          <div className="flex items-center justify-center border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-white/10 dark:bg-slate-950/40">
             <div className="w-[58mm] rounded-[1mm] border border-black/80 bg-white p-[2.5mm] text-black" style={{ minHeight: '40mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div className="overflow-hidden font-semibold leading-tight" style={{ fontSize: '7.5pt', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', height: '18pt' }}>{items[0].name}</div>
               <div className="flex items-baseline gap-1">
@@ -184,20 +184,20 @@ export function LabelPrintDialog({ items, onClose }: Props) {
         ) : null}
 
         {/* Список товаров */}
-        <div className="min-h-0 flex-1 divide-y divide-white/5 overflow-y-auto">
+        <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-white/5">
           {items.map((item) => (
             <div key={item.item_id} className="flex items-center gap-3 px-5 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-white">{item.name}</p>
+                <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{item.name}</p>
                 <p className="truncate text-xs text-slate-500">{item.barcode}</p>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-white">{formatPrice(item.sale_price)}</span>
+              <span className="shrink-0 text-sm font-semibold text-slate-900 dark:text-white">{formatPrice(item.sale_price)}</span>
             </div>
           ))}
         </div>
 
         {/* Подвал */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 dark:border-white/10">
           <p className="text-xs text-slate-500">Итого: {items.length * copies} ценник{items.length * copies === 1 ? '' : 'а'} · 58mm</p>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onClose}>Отмена</Button>

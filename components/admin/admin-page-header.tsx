@@ -94,7 +94,7 @@ export function AdminTableViewport(props: {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]',
+        'relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.02]',
         props.className,
       )}
     >
@@ -113,4 +113,4 @@ export function AdminTableViewport(props: {
 
 /** Класс для &lt;thead&gt; внутри AdminTableViewport с maxHeight */
 export const adminTableStickyTheadClass =
-  'sticky top-0 z-10 border-b border-white/10 bg-slate-950/95 text-xs uppercase tracking-wide text-slate-500 backdrop-blur-md shadow-[0_1px_0_0_rgba(255,255,255,0.06)]'
+  'sticky top-0 z-10 border-b border-slate-200 bg-white/95 text-xs uppercase tracking-wide text-slate-500 backdrop-blur-md shadow-[0_1px_0_0_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]'

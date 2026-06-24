@@ -347,7 +347,7 @@ export function ChecklistEditorDialog({
                       type="button"
                       disabled={!canEditItems}
                       onClick={() => resetItemForTemplate()}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-black text-emerald-100 hover:bg-emerald-400/15 disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-black text-emerald-700 dark:text-emerald-100 hover:bg-emerald-400/15 disabled:opacity-50"
                     >
                       <Plus className="h-4 w-4" />
                       Новый пункт
@@ -356,7 +356,7 @@ export function ChecklistEditorDialog({
                 </div>
 
                 {!canEditItems && (
-                  <div className="rounded-3xl border border-amber-300/25 bg-amber-300/10 p-5 text-sm leading-6 text-amber-50">
+                  <div className="rounded-3xl border border-amber-300/25 bg-amber-300/10 p-5 text-sm leading-6 text-amber-800 dark:text-amber-50">
                     Сначала сохраните чек-лист. После этого можно будет добавлять пункты проверки.
                   </div>
                 )}

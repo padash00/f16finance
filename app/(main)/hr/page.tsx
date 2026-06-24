@@ -529,7 +529,7 @@ export default function HrPage() {
               onClick={() => setTab('active')}
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'active'
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
                   : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
@@ -539,7 +539,7 @@ export default function HrPage() {
               onClick={() => setTab('dismissed')}
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'dismissed'
-                  ? 'bg-red-500/15 text-red-300 border-red-500/40'
+                  ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40'
                   : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
@@ -549,7 +549,7 @@ export default function HrPage() {
               onClick={() => setTab('career')}
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'career'
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
                   : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
@@ -559,7 +559,7 @@ export default function HrPage() {
               onClick={() => setTab('positions')}
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'positions'
-                  ? 'bg-blue-500/15 text-blue-300 border-blue-500/40'
+                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40'
                   : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
@@ -569,7 +569,7 @@ export default function HrPage() {
               onClick={() => setTab('analytics')}
               className={`px-4 py-2 rounded-lg text-sm border transition ${
                 tab === 'analytics'
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
                   : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-400 dark:hover:border-slate-500'
               }`}
             >
@@ -652,14 +652,14 @@ export default function HrPage() {
               <div className="flex border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   onClick={() => setViewMode('cards')}
-                  className={`p-1.5 ${viewMode === 'cards' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+                  className={`p-1.5 ${viewMode === 'cards' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
                   title="Карточки"
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`p-1.5 ${viewMode === 'table' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+                  className={`p-1.5 ${viewMode === 'table' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
                   title="Таблица"
                 >
                   <List className="w-3.5 h-3.5" />
@@ -822,7 +822,7 @@ export default function HrPage() {
                           {!dismissed && canEdit && (
                             <button
                               onClick={() => setSelectedEmp(emp as unknown as PanelEmployee)}
-                              className="p-1.5 rounded hover:bg-amber-500/10 text-amber-300"
+                              className="p-1.5 rounded hover:bg-amber-500/10 text-amber-600 dark:text-amber-300"
                               title="Профиль"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -831,7 +831,7 @@ export default function HrPage() {
                           {dismissed && canRestore && (
                             <button
                               onClick={() => restore(emp)}
-                              className="p-1.5 rounded hover:bg-emerald-500/10 text-emerald-300"
+                              className="p-1.5 rounded hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
                               title="Восстановить"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
@@ -927,13 +927,13 @@ export default function HrPage() {
                   </div>
                   <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                     {emp.phone && (
-                      <a href={`tel:${emp.phone}`} className="hover:text-amber-300 transition-colors">📞 {emp.phone}</a>
+                      <a href={`tel:${emp.phone}`} className="hover:text-amber-600 dark:hover:text-amber-300 transition-colors">📞 {emp.phone}</a>
                     )}
                     {emp.email && (
-                      <a href={`mailto:${emp.email}`} className="hover:text-amber-300 transition-colors truncate">✉ {emp.email}</a>
+                      <a href={`mailto:${emp.email}`} className="hover:text-amber-600 dark:hover:text-amber-300 transition-colors truncate">✉ {emp.email}</a>
                     )}
                     {emp.telegram_chat_id && (
-                      <a href={`tg://user?id=${emp.telegram_chat_id}`} className="hover:text-amber-300 transition-colors">📨 Telegram</a>
+                      <a href={`tg://user?id=${emp.telegram_chat_id}`} className="hover:text-amber-600 dark:hover:text-amber-300 transition-colors">📨 Telegram</a>
                     )}
                     {emp.monthly_salary != null && emp.monthly_salary > 0 && (
                       <span>💰 {emp.monthly_salary.toLocaleString('ru-RU')} ₸/мес</span>
@@ -1041,13 +1041,13 @@ export default function HrPage() {
       {dismissTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setDismissTarget(null)}>
           <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-2xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-1">Уволить сотрудника</h3>
+            <h3 className="text-lg font-bold mb-1 text-slate-900 dark:text-white">Уволить сотрудника</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
               {dismissTarget.full_name} ({dismissTarget.kind === 'operator' ? 'оператор' : 'админ'})
             </p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Дата увольнения</label>
+                <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Дата увольнения</label>
                 <input
                   type="date"
                   value={dismissDate}
@@ -1056,7 +1056,7 @@ export default function HrPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Тип</label>
+                <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Тип</label>
                 <select
                   value={dismissType}
                   onChange={(e) => setDismissType(e.target.value as DismissalType)}
@@ -1068,7 +1068,7 @@ export default function HrPage() {
                 </select>
               </div>
             </div>
-            <label className="block text-sm font-medium mb-1">Причина увольнения</label>
+            <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Причина увольнения</label>
             <textarea
               value={dismissReason}
               onChange={(e) => setDismissReason(e.target.value)}
@@ -1128,10 +1128,10 @@ function MiniStat({
   tone?: 'indigo' | 'emerald' | 'blue' | 'orange' | 'gray'
 }) {
   const toneMap = {
-    indigo: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-    emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-    blue: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
-    orange: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+    indigo: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    blue: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    orange: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
     gray: 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400',
   }
   return (
@@ -1156,9 +1156,9 @@ function Chip({
   children: React.ReactNode
 }) {
   const toneMap = {
-    indigo: 'border-amber-500/40 text-amber-300 bg-amber-500/10',
-    orange: 'border-orange-500/40 text-orange-300 bg-orange-500/10',
-    purple: 'border-amber-500/40 text-amber-300 bg-amber-500/10',
+    indigo: 'border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10',
+    orange: 'border-orange-500/40 text-orange-700 dark:text-orange-300 bg-orange-500/10',
+    purple: 'border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10',
   }
   return (
     <button
@@ -1169,7 +1169,7 @@ function Chip({
     >
       <span>{children}</span>
       {count != null && (
-        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${active ? 'bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
+        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${active ? 'bg-amber-500/20 dark:bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
           {count}
         </span>
       )}

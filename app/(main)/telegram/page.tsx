@@ -366,7 +366,7 @@ create table if not exists telegram_allowed_users (
                 )}
 
                 {!status?.hasToken && (
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-slate-400 space-y-1">
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-slate-700 dark:text-slate-400 space-y-1">
                     <p className="text-amber-700 dark:text-amber-300 font-semibold text-sm mb-2">Как настроить:</p>
                     <p>1. Создайте бота через <strong className="text-slate-900 dark:text-white">@BotFather</strong> → получите токен</p>
                     <p>2. Добавьте в Vercel env: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-700 dark:text-slate-300">TELEGRAM_BOT_TOKEN</code></p>
@@ -389,12 +389,12 @@ create table if not exists telegram_allowed_users (
             badge={users.length > 0 ? String(users.length) : undefined}
           >
             {tableExists === false && (
-              <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-300 space-y-2">
+              <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-700 dark:text-amber-300 space-y-2">
                 <div className="flex items-center gap-2 font-semibold">
                   <AlertTriangle className="w-4 h-4" />
                   Таблица не создана в Supabase
                 </div>
-                <p className="text-slate-400">
+                <p className="text-slate-600 dark:text-slate-400">
                   Раскройте раздел «SQL для Supabase» внизу и выполните скрипт в SQL Editor.
                   После этого обновите страницу.
                 </p>
@@ -434,7 +434,7 @@ create table if not exists telegram_allowed_users (
                     onChange={(e) => setNewUserFinance(e.target.checked)}
                     className="w-4 h-4 rounded accent-amber-500"
                   />
-                  <span className="text-xs text-slate-400">Доступ к финансовым командам</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Доступ к финансовым командам</span>
                 </label>
                 <button
                   onClick={handleAddUser}
@@ -449,7 +449,7 @@ create table if not exists telegram_allowed_users (
                 <p className="text-xs text-red-400">{addError}</p>
               )}
               <p className="text-xs text-slate-600">
-                Свой Telegram ID: напишите боту <span className="text-slate-400">@userinfobot</span> — он вернёт числовой ID
+                Свой Telegram ID: напишите боту <span className="text-slate-500 dark:text-slate-400">@userinfobot</span> — он вернёт числовой ID
               </p>
             </div>
             )}
@@ -533,7 +533,7 @@ create table if not exists telegram_allowed_users (
           >
             <p className="text-xs text-slate-500 mb-4">
               Привяжите Telegram ID к каждому сотруднику чтобы они могли использовать финансовые команды бота по своей роли.
-              Узнать ID: написать <span className="text-slate-400">@userinfobot</span> в Telegram.
+              Узнать ID: написать <span className="text-slate-500 dark:text-slate-400">@userinfobot</span> в Telegram.
             </p>
 
             {staffLoading ? (
@@ -707,7 +707,7 @@ create table if not exists telegram_allowed_users (
                   <code className="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono w-32 shrink-0 truncate">
                     {cmd}
                   </code>
-                  <span className="text-sm text-slate-400 flex-1">{desc}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-400 flex-1">{desc}</span>
                   {locked && (
                     <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded whitespace-nowrap">
                       🔒 доступ

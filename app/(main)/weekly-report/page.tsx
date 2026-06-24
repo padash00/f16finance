@@ -1761,7 +1761,7 @@ function WeeklyReportContent() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="ml-4 bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 border-0"
+                  className="ml-4 bg-violet-500/20 text-violet-700 dark:text-violet-300 hover:bg-violet-500/30 border-0"
                   onClick={handleCurrentWeek}
                 >
                   Текущая неделя
@@ -2337,12 +2337,12 @@ function WeeklyReportContent() {
                       <div className="mb-3">
                         <p className="text-xs text-emerald-400 font-medium mb-2 uppercase tracking-wide">Доходы</p>
                         <div className="space-y-1">
-                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Наличные</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
-                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">{cashLabels.providerName}</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
-                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Online</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
-                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Карта</span><span className="text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
+                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Наличные</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
+                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">{cashLabels.providerName}</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
+                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Online</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
+                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-slate-400">Карта</span><span className="text-slate-700 dark:text-slate-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
                           <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
-                            <span className="text-slate-300 font-medium">Итого доход</span>
+                            <span className="text-slate-700 dark:text-slate-300 font-medium">Итого доход</span>
                             <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
                           </div>
                         </div>
@@ -2496,8 +2496,8 @@ function WeeklyReportContent() {
             )}
 
             {aiReport && (
-              <div className="prose prose-invert prose-sm max-w-none">
-                {aiReportLoading ? <p className="mb-2 text-xs text-violet-300">AI пишет отчёт...</p> : null}
+              <div className="prose dark:prose-invert prose-sm max-w-none">
+                {aiReportLoading ? <p className="mb-2 text-xs text-violet-600 dark:text-violet-300">AI пишет отчёт...</p> : null}
                 <pre className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
               </div>
             )}

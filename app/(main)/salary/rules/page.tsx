@@ -1231,7 +1231,7 @@ function SalaryRulesContent() {
           {/* Messages */}
           {error && (
             <Card className="p-4 border border-red-500/30 bg-red-500/10">
-              <div className="flex items-center gap-2 text-red-300">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
                 <AlertTriangle className="w-4 h-4" />
                 <span className="text-sm">{error}</span>
               </div>
@@ -1240,7 +1240,7 @@ function SalaryRulesContent() {
 
           {successMsg && (
             <Card className="p-4 border border-emerald-500/30 bg-emerald-500/10">
-              <div className="flex items-center gap-2 text-emerald-300">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="w-4 h-4" />
                 <span className="text-sm">{successMsg}</span>
               </div>
@@ -1986,7 +1986,7 @@ function SalaryRulesContent() {
             <TabsContent value="seniority" className="space-y-6">
               {error && (
                 <Card className="p-4 border border-red-500/30 bg-red-500/10">
-                  <div className="flex items-center gap-2 text-red-300">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
                     <AlertTriangle className="w-4 h-4" />
                     <span className="text-sm">{error}</span>
                   </div>
@@ -1995,7 +1995,7 @@ function SalaryRulesContent() {
 
               {successMsg && (
                 <Card className="p-4 border border-emerald-500/30 bg-emerald-500/10">
-                  <div className="flex items-center gap-2 text-emerald-300">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="text-sm">{successMsg}</span>
                   </div>

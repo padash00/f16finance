@@ -1430,7 +1430,7 @@ function OverviewTab(props: any) {
   } = props
   const trendIcon = analytics.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-400" /> :
                    analytics.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-400" /> : 
-                   <MinusIcon className="w-4 h-4 text-slate-400" />
+                   <MinusIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
 
   return (
     <div className="space-y-6">
@@ -1541,7 +1541,7 @@ function OverviewTab(props: any) {
               <div key={p.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="text-slate-400">{p.name}</span>
+                  <span className="text-slate-500 dark:text-slate-400">{p.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-900 dark:text-white font-medium">{Formatters.moneyDetailed(p.value)}</span>
@@ -1573,7 +1573,7 @@ function OverviewTab(props: any) {
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-400">Достоверность</span>
+                <span className="text-slate-500 dark:text-slate-400">Достоверность</span>
                 <span className={analytics.prediction.confidence > 70 ? 'text-green-400' : 'text-yellow-400'}>
                   {analytics.prediction.confidence}%
                 </span>
@@ -1824,7 +1824,7 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {analytics.anomalies.map((a: any, i: number) => (
               <div key={i} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl">
-                <div className="text-xs text-slate-400 mb-1">{DateUtils.formatDate(a.date)}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{DateUtils.formatDate(a.date)}</div>
                 <div className={`text-sm font-medium ${a.type === 'spike' ? 'text-green-400' : 'text-red-400'}`}>
                   {a.type === 'spike' ? '↗ Всплеск' : '↘ Падение'}: {Formatters.moneyDetailed(a.amount)}
                 </div>

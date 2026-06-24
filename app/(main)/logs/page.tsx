@@ -707,7 +707,7 @@ export default function LogsPage() {
           </select>
           <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900/60 px-3 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
             <input type="checkbox" checked={onlyErrors} onChange={e => setOnlyErrors(e.target.checked)}
-              className="h-4 w-4 rounded border-white/20 bg-transparent" />
+              className="h-4 w-4 rounded border-slate-300 dark:border-white/20 bg-transparent" />
             Только ошибки
           </label>
           <Button onClick={() => { setPage(1); loadLogs(true) }}>Применить</Button>
@@ -721,11 +721,11 @@ export default function LogsPage() {
       {loading ? (
         <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-6 text-slate-900 dark:text-white">
           <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin text-sky-300" /> Загружаем журнал...
+            <Loader2 className="h-4 w-4 animate-spin text-sky-500 dark:text-sky-300" /> Загружаем журнал...
           </div>
         </Card>
       ) : error ? (
-        <Card className="border-red-500/20 bg-red-500/10 p-6 text-red-200">{error}</Card>
+        <Card className="border-red-500/20 bg-red-500/10 p-6 text-red-700 dark:text-red-200">{error}</Card>
       ) : (
         <div className="space-y-2">
           {(data?.items || []).map((item) => {

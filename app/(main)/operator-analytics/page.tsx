@@ -622,13 +622,13 @@ const OperatorDetailsModal = memo(({
                   {operator.position && (
                     <>
                       <p className="text-sm text-slate-700 dark:text-slate-400">{operator.position}</p>
-                      <span className="w-1 h-1 rounded-full bg-slate-600" />
+                      <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
                     </>
                   )}
                   <p className="text-sm text-slate-700 dark:text-slate-400 font-mono">ID: {operator.operatorId.slice(0, 8)}</p>
                   {tenure && (
                     <>
-                      <span className="w-1 h-1 rounded-full bg-slate-600" />
+                      <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
                       <p className="text-sm text-slate-700 dark:text-slate-400 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {tenure}

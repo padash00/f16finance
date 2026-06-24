@@ -363,21 +363,21 @@ export default function CashFlowPage() {
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-emerald-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-slate-400">Доходы</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Доходы</p>
               </div>
               <p className="text-xl font-bold text-emerald-400">{fmtMoney(stats.totalIncome)}</p>
             </Card>
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-red-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
-                <p className="text-xs text-slate-400">Расходы</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Расходы</p>
               </div>
               <p className="text-xl font-bold text-red-400">{fmtMoney(stats.totalExpenses)}</p>
             </Card>
             <Card className={`p-4 bg-white dark:bg-slate-900/80 ${stats.profit >= 0 ? 'border-amber-500/20' : 'border-red-500/30'}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Wallet className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-400">Прибыль</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Прибыль</p>
               </div>
               <p className={`text-xl font-bold ${stats.profit >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
                 {fmtMoney(stats.profit)}
@@ -386,7 +386,7 @@ export default function CashFlowPage() {
             <Card className="p-4 bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-4 h-4 text-amber-400" />
-                <p className="text-xs text-slate-400">Маржа</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Маржа</p>
               </div>
               <p className={`text-xl font-bold ${stats.margin >= 20 ? 'text-emerald-400' : stats.margin >= 10 ? 'text-amber-400' : 'text-red-400'}`}>
                 {stats.margin.toFixed(1)}%

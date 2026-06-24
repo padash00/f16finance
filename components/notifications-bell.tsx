@@ -194,24 +194,24 @@ export function NotificationsBell() {
           if (!open) load()
         }}
         className={cn(
-          'relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-900/70 transition hover:border-amber-500/20 hover:text-white',
-          open ? 'text-white border-amber-500/30' : 'text-slate-400',
+          'relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white transition hover:border-amber-500/20 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900/70 dark:hover:text-white',
+          open ? 'text-slate-900 border-amber-500/30 dark:text-white dark:border-amber-500/30' : 'text-slate-500 dark:text-slate-400',
         )}
         aria-label="Уведомления"
       >
         <Bell className={cn('h-4 w-4', unreadTotal > 0 && 'animate-pulse')} />
         {unreadTotal > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-slate-950 bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full border border-white bg-red-500 px-1 text-[10px] font-bold text-white dark:border-slate-950">
             {unreadTotal > 99 ? '99+' : unreadTotal}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[360px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-white/5">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white">Уведомления</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Уведомления</p>
               <p className="text-[11px] text-slate-500">
                 {unreadTotal > 0
                   ? `${unreadTotal} новых · всего ${total}`
@@ -226,7 +226,7 @@ export function NotificationsBell() {
                 <button
                   type="button"
                   onClick={handleMarkAllRead}
-                  className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300 transition hover:border-emerald-500/40 hover:bg-emerald-500/20"
+                  className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 transition hover:border-emerald-500/40 hover:bg-emerald-500/20 dark:text-emerald-300"
                   title="Отметить все как прочитанные"
                 >
                   <Check className="h-3 w-3" />
@@ -249,13 +249,13 @@ export function NotificationsBell() {
                   <div key={group.id} className="mb-3 last:mb-0">
                     <div className="flex items-center justify-between px-3 py-1">
                       <div className="flex items-center gap-2">
-                        <GroupIcon className="h-3.5 w-3.5 text-amber-300" />
-                        <span className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{group.label}</span>
+                        <GroupIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-300" />
+                        <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{group.label}</span>
                         <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                           {group.count}
                         </span>
                         {newCount > 0 ? (
-                          <span className="rounded-md border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                          <span className="rounded-md border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-300">
                             +{newCount}
                           </span>
                         ) : null}
@@ -263,7 +263,7 @@ export function NotificationsBell() {
                       <Link
                         href={group.href}
                         onClick={() => setOpen(false)}
-                        className="text-[11px] text-slate-400 transition hover:text-amber-300"
+                        className="text-[11px] text-slate-400 transition hover:text-amber-600 dark:hover:text-amber-300"
                       >
                         все →
                       </Link>
@@ -279,13 +279,13 @@ export function NotificationsBell() {
                             className={cn(
                               'flex items-start gap-3 rounded-xl px-3 py-2 transition',
                               isNew
-                                ? 'bg-red-500/[0.04] text-white hover:bg-red-500/10'
-                                : 'text-slate-300 hover:bg-white/5 hover:text-white',
+                                ? 'bg-red-500/[0.04] text-slate-900 hover:bg-red-500/10 dark:text-white'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white',
                             )}
                           >
                             <div className={cn(
                               'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                              isNew ? 'bg-red-500/15 text-red-300' : 'bg-slate-800/70 text-slate-400',
+                              isNew ? 'bg-red-500/15 text-red-600 dark:text-red-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800/70 dark:text-slate-400',
                             )}>
                               <GroupIcon className="h-3.5 w-3.5" />
                             </div>

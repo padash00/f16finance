@@ -372,7 +372,7 @@ function OperatorSalaryDetailPageContent() {
                       </thead>
                       <tbody>
                         {data.week.companyAllocations.map((a) => (
-                          <tr key={a.companyId} className="border-t border-white/5 text-slate-700 dark:text-slate-200">
+                          <tr key={a.companyId} className="border-t border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-200">
                             <td className="py-3 pr-3">
                               <div className="font-medium text-slate-900 dark:text-white">{a.companyName || a.companyCode || a.companyId}</div>
                               <div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div>
@@ -506,7 +506,7 @@ function OperatorSalaryDetailPageContent() {
                       {shifts.length === 0 ? (
                         <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">Нет смен за эту неделю.</td></tr>
                       ) : shifts.map((shift) => (
-                        <tr key={shift.id} className="border-t border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                        <tr key={shift.id} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                           <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-slate-300">{formatRuDate(shift.date)}</td>
                           <td className="px-4 py-3 text-center">
                             {shift.shift === 'day' ? <Sun className="inline h-4 w-4 text-yellow-400" /> : <Moon className="inline h-4 w-4 text-blue-400" />}

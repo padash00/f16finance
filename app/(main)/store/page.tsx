@@ -30,13 +30,13 @@ type SearchResult = { type: string; title: string; subtitle: string; href: strin
 const card = 'rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 shadow-lg shadow-black/20'
 
 const HUBS = [
-  { href: '/store/stock', label: 'Склад', note: 'Остатки, витрина, движения, каталог', icon: Warehouse, color: 'text-emerald-300' },
-  { href: '/store/documents', label: 'Документы', note: 'Приёмка, оприходование, списания, ревизия', icon: FileText, color: 'text-sky-300' },
-  { href: '/store/orders', label: 'Заявки', note: 'Заявки точек и заказы поставщикам', icon: ClipboardList, color: 'text-violet-300' },
-  { href: '/store/vendors', label: 'Поставщики', note: 'Поставщики, долги, расходники', icon: Building2, color: 'text-amber-300' },
-  { href: '/store/sales', label: 'Аналитика', note: 'Продажи, товары, ABC, прогноз', icon: Activity, color: 'text-emerald-300' },
-  { href: '/store/cashbox', label: 'Касса', note: 'Чеки, возвраты, реклама', icon: Receipt, color: 'text-sky-300' },
-  { href: '/store/clients', label: 'Клиенты', note: 'Клиенты и скидки', icon: Users2, color: 'text-violet-300' },
+  { href: '/store/stock', label: 'Склад', note: 'Остатки, витрина, движения, каталог', icon: Warehouse, color: 'text-emerald-600 dark:text-emerald-300' },
+  { href: '/store/documents', label: 'Документы', note: 'Приёмка, оприходование, списания, ревизия', icon: FileText, color: 'text-sky-600 dark:text-sky-300' },
+  { href: '/store/orders', label: 'Заявки', note: 'Заявки точек и заказы поставщикам', icon: ClipboardList, color: 'text-violet-600 dark:text-violet-300' },
+  { href: '/store/vendors', label: 'Поставщики', note: 'Поставщики, долги, расходники', icon: Building2, color: 'text-amber-600 dark:text-amber-300' },
+  { href: '/store/sales', label: 'Аналитика', note: 'Продажи, товары, ABC, прогноз', icon: Activity, color: 'text-emerald-600 dark:text-emerald-300' },
+  { href: '/store/cashbox', label: 'Касса', note: 'Чеки, возвраты, реклама', icon: Receipt, color: 'text-sky-600 dark:text-sky-300' },
+  { href: '/store/clients', label: 'Клиенты', note: 'Клиенты и скидки', icon: Users2, color: 'text-violet-600 dark:text-violet-300' },
 ]
 
 export default function StoreOverviewPage() {
@@ -155,7 +155,7 @@ export default function StoreOverviewPage() {
       {topLowStock.length > 0 && (
         <div className={`${card} p-4`}>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><AlertTriangle className="h-4 w-4 text-amber-300" /> Скоро закончится</span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><AlertTriangle className="h-4 w-4 text-amber-500 dark:text-amber-300" /> Скоро закончится</span>
             <Link href="/store/sales" className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-300 hover:text-amber-700 dark:hover:text-amber-200">Прогноз <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -189,7 +189,7 @@ export default function StoreOverviewPage() {
       {/* Последние действия */}
       <div className={`${card} overflow-hidden`}>
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
-          <History className="h-4 w-4 text-violet-300" /> Последние действия
+          <History className="h-4 w-4 text-violet-500 dark:text-violet-300" /> Последние действия
         </div>
         {!loaded ? (
           <div className="flex items-center justify-center gap-2 py-10 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Загрузка…</div>
@@ -236,11 +236,11 @@ const ACTIVITY_PHRASE: Record<string, string> = {
   'inventory-posting:create': 'Оприходование',
 }
 const ENTITY_META: Record<string, { label: string; icon: any; color: string }> = {
-  'inventory-receipt': { label: 'Приёмка', icon: PackagePlus, color: 'text-sky-300' },
-  'inventory-writeoff': { label: 'Списание', icon: ArchiveX, color: 'text-rose-300' },
-  'inventory-request': { label: 'Заявка', icon: ClipboardList, color: 'text-violet-300' },
-  'inventory-revision': { label: 'Ревизия', icon: ScanSearch, color: 'text-amber-300' },
-  'inventory-posting': { label: 'Оприходование', icon: Package, color: 'text-emerald-300' },
+  'inventory-receipt': { label: 'Приёмка', icon: PackagePlus, color: 'text-sky-500 dark:text-sky-300' },
+  'inventory-writeoff': { label: 'Списание', icon: ArchiveX, color: 'text-rose-500 dark:text-rose-300' },
+  'inventory-request': { label: 'Заявка', icon: ClipboardList, color: 'text-violet-500 dark:text-violet-300' },
+  'inventory-revision': { label: 'Ревизия', icon: ScanSearch, color: 'text-amber-500 dark:text-amber-300' },
+  'inventory-posting': { label: 'Оприходование', icon: Package, color: 'text-emerald-500 dark:text-emerald-300' },
 }
 const ACTION_FALLBACK: Record<string, string> = {
   create: 'создано', create_posting: 'оприходование', approve: 'одобрено', reject: 'отклонено',
@@ -248,13 +248,13 @@ const ACTION_FALLBACK: Record<string, string> = {
   apply: 'проведено', close: 'закрыто', open: 'открыто',
 }
 function activityMeta(entity: string, action: string): { phrase: string; icon: any; color: string } {
-  const meta = ENTITY_META[entity] || { label: String(entity || '').replace(/[-_]/g, ' '), icon: History, color: 'text-slate-400' }
+  const meta = ENTITY_META[entity] || { label: String(entity || '').replace(/[-_]/g, ' '), icon: History, color: 'text-slate-500 dark:text-slate-400' }
   const phrase = ACTIVITY_PHRASE[`${entity}:${action}`] || `${meta.label} · ${ACTION_FALLBACK[action] || action}`
   return { phrase, icon: meta.icon, color: meta.color }
 }
 
 function Kpi({ label, value, hint, tone, loaded, href }: { label: string; value: number; hint: string; tone: 'normal' | 'amber' | 'rose'; loaded: boolean; href?: string }) {
-  const valueColor = tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : 'text-slate-900 dark:text-white'
+  const valueColor = tone === 'rose' ? 'text-rose-600 dark:text-rose-300' : tone === 'amber' ? 'text-amber-600 dark:text-amber-300' : 'text-slate-900 dark:text-white'
   const body = (
     <div className={`${card} p-4 ${href ? 'transition-colors hover:border-slate-300 dark:hover:border-white/20' : ''}`}>
       <p className="text-[11px] uppercase tracking-wider text-slate-500">{label}</p>

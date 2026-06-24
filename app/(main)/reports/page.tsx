@@ -2506,7 +2506,7 @@ function ReportsContent() {
                 </div>
                 <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-500">
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500/40" /> Убыток</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-800" /> Нейтрально</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800" /> Нейтрально</span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500/40" /> Прибыль</span>
                 </div>
               </div>
@@ -2609,7 +2609,7 @@ function ReportsContent() {
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                   }}
-                                  className="flex items-center px-4 hover:bg-white/5 transition-colors"
+                                  className="flex items-center px-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                                 >
                                   <div className="w-8">
                                     <input 
@@ -2752,7 +2752,7 @@ function ReportsContent() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="border-white/10"
+                      className="border-slate-200 dark:border-white/10"
                       onClick={() => setSelectedRows(new Set())}
                     >
                       Снять выделение
