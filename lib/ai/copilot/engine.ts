@@ -126,6 +126,17 @@ export async function runCopilot(
     if (!ctx.isSuperAdmin && !ctx.capabilities.has(tool.requiredCapability)) {
       return { text: `У тебя нет права для "${tool.description}". Обратись к администратору.` }
     }
+    // АГЕНТНЫЙ МОЗГ для чтения: read-инструмент с готовыми параметрами →
+    // выполняем, читаем результат, при нужде цепляем ещё, и СИНТЕЗИРУЕМ ответ.
+    // Write-действия (аванс/штраф/расход и т.п.) сюда не попадают — у них своя
+    // схема с подтверждением.
+    if (isReadOnlyTool(tool.name)) {
+      const missingReq = tool.params.find((p) => p.required && (llmResponse.toolCall!.args?.[p.name] == null || llmResponse.toolCall!.args?.[p.name] === ''))
+      if (!missingReq) {
+        const synth = await runAgenticRead(input, ctx, tools, session, llmResponse.toolCall)
+        if (synth) { pushHistory(session, 'assistant', synth.text); return synth }
+      }
+    }
     startTool(session, tool.name)
     // Multi-step: если AI вернул несколько tool_calls — кладём остальные в очередь.
     // После выполнения первого, engine автоматически возьмёт следующий.
@@ -707,4 +718,113 @@ async function callLLM(
     console.error('[copilot] callLLM error:', e)
     return { text: `Ошибка AI: ${e?.message || 'unknown'}` }
   }
+}
+
+// Инструмент только читает данные (безопасно авто-выполнять и рассуждать)?
+const READ_PREFIXES = ['query_', 'get_', 'compare_', 'who_', 'list_', 'search_', 'find_']
+function isReadOnlyTool(name: string): boolean {
+  return READ_PREFIXES.some((p) => name.startsWith(p))
+}
+
+// Выполняет read-инструмент и возвращает текст результата (для подачи модели).
+async function runReadTool(name: string, args: Record<string, unknown>, ctx: CopilotContext): Promise<string> {
+  const tool = getTool(name)
+  if (!tool) return `Инструмент ${name} не найден.`
+  if (!isReadOnlyTool(name)) return 'Это действие меняет данные — в авто-режиме не выполняется, нужно подтверждение пользователя.'
+  if (!ctx.isSuperAdmin && !ctx.capabilities.has(tool.requiredCapability)) return 'Нет прав на это действие.'
+  try {
+    const result = await tool.handler(args || {}, ctx)
+    if (!result.ok) return `Ошибка: ${result.message}`
+    let out = result.message || ''
+    if (result.data != null) {
+      const json = JSON.stringify(result.data)
+      out += '\nДАННЫЕ: ' + (json.length > 3000 ? json.slice(0, 3000) + '…' : json)
+    }
+    return out || 'Готово (без данных).'
+  } catch (e: any) {
+    return `Ошибка выполнения: ${e?.message || 'unknown'}`
+  }
+}
+
+/**
+ * АГЕНТНЫЙ ЦИКЛ ЧТЕНИЯ: выполняет read-инструменты, читает их результаты,
+ * при необходимости вызывает ещё, и пишет ОСМЫСЛЕННЫЙ синтезированный ответ.
+ * Только read-инструменты. Возвращает null если AI не настроен (→ фолбэк).
+ */
+async function runAgenticRead(
+  userText: string,
+  ctx: CopilotContext,
+  tools: CopilotTool[],
+  session: ReturnType<typeof getOrCreateSession>,
+  first: { name: string; args: Record<string, unknown> },
+): Promise<CopilotResponse | null> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return null
+
+  const readTools = tools.filter((t) => isReadOnlyTool(t.name))
+  const openaiTools = readTools.map((t) => toolToOpenAISchema(t, ctx))
+
+  const sys =
+    'Ты — Orda, аналитик-управляющий клуба. У тебя есть инструменты ЧТЕНИЯ данных бизнеса. ' +
+    'Чтобы ответить: вызывай нужные инструменты (можно несколько, последовательно), ЧИТАЙ их результаты, ' +
+    'и напиши КОРОТКИЙ ответ по-русски с конкретными цифрами и одной дельной мыслью. ' +
+    'Числа бери ТОЛЬКО из результатов инструментов — не выдумывай. Если данных не хватило — честно скажи. ' +
+    'Деньги пиши как "10 000 ₸". Без воды, приветствий и повторения вопроса.'
+
+  const msgs: any[] = [
+    { role: 'system', content: sys },
+    ...session.history.slice(-4).map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: userText },
+  ]
+
+  // Сеем первым инструментом, который уже выбрал роутер — экономим один вызов.
+  const seedId = 'call_seed'
+  msgs.push({ role: 'assistant', content: null, tool_calls: [{ id: seedId, type: 'function', function: { name: first.name, arguments: JSON.stringify(first.args || {}) } }] })
+  msgs.push({ role: 'tool', tool_call_id: seedId, content: await runReadTool(first.name, first.args, ctx) })
+
+  let lastToolText = ''
+  for (let iter = 0; iter < 3; iter++) {
+    try {
+      const res = await fetch(OPENAI_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: MODEL,
+          max_completion_tokens: MODEL.startsWith('gpt-5') ? 4000 : 1200,
+          ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0.2 }),
+          messages: msgs,
+          tools: openaiTools,
+          tool_choice: 'auto',
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { console.error('[copilot] agentic error:', data); break }
+      const message = data?.choices?.[0]?.message
+      if (!message) break
+
+      const tcs = message.tool_calls || []
+      if (tcs.length === 0) {
+        const text = (message.content || '').trim()
+        if (text) return { text }
+        break
+      }
+      // Модель хочет ещё данных — выполняем read-инструменты.
+      msgs.push({ role: 'assistant', content: message.content || null, tool_calls: tcs })
+      for (const tc of tcs) {
+        if (!tc?.function?.name) continue
+        let args: Record<string, unknown> = {}
+        try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
+        const out = await runReadTool(tc.function.name, args, ctx)
+        lastToolText = out
+        msgs.push({ role: 'tool', tool_call_id: tc.id, content: out })
+      }
+    } catch (e: any) {
+      console.error('[copilot] agentic loop error:', e)
+      break
+    }
+  }
+
+  // Фолбэк: если синтез не получился — отдаём последний результат инструмента «как есть».
+  const fallback = lastToolText || (await runReadTool(first.name, first.args, ctx))
+  return { text: fallback.replace(/\nДАННЫЕ:[\s\S]*$/, '').trim() || 'Не удалось получить ответ.' }
 }
