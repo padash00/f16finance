@@ -199,7 +199,11 @@
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    /* `none`, а НЕ translateY(0): identity-transform всё равно делает элемент
+       containing block для position:fixed → все модалки внутри страницы
+       срезаются/уезжают (fixed считается от страницы, а не от экрана).
+       С `none` containing block не создаётся, модалки центрируются по экрану. */
+    transform: none;
   }
 }
 
