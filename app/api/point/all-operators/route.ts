@@ -98,7 +98,12 @@ export async function GET(request: Request) {
         .select('id, staff_id, user_id, email, role')
         .eq('status', 'active')
         .in('organization_id', orgIds)
-        .in('role', ['owner', 'manager', 'marketer'])
+        // Раньше был жёсткий белый список owner/manager/marketer — кастомные
+        // должности (напр. «технический директор», созданные в Кадрах) в него не
+        // попадали и пропадали из списка должников. Теперь берём всех штатных,
+        // кроме клиентов и операторов (операторы добавляются отдельным путём через
+        // operator_company_assignments).
+        .not('role', 'in', '("customer","operator")')
 
       if (membersError) throw membersError
       members = membersRaw || []
