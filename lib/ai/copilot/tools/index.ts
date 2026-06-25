@@ -104,6 +104,11 @@ import { getEmployeeRatingTool } from './analytics/get-employee-rating'
 import { getStockValueTool } from './analytics/get-stock-value'
 import { getTopSellingTool } from './analytics/get-top-selling'
 import { getCustomerInfoTool } from './analytics/get-customer-info'
+import { getIncidentsTool } from './analytics/get-incidents'
+import { getProfitabilityTool } from './analytics/get-profitability'
+import { createIncidentTool } from './team/create-incident'
+import { dismissEmployeeTool } from './team/dismiss-employee'
+import { updateIncomeTool } from './finance/update-income'
 
 let initialized = false
 
@@ -124,6 +129,7 @@ export function initializeCopilotTools(): void {
   registerTool(addVendorTool)
   registerTool(updateExpenseTool)
   registerTool(addKaspiRecordTool)
+  registerTool(updateIncomeTool)
 
   // Зарплата
   registerTool(giveAdvanceTool)
@@ -169,6 +175,8 @@ export function initializeCopilotTools(): void {
   registerTool(sendMessageToOperatorTool)
   registerTool(broadcastToOperatorsTool)
   registerTool(updateOperatorTool)
+  registerTool(createIncidentTool)
+  registerTool(dismissEmployeeTool)
 
   // POS / лояльность / чеки
   registerTool(createPromoTool)
@@ -244,6 +252,8 @@ export function initializeCopilotTools(): void {
   registerTool(getStockValueTool)
   registerTool(getTopSellingTool)
   registerTool(getCustomerInfoTool)
+  registerTool(getIncidentsTool)
+  registerTool(getProfitabilityTool)
   registerTool(listGoalsTool)
   registerTool(listRemindersTool)
   registerTool(listMemoriesTool)
