@@ -9,6 +9,7 @@ import { useStoreScope } from '@/components/store/store-scope'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { ModalPortal } from '@/components/ui/modal-portal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -838,6 +839,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
       )}
 
       {payDebt ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={closePay}>
           <div
             className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
@@ -925,9 +927,11 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
 
       {writeOffDebt ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !writingOff && setWriteOffDebt(null)}>
           <div
             className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
@@ -966,9 +970,11 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
 
       {bulkPayOpen ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !bulkPaying && setBulkPayOpen(false)}>
           <div
             className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
@@ -1031,9 +1037,11 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
 
       {reschedDebt ? (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => !rescheduling && setReschedDebt(null)}>
           <div
             className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 p-6 text-slate-900 dark:text-white shadow-2xl"
@@ -1078,6 +1086,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   )
