@@ -5,19 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function addDaysISO(iso: string, diff: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, (m || 1) - 1, d || 1)
-  dt.setDate(dt.getDate() + diff)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
+import { scopedOperatorIds, scopedOperatorRows, resolveDateRange, dateRangeParams } from '../../query-helpers'
 
 export const getOperatorInfoTool: CopilotTool = {
   name: 'get_operator_info',
@@ -37,22 +25,10 @@ export const getOperatorInfoTool: CopilotTool = {
         return (data || []).map((op: any) => ({ value: op.id, label: op.short_name || op.name }))
       },
     },
-    {
-      name: 'period',
-      label: 'Период',
-      type: 'select',
-      required: true,
-      description: 'За какой период',
-      getOptions: async () => [
-        { value: 'week', label: 'Неделя' },
-        { value: 'month', label: 'Месяц' },
-        { value: 'quarter', label: 'Квартал' },
-      ],
-    },
+    ...dateRangeParams(),
   ],
   handler: async (input, ctx) => {
     const operatorId = String(input.operator_id || '')
-    const period = String(input.period || 'week')
     if (!operatorId) return { ok: false, message: 'Не выбран оператор.' }
 
     // Мультитенантная изоляция: оператор должен принадлежать своей организации.
@@ -61,22 +37,19 @@ export const getOperatorInfoTool: CopilotTool = {
       return { ok: false, message: 'Оператор не найден.' }
     }
 
-    const today = todayISO()
-    let from = today
-    if (period === 'week') from = addDaysISO(today, -6)
-    else if (period === 'month') from = addDaysISO(today, -29)
-    else if (period === 'quarter') from = addDaysISO(today, -89)
+    const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'week' })
 
     const { data: op } = await ctx.supabase.from('operators').select('id, name, short_name').eq('id', operatorId).single()
     if (!op) return { ok: false, message: 'Оператор не найден.' }
 
-    const { data: incomes } = await ctx.supabase
+    let incQ = ctx.supabase
       .from('incomes')
       .select('cash_amount, kaspi_amount, card_amount, online_amount, date, shift_id')
       .eq('operator_id', operatorId)
-      .gte('date', from)
-      .lte('date', today)
       .range(0, 9999)
+    if (from) incQ = incQ.gte('date', from)
+    if (to) incQ = incQ.lte('date', to)
+    const { data: incomes } = await incQ
 
     const rows = incomes || []
     let totalRev = 0
@@ -91,11 +64,10 @@ export const getOperatorInfoTool: CopilotTool = {
     const avgPerShift = shifts > 0 ? totalRev / shifts : 0
 
     const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
-    const periodLabel: Record<string, string> = { week: 'неделя', month: 'месяц', quarter: 'квартал' }
 
     return {
       ok: true,
-      message: `👤 ${op.short_name || op.name} — ${periodLabel[period] || period}:
+      message: `👤 ${op.short_name || op.name} — ${label}:
   Смены: ${shifts}
   Выручка: ${fmt(totalRev)}
   Средняя за смену: ${fmt(avgPerShift)}`,

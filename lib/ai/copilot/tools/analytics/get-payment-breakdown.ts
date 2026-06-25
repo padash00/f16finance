@@ -4,19 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyIds } from '../../query-helpers'
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function addDaysISO(iso: string, diff: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, (m || 1) - 1, d || 1)
-  dt.setDate(dt.getDate() + diff)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
+import { scopedCompanyIds, resolveDateRange, dateRangeParams } from '../../query-helpers'
 
 export const getPaymentBreakdownTool: CopilotTool = {
   name: 'get_payment_breakdown',
@@ -24,34 +12,18 @@ export const getPaymentBreakdownTool: CopilotTool = {
   description: 'Разбивка выручки по способам оплаты (нал/Безналичный/карта/онлайн) с долями',
   requiredCapability: 'analytics.view',
   severity: 'low',
-  params: [
-    {
-      name: 'period',
-      label: 'Период',
-      type: 'select',
-      required: true,
-      description: 'За какой период',
-      getOptions: async () => [
-        { value: 'week', label: 'Неделя' },
-        { value: 'month', label: 'Месяц' },
-        { value: 'quarter', label: 'Квартал' },
-      ],
-    },
-  ],
+  params: [...dateRangeParams()],
   handler: async (input, ctx) => {
-    const period = String(input.period || 'month')
-    const today = todayISO()
-    const days = period === 'week' ? 6 : period === 'month' ? 29 : 89
-    const from = addDaysISO(today, -days)
+    const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'month' })
 
     // Мультитенантная изоляция: только выручка точек своей организации.
     const ids = await scopedCompanyIds(ctx)
     let query = ctx.supabase
       .from('incomes')
       .select('cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', from)
-      .lte('date', today)
       .range(0, 19999)
+    if (from) query = query.gte('date', from)
+    if (to) query = query.lte('date', to)
     if (ids) query = query.in('company_id', ids)
     const { data } = await query
 
@@ -74,7 +46,7 @@ export const getPaymentBreakdownTool: CopilotTool = {
 
     return {
       ok: true,
-      message: `💳 Разбивка платежей за ${period === 'week' ? 'неделю' : period === 'month' ? 'месяц' : 'квартал'}:
+      message: `💳 Разбивка платежей за ${label}:
   💵 Наличные: ${fmt(cash)} (${pct(cash)})
   💳 Безналичный: ${fmt(kaspi)} (${pct(kaspi)})
   💸 Карта: ${fmt(card)} (${pct(card)})

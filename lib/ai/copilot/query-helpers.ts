@@ -6,6 +6,68 @@
  * 2 отдельных запроса вместо JOIN для надёжности.
  */
 
+// ─────────────────────────────────────────────────────────────────────────
+// Период: единая логика для всех инструментов. Пресет ИЛИ точные даты from/to.
+// ─────────────────────────────────────────────────────────────────────────
+export function todayISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+export function addDaysISO(iso: string, diff: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, (m || 1) - 1, d || 1)
+  dt.setDate(dt.getDate() + diff)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Разрешает период запроса. Приоритет — точные даты from/to (YYYY-MM-DD), иначе
+ * пресет period. Возвращает { from, to (включительно, null = без границы), label }.
+ * Используй ВЕЗДЕ в data-инструментах, чтобы «за 15-21 июня» работало одинаково.
+ */
+export function resolveDateRange(
+  input: Record<string, unknown>,
+  opts?: { defaultPeriod?: string },
+): { from: string | null; to: string | null; label: string } {
+  const today = todayISO()
+  const reIso = /^\d{4}-\d{2}-\d{2}$/
+  const inFrom = String(input.from || '').trim()
+  const inTo = String(input.to || '').trim()
+  if (reIso.test(inFrom) && reIso.test(inTo)) {
+    return { from: inFrom, to: inTo, label: inFrom === inTo ? inFrom : `${inFrom} — ${inTo}` }
+  }
+  const period = String(input.period || opts?.defaultPeriod || 'today')
+  switch (period) {
+    case 'all': return { from: null, to: null, label: 'всё время' }
+    case 'yesterday': { const d = addDaysISO(today, -1); return { from: d, to: d, label: 'вчера' } }
+    case 'week': return { from: addDaysISO(today, -6), to: today, label: 'неделя' }
+    case 'month': return { from: addDaysISO(today, -29), to: today, label: 'месяц' }
+    case 'quarter': return { from: addDaysISO(today, -89), to: today, label: 'квартал' }
+    case 'year': return { from: addDaysISO(today, -364), to: today, label: 'год' }
+    default: return { from: today, to: today, label: 'сегодня' }
+  }
+}
+
+/**
+ * Готовые параметры периода для инструмента (period + from + to).
+ * Раскладывай в params: `...dateRangeParams()`.
+ */
+export function dateRangeParams(): any[] {
+  return [
+    {
+      name: 'period', label: 'Период', type: 'select', required: false,
+      description: 'Готовый период. ИЛИ используй точные даты from/to для конкретного диапазона.',
+      getOptions: async () => [
+        { value: 'today', label: 'Сегодня' }, { value: 'yesterday', label: 'Вчера' },
+        { value: 'week', label: 'Неделя' }, { value: 'month', label: 'Месяц' },
+        { value: 'quarter', label: 'Квартал' }, { value: 'year', label: 'Год' }, { value: 'all', label: 'Всё время' },
+      ],
+    },
+    { name: 'from', label: 'С даты', type: 'string', required: false, description: 'Начало периода YYYY-MM-DD (произвольный диапазон, напр. «за 15-21 июня»).' },
+    { name: 'to', label: 'По дату', type: 'string', required: false, description: 'Конец периода YYYY-MM-DD.' },
+  ]
+}
+
 export async function resolveCompanyNames(
   supabase: any,
   rows: Array<{ company_id?: string | null }>,

@@ -4,19 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedOperatorIds, scopedOperatorRows } from '../../query-helpers'
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function addDaysISO(iso: string, diff: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, (m || 1) - 1, d || 1)
-  dt.setDate(dt.getDate() + diff)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
+import { scopedOperatorIds, scopedOperatorRows, resolveDateRange, dateRangeParams } from '../../query-helpers'
 
 export const getTopOperatorsTool: CopilotTool = {
   name: 'get_top_operators',
@@ -24,23 +12,9 @@ export const getTopOperatorsTool: CopilotTool = {
   description: 'Топ операторов по выручке за период',
   requiredCapability: 'operator-analytics.view',
   severity: 'low',
-  params: [
-    {
-      name: 'period',
-      label: 'Период',
-      type: 'select',
-      required: true,
-      description: 'За какой период',
-      getOptions: async () => [
-        { value: 'week', label: 'Неделя' },
-        { value: 'month', label: 'Месяц' },
-      ],
-    },
-  ],
+  params: [...dateRangeParams()],
   handler: async (input, ctx) => {
-    const period = String(input.period || 'week')
-    const today = todayISO()
-    const from = period === 'month' ? addDaysISO(today, -29) : addDaysISO(today, -6)
+    const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'week' })
 
     const ops = await scopedOperatorRows(ctx)
     const opMap = new Map((ops || []).map((o: any) => [String(o.id), o]))
@@ -50,10 +24,10 @@ export const getTopOperatorsTool: CopilotTool = {
     let incomesQ = ctx.supabase
       .from('incomes')
       .select('operator_id, cash_amount, kaspi_amount, card_amount, online_amount, shift_id, date')
-      .gte('date', from)
-      .lte('date', today)
       .not('operator_id', 'is', null)
       .range(0, 19999)
+    if (from) incomesQ = incomesQ.gte('date', from)
+    if (to) incomesQ = incomesQ.lte('date', to)
     if (opIds) incomesQ = incomesQ.in('operator_id', opIds)
     const { data: incomes } = await incomesQ
 
@@ -81,7 +55,7 @@ export const getTopOperatorsTool: CopilotTool = {
     if (ranking.length === 0) return { ok: true, message: 'Нет данных за период.' }
 
     const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
-    const lines = [`🏆 Топ операторов (${period === 'month' ? 'месяц' : 'неделя'}):\n`]
+    const lines = [`🏆 Топ операторов (${label}):\n`]
     ranking.slice(0, 10).forEach((r, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
       lines.push(`${medal} ${r.name}: ${fmt(r.rev)} (${r.shifts} см, ${fmt(r.avg)}/см)`)

@@ -19,6 +19,8 @@ function addDaysISO(iso: string, diff: number): string {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
 
+const reIso = /^\d{4}-\d{2}-\d{2}$/
+
 export const queryAnomaliesTool: CopilotTool = {
   name: 'query_anomalies',
   category: 'analytics',
@@ -38,11 +40,29 @@ export const queryAnomaliesTool: CopilotTool = {
         { value: '60', label: 'Последние 60 дней' },
       ],
     },
+    { name: 'from', label: 'С даты', type: 'string', required: false, description: 'Начало периода YYYY-MM-DD (произвольный диапазон, имеет приоритет над period).' },
+    { name: 'to', label: 'По дату', type: 'string', required: false, description: 'Конец периода YYYY-MM-DD.' },
   ],
   handler: async (input, ctx) => {
-    const days = Number(input.period || '30')
     const today = todayISO()
-    const from = addDaysISO(today, -(days - 1))
+    const inFrom = String(input.from || '').trim()
+    const inTo = String(input.to || '').trim()
+    const hasExact = reIso.test(inFrom) && reIso.test(inTo)
+
+    let from: string
+    let to: string
+    let days: number
+    if (hasExact) {
+      from = inFrom
+      to = inTo
+      const [fy, fm, fd] = from.split('-').map(Number)
+      const [ty, tm, td] = to.split('-').map(Number)
+      days = Math.round((new Date(ty, (tm || 1) - 1, td || 1).getTime() - new Date(fy, (fm || 1) - 1, fd || 1).getTime()) / 86400000) + 1
+    } else {
+      days = Number(input.period || '30')
+      from = addDaysISO(today, -(days - 1))
+      to = today
+    }
 
     // Мультитенантная изоляция: только выручка точек своей организации.
     const ids = await scopedCompanyIds(ctx)
@@ -50,7 +70,7 @@ export const queryAnomaliesTool: CopilotTool = {
       .from('incomes')
       .select('date, cash_amount, kaspi_amount, card_amount, online_amount')
       .gte('date', from)
-      .lte('date', today)
+      .lte('date', to)
       .range(0, 19999)
     if (ids) rowsQ = rowsQ.in('company_id', ids)
     const { data: rows } = await rowsQ

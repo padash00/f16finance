@@ -4,19 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { scopedCompanyRows } from '../../query-helpers'
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function addDaysISO(iso: string, diff: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, (m || 1) - 1, d || 1)
-  dt.setDate(dt.getDate() + diff)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
+import { scopedCompanyRows, resolveDateRange, dateRangeParams } from '../../query-helpers'
 
 export const queryByCompanyTool: CopilotTool = {
   name: 'query_by_company',
@@ -24,31 +12,18 @@ export const queryByCompanyTool: CopilotTool = {
   description: 'Разбивка финансов по точкам (доходы / расходы / прибыль / маржа)',
   requiredCapability: 'profitability.view',
   severity: 'low',
-  params: [
-    {
-      name: 'period',
-      label: 'Период',
-      type: 'select',
-      required: true,
-      description: 'За какой период',
-      getOptions: async () => [
-        { value: 'week', label: 'Неделя' },
-        { value: 'month', label: 'Месяц' },
-      ],
-    },
-  ],
+  params: [...dateRangeParams()],
   handler: async (input, ctx) => {
-    const period = String(input.period || 'month')
-    const today = todayISO()
-    const from = period === 'week' ? addDaysISO(today, -6) : addDaysISO(today, -29)
+    const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'month' })
 
     const companies = await scopedCompanyRows(ctx)
     if (!companies || companies.length === 0) return { ok: true, message: 'Точек нет.' }
 
-    const [incRes, expRes] = await Promise.all([
-      ctx.supabase.from('incomes').select('company_id, cash_amount, kaspi_amount, card_amount, online_amount').gte('date', from).lte('date', today).range(0, 19999),
-      ctx.supabase.from('expenses').select('company_id, cash_amount, kaspi_amount').gte('date', from).lte('date', today).range(0, 19999),
-    ])
+    let incBase = ctx.supabase.from('incomes').select('company_id, cash_amount, kaspi_amount, card_amount, online_amount').range(0, 19999)
+    let expBase = ctx.supabase.from('expenses').select('company_id, cash_amount, kaspi_amount').range(0, 19999)
+    if (from) { incBase = incBase.gte('date', from); expBase = expBase.gte('date', from) }
+    if (to) { incBase = incBase.lte('date', to); expBase = expBase.lte('date', to) }
+    const [incRes, expRes] = await Promise.all([incBase, expBase])
 
     const stats = new Map<string, { name: string; income: number; expense: number }>()
     for (const c of companies as any[]) stats.set(String(c.id), { name: c.name, income: 0, expense: 0 })
@@ -63,7 +38,7 @@ export const queryByCompanyTool: CopilotTool = {
     }
 
     const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
-    const lines = [`📊 По точкам (${period === 'week' ? 'неделя' : 'месяц'}):\n`]
+    const lines = [`📊 По точкам (${label}):\n`]
     const ranking = Array.from(stats.values()).filter((s) => s.income > 0 || s.expense > 0).sort((a, b) => b.income - a.income)
     let totalInc = 0
     let totalExp = 0

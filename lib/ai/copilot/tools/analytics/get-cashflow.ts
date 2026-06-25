@@ -4,19 +4,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function addDaysISO(iso: string, diff: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, (m || 1) - 1, d || 1)
-  dt.setDate(dt.getDate() + diff)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
+import { companyOptions, scopedCompanyIds, resolveDateRange, dateRangeParams } from '../../query-helpers'
 
 export const getCashflowTool: CopilotTool = {
   name: 'get_cashflow',
@@ -25,18 +13,7 @@ export const getCashflowTool: CopilotTool = {
   requiredCapability: 'cashflow.view',
   severity: 'low',
   params: [
-    {
-      name: 'period',
-      label: 'Период',
-      type: 'select',
-      required: true,
-      description: 'За какой период',
-      getOptions: async () => [
-        { value: 'today', label: 'Сегодня' },
-        { value: 'week', label: 'Неделя' },
-        { value: 'month', label: 'Месяц' },
-      ],
-    },
+    ...dateRangeParams(),
     {
       name: 'company_id',
       label: 'Точка',
@@ -47,27 +24,19 @@ export const getCashflowTool: CopilotTool = {
     },
   ],
   handler: async (input, ctx) => {
-    const period = String(input.period || 'today')
     const companyId = String(input.company_id || '')
-    const today = todayISO()
-
-    let from = today
-    let to = today
-    if (period === 'week') from = addDaysISO(today, -6)
-    else if (period === 'month') from = addDaysISO(today, -29)
+    const { from, to, label } = resolveDateRange(input, { defaultPeriod: 'today' })
 
     let incQ = ctx.supabase
       .from('incomes')
       .select('cash_amount, kaspi_amount, card_amount, online_amount')
-      .gte('date', from)
-      .lte('date', to)
       .range(0, 9999)
     let expQ = ctx.supabase
       .from('expenses')
       .select('cash_amount, kaspi_amount')
-      .gte('date', from)
-      .lte('date', to)
       .range(0, 9999)
+    if (from) { incQ = incQ.gte('date', from); expQ = expQ.gte('date', from) }
+    if (to) { incQ = incQ.lte('date', to); expQ = expQ.lte('date', to) }
     if (companyId) {
       incQ = incQ.eq('company_id', companyId)
       expQ = expQ.eq('company_id', companyId)
@@ -96,11 +65,10 @@ export const getCashflowTool: CopilotTool = {
     const margin = income > 0 ? (profit / income) * 100 : 0
 
     const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
-    const periodLabel: Record<string, string> = { today: 'сегодня', week: 'неделя', month: 'месяц' }
 
     return {
       ok: true,
-      message: `💰 Cashflow за ${periodLabel[period] || period}:
+      message: `💰 Cashflow за ${label}:
   Доходы: ${fmt(income)}
   Расходы: ${fmt(expense)}
   Прибыль: ${fmt(profit)}

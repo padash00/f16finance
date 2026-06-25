@@ -11,6 +11,8 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+const reIso = /^\d{4}-\d{2}-\d{2}$/
+
 export const getTaxSummaryTool: CopilotTool = {
   name: 'get_tax_summary',
   category: 'analytics',
@@ -30,6 +32,8 @@ export const getTaxSummaryTool: CopilotTool = {
         { value: 'currentYear', label: 'Текущий год' },
       ],
     },
+    { name: 'from', label: 'С даты', type: 'string', required: false, description: 'Начало периода YYYY-MM-DD (произвольный диапазон, имеет приоритет над period).' },
+    { name: 'to', label: 'По дату', type: 'string', required: false, description: 'Конец периода YYYY-MM-DD.' },
   ],
   handler: async (input, ctx) => {
     const period = String(input.period || 'currentQuarter')
@@ -38,7 +42,14 @@ export const getTaxSummaryTool: CopilotTool = {
     let from = today
     let to = today
 
-    if (period === 'currentQuarter') {
+    const inFrom = String(input.from || '').trim()
+    const inTo = String(input.to || '').trim()
+    const hasExact = reIso.test(inFrom) && reIso.test(inTo)
+
+    if (hasExact) {
+      from = inFrom
+      to = inTo
+    } else if (period === 'currentQuarter') {
       const qStart = Math.floor(now.getMonth() / 3) * 3
       from = `${now.getFullYear()}-${String(qStart + 1).padStart(2, '0')}-01`
       to = today
@@ -78,10 +89,11 @@ export const getTaxSummaryTool: CopilotTool = {
       lastQuarter: 'прошлый квартал',
       currentYear: 'текущий год',
     }
+    const label = hasExact ? (from === to ? from : `${from} — ${to}`) : periodLabel[period]
 
     return {
       ok: true,
-      message: `📊 Налог за ${periodLabel[period]}:
+      message: `📊 Налог за ${label}:
   Период: ${from} — ${to}
   Выручка: ${fmt(revenue)}
   Налог 3% (упрощёнка): ${fmt(tax)}
