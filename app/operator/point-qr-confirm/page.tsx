@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { CheckCircle2, Loader2, MonitorSmartphone, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { OperatorPanel } from '@/components/operator/operator-mobile-ui'
 
 function PointQrConfirmContent() {
   const searchParams = useSearchParams()
@@ -56,57 +56,47 @@ function PointQrConfirmContent() {
 
   if (!nonce) {
     return (
-      <Card className="mx-auto w-full max-w-md border-destructive/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <XCircle className="h-5 w-5 text-destructive" />
-            Неверная ссылка
-          </CardTitle>
-          <CardDescription>Отсканируйте QR-код с экрана терминала Orda Point ещё раз.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/operator">В кабинет</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <OperatorPanel className="mx-auto w-full max-w-md border-rose-500/40">
+        <div className="flex items-center gap-2 font-mono text-[15px] font-semibold uppercase tracking-tight text-rose-300">
+          <XCircle className="h-5 w-5" />
+          Неверная ссылка
+        </div>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">Отсканируйте QR-код с экрана терминала Orda Point ещё раз.</p>
+        <Button asChild variant="outline" className="mt-4 w-full border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]">
+          <Link href="/operator">В кабинет</Link>
+        </Button>
+      </OperatorPanel>
     )
   }
 
   if (done === 'ok') {
     return (
-      <Card className="mx-auto w-full max-w-md border-emerald-500/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            Готово
-          </CardTitle>
-          <CardDescription>Можно вернуться к терминалу — вход выполнен.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/operator">В кабинет</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <OperatorPanel className="mx-auto w-full max-w-md border-emerald-500/40">
+        <div className="flex items-center gap-2 font-mono text-[15px] font-semibold uppercase tracking-tight text-emerald-300">
+          <CheckCircle2 className="h-5 w-5" />
+          Готово
+        </div>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">Можно вернуться к терминалу — вход выполнен.</p>
+        <Button asChild variant="outline" className="mt-4 w-full border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]">
+          <Link href="/operator">В кабинет</Link>
+        </Button>
+      </OperatorPanel>
     )
   }
 
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <MonitorSmartphone className="h-5 w-5" />
-          Вход на терминале
-        </CardTitle>
-        <CardDescription>
-          Подтвердите вход в программу Orda Point на этом компьютере. Делайте это только если QR показан на вашем рабочем
-          терминале.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <OperatorPanel accent="amber" className="mx-auto w-full max-w-md">
+      <div className="flex items-center gap-2 font-mono text-[15px] font-semibold uppercase tracking-tight text-zinc-100">
+        <MonitorSmartphone className="h-5 w-5 text-amber-400" />
+        Вход на терминале
+      </div>
+      <p className="mt-2 text-sm leading-6 text-zinc-400">
+        Подтвердите вход в программу Orda Point на этом компьютере. Делайте это только если QR показан на вашем рабочем
+        терминале.
+      </p>
+      <div className="mt-4 space-y-3">
         {done === 'err' && errMessage ? (
-          <p className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{errMessage}</p>
+          <p className="border border-rose-500/40 bg-rose-500/[0.06] px-3 py-2 text-sm text-rose-300">{errMessage}</p>
         ) : null}
         <Button className="w-full" disabled={loading} onClick={() => void confirm()}>
           {loading ? (
@@ -118,11 +108,11 @@ function PointQrConfirmContent() {
             'Подтвердить вход'
           )}
         </Button>
-        <Button asChild variant="ghost" className="w-full">
+        <Button asChild variant="ghost" className="w-full text-zinc-400 hover:text-zinc-100">
           <Link href="/operator">Отмена</Link>
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </OperatorPanel>
   )
 }
 
@@ -131,7 +121,7 @@ export default function PointQrConfirmPage() {
     <div className="flex min-h-[60vh] flex-col items-center justify-center p-4">
       <Suspense
         fallback={
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-zinc-400">
             <Loader2 className="h-4 w-4 animate-spin" />
             Загрузка…
           </div>

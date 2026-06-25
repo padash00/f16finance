@@ -99,9 +99,9 @@ export default function OperatorHomePage() {
   if (loading) {
     return (
       <OperatorPanel>
-        <div className="flex items-center gap-3 text-sm text-slate-300">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Загружаю ваш рабочий день...
+        <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-wide text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Загружаю ваш рабочий день…
         </div>
       </OperatorPanel>
     )
@@ -109,8 +109,8 @@ export default function OperatorHomePage() {
 
   if (error || !data) {
     return (
-      <OperatorPanel className="border-red-500/25 bg-red-500/10">
-        <div className="flex items-start gap-3 text-sm text-red-200">
+      <OperatorPanel className="border-rose-500/40">
+        <div className="flex items-start gap-3 text-sm text-rose-300">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           <div>{error || 'Не удалось загрузить операторский кабинет'}</div>
         </div>
@@ -202,7 +202,7 @@ export default function OperatorHomePage() {
           title="Фокус на сегодня"
           description="Короткая сводка по тому, что важно не пропустить."
           action={
-            <Button asChild variant="ghost" className="text-slate-300 hover:text-white">
+            <Button asChild variant="ghost" className="text-zinc-400 hover:text-zinc-100">
               <Link href="/operator/tasks">
                 Все задачи
                 <ArrowRight className="h-4 w-4" />

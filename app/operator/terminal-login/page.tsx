@@ -295,7 +295,7 @@ export default function OperatorTerminalLoginPage() {
 
       <OperatorPanel className="border-[#23262b] bg-[#0e0f10]">
         <div className="flex items-start gap-3">
-          <div className="rounded-none border border-amber-400/25 bg-amber-400/10 p-3 text-amber-200">
+          <div className="border border-amber-400/25 bg-amber-400/10 p-3 text-amber-300">
             <MonitorSmartphone className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
@@ -321,11 +321,11 @@ export default function OperatorTerminalLoginPage() {
         />
         {scanning ? (
           <div className="mt-4 space-y-3">
-            <div className="overflow-hidden rounded-none border border-[#23262b] bg-black/40">
+            <div className="overflow-hidden border border-[#23262b] bg-black/40">
               <video ref={videoRef} className="aspect-video w-full object-cover" playsInline muted autoPlay />
             </div>
-            <p className="text-center text-xs text-zinc-500">Держите QR в центре кадра 2–5 секунд при хорошем свете.</p>
-            <Button type="button" variant="outline" className="w-full border-white/20 text-zinc-100" onClick={stopScan}>
+            <p className="text-center font-mono text-[11px] uppercase tracking-wide text-zinc-500">Держите QR в центре кадра 2–5 секунд при хорошем свете.</p>
+            <Button type="button" variant="outline" className="w-full border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]" onClick={stopScan}>
               Остановить камеру
             </Button>
           </div>
@@ -339,13 +339,13 @@ export default function OperatorTerminalLoginPage() {
               <Camera className="h-4 w-4" />
               Сканировать QR
             </Button>
-            <Button type="button" variant="outline" className="flex-1 gap-2 border-white/20 text-zinc-100" onClick={onPickImage}>
+            <Button type="button" variant="outline" className="flex-1 gap-2 border-[#23262b] bg-[#0b0c0d] text-zinc-100 hover:bg-[#0e0f10]" onClick={onPickImage}>
               <ImageUp className="h-4 w-4" />
               Фото с QR
             </Button>
           </div>
         )}
-        {scanError ? <p className="mt-3 rounded-none border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">{scanError}</p> : null}
+        {scanError ? <p className="mt-3 border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-200">{scanError}</p> : null}
       </OperatorPanel>
 
       <OperatorPanel className="border-[#23262b] bg-[#0e0f10]">
@@ -354,7 +354,7 @@ export default function OperatorTerminalLoginPage() {
           description="Если ссылка уже открыта в другом окне — скопируйте из адреса значение параметра n= (длинная строка)."
         />
         <div className="mt-4 space-y-2">
-          <Label htmlFor="terminal-nonce" className="text-zinc-400">
+          <Label htmlFor="terminal-nonce" className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
             Код
           </Label>
           <Input
@@ -362,7 +362,7 @@ export default function OperatorTerminalLoginPage() {
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Вставьте код после n= …"
-            className="border-white/15 bg-[#0e0f10] text-zinc-100 placeholder:text-zinc-500"
+            className="border-[#23262b] bg-[#0e0f10] font-mono text-zinc-100 placeholder:text-zinc-500"
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}

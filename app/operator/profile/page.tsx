@@ -80,28 +80,28 @@ export default function OperatorProfileMobilePage() {
   if (loading) {
     return (
       <OperatorPanel>
-        <div className="flex items-center gap-3 text-sm text-zinc-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Загружаю профиль...
+        <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-wide text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Загружаю профиль…
         </div>
       </OperatorPanel>
     )
   }
 
   if (error || !data) {
-    return <OperatorPanel className="border-red-500/25 bg-red-500/10 text-sm text-red-200">{error || 'Профиль недоступен'}</OperatorPanel>
+    return <OperatorPanel className="border-rose-500/40 text-sm text-rose-300">{error || 'Профиль недоступен'}</OperatorPanel>
   }
 
   return (
     <div className="space-y-4">
       <OperatorPanel accent="blue">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-none border border-[#23262b] bg-[#0e0f10] text-zinc-100">
+          <div className="flex h-16 w-16 items-center justify-center border border-[#23262b] bg-[#0e0f10] text-zinc-100">
             <UserRound className="h-8 w-8" />
           </div>
           <div className="min-w-0">
-            <div className="text-2xl font-semibold text-zinc-100">{data.operator.name}</div>
-            <div className="mt-1 text-sm text-zinc-400">{data.operator.profile.position || 'Оператор'}</div>
+            <div className="font-mono text-2xl font-semibold uppercase tracking-tight text-zinc-50">{data.operator.name}</div>
+            <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">{data.operator.profile.position || 'Оператор'}</div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {data.operator.username ? <OperatorPill>Логин: {data.operator.username}</OperatorPill> : null}
               {data.operator.auth_role ? <OperatorPill tone="blue">Роль: {data.operator.auth_role}</OperatorPill> : null}
@@ -111,9 +111,9 @@ export default function OperatorProfileMobilePage() {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-none border border-[#23262b] bg-[#0e0f10] p-4">
+          <div className="border border-[#23262b] bg-[#0e0f10] p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
-              <Phone className="h-4 w-4 text-amber-300" />
+              <Phone className="h-4 w-4 text-amber-400" />
               Контакты
             </div>
             <div className="mt-3 space-y-2 text-sm text-zinc-400">
@@ -123,7 +123,7 @@ export default function OperatorProfileMobilePage() {
             </div>
           </div>
 
-          <div className="rounded-none border border-[#23262b] bg-[#0e0f10] p-4">
+          <div className="border border-[#23262b] bg-[#0e0f10] p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
               <CalendarDays className="h-4 w-4 text-amber-400" />
               Даты
@@ -143,14 +143,14 @@ export default function OperatorProfileMobilePage() {
             <OperatorEmptyState title="Точек пока нет" description="Активных привязок к точкам пока нет." />
           ) : (
             data.assignments.map((assignment) => (
-              <div key={assignment.id} className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+              <div key={assignment.id} className="border border-[#23262b] bg-[#0b0c0d] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
                       <Building2 className="h-4 w-4 text-amber-400" />
                       {assignment.companyName || 'Точка'}
                     </div>
-                    <div className="mt-1 text-xs text-zinc-500">
+                    <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
                       {assignment.companyCode ? `Код: ${assignment.companyCode}` : 'Код не указан'} · {assignment.role}
                     </div>
                   </div>
@@ -168,12 +168,12 @@ export default function OperatorProfileMobilePage() {
           <OperatorSectionHeading title="Старший по точке" description="Точки, за которые вы отвечаете как старший." />
           <div className="mt-4 space-y-3">
             {data.leadAssignments.map((assignment) => (
-              <div key={assignment.id} className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+              <div key={assignment.id} className="border border-[#23262b] bg-[#0b0c0d] p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
                   <ShieldCheck className="h-4 w-4 text-amber-400" />
                   {assignment.companyName || 'Точка'}
                 </div>
-                <div className="mt-1 text-xs text-zinc-500">
+                <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
                   {assignment.companyCode ? `Код: ${assignment.companyCode}` : 'Код не указан'} · {assignment.role}
                 </div>
               </div>

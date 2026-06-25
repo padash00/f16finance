@@ -168,8 +168,8 @@ export default function OperatorShiftsPage() {
         </div>
       </OperatorPanel>
 
-      {error ? <OperatorPanel className="border-red-500/25 bg-red-500/10 text-sm text-red-200">{error}</OperatorPanel> : null}
-      {notice ? <OperatorPanel className="border-emerald-500/25 bg-emerald-500/10 text-sm text-emerald-200">{notice}</OperatorPanel> : null}
+      {error ? <OperatorPanel className="border-rose-500/40 text-sm text-rose-300">{error}</OperatorPanel> : null}
+      {notice ? <OperatorPanel className="border-emerald-500/40 text-sm text-emerald-300">{notice}</OperatorPanel> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <OperatorMetricCard label="Всего смен" value={weekStats.total} icon={CalendarDays} tone="blue" />
@@ -180,9 +180,9 @@ export default function OperatorShiftsPage() {
 
       {loading ? (
         <OperatorPanel>
-          <div className="flex items-center gap-3 text-sm text-zinc-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Загружаю ваш график...
+          <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-wide text-zinc-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Загружаю ваш график…
           </div>
         </OperatorPanel>
       ) : null}
@@ -202,8 +202,8 @@ export default function OperatorShiftsPage() {
             <OperatorPanel key={group.company.id}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-lg font-semibold text-zinc-100">{group.company.name || 'Точка'}</div>
-                  <div className="mt-1 text-sm text-zinc-500">
+                  <div className="font-mono text-[15px] font-semibold uppercase tracking-tight text-zinc-100">{group.company.name || 'Точка'}</div>
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
                     {group.company.code ? `Код: ${group.company.code}` : 'Код точки не указан'}
                   </div>
                 </div>
@@ -214,10 +214,10 @@ export default function OperatorShiftsPage() {
 
               <div className="mt-4 space-y-3">
                 {group.shifts.map((shift) => (
-                  <div key={`${group.company.id}:${shift.date}:${shift.shift_type}`} className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+                  <div key={`${group.company.id}:${shift.date}:${shift.shift_type}`} className="border border-[#23262b] bg-[#0b0c0d] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-zinc-100">
+                        <div className="font-mono text-[13px] font-semibold text-zinc-100">
                           {formatRuDate(shift.date, 'full')} · {shiftLabel(shift.shift_type)}
                         </div>
                         {shift.comment ? <div className="mt-1 text-xs text-zinc-500">{shift.comment}</div> : null}
@@ -227,7 +227,7 @@ export default function OperatorShiftsPage() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="text-amber-200 hover:text-zinc-100"
+                          className="text-amber-300 hover:text-zinc-100"
                           onClick={() =>
                             setIssueDraft({
                               responseId: group.response!.id,
@@ -247,12 +247,12 @@ export default function OperatorShiftsPage() {
               </div>
 
               {openRequests.length > 0 ? (
-                <div className="mt-4 rounded-none border border-amber-500/20 bg-amber-500/10 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
+                <div className="mt-4 border border-amber-500/20 bg-amber-500/[0.06] p-4">
+                  <div className="flex items-center gap-2 font-mono text-[12px] font-semibold uppercase tracking-wide text-amber-300">
                     <AlertTriangle className="h-4 w-4" />
                     Открытые замечания: {openRequests.length}
                   </div>
-                  <div className="mt-2 space-y-2 text-xs text-amber-100/90">
+                  <div className="mt-2 space-y-2 font-mono text-[11px] uppercase tracking-wide text-amber-200/80">
                     {openRequests.map((request) => (
                       <div key={request.id}>
                         {formatRuDate(request.shift_date)} · {shiftLabel(request.shift_type)} · {request.status}
@@ -273,9 +273,9 @@ export default function OperatorShiftsPage() {
         })}
 
       {issueDraft ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/80 p-3 sm:items-center sm:justify-center">
-          <form onSubmit={submitIssue} className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-none border border-[#23262b] bg-[#0b1324] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
-            <div className="text-lg font-semibold text-zinc-100">Сообщить о проблеме со сменой</div>
+        <div className="fixed inset-0 z-50 flex items-end bg-black/80 p-3 sm:items-center sm:justify-center">
+          <form onSubmit={submitIssue} className="w-full max-w-lg max-h-[90vh] overflow-y-auto border border-[#23262b] bg-[#0e0f10] p-5">
+            <div className="font-mono text-[15px] font-semibold uppercase tracking-tight text-zinc-100">Сообщить о проблеме со сменой</div>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               {issueDraft.companyName || 'Точка'} · {formatRuDate(issueDraft.shiftDate, 'full')} · {shiftLabel(issueDraft.shiftType)}
             </p>

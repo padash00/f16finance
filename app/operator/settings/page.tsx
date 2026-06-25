@@ -68,13 +68,13 @@ export default function OperatorSettingsMobilePage() {
       <OperatorPanel accent="amber">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm text-zinc-500">Настройки</div>
-            <div className="mt-1 text-xl font-semibold text-zinc-100">Управление личным кабинетом</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-500">Настройки</div>
+            <div className="mt-1.5 font-mono text-xl font-semibold uppercase tracking-tight text-zinc-50">Управление личным кабинетом</div>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Здесь собраны действия, которые оператору реально нужны с телефона: сменить пароль, открыть профиль, перейти в задачи или выйти из системы.
             </p>
           </div>
-          <div className="rounded-none bg-amber-500/15 p-3 text-amber-300">
+          <div className="border border-amber-400/25 bg-amber-400/10 p-3 text-amber-300">
             <UserCog className="h-6 w-6" />
           </div>
         </div>
@@ -82,23 +82,23 @@ export default function OperatorSettingsMobilePage() {
 
       {loading ? (
         <OperatorPanel>
-          <div className="flex items-center gap-3 text-sm text-zinc-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Загружаю настройки...
+          <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-wide text-zinc-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Загружаю настройки…
           </div>
         </OperatorPanel>
       ) : null}
 
-      {error ? <OperatorPanel className="border-red-500/25 bg-red-500/10 text-sm text-red-200">{error}</OperatorPanel> : null}
+      {error ? <OperatorPanel className="border-rose-500/40 text-sm text-rose-300">{error}</OperatorPanel> : null}
 
       {!loading && data ? (
         <>
           <OperatorPanel>
             <OperatorSectionHeading title="Ваш аккаунт" description="Короткая сводка по аккаунту, чтобы быстро проверить, всё ли подключено." />
             <div className="mt-4 space-y-3 text-sm text-zinc-400">
-              <div className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
-                <div className="font-medium text-zinc-100">{data.operator.name}</div>
-                <div className="mt-1 text-xs text-zinc-500">
+              <div className="border border-[#23262b] bg-[#0b0c0d] p-4">
+                <div className="font-mono text-[13px] font-semibold text-zinc-100">{data.operator.name}</div>
+                <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
                   {data.operator.profile.position || 'Оператор'}
                   {data.operator.username ? ` · ${data.operator.username}` : ''}
                 </div>
@@ -114,8 +114,8 @@ export default function OperatorSettingsMobilePage() {
           </OperatorPanel>
 
           <OperatorPanel>
-            <div className="flex items-center gap-2 text-lg font-semibold text-zinc-100">
-              <ShieldCheck className="h-5 w-5 text-amber-400" />
+            <div className="flex items-center gap-2 font-mono text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-100">
+              <ShieldCheck className="h-4 w-4 text-amber-400" />
               Безопасность
             </div>
             <div className="mt-4 grid gap-3">
@@ -129,8 +129,8 @@ export default function OperatorSettingsMobilePage() {
           </OperatorPanel>
 
           <OperatorPanel>
-            <div className="flex items-center gap-2 text-lg font-semibold text-zinc-100">
-              <Bell className="h-5 w-5 text-amber-400" />
+            <div className="flex items-center gap-2 font-mono text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-100">
+              <Bell className="h-4 w-4 text-amber-400" />
               Рабочие действия
             </div>
             <div className="mt-4 grid gap-3">
@@ -147,14 +147,14 @@ export default function OperatorSettingsMobilePage() {
           </OperatorPanel>
 
           <OperatorPanel>
-            <div className="text-lg font-semibold text-zinc-100">Выход</div>
+            <div className="font-mono text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-100">Выход</div>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Если вы закончили работу на этом устройстве, безопасно выйдите из кабинета.
             </p>
             <Button
               type="button"
               variant="outline"
-              className="mt-4 w-full justify-start border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20"
+              className="mt-4 w-full justify-start border-rose-500/40 bg-rose-500/[0.06] text-rose-300 hover:bg-rose-500/15"
               onClick={() => void handleLogout()}
               disabled={loggingOut}
             >

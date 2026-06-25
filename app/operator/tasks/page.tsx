@@ -163,8 +163,8 @@ export default function OperatorTasksMobilePage() {
         />
       </OperatorPanel>
 
-      {error ? <OperatorPanel className="border-red-500/25 bg-red-500/10 text-sm text-red-200">{error}</OperatorPanel> : null}
-      {notice ? <OperatorPanel className="border-emerald-500/25 bg-emerald-500/10 text-sm text-emerald-200">{notice}</OperatorPanel> : null}
+      {error ? <OperatorPanel className="border-rose-500/40 text-sm text-rose-300">{error}</OperatorPanel> : null}
+      {notice ? <OperatorPanel className="border-emerald-500/40 text-sm text-emerald-300">{notice}</OperatorPanel> : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <OperatorMetricCard label="Активные" value={activeTasks.length} icon={SquareKanban} tone="violet" />
@@ -174,9 +174,9 @@ export default function OperatorTasksMobilePage() {
 
       {loading ? (
         <OperatorPanel>
-          <div className="flex items-center gap-3 text-sm text-zinc-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Загружаю задачи...
+          <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-wide text-zinc-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Загружаю задачи…
           </div>
         </OperatorPanel>
       ) : null}
@@ -195,7 +195,7 @@ export default function OperatorTasksMobilePage() {
             <OperatorPanel key={task.id}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Задача #{task.task_number}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">Задача #{task.task_number}</div>
                   <div className="mt-2 text-lg font-semibold text-zinc-100">{task.title}</div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs">
                     <OperatorPill>{statusLabel(task.status)}</OperatorPill>
@@ -235,18 +235,18 @@ export default function OperatorTasksMobilePage() {
               </div>
 
               {isOpen ? (
-                <div className="mt-4 space-y-4 rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+                <div className="mt-4 space-y-4 border border-[#23262b] bg-[#0b0c0d] p-4">
                   <div>
-                    <div className="text-sm font-medium text-zinc-100">Комментарии</div>
+                    <div className="font-mono text-[12px] font-semibold uppercase tracking-[0.16em] text-zinc-100">Комментарии</div>
                     <div className="mt-3 space-y-3">
                       {comments.length === 0 ? <div className="text-sm text-zinc-500">Пока комментариев нет.</div> : null}
                       {comments.map((comment) => (
-                        <div key={comment.id} className="rounded-none border border-[#23262b] bg-[#0e0f10] p-3">
-                          <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                        <div key={comment.id} className="border border-[#23262b] bg-[#0e0f10] p-3">
+                          <div className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
                             <span>{comment.author_name}</span>
                             <span>{new Date(comment.created_at).toLocaleString('ru-RU')}</span>
                           </div>
-                          <div className="mt-2 text-sm text-slate-200">{comment.content}</div>
+                          <div className="mt-2 text-sm text-zinc-200">{comment.content}</div>
                         </div>
                       ))}
                     </div>
@@ -275,9 +275,9 @@ export default function OperatorTasksMobilePage() {
           <OperatorSectionHeading title="Недавно завершено" description="Последние задачи, которые вы уже довели до результата." />
           <div className="mt-4 space-y-3">
             {completedTasks.slice(0, 5).map((task) => (
-              <div key={task.id} className="rounded-none border border-[#23262b] bg-[#0b0c0d] p-4">
+              <div key={task.id} className="border border-[#23262b] bg-[#0b0c0d] p-4">
                 <div className="text-sm font-medium text-zinc-100">{task.title}</div>
-                <div className="mt-1 text-xs text-zinc-500">Обновлено: {new Date(task.updated_at).toLocaleString('ru-RU')}</div>
+                <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-zinc-500">Обновлено: {new Date(task.updated_at).toLocaleString('ru-RU')}</div>
               </div>
             ))}
           </div>
