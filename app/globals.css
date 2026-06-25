@@ -193,17 +193,17 @@
 
 /* ─── Анимации: только если пользователь не просил reduce-motion ─────────── */
 @keyframes orda-fade-up {
+  /* ВАЖНО: только opacity, БЕЗ transform. Любой transform на обёртке страницы
+     (.orda-main-enter оборачивает каждую страницу) делает её containing block
+     для position:fixed — и ВСЕ модалки внутри срезаются/уезжают (fixed считается
+     от страницы, а не от экрана). Даже translateY(0) и даже сам факт transform-
+     анимации в части браузеров оставляет элемент точкой отсчёта. Поэтому fade без
+     сдвига — безопасно для модалок во всём приложении. */
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    /* `none`, а НЕ translateY(0): identity-transform всё равно делает элемент
-       containing block для position:fixed → все модалки внутри страницы
-       срезаются/уезжают (fixed считается от страницы, а не от экрана).
-       С `none` containing block не создаётся, модалки центрируются по экрану. */
-    transform: none;
   }
 }
 
