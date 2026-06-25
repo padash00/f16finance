@@ -1,50 +1,119 @@
 /**
  * Conversational sessions для AI Copilot.
  *
- * Хранятся в памяти процесса (Map). Этого достаточно для MVP —
- * Vercel держит warm-instance долго, и сессия не должна жить дольше
- * 30 минут активности. Если процесс перезапустится — пользователь
- * просто начнёт диалог заново.
+ * ДВУХУРОВНЕВОЕ хранение:
+ *   L1 — Map в памяти процесса (быстро, для тёплого инстанса).
+ *   L2 — таблица Supabase `copilot_sessions` (источник правды, переживает
+ *        смену serverless-инстанса). Сессия хранится целиком как JSONB.
  *
- * Если потребуется persistence — заменим на Supabase table
- * `copilot_sessions` (структура та же).
+ * Почему L2: на Vercel соседние HTTP-запросы могут попасть на разные инстансы.
+ * Без БД многошаговое действие (выдай аванс → выбери → подтверди) теряло
+ * состояние между запросами → «Сессия устарела». Теперь состояние читается из
+ * БД при промахе кэша и пишется обратно после каждого запроса.
+ *
+ * getOrCreateSession / saveSession / clearSession — АСИНХРОННЫЕ (ходят в БД).
+ * Мутаторы (startTool/setParam/...) — синхронные, меняют объект; реальная
+ * запись в БД происходит через saveSession в конце обработки запроса.
  */
 
 import type { CopilotSession } from './types'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 const SESSIONS = new Map<string, CopilotSession>()
 const SESSION_TTL_MS = 30 * 60 * 1000 // 30 минут — общий TTL для history контекста
 const ACTIVE_DIALOG_TTL_MS = 10 * 60 * 1000 // 10 минут — для активного сбора параметров
+const TABLE = 'copilot_sessions'
 
 function sessionKey(userId: string, telegramChatId?: number): string {
   return telegramChatId != null ? `tg:${telegramChatId}` : `user:${userId}`
 }
 
-export function getOrCreateSession(userId: string, telegramChatId?: number): CopilotSession {
-  const key = sessionKey(userId, telegramChatId)
-  const existing = SESSIONS.get(key)
-  const now = Date.now()
-  if (existing && now - existing.updatedAt < SESSION_TTL_MS) {
-    existing.updatedAt = now
-    return existing
-  }
-  const session: CopilotSession = {
+function isFresh(session: CopilotSession, now: number): boolean {
+  const age = now - session.updatedAt
+  const inActiveDialog = !!(session.activeTool && session.awaitingParam)
+  return age < (inActiveDialog ? ACTIVE_DIALOG_TTL_MS : SESSION_TTL_MS)
+}
+
+function newSession(key: string, userId: string, telegramChatId: number | undefined, now: number): CopilotSession {
+  return {
     sessionId: key,
     userId,
     telegramChatId,
     activeTool: null,
     collectedParams: {},
     awaitingParam: null,
+    pendingOptions: {},
     history: [],
     createdAt: now,
     updatedAt: now,
   }
+}
+
+let adminClient: ReturnType<typeof createAdminSupabaseClient> | null = null
+function admin() {
+  if (!hasAdminSupabaseCredentials()) return null
+  if (!adminClient) adminClient = createAdminSupabaseClient()
+  return adminClient
+}
+
+async function loadFromDb(key: string, now: number): Promise<CopilotSession | null> {
+  const db = admin()
+  if (!db) return null
+  try {
+    const { data } = await db.from(TABLE).select('data').eq('session_key', key).maybeSingle()
+    const session = (data?.data || null) as CopilotSession | null
+    if (session && isFresh(session, now)) return session
+  } catch { /* таблицы может не быть — деградируем до in-memory */ }
+  return null
+}
+
+/**
+ * Загружает сессию (L1 кэш → БД → новая). Асинхронная.
+ */
+export async function getOrCreateSession(userId: string, telegramChatId?: number): Promise<CopilotSession> {
+  const key = sessionKey(userId, telegramChatId)
+  const now = Date.now()
+
+  const cached = SESSIONS.get(key)
+  if (cached && isFresh(cached, now)) {
+    cached.updatedAt = now
+    return cached
+  }
+
+  const fromDb = await loadFromDb(key, now)
+  if (fromDb) {
+    fromDb.updatedAt = now
+    SESSIONS.set(key, fromDb)
+    return fromDb
+  }
+
+  const session = newSession(key, userId, telegramChatId, now)
   SESSIONS.set(key, session)
   return session
 }
 
-export function clearSession(userId: string, telegramChatId?: number): void {
-  SESSIONS.delete(sessionKey(userId, telegramChatId))
+/**
+ * Пишет сессию в БД (write-through). Вызывать в конце обработки запроса.
+ * Без admin-кредов работает только in-memory (L1) — деградация, не ошибка.
+ */
+export async function saveSession(session: CopilotSession): Promise<void> {
+  SESSIONS.set(session.sessionId, session)
+  const db = admin()
+  if (!db) return
+  try {
+    await db.from(TABLE).upsert(
+      { session_key: session.sessionId, data: session, updated_at: new Date().toISOString() },
+      { onConflict: 'session_key' },
+    )
+  } catch { /* не критично — L1 кэш уже обновлён */ }
+}
+
+export async function clearSession(userId: string, telegramChatId?: number): Promise<void> {
+  const key = sessionKey(userId, telegramChatId)
+  SESSIONS.delete(key)
+  const db = admin()
+  if (!db) return
+  try { await db.from(TABLE).delete().eq('session_key', key) } catch { /* ignore */ }
 }
 
 export function startTool(session: CopilotSession, toolName: string): void {
@@ -86,21 +155,14 @@ export function pushHistory(session: CopilotSession, role: 'user' | 'assistant',
 }
 
 /**
- * Проактивная очистка устаревших сессий. Вызывается из engine
- * перед обработкой нового запроса (lazy cleanup).
- *
- * - Активные диалоги (с awaitingParam) живут 10 минут
- * - Просто история без активного tool — 30 минут
+ * Проактивная очистка устаревших сессий из L1-кэша (in-memory).
+ * БД-строки чистятся по TTL при загрузке (стейл игнорируется) — отдельный
+ * cleanup не критичен.
  */
 export function cleanupExpiredSessions(): void {
   const now = Date.now()
   for (const [key, session] of SESSIONS) {
-    const age = now - session.updatedAt
-    const inActiveDialog = !!(session.activeTool && session.awaitingParam)
-    const ttl = inActiveDialog ? ACTIVE_DIALOG_TTL_MS : SESSION_TTL_MS
-    if (age > ttl) {
-      SESSIONS.delete(key)
-    }
+    if (!isFresh(session, now)) SESSIONS.delete(key)
   }
 }
 

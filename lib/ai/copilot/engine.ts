@@ -18,11 +18,11 @@ import 'server-only'
 import {
   cleanupExpiredSessions,
   getOrCreateSession,
+  saveSession,
   startTool,
   setParam,
   awaitParam,
   pushHistory,
-  clearSession,
   resetToolState,
 } from './sessions'
 import {
@@ -31,7 +31,7 @@ import {
   describeToolsForPrompt,
   toolToOpenAISchema,
 } from './registry'
-import type { CopilotContext, CopilotResponse, CopilotTool, CopilotParam } from './types'
+import type { CopilotContext, CopilotResponse, CopilotTool, CopilotParam, CopilotSession } from './types'
 import { fuzzyFindBest } from './fuzzy'
 
 const OPENAI_API = 'https://api.openai.com/v1/chat/completions'
@@ -87,8 +87,21 @@ export async function runCopilot(
 ): Promise<CopilotResponse> {
   cleanupExpiredSessions()
 
-  const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
+  const session = await getOrCreateSession(ctx.userId, ctx.telegramChatId)
   pushHistory(session, 'user', input)
+  try {
+    return await runCopilotCore(input, ctx, session)
+  } finally {
+    // write-through: состояние диалога переживёт смену serverless-инстанса
+    await saveSession(session)
+  }
+}
+
+async function runCopilotCore(
+  input: string,
+  ctx: CopilotContext,
+  session: CopilotSession,
+): Promise<CopilotResponse> {
 
   // ─── Если в процессе сбора параметров — пробуем интерпретировать ввод как ответ ─
   if (session.activeTool && session.awaitingParam) {
@@ -198,10 +211,21 @@ export async function handleCallback(
   callbackData: string,
   ctx: CopilotContext,
 ): Promise<CopilotResponse> {
-  const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
+  const session = await getOrCreateSession(ctx.userId, ctx.telegramChatId)
+  try {
+    return await handleCallbackCore(callbackData, ctx, session)
+  } finally {
+    await saveSession(session)
+  }
+}
 
+async function handleCallbackCore(
+  callbackData: string,
+  ctx: CopilotContext,
+  session: CopilotSession,
+): Promise<CopilotResponse> {
   if (callbackData === 'cancel') {
-    clearSession(ctx.userId, ctx.telegramChatId)
+    resetToolState(session)
     return { text: '❌ Отменено.' }
   }
 
@@ -264,14 +288,14 @@ export async function handleCallback(
 async function continueToolCollection(
   tool: CopilotTool,
   ctx: CopilotContext,
-  session: ReturnType<typeof getOrCreateSession>,
+  session: CopilotSession,
 ): Promise<CopilotResponse> {
   // Найти первый недостающий обязательный параметр
   const missing = tool.params.find((p) => p.required && session.collectedParams[p.name] == null)
 
   if (missing) {
     awaitParam(session, missing.name)
-    return await askForParam(missing, ctx, tool)
+    return await askForParam(missing, ctx, tool, session)
   }
 
   // Все параметры собраны — спрашиваем подтверждение
@@ -294,6 +318,7 @@ async function askForParam(
   param: CopilotParam,
   ctx: CopilotContext,
   tool: CopilotTool,
+  session: CopilotSession,
 ): Promise<CopilotResponse> {
   if ((param.type === 'select' || param.type === 'multiselect') && param.getOptions) {
     let options: Awaited<ReturnType<typeof param.getOptions>>
@@ -309,7 +334,6 @@ async function askForParam(
     }
     if (options.length === 0) {
       // Сбрасываем tool state но сохраняем history (для multi-step контекста).
-      const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
       resetToolState(session)
       return {
         text: `Нет доступных вариантов для "${param.label}". Действие отменено.\nВозможно нужная запись отсутствует. Попробуй другую команду.`,
@@ -336,8 +360,7 @@ async function askForParam(
 
     const truncated = options.length > visible.length
 
-    // Кэшируем visible в сессии — нужно для резолва индекса в callback.
-    const session = getOrCreateSession(ctx.userId, ctx.telegramChatId)
+    // Кэшируем visible в сессии — нужно для резолва индекса в callback (Telegram).
     if (!session.pendingOptions) session.pendingOptions = {}
     session.pendingOptions[param.name] = visible
 
@@ -373,7 +396,7 @@ async function askForParam(
 async function executeTool(
   tool: CopilotTool,
   ctx: CopilotContext,
-  session: ReturnType<typeof getOrCreateSession>,
+  session: CopilotSession,
 ): Promise<CopilotResponse> {
   try {
     const params = session.collectedParams
@@ -613,7 +636,7 @@ async function callLLM(
   userText: string,
   ctx: CopilotContext,
   tools: CopilotTool[],
-  session: ReturnType<typeof getOrCreateSession>,
+  session: CopilotSession,
 ): Promise<LLMResult> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return { text: 'AI не настроен (нет OPENAI_API_KEY).' }
@@ -784,7 +807,7 @@ async function runAgenticRead(
   userText: string,
   ctx: CopilotContext,
   tools: CopilotTool[],
-  session: ReturnType<typeof getOrCreateSession>,
+  session: CopilotSession,
   first: { name: string; args: Record<string, unknown> },
 ): Promise<CopilotResponse | null> {
   const apiKey = process.env.OPENAI_API_KEY
