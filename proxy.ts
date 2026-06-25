@@ -27,7 +27,9 @@ function normalizeHost(hostHeader: string | null) {
 function isStaticAsset(pathname: string) {
   if (pathname.startsWith('/_next/')) return true
   if (pathname === '/favicon.ico') return true
-  return /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|woff|woff2|ttf|eot)$/i.test(pathname)
+  // .html/.htm — статические файлы из public/ (верификации Yandex/Google и т.п.):
+  // без этого middleware редиректил их и страница была «недоступна».
+  return /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|html|htm|woff|woff2|ttf|eot)$/i.test(pathname)
 }
 
 export async function proxy(request: NextRequest) {
