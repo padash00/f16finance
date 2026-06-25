@@ -152,11 +152,11 @@ export async function GET(request: Request) {
 
       const staffIds = [...staffIdsForOrgRoles]
 
-      const staffByStaffId = new Map<string, { full_name: string | null; short_name: string | null; email: string | null; is_active: boolean | null }>()
+      const staffByStaffId = new Map<string, { full_name: string | null; short_name: string | null; email: string | null; is_active: boolean | null; role: string | null }>()
       if (staffIds.length > 0) {
         const { data: staffData, error: staffErr } = await supabase
           .from('staff')
-          .select('id, full_name, short_name, email, is_active')
+          .select('id, full_name, short_name, email, is_active, role')
           .in('id', staffIds)
 
         if (staffErr) throw staffErr
@@ -197,13 +197,16 @@ export async function GET(request: Request) {
               const display =
                 [s.full_name, s.short_name, s.email].map((x: string | null) => (x || '').trim()).find(Boolean) ||
                 'Сотрудник'
+              // Реальная должность из Кадров (staff.role, напр. «технический
+              // директор») важнее общего ярлыка org-роли («Руководитель»).
+              const realPosition = (s.role || '').trim()
               staffDebtors.set(rowId, {
                 id: rowId,
                 name: display,
                 short_name: s.short_name || null,
                 full_name: s.full_name || null,
                 kind: 'staff' as const,
-                role_label: roleLabel,
+                role_label: realPosition || roleLabel,
               })
             }
           } else {
