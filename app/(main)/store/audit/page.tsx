@@ -324,13 +324,22 @@ export default function StoreAuditPage() {
             </Select>
           </div>
 
+          {/* Подсказка: как назначить под разные сценарии */}
+          <div className="space-y-1.5 rounded-lg border border-sky-500/30 bg-sky-500/[0.06] p-3 text-xs text-sky-800 dark:text-sky-200">
+            <div className="font-semibold">💡 Как назначить операторов</div>
+            <div>• <b>Несколько кассиров на одну витрину</b> (считают вместе, видят «кто что уже посчитал», помогают друг другу) → режим <b>«Обычный»</b>, добавь всех на <b>«Вся локация»</b>.</div>
+            <div>• <b>Поделить по секциям</b> (каждый считает свою часть, не пересекаются) → <b>«Обычный»</b>, каждому свою секцию.</div>
+            <div>• <b>Перепроверка</b> (двое считают одно и то же вслепую, система ловит расхождения) → <b>«Двойной слепой»</b>, 2 оператора на одну секцию.</div>
+            <div className="pt-0.5 text-sky-700/80 dark:text-sky-300/70">Системный остаток кассирам не виден — считают честно «с нуля». Расхождения покажутся тебе при закрытии акта.</div>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Режим подсчёта</Label>
             <div className="flex border border-slate-200 dark:border-white/10">
               <button type="button" onClick={() => setMode('single')} className={`flex-1 px-3 py-2 text-xs transition ${mode === 'single' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Обычный</button>
               <button type="button" onClick={() => setMode('double')} className={`flex-1 border-l border-slate-200 dark:border-white/10 px-3 py-2 text-xs transition ${mode === 'double' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:text-foreground'}`}>Двойной слепой</button>
             </div>
-            <p className="text-[11px] text-muted-foreground">{mode === 'double' ? 'Назначьте 2 операторов на одну секцию — посчитают независимо, расхождение пойдёт на пересчёт.' : 'Один оператор на секцию.'}</p>
+            <p className="text-[11px] text-muted-foreground">{mode === 'double' ? 'Назначь 2 операторов на ОДНУ секцию — посчитают независимо, расхождение между ними пойдёт на пересчёт.' : 'Можно несколько операторов на одну секцию (считают вместе, видят друг друга) или каждому свою секцию.'}</p>
           </div>
 
           {locationId && !formData ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка операторов…</div> : null}
@@ -521,25 +530,29 @@ export default function StoreAuditPage() {
                     .sort((a, b) => (b.shrinkage + b.surplus) - (a.shrinkage + a.surplus) || Math.abs(b.variance) - Math.abs(a.variance))
                     .map((r) => {
                       const moved = r.movedIn > 0 || r.movedOut > 0
+                      const diff = r.shrinkage > 0 ? 'short' : r.surplus > 0 ? 'surplus' : 'ok'
                       return (
-                        <div key={r.item_id} className="border-b border-slate-100 dark:border-white/5 py-1.5 last:border-0">
-                          <div className="flex items-center justify-between gap-3 text-sm">
-                            <span className="min-w-0 truncate text-foreground">{r.name}</span>
-                            <div className="flex shrink-0 items-center gap-3 tabular-nums">
-                              <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span>
-                              <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
-                              <span className="text-xs text-foreground">итог {fmt(r.final)}</span>
-                              {r.shrinkage > 0 ? (
-                                <span className="w-20 text-right font-medium text-rose-400">−{fmt(r.shrinkage)}</span>
-                              ) : r.surplus > 0 ? (
-                                <span className="w-20 text-right font-medium text-emerald-400">+{fmt(r.surplus)}</span>
-                              ) : (
-                                <span className="w-20 text-right text-muted-foreground">сошлось</span>
-                              )}
-                            </div>
+                        <div
+                          key={r.item_id}
+                          className={`flex flex-col gap-1 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${
+                            diff === 'short' ? 'border-rose-500/30 bg-rose-500/[0.05]'
+                            : diff === 'surplus' ? 'border-emerald-500/30 bg-emerald-500/[0.05]'
+                            : 'border-transparent opacity-55'
+                          }`}
+                        >
+                          <span className={`min-w-0 truncate text-sm ${diff === 'ok' ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{r.name}</span>
+                          <div className="flex shrink-0 items-center gap-3 tabular-nums">
+                            <span className="text-[11px] text-muted-foreground">{fmt(r.expected)} → <span className="text-foreground">{fmt(r.final)}</span></span>
+                            {diff === 'short' ? (
+                              <span className="rounded-md bg-rose-500/15 px-2 py-0.5 text-sm font-bold text-rose-600 dark:text-rose-300">−{fmt(r.shrinkage)}</span>
+                            ) : diff === 'surplus' ? (
+                              <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-sm font-bold text-emerald-600 dark:text-emerald-300">+{fmt(r.surplus)}</span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-xs text-emerald-500/80"><Check className="h-3.5 w-3.5" /> сошлось</span>
+                            )}
                           </div>
                           {moved ? (
-                            <div className="mt-0.5 text-[11px] text-sky-400/80 tabular-nums">
+                            <div className="text-[11px] text-sky-400/80 tabular-nums sm:basis-full sm:text-right">
                               во время ревизии:{r.movedIn > 0 ? ` приход +${fmt(r.movedIn)}` : ''}{r.movedOut > 0 ? ` продажи −${fmt(r.movedOut)}` : ''}
                             </div>
                           ) : null}
