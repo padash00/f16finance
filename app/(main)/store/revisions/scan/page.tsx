@@ -39,25 +39,78 @@ export default function ScanRevisionPage() {
 
   const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // ── Черновик в localStorage: подсчёты не теряются при перезагрузке/вылете ──
-  // Ключ по точке+дате. Восстанавливается при выборе точки, очищается после провода.
+  // ── Черновик ревизии: СЕРВЕРНЫЙ (переживает смену устройства + общий для
+  //    параллельных кассиров) с localStorage как офлайн-подстраховкой. ──
   const draftKey = useCallback(
     (loc: string) => `revision-scan-draft:${loc}:${new Date().toISOString().slice(0, 10)}`,
     [],
   )
-  // Восстановить черновик при выборе точки
+  // item_id → ms последнего ЛОКАЛЬНОГО изменения (чтобы поллинг не затирал свежий ввод)
+  const lastLocalRef = useRef<Record<string, number>>({})
+
+  // Записать подсчёт позиции на сервер (fire-and-forget)
+  const pushDraftItem = useCallback((itemId: string, qty: number) => {
+    if (!locationId) return
+    lastLocalRef.current[itemId] = Date.now()
+    void fetch('/api/admin/store/revisions/draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location_id: locationId, item_id: itemId, actual_qty: qty }),
+    }).catch(() => { /* офлайн — localStorage подстрахует */ })
+  }, [locationId])
+
+  // Загрузка при выборе точки: сначала сервер (общий счёт), иначе localStorage
   useEffect(() => {
     if (!locationId) return
-    try {
-      const raw = window.localStorage.getItem(draftKey(locationId))
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed.counts === 'object') setCounts(parsed.counts || {})
-      }
-    } catch { /* поврежденный черновик — игнорируем */ }
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/store/revisions/draft?location_id=${encodeURIComponent(locationId)}`, { cache: 'no-store' })
+        if (res.ok) {
+          const json = await res.json().catch(() => null)
+          const srv = json?.data?.counts
+          if (!cancelled && srv && typeof srv === 'object') { setCounts(srv); return }
+        }
+      } catch { /* сервер недоступен — фолбэк ниже */ }
+      try {
+        const raw = window.localStorage.getItem(draftKey(locationId))
+        if (raw && !cancelled) {
+          const parsed = JSON.parse(raw)
+          if (parsed && typeof parsed.counts === 'object') setCounts(parsed.counts || {})
+        }
+      } catch { /* поврежденный черновик — игнорируем */ }
+    })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId])
-  // Автосохранение черновика при каждом изменении подсчётов
+
+  // Поллинг: подсос подсчётов других кассиров (общий счёт точки). Не затираем
+  // позиции, изменённые локально в последние 8с (ещё летят на сервер).
+  useEffect(() => {
+    if (!locationId) return
+    const t = setInterval(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/admin/store/revisions/draft?location_id=${encodeURIComponent(locationId)}`, { cache: 'no-store' })
+          if (!res.ok) return
+          const json = await res.json().catch(() => null)
+          const srv = json?.data?.counts as Record<string, number> | undefined
+          if (!srv) return
+          setCounts((prev) => {
+            const next = { ...prev }
+            const now = Date.now()
+            for (const [id, q] of Object.entries(srv)) {
+              if ((lastLocalRef.current[id] || 0) > now - 8000) continue
+              next[id] = Number(q)
+            }
+            return next
+          })
+        } catch { /* сеть моргнула — пропускаем тик */ }
+      })()
+    }, 6000)
+    return () => clearInterval(t)
+  }, [locationId])
+
+  // localStorage-подстраховка (офлайн / сервер недоступен)
   useEffect(() => {
     if (!locationId) return
     try {
@@ -144,6 +197,7 @@ export default function ScanRevisionPage() {
     if (!pending) return
     const qty = parseQty(qtyInput)
     setCounts((prev) => ({ ...prev, [pending.item.id]: qty }))
+    pushDraftItem(pending.item.id, qty)
     flash(true, `${pending.item.name}: ${fmt(qty)}`)
     setPending(null)
     setQtyInput('')
@@ -197,6 +251,8 @@ export default function ScanRevisionPage() {
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка (${res.status})`)
       try { window.localStorage.removeItem(draftKey(locationId)) } catch {}
+      // очищаем общий серверный черновик точки после успешного провода
+      void fetch(`/api/admin/store/revisions/draft?location_id=${encodeURIComponent(locationId)}`, { method: 'DELETE' }).catch(() => {})
       setResult({ changed: Number(json?.data?.changed_items ?? items.length) })
     } catch (e: any) {
       setError(e?.message || 'Не удалось провести ревизию')
