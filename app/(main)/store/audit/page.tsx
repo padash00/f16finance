@@ -258,23 +258,39 @@ export default function StoreAuditPage() {
         ) : acts.length === 0 ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">Актов пока нет. Создайте первый аудит-акт.</Card>
         ) : (
-          <div className="space-y-2">
-            {acts.map((a) => (
-              <button key={a.id} type="button" onClick={() => void openDetail(a.id)} className="block w-full text-left">
-                <Card className="flex items-center justify-between gap-3 p-4 transition hover:border-amber-400/40">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${a.status === 'open' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : a.status === 'closed' ? 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300' : 'bg-red-500/15 text-red-700 dark:text-red-300'}`}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {acts.map((a) => {
+              const pct = a.totalItems ? Math.round((a.countedItems / a.totalItems) * 100) : 0
+              const statusCls =
+                a.status === 'open' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                : a.status === 'closed' ? 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300'
+                : 'bg-red-500/15 text-red-700 dark:text-red-300'
+              const barCls = a.status === 'closed' ? 'bg-emerald-500' : a.status === 'cancelled' ? 'bg-red-400/70' : 'bg-amber-500'
+              return (
+                <button key={a.id} type="button" onClick={() => void openDetail(a.id)} className="text-left">
+                  <Card className="flex h-full flex-col gap-3 p-4 transition hover:-translate-y-0.5 hover:border-amber-400/50 hover:shadow-md">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-semibold text-foreground">{a.locationName}</span>
+                      <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusCls}`}>
                         {a.status === 'open' ? 'Открыт' : a.status === 'closed' ? 'Закрыт' : 'Отменён'}
                       </span>
-                      <span className="truncate text-sm font-medium text-foreground">{a.locationName}</span>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{fmtDate(a.opened_at)} · посчитано {a.countedItems} из {a.totalItems}{a.comment ? ` · ${a.comment}` : ''}</div>
-                  </div>
-                  <div className="text-xs text-muted-foreground tabular-nums">{a.totalItems ? Math.round((a.countedItems / a.totalItems) * 100) : 0}%</div>
-                </Card>
-              </button>
-            ))}
+                    <div className="text-xs text-muted-foreground">
+                      {fmtDate(a.opened_at)}{a.comment ? ` · ${a.comment}` : ''}
+                    </div>
+                    <div className="mt-auto space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="tabular-nums text-muted-foreground">{a.countedItems} / {a.totalItems} поз.</span>
+                        <span className="tabular-nums font-semibold text-foreground">{pct}%</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                        <div className={`h-full rounded-full ${barCls} transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
+                      </div>
+                    </div>
+                  </Card>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
