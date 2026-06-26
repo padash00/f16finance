@@ -39,6 +39,33 @@ export default function ScanRevisionPage() {
 
   const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── Черновик в localStorage: подсчёты не теряются при перезагрузке/вылете ──
+  // Ключ по точке+дате. Восстанавливается при выборе точки, очищается после провода.
+  const draftKey = useCallback(
+    (loc: string) => `revision-scan-draft:${loc}:${new Date().toISOString().slice(0, 10)}`,
+    [],
+  )
+  // Восстановить черновик при выборе точки
+  useEffect(() => {
+    if (!locationId) return
+    try {
+      const raw = window.localStorage.getItem(draftKey(locationId))
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed.counts === 'object') setCounts(parsed.counts || {})
+      }
+    } catch { /* поврежденный черновик — игнорируем */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationId])
+  // Автосохранение черновика при каждом изменении подсчётов
+  useEffect(() => {
+    if (!locationId) return
+    try {
+      if (Object.keys(counts).length === 0) window.localStorage.removeItem(draftKey(locationId))
+      else window.localStorage.setItem(draftKey(locationId), JSON.stringify({ counts, savedAt: new Date().toISOString() }))
+    } catch { /* localStorage забит — пропускаем */ }
+  }, [counts, locationId, draftKey])
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -169,6 +196,7 @@ export default function ScanRevisionPage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || json?.message || `Ошибка (${res.status})`)
+      try { window.localStorage.removeItem(draftKey(locationId)) } catch {}
       setResult({ changed: Number(json?.data?.changed_items ?? items.length) })
     } catch (e: any) {
       setError(e?.message || 'Не удалось провести ревизию')
