@@ -324,12 +324,22 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
       setHasDraft(false)
       return
     }
+    let cancelled = false
     try {
       const raw = window.localStorage.getItem(draftKey(locationId, countedAt))
-      setHasDraft(!!raw)
-    } catch {
-      setHasDraft(false)
-    }
+      if (raw) setHasDraft(true)
+    } catch { /* ignore */ }
+    // серверный черновик (кросс-устройство / общий счёт точки)
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/store/revisions/draft?location_id=${encodeURIComponent(locationId)}&date=${encodeURIComponent(countedAt)}`, { cache: 'no-store' })
+        if (!res.ok || cancelled) return
+        const json = await res.json().catch(() => null)
+        const n = Object.keys(json?.data?.counts || {}).length
+        if (n > 0) setHasDraft(true)
+      } catch { /* сервер недоступен — остаётся localStorage */ }
+    })()
+    return () => { cancelled = true }
   }, [formSheetOpen, locationId, countedAt])
 
   useEffect(() => {
@@ -348,8 +358,38 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     }
   }, [lines, comment, locationId, countedAt, formSheetOpen])
 
-  function loadDraft() {
+  // Серверный черновик: дебаунс-сохранение всех строк (кросс-устройство + общий
+  // счёт для параллельной работы с камерной ревизией). localStorage выше — офлайн.
+  useEffect(() => {
+    if (!formSheetOpen || !locationId || !countedAt) return
+    const items = lines
+      .map((l) => ({ item_id: l.item_id, actual_qty: parseQty(l.actual_qty) }))
+      .filter((l) => l.item_id && Number.isFinite(l.actual_qty))
+    if (items.length === 0) return
+    const t = setTimeout(() => {
+      void fetch('/api/admin/store/revisions/draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location_id: locationId, date: countedAt, items }),
+      }).catch(() => { /* офлайн — localStorage подстрахует */ })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [lines, locationId, countedAt, formSheetOpen])
+
+  async function loadDraft() {
     if (!locationId || !countedAt) return
+    // Серверный черновик — приоритет (кросс-устройство / общий счёт точки)
+    try {
+      const res = await fetch(`/api/admin/store/revisions/draft?location_id=${encodeURIComponent(locationId)}&date=${encodeURIComponent(countedAt)}`, { cache: 'no-store' })
+      if (res.ok) {
+        const json = await res.json().catch(() => null)
+        const counts = json?.data?.counts as Record<string, number> | undefined
+        if (counts && Object.keys(counts).length > 0) {
+          setLines(Object.entries(counts).map(([item_id, qty]) => ({ item_id, actual_qty: formatQty(Number(qty)), comment: '' })))
+          return
+        }
+      }
+    } catch { /* сервер недоступен — фолбэк ниже */ }
+    // Фолбэк: localStorage
     try {
       const raw = window.localStorage.getItem(draftKey(locationId, countedAt))
       if (!raw) return
@@ -368,6 +408,8 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
     } catch {
       /* ignore */
     }
+    // очищаем общий серверный черновик точки
+    void fetch(`/api/admin/store/revisions/draft?location_id=${encodeURIComponent(locationId)}&date=${encodeURIComponent(countedAt)}`, { method: 'DELETE' }).catch(() => {})
     setHasDraft(false)
   }
 

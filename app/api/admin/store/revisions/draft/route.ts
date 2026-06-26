@@ -65,33 +65,39 @@ export async function GET(request: Request) {
   }
 }
 
-// POST { location_id, item_id, actual_qty, date? } — записать подсчёт по позиции
+// POST — записать подсчёт. Один: { location_id, item_id, actual_qty, date? }
+// ИЛИ пачкой: { location_id, items: [{item_id, actual_qty}], date? }
 export async function POST(request: Request) {
   try {
     const s = await setup(request)
     if ('response' in s) return s.response
     const body = (await request.json().catch(() => null)) as any
     const locationId = String(body?.location_id || '').trim()
-    const itemId = String(body?.item_id || '').trim()
     const date = String(body?.date || '').trim() || todayISO()
-    const qty = Number(body?.actual_qty)
-    if (!locationId || !itemId || !Number.isFinite(qty)) return json({ error: 'location_id, item_id, actual_qty обязательны' }, 400)
+    if (!locationId) return json({ error: 'location_id обязателен' }, 400)
     await ensureInventoryLocationAccess(s.supabase as any, locationId, s.inventoryScope)
 
-    const { error } = await s.supabase.from(TABLE).upsert(
-      {
+    const now = new Date().toISOString()
+    const rawItems = Array.isArray(body?.items)
+      ? body.items
+      : [{ item_id: body?.item_id, actual_qty: body?.actual_qty }]
+    const rows = rawItems
+      .map((it: any) => ({ item_id: String(it?.item_id || '').trim(), qty: Number(it?.actual_qty) }))
+      .filter((it: any) => it.item_id && Number.isFinite(it.qty))
+      .map((it: any) => ({
         location_id: locationId,
-        item_id: itemId,
+        item_id: it.item_id,
         draft_date: date,
-        actual_qty: qty,
+        actual_qty: it.qty,
         counted_by: s.actorUserId,
         organization_id: s.inventoryScope.organizationId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'location_id,item_id,draft_date' },
-    )
+        updated_at: now,
+      }))
+    if (rows.length === 0) return json({ error: 'нет валидных позиций' }, 400)
+
+    const { error } = await s.supabase.from(TABLE).upsert(rows, { onConflict: 'location_id,item_id,draft_date' })
     if (error) return json({ error: error.message }, 500)
-    return json({ ok: true })
+    return json({ ok: true, data: { saved: rows.length } })
   } catch (error: any) {
     if (error?.message === 'forbidden-location' || error?.message === 'inventory-location-not-found') return json({ error: 'forbidden' }, 403)
     await writeSystemErrorLogSafe({ scope: 'server', area: 'revisions/draft.POST', message: error?.message || 'draft post error' })
