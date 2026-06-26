@@ -31,9 +31,12 @@ export default function OperatorAuditPage() {
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [highlightId, setHighlightId] = useState<string | null>(null)
+  const [onlyLeft, setOnlyLeft] = useState(false)              // фильтр «осталось посчитать»
+  const [unknownCode, setUnknownCode] = useState<string | null>(null) // штрихкод не из списка
+  const unknownTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { editsRef.current = edits }, [edits])
-  useEffect(() => () => { if (autoTimer.current) clearTimeout(autoTimer.current) }, [])
+  useEffect(() => () => { if (autoTimer.current) clearTimeout(autoTimer.current); if (unknownTimer.current) clearTimeout(unknownTimer.current) }, [])
 
   const itemByBarcode = useMemo(() => {
     const m = new Map<string, ItemRow>()
@@ -48,8 +51,13 @@ export default function OperatorAuditPage() {
       const it = itemByBarcode.get(code)
       if (!it) {
         scanFeedback(false)
+        // штрихкод не из списка ревизии — покажем кассиру, чтобы не считал «в пустоту»
+        setUnknownCode(code)
+        if (unknownTimer.current) clearTimeout(unknownTimer.current)
+        unknownTimer.current = setTimeout(() => setUnknownCode(null), 4000)
         return
       }
+      setUnknownCode(null)
       scanFeedback(true)
       setHighlightId(it.item_id)
       const el = document.getElementById(`audit-input-${it.item_id}`) as HTMLInputElement | null
@@ -200,6 +208,12 @@ export default function OperatorAuditPage() {
   }
 
   const countedNum = useMemo(() => Object.values(edits).filter((v) => String(v).trim() !== '').length, [edits])
+  const leftNum = items.length - countedNum
+  // Видимые позиции: все или только непосчитанные (фильтр «осталось»)
+  const visibleItems = useMemo(
+    () => (onlyLeft ? items.filter((it) => String(edits[it.item_id] ?? '').trim() === '') : items),
+    [items, onlyLeft, edits],
+  )
 
   // ── Список актов ───────────────────────────────────────────────────────────
   if (!activeAct) {
@@ -275,6 +289,28 @@ export default function OperatorAuditPage() {
             debounceMs={1500}
             startLabel="Сканировать камерой"
           />
+          {/* Прогресс + фильтр «осталось посчитать» */}
+          <div className="mt-2 space-y-1.5">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${items.length ? (countedNum / items.length) * 100 : 0}%` }} />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-wide text-zinc-500 tabular-nums">посчитано {countedNum} · осталось {leftNum}</span>
+              <button
+                type="button"
+                onClick={() => setOnlyLeft((v) => !v)}
+                className={`border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition ${onlyLeft ? 'border-amber-400/60 bg-amber-400/15 text-amber-300' : 'border-[#23262b] text-zinc-400 hover:text-zinc-200'}`}
+              >
+                {onlyLeft ? `показаны осталось (${leftNum})` : 'показать осталось'}
+              </button>
+            </div>
+          </div>
+          {/* Штрихкод не из списка ревизии */}
+          {unknownCode ? (
+            <div className="mt-2 border border-amber-500/40 bg-amber-500/[0.08] p-2 font-mono text-[11px] leading-snug text-amber-300">
+              Штрихкод <span className="tabular-nums">{unknownCode}</span> — нет в списке. Возможно, товар не из вашей секции или его нет в каталоге.
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -282,9 +318,11 @@ export default function OperatorAuditPage() {
         <div className="flex items-center gap-3 border border-[#23262b] bg-[#0e0f10] p-4 font-mono text-[13px] uppercase text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка товаров…</div>
       ) : items.length === 0 ? (
         <OperatorEmptyState title="В вашей секции нет товаров" description="По назначенной секции нет позиций для подсчёта." />
+      ) : visibleItems.length === 0 ? (
+        <OperatorEmptyState title="Всё посчитано ✓" description="В этой секции не осталось непосчитанных позиций. Сними фильтр, чтобы видеть все." />
       ) : (
         <div className="space-y-1.5">
-          {items.map((it) => (
+          {visibleItems.map((it) => (
             <div key={it.item_id} className={`flex items-center justify-between gap-3 border bg-[#0b0c0d] p-3 ${it.otherBy && (edits[it.item_id] ?? '') === '' ? 'border-emerald-500/30' : 'border-[#23262b]'}`}>
               <div className="min-w-0">
                 <div className="truncate font-mono text-[13px] text-zinc-100">{it.name}</div>
