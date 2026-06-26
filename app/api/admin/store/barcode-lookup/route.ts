@@ -71,6 +71,33 @@ async function lookupOpenFoodFacts(code: string): Promise<Partial<Suggestion> | 
   }
 }
 
+// UPCitemdb (бесплатный trial-эндпоинт, без ключа, ~лимит в день). Глобальная база,
+// шире Open Food Facts — ловит и не-еду. Фолбэк, когда OFF не нашёл.
+async function lookupUpcItemDb(code: string): Promise<Partial<Suggestion> | null> {
+  try {
+    const url = `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'OrdaPoint/1.0 (ordaops.kz)' },
+      signal: AbortSignal.timeout(7000),
+    })
+    if (!res.ok) return null
+    const j: any = await res.json().catch(() => null)
+    const item = j?.items?.[0]
+    if (!item) return null
+    const name = String(item.title || '').trim()
+    if (!name) return null
+    return {
+      name,
+      brand: String(item.brand || '').trim() || null,
+      category_raw: String(item.category || '').split('>').slice(-1)[0]?.trim() || null,
+      image_url: Array.isArray(item.images) ? String(item.images[0] || '').trim() || null : null,
+      source: 'upcitemdb',
+    }
+  } catch {
+    return null
+  }
+}
+
 // AI причёсывает сырьё: перевод названия на русский, ближайшая из СУЩЕСТВУЮЩИХ
 // категорий, короткое описание. Код товара AI НЕ передаём как «угадай» — только
 // нормализуем уже найденные данные (иначе галлюцинации).
@@ -143,19 +170,19 @@ export async function GET(request: Request) {
         }
       : null
 
-    // 3) Внешний поиск (если не было в кэше)
+    // 3) Внешний поиск (если не было в кэше): Open Food Facts → UPCitemdb.
     if (!suggestion) {
-      const off = await lookupOpenFoodFacts(code)
-      if (off && off.name) {
+      const external = (await lookupOpenFoodFacts(code)) || (await lookupUpcItemDb(code))
+      if (external && external.name) {
         suggestion = {
           barcode: code,
-          name: off.name || null,
-          brand: off.brand || null,
-          category_raw: off.category_raw || null,
+          name: external.name || null,
+          brand: external.brand || null,
+          category_raw: external.category_raw || null,
           description: null,
-          image_url: off.image_url || null,
+          image_url: external.image_url || null,
           country,
-          source: off.source || 'openfoodfacts',
+          source: external.source || 'external',
         }
       }
     }
