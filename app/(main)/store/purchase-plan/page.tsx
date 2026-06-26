@@ -20,12 +20,24 @@ type Line = {
   order: number
   unitCost: number
   amount: number
+  salePrice?: number
+  marginPct?: number
+  coverageWeeks?: number
+  wasOutOfStock?: boolean
 }
 
 type SupplierGroup = {
   supplier: string
   total: number
   items: Line[]
+}
+
+type SkipLine = {
+  item_id: string
+  name: string
+  stock: number
+  weeklyDemand: number
+  coverageWeeks: number
 }
 
 type PlanData = {
@@ -35,6 +47,7 @@ type PlanData = {
   total: number
   revenue4wPerWeek: number
   bySupplier: SupplierGroup[]
+  doNotBuy?: SkipLine[]
 }
 
 type Company = { id: string; name: string; code?: string | null }
@@ -302,6 +315,7 @@ export default function PurchasePlanPage() {
                         <th className="text-right font-medium px-3 py-2">В наличии</th>
                         <th className="text-right font-medium px-3 py-2">Купить</th>
                         <th className="text-right font-medium px-3 py-2">Цена</th>
+                        <th className="text-right font-medium px-3 py-2">Маржа</th>
                         <th className="text-right font-medium px-4 py-2">Сумма</th>
                       </tr>
                     </thead>
@@ -309,7 +323,10 @@ export default function PurchasePlanPage() {
                       {g.items.map((it) => (
                         <tr key={it.item_id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
                           <td className="px-4 py-2">
-                            <div className="font-medium text-slate-900 dark:text-white">{it.name}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-slate-900 dark:text-white">{it.name}</span>
+                              {it.wasOutOfStock ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300" title="Сейчас в нуле — реальный спрос мог быть выше">был в нуле</span> : null}
+                            </div>
                             {it.barcode ? <div className="text-[11px] text-slate-400 tabular-nums">{it.barcode}</div> : null}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
@@ -337,6 +354,11 @@ export default function PurchasePlanPage() {
                             />
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{money(it.unitCost)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {it.marginPct != null && it.marginPct !== 0 ? (
+                              <span className={it.marginPct >= 25 ? 'text-emerald-600 dark:text-emerald-400' : it.marginPct >= 10 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}>{Math.round(it.marginPct)}%</span>
+                            ) : <span className="text-slate-400">—</span>}
+                          </td>
                           <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-900 dark:text-white">{money(it._amount)}</td>
                         </tr>
                       ))}
@@ -345,6 +367,27 @@ export default function PurchasePlanPage() {
                 </div>
               </Card>
             ))}
+
+            {/* Не бери — затоваренные позиции (остатка хватит надолго) */}
+            {plan.doNotBuy && plan.doNotBuy.length > 0 ? (
+              <Card className="overflow-hidden bg-white dark:bg-slate-900/40 border-slate-200 dark:border-white/10">
+                <div className="border-b border-slate-200 dark:border-white/10 px-4 py-3">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">🧊 Не бери — затоварено ({plan.doNotBuy.length})</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Остатка хватит надолго — деньги заморожены, лучше распродать.</div>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-white/5">
+                  {plan.doNotBuy.map((s) => (
+                    <div key={s.item_id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                      <span className="min-w-0 truncate text-slate-700 dark:text-slate-200">{s.name}</span>
+                      <div className="flex shrink-0 items-center gap-4 tabular-nums text-xs">
+                        <span className="text-slate-500 dark:text-slate-400">в наличии {num(s.stock)} · ~{num(s.weeklyDemand)}/нед</span>
+                        <span className="font-medium text-sky-600 dark:text-sky-400">хватит на {s.coverageWeeks >= 99 ? '∞' : `~${num(s.coverageWeeks)} нед`}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
           </div>
         )
       ) : null}

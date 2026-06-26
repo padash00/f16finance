@@ -27,6 +27,18 @@ export type PurchasePlanLine = {
   order: number
   unitCost: number
   amount: number
+  salePrice: number
+  marginPct: number       // (цена − закуп) / цена × 100
+  coverageWeeks: number    // на сколько недель хватит текущего остатка
+  wasOutOfStock: boolean   // сейчас в нуле — реальный спрос мог быть выше
+}
+
+export type PurchasePlanSkip = {
+  item_id: string
+  name: string
+  stock: number
+  weeklyDemand: number
+  coverageWeeks: number
 }
 
 export type PurchasePlanSupplierGroup = {
@@ -42,6 +54,7 @@ export type PurchasePlanResult = {
   total: number
   revenue4wPerWeek: number
   bySupplier: PurchasePlanSupplierGroup[]
+  doNotBuy: PurchasePlanSkip[]   // затоваренные — брать не нужно
 }
 
 const DAY_MS = 86_400_000
@@ -90,7 +103,7 @@ export async function computePurchasePlan(
   const locationIds = (locRows || []).map((r: any) => String(r.id)).filter(Boolean)
 
   if (locationIds.length === 0) {
-    return { company_id: companyId, weekStart, generatedAt, total: 0, revenue4wPerWeek: 0, bySupplier: [] }
+    return { company_id: companyId, weekStart, generatedAt, total: 0, revenue4wPerWeek: 0, bySupplier: [], doNotBuy: [] }
   }
 
   // 2. Продажи за 28 дней (movement_type='sale', from_location ∈ локации точки).
@@ -136,7 +149,7 @@ export async function computePurchasePlan(
 
   const itemIds = Array.from(demandByItem.keys())
   if (itemIds.length === 0) {
-    return { company_id: companyId, weekStart, generatedAt, total: 0, revenue4wPerWeek: round2(revenueLastWeekWindow), bySupplier: [] }
+    return { company_id: companyId, weekStart, generatedAt, total: 0, revenue4wPerWeek: round2(revenueLastWeekWindow), bySupplier: [], doNotBuy: [] }
   }
 
   // 3. Текущий остаток по точке (сумма по локациям).
@@ -157,13 +170,13 @@ export async function computePurchasePlan(
     if (batch.length < PAGE) break
   }
 
-  // 4. Карточки товаров (name, barcode, fallback-цена).
-  const itemInfo = new Map<string, { name: string; barcode: string; fallbackCost: number }>()
+  // 4. Карточки товаров (name, barcode, fallback-цена, цена продажи для маржи).
+  const itemInfo = new Map<string, { name: string; barcode: string; fallbackCost: number; salePrice: number }>()
   for (let i = 0; i < itemIds.length; i += 500) {
     const chunk = itemIds.slice(i, i + 500)
     const { data, error } = await supabase
       .from('inventory_items')
-      .select('id, name, barcode, default_purchase_price')
+      .select('id, name, barcode, default_purchase_price, sale_price')
       .in('id', chunk)
     if (error) throw error
     for (const r of data || []) {
@@ -171,6 +184,7 @@ export async function computePurchasePlan(
         name: String(r.name || ''),
         barcode: String(r.barcode || ''),
         fallbackCost: Number(r.default_purchase_price || 0),
+        salePrice: Number((r as any).sale_price || 0),
       })
     }
   }
@@ -208,19 +222,31 @@ export async function computePurchasePlan(
 
   // 6. Расчёт и группировка по поставщикам.
   const groups = new Map<string, PurchasePlanLine[]>()
+  const doNotBuy: PurchasePlanSkip[] = []
   for (const itemId of itemIds) {
     const agg = demandByItem.get(itemId)!
     const weeklyDemand = agg.total / 4
     const target = weeklyDemand * 2 // запас на 2 недели
     const stock = stockByItem.get(itemId) || 0
     const order = Math.ceil(Math.max(0, target - stock))
-    if (order <= 0) continue
+    const info = itemInfo.get(itemId)
+    // На сколько недель хватит текущего остатка.
+    const coverageWeeks = weeklyDemand > 0 ? round1(stock / weeklyDemand) : stock > 0 ? 99 : 0
+
+    if (order <= 0) {
+      // Затоварено: остатка хватит надолго (>4 нед при наличии спроса) → «не бери».
+      if (weeklyDemand > 0 && coverageWeeks > 4) {
+        doNotBuy.push({ item_id: itemId, name: info?.name || '—', stock: round2(stock), weeklyDemand: round2(weeklyDemand), coverageWeeks })
+      }
+      continue
+    }
 
     const receipt = lastReceiptByItem.get(itemId)
-    const info = itemInfo.get(itemId)
     const unitCost = receipt ? receipt.unitCost : info?.fallbackCost || 0
     const supplierName = receipt ? receipt.supplierName : '—'
     const amount = order * unitCost
+    const salePrice = info?.salePrice || 0
+    const marginPct = salePrice > 0 ? round1(((salePrice - unitCost) / salePrice) * 100) : 0
 
     // Тренд: последние 14 vs предыдущие 14 дней.
     const trendPct =
@@ -240,11 +266,18 @@ export async function computePurchasePlan(
       order,
       unitCost: round2(unitCost),
       amount: round2(amount),
+      salePrice: round2(salePrice),
+      marginPct,
+      coverageWeeks,
+      wasOutOfStock: stock <= 0,
     }
     const list = groups.get(supplierName) || []
     list.push(line)
     groups.set(supplierName, list)
   }
+  // Самые затоваренные сверху, не больше 30.
+  doNotBuy.sort((a, b) => b.coverageWeeks - a.coverageWeeks)
+  doNotBuy.splice(30)
 
   const bySupplier: PurchasePlanSupplierGroup[] = Array.from(groups.entries())
     .map(([supplier, items]) => {
@@ -263,5 +296,6 @@ export async function computePurchasePlan(
     total,
     revenue4wPerWeek: round2(revenueLastWeekWindow),
     bySupplier,
+    doNotBuy,
   }
 }
