@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   Activity, Boxes, Warehouse, FileText, ClipboardList, Building2,
   Receipt, Users2, Monitor, ReceiptText, ArrowLeft, Store, LogOut,
-  Clock, Settings, Menu, X, Search, Command,
+  Clock, Settings, Menu, X, Search, Command, ShoppingCart,
 } from 'lucide-react'
 import { isAbortError } from '@/lib/is-abort-error'
 
@@ -19,6 +19,7 @@ const NAV: Item[] = [
   { href: '/store/stock', label: 'Склад', icon: Warehouse },
   { href: '/store/documents', label: 'Документы', icon: FileText },
   { href: '/store/orders', label: 'Заявки', icon: ClipboardList },
+  { href: '/store/purchase-plan', label: 'План закупа', icon: ShoppingCart },
   { href: '/store/vendors', label: 'Поставщики', icon: Building2 },
   { href: '/store/cashbox', label: 'Касса', icon: Receipt },
   { href: '/store/shifts', label: 'Смены', icon: Clock },
