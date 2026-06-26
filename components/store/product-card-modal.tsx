@@ -7,6 +7,7 @@ import {
   Loader2,
   Package,
   Pencil,
+  Search,
   TrendingUp,
   Truck,
   Warehouse,
@@ -84,6 +85,9 @@ export default function ProductCardModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [candidates, setCandidates] = useState<string[]>([])
+  const [searched, setSearched] = useState(false)
   const [savingDesc, setSavingDesc] = useState(false)
   const [editDesc, setEditDesc] = useState(false)
   const [descDraft, setDescDraft] = useState('')
@@ -113,6 +117,8 @@ export default function ProductCardModal({
       setData(null)
       setError(null)
       setEditDesc(false)
+      setCandidates([])
+      setSearched(false)
     }
   }, [open, itemId, load])
 
@@ -150,6 +156,50 @@ export default function ProductCardModal({
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  async function searchImages() {
+    if (!data) return
+    setSearching(true)
+    setError(null)
+    setSearched(true)
+    try {
+      const params = new URLSearchParams()
+      if (data.barcode) params.set('code', data.barcode)
+      if (data.name) params.set('name', data.name)
+      const res = await fetch(`/api/admin/store/catalog/image-search?${params.toString()}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Не удалось найти фото')
+      setCandidates(Array.isArray(json.images) ? json.images : [])
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка поиска фото')
+      setCandidates([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function pickImage(imageUrl: string) {
+    if (!itemId) return
+    setUploading(true)
+    setError(null)
+    try {
+      const patch = await fetch(`/api/admin/store/catalog/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: imageUrl }),
+      })
+      const patchJson = await patch.json().catch(() => null)
+      if (!patch.ok) throw new Error(patchJson?.error || 'Не удалось сохранить фото')
+      setData((d) => (d ? { ...d, image_url: imageUrl } : d))
+      setCandidates([])
+      setSearched(false)
+      onSaved?.()
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка сохранения фото')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -239,6 +289,43 @@ export default function ProductCardModal({
                       <Camera className="mr-1.5 h-3.5 w-3.5" />
                       {data.image_url ? 'Заменить фото' : 'Загрузить фото'}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={uploading || searching}
+                      onClick={() => void searchImages()}
+                    >
+                      {searching ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
+                      Найти фото
+                    </Button>
+
+                    {/* Найденные варианты — выбери понравившийся */}
+                    {candidates.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] text-muted-foreground">Выбери фото:</div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {candidates.map((url, i) => (
+                            <button
+                              key={`${url}-${i}`}
+                              type="button"
+                              disabled={uploading}
+                              onClick={() => void pickImage(url)}
+                              className="aspect-square overflow-hidden rounded-md border border-slate-200 bg-white transition hover:ring-2 hover:ring-emerald-500 dark:border-white/10 dark:bg-white/5"
+                              title="Поставить это фото"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : searched && !searching ? (
+                      <div className="text-[11px] text-muted-foreground">
+                        Ничего не нашлось. Загрузи фото вручную{data.barcode ? '' : ' (у товара нет штрихкода — поиск по названию требует Google-ключ)'}.
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>
