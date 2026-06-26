@@ -44,6 +44,7 @@ type CatalogItem = {
   total_balance: number
   low_stock_threshold: number | null
   requires_expiry?: boolean
+  image_url?: string | null
 }
 
 type ImportRow = {
