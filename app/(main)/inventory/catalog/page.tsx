@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import ProductCardModal from '@/components/store/product-card-modal'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -93,11 +94,14 @@ type ItemFormData = {
   notes: string
   low_stock_threshold: string
   requires_expiry: boolean
+  /** Фото из распознавания по штрихкоду — проставляется на товар после создания. */
+  image_url?: string
 }
 
 const EMPTY_FORM: ItemFormData = {
   name: '', barcode: '', unit: 'шт', sale_price: '0', purchase_price: '0',
   category_id: '', item_type: 'product', notes: '', low_stock_threshold: '', requires_expiry: true,
+  image_url: '',
 }
 
 const PAGE_SIZE = 50
@@ -276,6 +280,8 @@ function ItemForm({
       name: d.name || form.name,
       category_id: d.category_id || form.category_id,
       notes: d.description || form.notes,
+      // Фото из открытых баз — сохраним на товар после создания (авто-фото).
+      image_url: d.image_url || form.image_url || '',
     })
     setRecog((r) => ({ ...r, data: { ...r.data, found: 'applied' } }))
   }
@@ -467,6 +473,9 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Карточка товара (модалка по клику на товар)
+  const [cardItemId, setCardItemId] = useState<string | null>(null)
+
   const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty' | 'deleteAll' | 'resetBalances'>(null)
   const [bulkPhrase, setBulkPhrase] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -642,6 +651,18 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
       })
       const json2 = await res2.json()
       if (!res2.ok) throw new Error(json2.error)
+      // Авто-фото: если штрихкод распознан и пришёл image_url — проставим на товар.
+      const newItemId = String(json2?.data?.id || '').trim()
+      const recogPhoto = (addForm.image_url || '').trim()
+      if (newItemId && recogPhoto) {
+        try {
+          await fetch(`/api/admin/store/catalog/${newItemId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_url: recogPhoto }),
+          })
+        } catch { /* фото опционально — не блокируем создание товара */ }
+      }
       setShowAdd(false)
       setAddForm(EMPTY_FORM)
       await loadItems()
@@ -1025,7 +1046,14 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                       <Fragment key={item.id}>
                         <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''}`}>
                           <td className="px-3 py-2.5 font-medium max-w-[220px]">
-                            <span className="truncate block">{item.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setCardItemId(item.id)}
+                              className="truncate block text-left hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline transition-colors"
+                              title="Открыть карточку товара"
+                            >
+                              {item.name}
+                            </button>
                             {item.item_type === 'consumable' && (
                               <Badge variant="outline" className="text-[10px] mt-0.5 h-4">расходник</Badge>
                             )}
@@ -1070,6 +1098,13 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => setCardItemId(item.id)}
+                                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                                title="Карточка товара"
+                              >
+                                <Package className="w-3.5 h-3.5" />
+                              </button>
                               {canEdit && (
                                 <button
                                   onClick={() => { startEdit(item); setShowAdd(false) }}
@@ -1440,6 +1475,15 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Карточка товара — открывается по клику на название/иконку в таблице */}
+      <ProductCardModal
+        itemId={cardItemId}
+        open={cardItemId !== null}
+        onOpenChange={(o) => { if (!o) setCardItemId(null) }}
+        canEdit={canEdit}
+        onSaved={() => void loadItems()}
+      />
     </div>
   )
 }
