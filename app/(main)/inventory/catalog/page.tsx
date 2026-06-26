@@ -1045,14 +1045,19 @@ export function CatalogPageContent({ embedded = false }: { embedded?: boolean } 
                     {paginated.map((item) => (
                       <Fragment key={item.id}>
                         <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''}`}>
-                          <td className="px-3 py-2.5 font-medium max-w-[220px]">
+                          <td className="px-3 py-2.5 font-medium max-w-[260px]">
                             <button
                               type="button"
                               onClick={() => setCardItemId(item.id)}
-                              className="truncate block text-left hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline transition-colors"
+                              className="flex items-center gap-2 text-left hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                               title="Открыть карточку товара"
                             >
-                              {item.name}
+                              {item.image_url ? (
+                                <img src={item.image_url} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-slate-200 dark:border-white/10" />
+                              ) : (
+                                <span className="h-8 w-8 shrink-0 rounded bg-slate-100 dark:bg-white/[0.05]" />
+                              )}
+                              <span className="truncate hover:underline">{item.name}</span>
                             </button>
                             {item.item_type === 'consumable' && (
                               <Badge variant="outline" className="text-[10px] mt-0.5 h-4">расходник</Badge>

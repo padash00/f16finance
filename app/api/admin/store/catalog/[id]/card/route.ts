@@ -55,26 +55,27 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     })
     const allowedCompanyIds = companyScope.allowedCompanyIds // null = супер-админ (все)
 
-    // 1. Сам товар. image_url/brand читаем мягко (try/catch) — если миграции ещё нет.
-    const baseCols = 'id, name, barcode, unit, sale_price, default_purchase_price, category_id, low_stock_threshold, pack_size, description, organization_id, category:inventory_categories(id, name)'
+    // 1. Сам товар. description/image_url/brand читаем МЯГКО (try/catch) —
+    //    эти колонки могут отсутствовать, если миграция не применена.
+    const baseCols = 'id, name, barcode, unit, sale_price, default_purchase_price, category_id, low_stock_threshold, pack_size, organization_id, category:inventory_categories(id, name)'
     let item: any = null
     try {
       const { data, error } = await supabase
         .from('inventory_items')
-        .select(`${baseCols}, image_url, brand`)
+        .select(`${baseCols}, description, image_url, brand`)
         .eq('id', itemId)
         .maybeSingle()
       if (error) throw error
       item = data
     } catch {
-      // Колонок image_url/brand ещё нет (миграция не применена) — читаем без них.
+      // Доп. колонок ещё нет (миграция не применена) — читаем без них.
       const { data, error } = await supabase
         .from('inventory_items')
         .select(baseCols)
         .eq('id', itemId)
         .maybeSingle()
       if (error) throw error
-      item = data ? { ...data, image_url: null, brand: null } : null
+      item = data ? { ...data, description: null, image_url: null, brand: null } : null
     }
     if (!item) return json({ error: 'item-not-found' }, 404)
 

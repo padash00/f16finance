@@ -10,6 +10,7 @@
 -- 1. Колонки на товар (фото и бренд; description уже есть в схеме).
 alter table public.inventory_items add column if not exists image_url text;
 alter table public.inventory_items add column if not exists brand text;
+alter table public.inventory_items add column if not exists description text;
 
 comment on column public.inventory_items.image_url is 'URL фото товара (storage bucket product-photos или внешний из barcode-lookup)';
 comment on column public.inventory_items.brand is 'Бренд/производитель товара (показывается в карточке)';

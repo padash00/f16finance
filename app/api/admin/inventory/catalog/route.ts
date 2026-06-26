@@ -70,15 +70,23 @@ export async function GET(request: Request) {
     const orgId = access.activeOrganization?.id || null
     const scopeOrg = access.isSuperAdmin ? null : (orgId || '00000000-0000-0000-0000-000000000000')
 
-    // Fetch all inventory items with their category
-    let itemsQuery = supabase
-      .from('inventory_items')
-      .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, category:inventory_categories(id, name)')
-      .order('name', { ascending: true })
-    if (scopeOrg) itemsQuery = itemsQuery.eq('organization_id', scopeOrg)
-    const { data: items, error: itemsError } = await itemsQuery
-
-    if (itemsError) throw itemsError
+    // Fetch all inventory items with their category. image_url читаем МЯГКО —
+    // колонки может не быть, если миграция карточки не применена.
+    const ITEM_COLS = 'id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, requires_expiry, category:inventory_categories(id, name)'
+    let items: any[] | null = null
+    try {
+      let q = supabase.from('inventory_items').select(`${ITEM_COLS}, image_url`).order('name', { ascending: true })
+      if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+      const r = await q
+      if (r.error) throw r.error
+      items = r.data as any[]
+    } catch {
+      let q = supabase.from('inventory_items').select(ITEM_COLS).order('name', { ascending: true })
+      if (scopeOrg) q = q.eq('organization_id', scopeOrg)
+      const r = await q
+      if (r.error) throw r.error
+      items = (r.data || []).map((i: any) => ({ ...i, image_url: null }))
+    }
 
     // v8: total = warehouse + showcase. catalog_total больше не используется.
     const itemIds = (items || []).map((i: any) => String(i.id))
