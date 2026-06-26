@@ -237,7 +237,7 @@ export default function OperatorAuditPage() {
 
   // ── Слепой подсчёт ─────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 pb-24">
+    <div className="space-y-3 pb-44 lg:pb-4">
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => { setActiveAct(null); void loadActs() }} className="border border-[#23262b] p-2 text-zinc-400 hover:text-zinc-100"><ArrowLeft className="h-4 w-4" /></button>
         <div className="min-w-0 flex-1">
@@ -263,16 +263,19 @@ export default function OperatorAuditPage() {
         <div className="border border-emerald-500/30 bg-emerald-500/[0.06] p-2.5 font-mono text-[11px] text-emerald-300/90">Зелёным — уже посчитал другой кассир. Не считайте эти позиции повторно.</div>
       ) : null}
 
-      {/* Камера: скан штрихкода → подсветит и сфокусирует нужный товар */}
+      {/* Камера: STICKY сверху — скан доступен с любого места списка (не нужно
+          листать наверх). Штрихкод → подсветит и сфокусирует нужный товар ниже. */}
       {!itemsLoading && items.length > 0 ? (
-        <CameraScanner
-          onDetect={handleScan}
-          onError={(m) => setError(m)}
-          accent="amber"
-          aspectClass="aspect-[5/3]"
-          debounceMs={1500}
-          startLabel="Сканировать камерой"
-        />
+        <div className="sticky top-0 z-20 -mx-3 bg-[#0a0b0c] px-3 pb-2 pt-1 sm:-mx-5 sm:px-5">
+          <CameraScanner
+            onDetect={handleScan}
+            onError={(m) => setError(m)}
+            accent="amber"
+            aspectClass="aspect-[2/1]"
+            debounceMs={1500}
+            startLabel="Сканировать камерой"
+          />
+        </div>
       ) : null}
 
       {itemsLoading ? (
@@ -304,7 +307,22 @@ export default function OperatorAuditPage() {
       )}
 
       {items.length > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 border-t border-[#23262b] bg-[#0a0b0c]/95 p-3 backdrop-blur lg:hidden" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom,0px))' }}>
+        <div
+          className="fixed inset-x-0 z-30 border-t border-[#23262b] bg-[#0a0b0c]/95 p-3 backdrop-blur lg:hidden"
+          style={{ bottom: 'calc(3.6rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wide">
+            <span className="tabular-nums text-zinc-500">введено {countedNum} из {items.length}</span>
+            {autoStatus === 'saving' ? (
+              <span className="flex items-center gap-1 text-amber-300/90"><Loader2 className="h-3 w-3 animate-spin" /> сохраняю…</span>
+            ) : autoStatus === 'saved' ? (
+              <span className="text-emerald-400/90">сохранено ✓</span>
+            ) : autoStatus === 'error' ? (
+              <span className="text-rose-300">не сохранилось — нажми «Сохранить»</span>
+            ) : (
+              <span className="text-zinc-600">автосохранение</span>
+            )}
+          </div>
           <button type="button" onClick={save} disabled={saving} className="flex w-full items-center justify-center gap-2 border border-amber-400/60 bg-amber-400/15 py-3 font-mono text-[14px] font-semibold uppercase tracking-wide text-amber-300 disabled:opacity-50">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saved ? 'Сохранено ✓' : 'Сохранить всё'}
