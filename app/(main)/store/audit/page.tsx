@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2, Undo2, Users } from 'lucide-react'
+import { ArrowLeft, Check, ClipboardList, Loader2, Lock, Plus, RefreshCw, Trash2, Undo2, Users } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -553,7 +553,7 @@ export default function StoreAuditPage() {
             /* Подсчёт в процессе / исторический акт */
             <Card className="p-4">
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-medium text-foreground">{isOpen ? 'Подсчитано (расхождение раскроется при закрытии)' : 'Расхождение'}</div>
+                <div className="text-sm font-medium text-foreground">{isOpen ? 'Что уже посчитано' : 'Расхождение'}</div>
                 {!isOpen ? (
                   <div className="flex gap-3 text-xs tabular-nums">
                     <span className="text-rose-400">недостача {fmt(totals.short)}</span>
@@ -561,6 +561,9 @@ export default function StoreAuditPage() {
                   </div>
                 ) : null}
               </div>
+              {isOpen ? (
+                <p className="mb-3 text-xs text-muted-foreground">Зелёная галочка — позиция уже посчитана. Недостачу/излишек посчитаем при закрытии акта (учтём продажи, что прошли во время счёта).</p>
+              ) : null}
               {detailRows.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">Пока ничего не посчитано.</div>
               ) : (
@@ -590,7 +593,13 @@ export default function StoreAuditPage() {
                           <div className="flex items-center gap-4 tabular-nums">
                             {!isOpen ? <span className="text-xs text-muted-foreground">сист. {fmt(r.expected)}</span> : null}
                             <span className="text-xs text-muted-foreground">факт {fmt(r.counted)}</span>
-                            <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                            {isOpen ? (
+                              // Слепая ревизия: пока акт открыт — расхождение не показываем
+                              // (как и обещает заголовок). Это лишь отметка «посчитано».
+                              <span className="flex w-16 items-center justify-end text-emerald-500"><Check className="h-4 w-4" /></span>
+                            ) : (
+                              <span className={`w-16 text-right font-medium ${r.variance < 0 ? 'text-rose-400' : r.variance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>{r.variance > 0 ? '+' : ''}{fmt(r.variance)}</span>
+                            )}
                           </div>
                         </div>
                       ),
