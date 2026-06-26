@@ -301,6 +301,10 @@ export default function ProductCardModal({
                       Найти фото
                     </Button>
 
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      💡 Лучше <b>квадратное</b> фото 1:1 — примерно <b>800×800px</b> (минимум 500×500). Форматы JPG, PNG, WEBP, до 5 МБ.
+                    </p>
+
                     {/* Найденные варианты — выбери понравившийся */}
                     {candidates.length > 0 ? (
                       <div className="space-y-1.5">
