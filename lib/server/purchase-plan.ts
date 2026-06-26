@@ -31,6 +31,8 @@ export type PurchasePlanLine = {
   marginPct: number       // (цена − закуп) / цена × 100
   coverageWeeks: number    // на сколько недель хватит текущего остатка
   wasOutOfStock: boolean   // сейчас в нуле — реальный спрос мог быть выше
+  packSize: number         // штук в упаковке (1 = штучный)
+  packs: number            // сколько упаковок к заказу
 }
 
 export type PurchasePlanSkip = {
@@ -189,6 +191,21 @@ export async function computePurchasePlan(
     }
   }
 
+  // 4b. Размер упаковки (штук в коробке). Отдельным запросом с try/catch —
+  //     если колонки ещё нет (миграция не применена), упаковки = 1 (штучно).
+  const packByItem = new Map<string, number>()
+  try {
+    for (let i = 0; i < itemIds.length; i += 500) {
+      const chunk = itemIds.slice(i, i + 500)
+      const { data, error } = await supabase.from('inventory_items').select('id, pack_size').in('id', chunk)
+      if (error) throw error
+      for (const r of data || []) {
+        const ps = Number((r as any).pack_size || 1)
+        packByItem.set(String(r.id), ps > 0 ? ps : 1)
+      }
+    }
+  } catch { /* колонки pack_size нет — считаем штучно */ }
+
   // 5. Последняя приёмка по каждому товару → unitCost + supplierName.
   //    receipt_items (item_id, unit_cost) join receipts (received_at, supplier).
   //    Для каждого item_id берём строку с максимальным received_at.
@@ -228,7 +245,10 @@ export async function computePurchasePlan(
     const weeklyDemand = agg.total / 4
     const target = weeklyDemand * 2 // запас на 2 недели
     const stock = stockByItem.get(itemId) || 0
-    const order = Math.ceil(Math.max(0, target - stock))
+    // Округляем заказ ДО ЦЕЛЫХ УПАКОВОК (закупаешь коробками, не штуками).
+    const packSize = packByItem.get(itemId) || 1
+    const packs = Math.ceil(Math.max(0, target - stock) / packSize)
+    const order = packs * packSize
     const info = itemInfo.get(itemId)
     // На сколько недель хватит текущего остатка.
     const coverageWeeks = weeklyDemand > 0 ? round1(stock / weeklyDemand) : stock > 0 ? 99 : 0
@@ -270,6 +290,8 @@ export async function computePurchasePlan(
       marginPct,
       coverageWeeks,
       wasOutOfStock: stock <= 0,
+      packSize: round2(packSize),
+      packs,
     }
     const list = groups.get(supplierName) || []
     list.push(line)

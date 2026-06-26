@@ -24,6 +24,8 @@ type Line = {
   marginPct?: number
   coverageWeeks?: number
   wasOutOfStock?: boolean
+  packSize?: number
+  packs?: number
 }
 
 type SupplierGroup = {
@@ -66,6 +68,8 @@ export default function PurchasePlanPage() {
   const [plan, setPlan] = useState<PlanData | null>(null)
   // Отредактированные количества: item_id -> order
   const [edits, setEdits] = useState<Record<string, number>>({})
+  // Размер упаковки (переопределение/сохранение): item_id -> pack_size
+  const [packEdits, setPackEdits] = useState<Record<string, number>>({})
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -122,13 +126,36 @@ export default function PurchasePlanPage() {
     setEdits((prev) => ({ ...prev, [itemId]: n }))
   }
 
+  // Изменить размер упаковки: пересчитать локально + сохранить на сервере.
+  const savePackSize = (itemId: string, value: string) => {
+    const n = Math.max(1, Math.floor(Number(value) || 1))
+    setPackEdits((prev) => ({ ...prev, [itemId]: n }))
+    // снять ручную правку количества — пусть пересчитается по новой упаковке
+    setEdits((prev) => { const c = { ...prev }; delete c[itemId]; return c })
+    void fetch('/api/admin/store/purchase-plan/pack-size', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, pack_size: n }),
+    }).catch(() => {})
+  }
+
   // Итоги с учётом ручных правок.
   const computed = useMemo(() => {
     if (!plan) return null
     const groups = plan.bySupplier.map((g) => {
       const items = g.items.map((it) => {
-        const order = edits[it.item_id] === undefined ? it.order : edits[it.item_id]
-        return { ...it, _order: order, _amount: order * it.unitCost }
+        const effPack = packEdits[it.item_id] ?? (it.packSize || 1)
+        const manual = edits[it.item_id]
+        let order: number
+        let packs: number
+        if (manual !== undefined) {
+          order = manual
+          packs = effPack > 0 ? Math.ceil(order / effPack) : order
+        } else {
+          const need = Math.max(0, it.weeklyDemand * 2 - it.stock)
+          packs = Math.ceil(need / effPack)
+          order = packs * effPack
+        }
+        return { ...it, _order: order, _packs: packs, _packSize: effPack, _amount: order * it.unitCost }
       })
       const total = items.reduce((s, it) => s + it._amount, 0)
       return { supplier: g.supplier, items, total }
@@ -352,6 +379,17 @@ export default function PurchasePlanPage() {
                               onChange={(e) => setOrder(it.item_id, e.target.value)}
                               className="h-8 w-20 text-right tabular-nums ml-auto"
                             />
+                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">
+                              <span title="Размер упаковки (шт в коробке)">уп:</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={String(it._packSize)}
+                                onChange={(e) => savePackSize(it.item_id, e.target.value)}
+                                className="w-9 rounded border border-slate-200 dark:border-white/10 bg-transparent px-1 py-0.5 text-right tabular-nums"
+                              />
+                              {it._packSize > 1 ? <span className="text-slate-500 dark:text-slate-400">= {it._packs} кор</span> : null}
+                            </div>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-200">{money(it.unitCost)}</td>
                           <td className="px-3 py-2 text-right tabular-nums">
