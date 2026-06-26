@@ -422,6 +422,7 @@ export async function POST(request: Request) {
         variance: number // итог − система (на сколько изменился остаток)
         shrinkage: number // необъяснённая недостача (исключая движения)
         surplus: number // необъяснённый излишек
+        purchase_price: number // закупочная цена позиции (для недостачи в ₸)
       }
       const report: ReportRow[] = []
       // Недостача товара для долга: реальная нехватка на момент подсчёта =
@@ -454,19 +455,23 @@ export async function POST(request: Request) {
         const shrinkage = Math.max(0, expectedAtCount - counted)
         const surplus = Math.max(0, counted - expectedAtCount)
         stocktakeItems.push({ item_id: itemId, actual_qty: final, comment: null })
-        report.push({ item_id: itemId, name: '', expected, counted, movedIn, movedOut, final, variance: final - expected, shrinkage, surplus })
+        report.push({ item_id: itemId, name: '', expected, counted, movedIn, movedOut, final, variance: final - expected, shrinkage, surplus, purchase_price: 0 })
         if (shrinkage > 0) shortageByItem.set(itemId, { qty: shrinkage, op: latest.by })
       }
       if (conflicts.length > 0) {
         return json({ error: 'unresolved-conflicts', message: `Расхождение между счётчиками: ${conflicts.length} поз. Нужен пересчёт или решение владельца.`, conflicts }, 409)
       }
 
-      // имена товаров для отчёта
+      // имена + закупочные цены товаров для отчёта (недостача/излишек в ₸)
       const reportItemIds = report.map((r) => r.item_id)
       if (reportItemIds.length) {
-        const nameRows = await fetchItemsByIds(supabase, reportItemIds, 'id, name')
+        const nameRows = await fetchItemsByIds(supabase, reportItemIds, 'id, name, default_purchase_price')
         const nameBy = new Map(nameRows.map((i: any) => [String(i.id), String(i.name || '')]))
-        for (const r of report) r.name = nameBy.get(r.item_id) || 'Товар'
+        const priceBy = new Map(nameRows.map((i: any) => [String(i.id), num((i as any).default_purchase_price)]))
+        for (const r of report) {
+          r.name = nameBy.get(r.item_id) || 'Товар'
+          r.purchase_price = priceBy.get(r.item_id) || 0
+        }
       }
 
       // Атомарно «забираем» акт open → closed ДО записи стока. Если затронуто 0 строк —
@@ -538,11 +543,13 @@ export async function POST(request: Request) {
           acc.movedOut += r.movedOut
           acc.shrinkageQty += r.shrinkage
           acc.surplusQty += r.surplus
+          acc.shrinkageValue += r.shrinkage * (r.purchase_price || 0)
+          acc.surplusValue += r.surplus * (r.purchase_price || 0)
           if (r.shrinkage > 0) acc.shrinkageItems += 1
           if (r.surplus > 0) acc.surplusItems += 1
           return acc
         },
-        { movedItems: 0, movedIn: 0, movedOut: 0, shrinkageItems: 0, shrinkageQty: 0, surplusItems: 0, surplusQty: 0 },
+        { movedItems: 0, movedIn: 0, movedOut: 0, shrinkageItems: 0, shrinkageQty: 0, surplusItems: 0, surplusQty: 0, shrinkageValue: 0, surplusValue: 0 },
       )
 
       return json({ ok: true, data: { stocktake_id: (result as any)?.stocktake_id || null, report, summary, debtsCreated } })

@@ -15,8 +15,8 @@ type ActListRow = { id: string; status: string; comment: string | null; opened_a
 type FormData = { operators: Array<{ id: string; name: string }>; otherOperators?: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }> }
 type Assignment = { operator_id: string; category_id: string | null }
 type ReportRow = { item_id: string; name: string; expected: number; counted: number; variance: number; countedBy: string | null; conflict?: boolean; counts?: Array<{ qty: number; by: string | null }> }
-type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number }
-type CloseSummary = { movedItems: number; movedIn: number; movedOut: number; shrinkageItems: number; shrinkageQty: number; surplusItems: number; surplusQty: number }
+type CloseRow = { item_id: string; name: string; expected: number; counted: number; movedIn: number; movedOut: number; final: number; variance: number; shrinkage: number; surplus: number; purchase_price?: number }
+type CloseSummary = { movedItems: number; movedIn: number; movedOut: number; shrinkageItems: number; shrinkageQty: number; surplusItems: number; surplusQty: number; shrinkageValue?: number; surplusValue?: number }
 type Detail = {
   act: { id: string; status: string; comment: string | null; opened_at: string; closed_at: string | null }
   location: Loc | null
@@ -28,6 +28,7 @@ type Detail = {
 }
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2))
+const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—')
 const locLabel = (l: Loc | null) => (l ? `${l.company?.name ? l.company.name + ' · ' : ''}${l.location_type === 'point_display' ? 'Витрина' : l.location_type === 'warehouse' ? 'Склад' : l.name}` : '—')
 
@@ -503,11 +504,19 @@ export default function StoreAuditPage() {
           {/* Результат ревизии (после закрытия) — расхождения по позициям */}
           {closeReport ? (
             <Card className="p-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3">
                 <div className="text-sm font-medium text-foreground">Результат ревизии</div>
-                <div className="flex gap-3 text-xs tabular-nums">
-                  <span className="text-rose-400">недостача {fmt(closeSummary?.shrinkageQty || 0)}</span>
-                  <span className="text-emerald-400">излишек {fmt(closeSummary?.surplusQty || 0)}</span>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/[0.05] px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Недостача</div>
+                    <div className="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-300">{money(closeSummary?.shrinkageValue || 0)}</div>
+                    <div className="text-[11px] tabular-nums text-muted-foreground">{fmt(closeSummary?.shrinkageQty || 0)} шт · {closeSummary?.shrinkageItems || 0} поз.</div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.05] px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Излишек</div>
+                    <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-300">{money(closeSummary?.surplusValue || 0)}</div>
+                    <div className="text-[11px] tabular-nums text-muted-foreground">{fmt(closeSummary?.surplusQty || 0)} шт · {closeSummary?.surplusItems || 0} поз.</div>
+                  </div>
                 </div>
               </div>
 
@@ -544,9 +553,15 @@ export default function StoreAuditPage() {
                           <div className="flex shrink-0 items-center gap-3 tabular-nums">
                             <span className="text-[11px] text-muted-foreground">{fmt(r.expected)} → <span className="text-foreground">{fmt(r.final)}</span></span>
                             {diff === 'short' ? (
-                              <span className="rounded-md bg-rose-500/15 px-2 py-0.5 text-sm font-bold text-rose-600 dark:text-rose-300">−{fmt(r.shrinkage)}</span>
+                              <span className="flex items-center gap-2">
+                                {r.purchase_price ? <span className="text-[11px] tabular-nums text-rose-400/80">{money(r.shrinkage * r.purchase_price)}</span> : null}
+                                <span className="rounded-md bg-rose-500/15 px-2 py-0.5 text-sm font-bold text-rose-600 dark:text-rose-300">−{fmt(r.shrinkage)}</span>
+                              </span>
                             ) : diff === 'surplus' ? (
-                              <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-sm font-bold text-emerald-600 dark:text-emerald-300">+{fmt(r.surplus)}</span>
+                              <span className="flex items-center gap-2">
+                                {r.purchase_price ? <span className="text-[11px] tabular-nums text-emerald-400/80">{money(r.surplus * r.purchase_price)}</span> : null}
+                                <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-sm font-bold text-emerald-600 dark:text-emerald-300">+{fmt(r.surplus)}</span>
+                              </span>
                             ) : (
                               <span className="flex items-center gap-1 text-xs text-emerald-500/80"><Check className="h-3.5 w-3.5" /> сошлось</span>
                             )}
