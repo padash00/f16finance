@@ -5,7 +5,7 @@
  */
 
 import type { CopilotTool } from '../../types'
-import { companyOptions, scopedCompanyIds } from '../../query-helpers'
+import { companyOptions, scopedOperatorIds } from '../../query-helpers'
 
 export const listOperatorsTool: CopilotTool = {
   name: 'list_operators',
@@ -41,6 +41,12 @@ export const listOperatorsTool: CopilotTool = {
 
     let q = ctx.supabase.from('operators').select('id, name, short_name, is_active').order('name').range(0, 9999)
     if (onlyActive) q = q.eq('is_active', true)
+    // ОРГ-СКОУП: если точка не указана — ограничиваем операторами своей организации
+    // (иначе утечка операторов чужих клубов). С точкой фильтр уже по сменам этой точки.
+    if (!operatorIdsFilter) {
+      const orgOpIds = await scopedOperatorIds(ctx)
+      if (orgOpIds) q = q.in('id', orgOpIds)
+    }
     const { data, error } = await q
     if (error) return { ok: false, message: `Ошибка: ${error.message}` }
 

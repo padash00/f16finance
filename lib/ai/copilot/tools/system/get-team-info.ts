@@ -23,9 +23,13 @@ export const getTeamInfoTool: CopilotTool = {
       .eq('is_active', true)
       .in('role_in_company', ['senior_cashier', 'senior_operator'])
     if (coIds) leadsQ = leadsQ.in('company_id', coIds)
+    // staff скоупим по организации — иначе считаем сотрудников чужих клубов
+    // (источник «2 владельца» — владельцы других орг.).
+    let staffQ = ctx.supabase.from('staff').select('id, role')
+    if (ctx.organizationId) staffQ = staffQ.eq('organization_id', ctx.organizationId)
     const [{ data: ops }, { data: staff }, { data: leads }] = await Promise.all([
       opsQ,
-      ctx.supabase.from('staff').select('id, role'),
+      staffQ,
       leadsQ,
     ])
 
