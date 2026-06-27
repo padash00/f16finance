@@ -122,7 +122,7 @@ export default function BusinessIntelligencePage() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-6 text-slate-900 dark:text-white">
+    <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
       <AdminPageHeader
         title="Бизнес-аналитика"
         description="Формулы Amazon, Walmart, Six Sigma на твоих данных"
