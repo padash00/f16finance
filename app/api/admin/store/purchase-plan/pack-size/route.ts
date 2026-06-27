@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -13,8 +14,12 @@ export async function PATCH(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+    if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
+    // Не-супер без активной орг — отказ (иначе фильтр по орг отключается).
+    const orgId = access.activeOrganization?.id || null
+    if (!access.isSuperAdmin && !orgId) return json({ error: 'forbidden' }, 403)
 
     const body = (await request.json().catch(() => null)) as any
     const itemId = String(body?.item_id || '').trim()
@@ -23,10 +28,10 @@ export async function PATCH(request: Request) {
       return json({ error: 'item_id и положительный pack_size обязательны' }, 400)
     }
 
-    // Скоуп: товар своей организации (если у inventory_items есть organization_id).
+    // Скоуп: товар своей организации. Для не-супера ВСЕГДА фильтруем по орг.
     let q = supabase.from('inventory_items').update({ pack_size: packSize }).eq('id', itemId)
-    if (access.activeOrganization?.id && !access.isSuperAdmin) {
-      q = q.eq('organization_id', access.activeOrganization.id)
+    if (!access.isSuperAdmin) {
+      q = q.eq('organization_id', orgId)
     }
     const { error } = await q
     if (error) return json({ error: error.message }, 500)

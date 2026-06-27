@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { logAiUsageSafe } from '@/lib/ai/usage-tracker'
+import { addDaysISO, localDayISO } from '@/lib/core/time'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -32,8 +33,9 @@ export async function GET(request: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const today = new Date().toISOString().split('T')[0]
-    const yesterday = new Date(Date.now() - 86400_000).toISOString().split('T')[0]
+    // «Сегодня»/«вчера» по локальной зоне точки (Asia/Qyzylorda), а не UTC.
+    const today = localDayISO()
+    const yesterday = addDaysISO(today, -1)
 
     // Fetch today's and yesterday's sales total
     const [todayRes, yesterdayRes] = await Promise.all([

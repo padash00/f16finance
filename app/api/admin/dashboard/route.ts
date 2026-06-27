@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { addDaysISO, localDayISO } from '@/lib/core/time'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -39,15 +40,12 @@ export async function GET(request: Request) {
       })
     }
 
-    const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = yesterday.toISOString().split('T')[0]
-    const weekAgo = new Date(today)
-    weekAgo.setDate(weekAgo.getDate() - 7)
-    const weekAgoStr = weekAgo.toISOString().split('T')[0]
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+    // «Сегодня» по локальной зоне точки (Asia/Qyzylorda), а не UTC —
+    // sale_date пишется локальной датой, иначе ночью день «съезжает».
+    const todayStr = localDayISO()
+    const yesterdayStr = addDaysISO(todayStr, -1)
+    const weekAgoStr = addDaysISO(todayStr, -7)
+    const monthStart = `${todayStr.slice(0, 7)}-01`
 
     const applyPointSaleCompanyScope = (query: any) => {
       if (allowedCompanyIds && allowedCompanyIds.length > 0) {

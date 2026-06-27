@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { runCopilotForWeb } from '@/lib/ai/copilot'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 
 function json(data: unknown, status = 200) {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
     if ('response' in access) return access.response
     if (!access.user) return json({ error: 'unauthorized' }, 401)
     if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+
+    const rl = checkRateLimit(`copilot:${access.user?.id || 'anon'}`, 20, 60_000)
+    if (!rl.allowed) return NextResponse.json({ error: 'too-many-requests' }, { status: 429 })
 
     const body = (await request.json().catch(() => null)) as
       | { text?: string; callbackData?: string; currentPath?: string }

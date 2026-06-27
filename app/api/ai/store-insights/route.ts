@@ -6,6 +6,7 @@ import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { computeStoreInsights } from '@/lib/server/store-insights'
 
@@ -13,10 +14,6 @@ export const dynamic = 'force-dynamic'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
-}
-
-function canManageStore(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || !!access.staffRole
 }
 
 // Компактный текстовый дайджест бакета для промпта (без сырых дампов).
@@ -29,7 +26,7 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
+    if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
 
     const ip = getClientIp(request)
     const rl = checkRateLimit(`ai-store-insights:${access.user?.id || ip}`, 15, 60_000)

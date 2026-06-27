@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
+import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const runtime = 'nodejs'
@@ -24,10 +26,12 @@ export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    // Capability checks выше уже отсеивают; здесь — любой staff
-    if (!access.isSuperAdmin && !access.staffRole) {
+    if (!isStoreManager(access)) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
+
+    const rl = checkRateLimit(`photo-up:${access.user?.id || 'anon'}`, 20, 60_000)
+    if (!rl.allowed) return NextResponse.json({ error: 'too-many-requests' }, { status: 429 })
 
     const formData = await request.formData()
     const file = formData.get('file') as File | null

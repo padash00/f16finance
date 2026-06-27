@@ -6,6 +6,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { computePurchasePlan } from '@/lib/server/purchase-plan'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -14,17 +15,13 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || !!access.staffRole
-}
-
 const fmtMoney = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₸'
 
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canView(access)) return json({ error: 'forbidden' }, 403)
+    if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
 
     const body = await request.json().catch(() => ({}))
     const companyId = String(body?.company_id || '').trim()

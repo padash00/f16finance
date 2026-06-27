@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { checkRateLimit } from '@/lib/server/rate-limit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { isStoreManager } from '@/lib/server/store-access'
 
 export const runtime = 'nodejs'
 
@@ -62,7 +64,10 @@ export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin && !access.staffRole) return json({ error: 'forbidden' }, 403)
+    if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
+
+    const rl = checkRateLimit(`img-search:${access.user?.id || 'anon'}`, 30, 60_000)
+    if (!rl.allowed) return json({ error: 'too-many-requests' }, 429)
 
     const url = new URL(request.url)
     const code = String(url.searchParams.get('code') || '').replace(/\D/g, '')

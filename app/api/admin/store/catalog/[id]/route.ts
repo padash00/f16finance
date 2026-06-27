@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { isStoreManager } from '@/lib/server/store-access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,15 +18,11 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function canManageCatalog(access: { isSuperAdmin: boolean; staffRole: string }) {
-  return access.isSuperAdmin || !!access.staffRole
-}
-
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
-    if (!canManageCatalog(access)) return json({ error: 'forbidden' }, 403)
+    if (!isStoreManager(access)) return json({ error: 'forbidden' }, 403)
 
     const { id } = await context.params
     const itemId = String(id || '').trim()
@@ -39,16 +36,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
     // Изоляция: редактировать можно только товар своей орг.
+    // Не-супер без активной орг — отказ (иначе фильтр по орг отключается и течёт между тенантами).
     const callerOrgId = access.activeOrganization?.id || null
-    const { data: itemRow } = await supabase
+    if (!access.isSuperAdmin && !callerOrgId) return json({ error: 'forbidden' }, 403)
+
+    let lookup = supabase
       .from('inventory_items')
       .select('organization_id')
       .eq('id', itemId)
-      .maybeSingle()
+    if (!access.isSuperAdmin && callerOrgId) lookup = lookup.eq('organization_id', callerOrgId)
+    const { data: itemRow } = await lookup.maybeSingle()
     if (!itemRow) return json({ error: 'item-not-found' }, 404)
-    if (!access.isSuperAdmin && callerOrgId && String((itemRow as any).organization_id) !== String(callerOrgId)) {
-      return json({ error: 'forbidden' }, 403)
-    }
 
     // Собираем только переданные поля.
     const full: Record<string, unknown> = {}

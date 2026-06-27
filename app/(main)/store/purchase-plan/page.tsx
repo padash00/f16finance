@@ -163,7 +163,7 @@ export default function PurchasePlanPage() {
     const total = groups.reduce((s, g) => s + g.total, 0)
     const positions = groups.reduce((s, g) => s + g.items.filter((it) => it._order > 0).length, 0)
     return { groups, total, positions }
-  }, [plan, edits])
+  }, [plan, edits, packEdits])
 
   const askAi = async () => {
     if (!companyId) return
