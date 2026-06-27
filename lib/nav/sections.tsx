@@ -121,6 +121,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
+      { href: '/expense-analysis', label: 'AI Разбор расходов', icon: Wallet, note: 'Где утекают деньги', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/expenses/pending', label: 'Ожидают одобрения', icon: ClipboardList, note: 'Расходы без чека на проверке', badgeColor: 'orange', isNew: true },
       { href: '/expense-whitelist', label: 'Доверенные поставщики', icon: Shield, note: 'Вендоры без чеков' },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
@@ -156,6 +157,7 @@ export const navSections: NavSection[] = [
     icon: Users,
     featuresAny: ['club.pos', 'shop.catalog', 'service.jobs', 'restaurant.recipes_lite'],
     items: [
+      { href: '/team-analysis', label: 'AI Разбор команды', icon: Users, note: 'Кто звезда, кто проседает', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/salary', label: 'Зарплата', icon: Wallet, note: 'Расчеты и выплаты' },
       { href: '/salary/rules', label: 'Правила зарплаты', icon: ListChecks, note: 'Ставки и бонусы' },
       { href: '/point-debts', label: 'Долги с точки', icon: Receipt, note: 'Позиции по неделям и списание' },
