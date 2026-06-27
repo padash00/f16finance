@@ -235,6 +235,25 @@ export type RfmSection = {
   customers: RfmCustomer[] // верх по monetary
 }
 
+export type HealthFactor = { label: string; score0to100: number; note: string }
+export type HealthSection = {
+  score: number // 0..100 — общая оценка здоровья бизнеса
+  factors: HealthFactor[]
+}
+
+export type ClvRow = {
+  customer_id: string
+  name: string
+  clv: number // оценка пожизненной ценности клиента, ₸
+  avgOrder: number // средний чек, ₸
+  frequency: number // число покупок
+}
+export type ClvSection = {
+  available: boolean
+  note?: string
+  rows: ClvRow[]
+}
+
 export type BusinessIntelligenceResult = {
   organizationId: string | null
   generatedAt: string
@@ -245,6 +264,8 @@ export type BusinessIntelligenceResult = {
   abc: AbcSection
   cashierRisk: BayesSection
   rfm: RfmSection
+  healthScore: HealthSection
+  clv: ClvSection
 }
 
 function emptyResult(organizationId: string | null): BusinessIntelligenceResult {
@@ -259,6 +280,8 @@ function emptyResult(organizationId: string | null): BusinessIntelligenceResult 
     abc: na({ totalRevenue: 0, totalItems: 0, classes: [], vital: [] }),
     cashierRisk: na({ source: 'none', rows: [] }),
     rfm: na({ segments: [], customers: [] }),
+    healthScore: { score: 0, factors: [] },
+    clv: { available: false, note: 'нет данных', rows: [] },
   }
 }
 
@@ -636,6 +659,16 @@ export async function computeBusinessIntelligence(
   // ── G. RFM-сегментация клиентов ────────────────────────────────────────────
   const rfm = await computeRfm(supabase, { allowedCompanyIds, now })
 
+  // ── H. Оценка здоровья бизнеса (среднее доступных факторов 0..100) ──────────
+  const healthScore = computeHealthScore({
+    safety: safetySection,
+    anomalies: anomalySection,
+    cashierRisk,
+  })
+
+  // ── I. CLV — пожизненная ценность клиента (переиспользуем RFM) ──────────────
+  const clv = computeClv(rfm)
+
   return {
     organizationId,
     generatedAt: new Date().toISOString(),
@@ -646,7 +679,96 @@ export async function computeBusinessIntelligence(
     abc: abcSection,
     cashierRisk,
     rfm,
+    healthScore,
+    clv,
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H. Оценка здоровья бизнеса.
+// score = среднее доступных факторов, каждый 0..100. Все деления защищены.
+//   Наличие     = 100 · (1 − belowReorder/total)  — доля топ-товаров НЕ ниже дозаказа
+//   Стабильность= 100 − min(100, anomalies×10)     — меньше аномалий лучше
+//   Контроль    = 100 − maxPosteriorPct            — по макс. риску кассира (нет → 100)
+// (Фактор «Ассортимент» по мёртвым товарам пропускаем — отдельных данных здесь нет.)
+// ─────────────────────────────────────────────────────────────────────────────
+function computeHealthScore(input: {
+  safety: SafetySection
+  anomalies: AnomalySection
+  cashierRisk: BayesSection
+}): HealthSection {
+  const factors: HealthFactor[] = []
+
+  // Наличие — по страховому запасу.
+  const safetyRows = input.safety.rows || []
+  const total = safetyRows.length
+  if (input.safety.available && total > 0) {
+    const below = safetyRows.filter((r) => r.belowReorder).length
+    const score = 100 * (1 - below / total) // total>0 гарантирован
+    factors.push({
+      label: 'Наличие',
+      score0to100: r0(score),
+      note: `${total - below} из ${total} топ-товаров выше точки дозаказа${below > 0 ? `, ${below} нужно заказать` : ''}`,
+    })
+  }
+
+  // Стабильность — по числу аномальных дней.
+  if (input.anomalies.available) {
+    const n = input.anomalies.anomalies.length
+    const score = 100 - Math.min(100, n * 10)
+    factors.push({
+      label: 'Стабильность',
+      score0to100: r0(score),
+      note: n === 0 ? 'аномальных дней выручки нет' : `${n} аномальных ${n === 1 ? 'день' : 'дней'} в выручке`,
+    })
+  }
+
+  // Контроль — по максимальному риску кассира.
+  if (input.cashierRisk.available && input.cashierRisk.rows.length > 0) {
+    const maxPct = Math.max(...input.cashierRisk.rows.map((r) => r.posteriorPct))
+    const score = Math.max(0, 100 - maxPct)
+    const worst = input.cashierRisk.rows.find((r) => r.posteriorPct === maxPct)
+    factors.push({
+      label: 'Контроль',
+      score0to100: r0(score),
+      note: worst ? `макс. риск недостач: ${worst.cashier} (${maxPct}%)` : `макс. риск недостач ${maxPct}%`,
+    })
+  } else {
+    factors.push({ label: 'Контроль', score0to100: 100, note: 'данных о недостачах нет — рисков не выявлено' })
+  }
+
+  // score = среднее доступных факторов (защита деления на 0).
+  const score = factors.length > 0 ? r0(mean(factors.map((f) => f.score0to100))) : 0
+  return { score, factors }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I. CLV — Customer Lifetime Value (переиспользуем RFM-клиентов).
+//   avgOrder = monetary / max(1, frequency)        — средний чек
+//   clv ≈ avgOrder · frequency · HORIZON            — простая оценка ценности
+//   HORIZON = 2 (горизонт ~2 «жизни» клиента)
+// Топ-10 по clv убыв. Нет клиентов → available:false.
+// ─────────────────────────────────────────────────────────────────────────────
+const CLV_HORIZON = 2
+
+function computeClv(rfm: RfmSection): ClvSection {
+  if (!rfm.available || !rfm.customers || rfm.customers.length === 0) {
+    return { available: false, note: 'нужны данные о клиентах и покупках', rows: [] }
+  }
+  const rows: ClvRow[] = rfm.customers.map((c) => {
+    const frequency = Math.max(0, c.frequency)
+    const avgOrder = c.monetary / Math.max(1, frequency) // защита деления на 0
+    const clv = avgOrder * frequency * CLV_HORIZON
+    return {
+      customer_id: c.customer_id,
+      name: c.name,
+      clv: r0(clv),
+      avgOrder: r0(avgOrder),
+      frequency,
+    }
+  })
+  rows.sort((a, b) => b.clv - a.clv)
+  return { available: true, rows: rows.slice(0, 10) }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Brain, Loader2, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { Brain, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 
@@ -23,6 +24,10 @@ type BayesSection = { available: boolean; note?: string; source: 'audit' | 'writ
 type RfmCustomer = { customer_id: string; name: string; recencyDays: number; frequency: number; monetary: number; rScore: number; fScore: number; mScore: number; segment: string }
 type RfmSegmentStat = { segment: string; count: number; monetary: number }
 type RfmSection = { available: boolean; note?: string; segments: RfmSegmentStat[]; customers: RfmCustomer[] }
+type HealthFactor = { label: string; score0to100: number; note: string }
+type HealthSection = { score: number; factors: HealthFactor[] }
+type ClvRow = { customer_id: string; name: string; clv: number; avgOrder: number; frequency: number }
+type ClvSection = { available: boolean; note?: string; rows: ClvRow[] }
 type BI = {
   organizationId: string | null
   generatedAt: string
@@ -33,6 +38,8 @@ type BI = {
   abc: AbcSection
   cashierRisk: BayesSection
   rfm: RfmSection
+  healthScore: HealthSection
+  clv: ClvSection
 }
 
 const money = (n: number) => Math.round(n || 0).toLocaleString('ru-RU') + ' ₸'
@@ -51,6 +58,7 @@ function SectionCard({
   action,
   available,
   unavailableNote,
+  headerExtra,
   children,
 }: {
   emoji: string
@@ -60,6 +68,7 @@ function SectionCard({
   action?: string
   available: boolean
   unavailableNote?: string
+  headerExtra?: React.ReactNode
   children?: React.ReactNode
 }) {
   return (
@@ -75,11 +84,14 @@ function SectionCard({
             </span>
           </p>
         </div>
-        {!available ? (
-          <span className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] text-slate-500 dark:border-white/15 dark:text-slate-400">
-            нужны данные
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {headerExtra}
+          {!available ? (
+            <span className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] text-slate-500 dark:border-white/15 dark:text-slate-400">
+              нужны данные
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="mt-3 rounded-lg bg-violet-500/[0.06] px-3 py-2">
         <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-200">
@@ -108,6 +120,18 @@ function Table({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Маленькая кнопка-ссылка (deep-link) для секции.
+function DeepLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20"
+    >
+      {children}
+    </Link>
+  )
+}
+
 type Company = { id: string; name: string }
 
 export default function BusinessIntelligencePage() {
@@ -118,6 +142,35 @@ export default function BusinessIntelligencePage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState<string>('') // '' = все точки
   const [days, setDays] = useState<number>(90) // период анализа
+
+  // AI-сводка «Главное сегодня».
+  const [aiActions, setAiActions] = useState<string[] | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiUnavailable, setAiUnavailable] = useState(false)
+
+  const runAi = async (cid: string = companyId, d: number = days) => {
+    setAiLoading(true)
+    setAiUnavailable(false)
+    setAiActions(null)
+    try {
+      const res = await fetch('/api/ai/business-intelligence', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ company_id: cid || null, days: d || null }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (res.ok && j?.ok && Array.isArray(j.actions) && j.actions.length) {
+        setAiActions(j.actions as string[])
+      } else {
+        setAiUnavailable(true)
+      }
+    } catch {
+      setAiUnavailable(true)
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const run = async (cid: string = companyId, d: number = days) => {
     setLoading(true)
@@ -156,6 +209,7 @@ export default function BusinessIntelligencePage() {
   // Первичная загрузка + перезапуск при смене точки или периода.
   useEffect(() => {
     run(companyId, days)
+    runAi(companyId, days)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, days])
 
@@ -193,7 +247,7 @@ export default function BusinessIntelligencePage() {
               ))}
             </select>
             <button
-              onClick={() => run()}
+              onClick={() => { run(); runAi() }}
               disabled={loading}
               className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}
             >
@@ -210,6 +264,81 @@ export default function BusinessIntelligencePage() {
       </p>
 
       {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
+
+      {/* AI-сводка «Главное сегодня» + Оценка здоровья */}
+      {(aiLoading || aiActions || (data && data.healthScore.factors.length > 0)) ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* AI-сводка */}
+          {(aiLoading || aiActions) ? (
+            <div className="lg:col-span-2 rounded-2xl border border-violet-300 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-400/30 dark:from-violet-500/10 dark:to-slate-900/40">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+                <span aria-hidden>🧠</span> Главное сегодня
+                <Sparkles className="h-4 w-4 text-violet-500" aria-hidden />
+              </h2>
+              {aiLoading ? (
+                <div className="mt-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> ИИ анализирует…
+                </div>
+              ) : aiActions && aiActions.length ? (
+                <ol className="mt-3 space-y-2">
+                  {aiActions.map((a, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-sm text-slate-800 dark:text-slate-100">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[11px] font-bold text-white">
+                        {i + 1}
+                      </span>
+                      <span className="leading-relaxed">{a}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Оценка здоровья */}
+          {data && data.healthScore.factors.length > 0 ? (
+            <div className={`${cardCls} ${aiLoading || aiActions ? '' : 'lg:col-span-3'}`}>
+              <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+                <span aria-hidden>❤️‍🩹</span> Здоровье бизнеса
+              </h2>
+              <div className="mt-2 flex items-end gap-2">
+                <span
+                  className={`text-4xl font-bold tabular-nums ${
+                    data.healthScore.score >= 80
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : data.healthScore.score >= 60
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                >
+                  {data.healthScore.score}
+                </span>
+                <span className={`pb-1 text-sm ${sub}`}>/ 100</span>
+              </div>
+              <div className="mt-3 space-y-2.5">
+                {data.healthScore.factors.map((f) => (
+                  <div key={f.label}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-slate-700 dark:text-slate-200">{f.label}</span>
+                      <span className="tabular-nums text-slate-500 dark:text-slate-400">{f.score0to100}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                      <div
+                        className={`h-full rounded-full ${
+                          f.score0to100 >= 80 ? 'bg-emerald-500' : f.score0to100 >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.max(0, Math.min(100, f.score0to100))}%` }}
+                      />
+                    </div>
+                    <p className={`mt-0.5 text-[11px] ${sub}`}>{f.note}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : aiUnavailable && !aiActions ? (
+        <p className={`text-xs ${sub}`}>AI-сводка недоступна.</p>
+      ) : null}
 
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
@@ -300,6 +429,7 @@ export default function BusinessIntelligencePage() {
             action="Заказывай примерно по EOQ — это золотая середина."
             available={data.eoq.available}
             unavailableNote={data.eoq.note}
+            headerExtra={<DeepLink href="/store/purchase-plan">📦 Запланировать закуп</DeepLink>}
           >
             <Table>
               <thead className="bg-slate-50 dark:bg-white/[0.03]">
@@ -334,6 +464,7 @@ export default function BusinessIntelligencePage() {
             action="Когда остаток падает до «точки дозаказа» — пора заказывать."
             available={data.safetyStock.available}
             unavailableNote={data.safetyStock.note}
+            headerExtra={<DeepLink href="/store/purchase-plan">📦 Запланировать закуп</DeepLink>}
           >
             <Table>
               <thead className="bg-slate-50 dark:bg-white/[0.03]">
@@ -469,6 +600,7 @@ export default function BusinessIntelligencePage() {
             action="Высокий % — присмотрись к кассиру лично."
             available={data.cashierRisk.available}
             unavailableNote={data.cashierRisk.note}
+            headerExtra={<DeepLink href="/shifts/reports">🔍 Смотреть смены</DeepLink>}
           >
             {data.cashierRisk.note ? <p className={`mb-3 text-xs ${sub}`}>{data.cashierRisk.note}</p> : null}
             <Table>
@@ -506,6 +638,7 @@ export default function BusinessIntelligencePage() {
             action="«В зоне риска» и «Уходят» — верни акцией/сообщением, пока не потеряли."
             available={data.rfm.available}
             unavailableNote={data.rfm.note}
+            headerExtra={<DeepLink href="/customers">✉️ К клиентам</DeepLink>}
           >
             <div className="space-y-4">
               {data.rfm.segments.length ? (
@@ -547,6 +680,39 @@ export default function BusinessIntelligencePage() {
                 </Table>
               ) : null}
             </div>
+          </SectionCard>
+
+          {/* CLV — ценность клиента */}
+          <SectionCard
+            emoji="💎"
+            title="Ценность клиента (CLV)"
+            formula="CLV ≈ средний чек · частота · 2"
+            how="Сколько денег приносит клиент за всё время. Видно, на кого тратить силы и кого нельзя терять."
+            action="Береги клиентов с высоким CLV: персональное внимание, бонусы — потеря одного дороже десяти случайных."
+            available={data.clv.available}
+            unavailableNote={data.clv.note}
+            headerExtra={<DeepLink href="/customers">✉️ К клиентам</DeepLink>}
+          >
+            <Table>
+              <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                <tr>
+                  <th className={thCls}>Клиент</th>
+                  <th className={thCls}>Средний чек</th>
+                  <th className={thCls}>Покупок</th>
+                  <th className={thCls}>CLV</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                {data.clv.rows.map((c) => (
+                  <tr key={c.customer_id}>
+                    <td className={`${tdCls} font-medium`}>{c.name}</td>
+                    <td className={tdCls}>{money(c.avgOrder)}</td>
+                    <td className={tdCls}>{c.frequency}</td>
+                    <td className={`${tdCls} font-semibold text-violet-600 dark:text-violet-300`}>{money(c.clv)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </SectionCard>
 
           <p className={`pt-2 text-center text-xs ${sub}`}>
