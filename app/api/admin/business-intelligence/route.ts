@@ -27,16 +27,19 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const companyId = String(new URL(request.url).searchParams.get('company_id') || '').trim() || null
+    const url = new URL(request.url)
+    const companyId = String(url.searchParams.get('company_id') || '').trim() || null
     if (companyId && companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(companyId)) {
       return json({ error: 'forbidden' }, 403)
     }
+    const days = Number(url.searchParams.get('days')) || null
 
     const data = await computeBusinessIntelligence(supabase, {
       organizationId: access.activeOrganization?.id || null,
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
       companyId,
+      days,
     })
 
     return json({ ok: true, data })

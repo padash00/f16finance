@@ -117,14 +117,17 @@ export default function BusinessIntelligencePage() {
   const [error, setError] = useState<string | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState<string>('') // '' = все точки
+  const [days, setDays] = useState<number>(90) // период анализа
 
-  const run = async (cid: string = companyId) => {
+  const run = async (cid: string = companyId, d: number = days) => {
     setLoading(true)
     setError(null)
     try {
-      const url = cid
-        ? `/api/admin/business-intelligence?company_id=${encodeURIComponent(cid)}`
-        : '/api/admin/business-intelligence'
+      const params = new URLSearchParams()
+      if (cid) params.set('company_id', cid)
+      if (d) params.set('days', String(d))
+      const qs = params.toString()
+      const url = qs ? `/api/admin/business-intelligence?${qs}` : '/api/admin/business-intelligence'
       const res = await fetch(url, { cache: 'no-store' })
       const j = await res.json()
       if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
@@ -150,11 +153,11 @@ export default function BusinessIntelligencePage() {
     return () => { active = false }
   }, [])
 
-  // Первичная загрузка + перезапуск при смене точки.
+  // Первичная загрузка + перезапуск при смене точки или периода.
   useEffect(() => {
-    run(companyId)
+    run(companyId, days)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId])
+  }, [companyId, days])
 
   return (
     <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
@@ -166,6 +169,18 @@ export default function BusinessIntelligencePage() {
         backHref="/"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              disabled={loading}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+              title="Период анализа"
+            >
+              <option value={30}>Месяц</option>
+              <option value={90}>Квартал</option>
+              <option value={180}>Полгода</option>
+              <option value={365}>Год</option>
+            </select>
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
@@ -199,7 +214,7 @@ export default function BusinessIntelligencePage() {
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
-          <p className="text-sm">Считаем формулы по данным за 60 дней…</p>
+          <p className="text-sm">Считаем формулы по данным за {days} дней…</p>
         </div>
       ) : !data ? null : (
         <div className={loading ? 'space-y-5 opacity-50 transition-opacity' : 'space-y-5'}>
@@ -535,7 +550,7 @@ export default function BusinessIntelligencePage() {
           </SectionCard>
 
           <p className={`pt-2 text-center text-xs ${sub}`}>
-            Расчёт по данным за 60 дней · обновлено {new Date(data.generatedAt).toLocaleString('ru-RU')}
+            Расчёт по данным за {days} дней · обновлено {new Date(data.generatedAt).toLocaleString('ru-RU')}
           </p>
         </div>
       )}

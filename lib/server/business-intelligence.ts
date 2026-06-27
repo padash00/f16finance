@@ -281,10 +281,13 @@ export async function computeBusinessIntelligence(
     allowedCompanyIds: string[] | null
     isSuperAdmin?: boolean
     companyId?: string | null
+    days?: number | null
   },
 ): Promise<BusinessIntelligenceResult> {
   const organizationId = params.organizationId || null
   const allowedCompanyIds = params.allowedCompanyIds
+  // Окно анализа: 30/90/180/365 дней (по умолчанию 60).
+  const windowDays = [30, 90, 180, 365].includes(Number(params.days)) ? Number(params.days) : ANALYSIS_DAYS
 
   // NEVER-pattern: не-супер без орг → пустой набор компаний → пустой результат.
   if (Array.isArray(allowedCompanyIds) && allowedCompanyIds.length === 0) {
@@ -299,7 +302,7 @@ export async function computeBusinessIntelligence(
   }
 
   const now = Date.now()
-  const since = new Date(now - ANALYSIS_DAYS * DAY_MS).toISOString()
+  const since = new Date(now - windowDays * DAY_MS).toISOString()
 
   // 1. Точки (companies) и их локации скоупа.
   let compQ = supabase.from('companies').select('id, name')
@@ -430,7 +433,7 @@ export async function computeBusinessIntelligence(
   }
 
   // Сколько недель в окне (для перевода спроса в неделю/год).
-  const weeks = ANALYSIS_DAYS / 7
+  const weeks = windowDays / 7
 
   // ── A. Детектор аномалий (Z-score / контрольные карты) ─────────────────────
   const anomalyPoints: AnomalyPoint[] = []
@@ -461,7 +464,7 @@ export async function computeBusinessIntelligence(
   const anomalySection: AnomalySection = {
     available: anomalyPoints.length > 0,
     note: anomalyPoints.length > 0 ? undefined : 'нужны данные о продажах за период',
-    days: ANALYSIS_DAYS,
+    days: windowDays,
     points: anomalyPoints,
     anomalies: anomalies.slice(0, 40),
   }
@@ -484,7 +487,7 @@ export async function computeBusinessIntelligence(
     const info = itemInfo.get(itemId)
     const purchase = purchaseOf(itemId)
     const salePrice = info?.salePrice || 0
-    const annualDemand = agg.soldQty * (365 / ANALYSIS_DAYS)
+    const annualDemand = agg.soldQty * (365 / windowDays)
     // Недельный спрос: заполняем все недели окна (включая нули) для честного σ.
     const totalWeeks = Math.max(1, Math.round(weeks))
     const weeklyMap = agg.weeklyQty
