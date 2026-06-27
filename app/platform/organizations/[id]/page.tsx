@@ -92,13 +92,23 @@ const BILLING_EVENT_LABELS: Record<string, string> = {
 
 const tenge = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
 
-type TabKey = 'overview' | 'billing' | 'access' | 'history'
+type TabKey = 'overview' | 'billing' | 'access' | 'members' | 'history'
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'overview', label: 'Обзор', icon: <LayoutDashboard className="h-4 w-4" /> },
   { key: 'billing', label: 'Тариф и оплата', icon: <CreditCard className="h-4 w-4" /> },
   { key: 'access', label: 'Доступы', icon: <ShieldCheck className="h-4 w-4" /> },
+  { key: 'members', label: 'Участники', icon: <Users className="h-4 w-4" /> },
   { key: 'history', label: 'История', icon: <History className="h-4 w-4" /> },
 ]
+
+type OrgMember = {
+  id: string
+  email: string | null
+  role: string
+  status: string
+  fullName: string
+  accountState: 'no_email' | 'no_account' | 'invited' | 'active'
+}
 
 const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
 
@@ -131,6 +141,14 @@ export default function OrgDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
+
+  // Участники
+  const [members, setMembers] = useState<OrgMember[]>([])
+  const [membersLoaded, setMembersLoaded] = useState(false)
+  const [mFullName, setMFullName] = useState('')
+  const [mEmail, setMEmail] = useState('')
+  const [mRole, setMRole] = useState('manager')
+  const [mBusy, setMBusy] = useState(false)
 
   // editable fields
   const [name, setName] = useState('')
@@ -324,6 +342,44 @@ export default function OrgDetailPage() {
     } catch (err: any) {
       setError(err.message)
       setEntering(false)
+    }
+  }
+
+  const loadMembers = async () => {
+    try {
+      const res = await fetch(`/api/admin/organization-members?organizationId=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      const data = await res.json().catch(() => null)
+      if (res.ok) setMembers(Array.isArray(data?.items) ? data.items : [])
+    } finally {
+      setMembersLoaded(true)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'members' && !membersLoaded) void loadMembers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, membersLoaded])
+
+  const memberAction = async (payload: Record<string, unknown>, successMsg?: string) => {
+    setMBusy(true)
+    setError(null)
+    setOkMsg(null)
+    try {
+      const res = await fetch('/api/admin/organization-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: id, ...payload }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Не удалось выполнить')
+      setOkMsg(data?.message || successMsg || 'Готово')
+      setMFullName('')
+      setMEmail('')
+      await loadMembers()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setMBusy(false)
     }
   }
 
@@ -862,6 +918,101 @@ export default function OrgDetailPage() {
               </p>
             </div>
           ) : null}
+        </div>
+      )}
+
+      {/* ============================ УЧАСТНИКИ ============================ */}
+      {activeTab === 'members' && (
+        <div className="space-y-4">
+          {/* Пригласить */}
+          <div className={cardCls}>
+            <h2 className="mb-3 text-sm font-semibold">Пригласить участника</h2>
+            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+              <input
+                value={mFullName}
+                onChange={(e) => setMFullName(e.target.value)}
+                placeholder="Имя"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+              />
+              <input
+                value={mEmail}
+                onChange={(e) => setMEmail(e.target.value)}
+                placeholder="email@example.com"
+                type="email"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+              />
+              <select
+                value={mRole}
+                onChange={(e) => setMRole(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
+              >
+                <option value="owner">Владелец</option>
+                <option value="manager">Управляющий</option>
+                <option value="marketer">Маркетолог</option>
+                <option value="other">Сотрудник</option>
+              </select>
+              <button
+                type="button"
+                disabled={mBusy || !mEmail.trim()}
+                onClick={() => void memberAction({ action: 'inviteMember', fullName: mFullName.trim(), email: mEmail.trim(), role: mRole })}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
+              >
+                Пригласить
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Если почта настроена — уйдёт письмо-приглашение. Иначе участник добавится со статусом «приглашён».</p>
+          </div>
+
+          {/* Список */}
+          <div className={cardCls}>
+            <h2 className="mb-3 text-sm font-semibold">Участники ({members.length})</h2>
+            {!membersLoaded ? (
+              <div className="py-6 text-center text-sm text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+            ) : members.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">Пока никого. Пригласи первого выше.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-white/5">
+                {members.map((m) => {
+                  const stateLabel =
+                    m.accountState === 'active' ? 'Активен' : m.accountState === 'invited' ? 'Приглашён' : m.accountState === 'no_account' ? 'Нет аккаунта' : 'Без почты'
+                  const stateColor =
+                    m.accountState === 'active' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : m.accountState === 'invited' ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300' : 'bg-slate-500/15 text-slate-500 dark:text-slate-400'
+                  const roleLabel = m.role === 'owner' ? 'Владелец' : m.role === 'manager' ? 'Управляющий' : m.role === 'marketer' ? 'Маркетолог' : 'Сотрудник'
+                  return (
+                    <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 dark:text-white">{m.fullName}</p>
+                        <p className="truncate text-xs text-slate-400">{m.email || '—'}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stateColor}`}>{stateLabel}</span>
+                        <select
+                          value={m.role}
+                          disabled={mBusy}
+                          onChange={(e) => void memberAction({ action: 'setRole', memberId: m.id, role: e.target.value })}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/5"
+                          title={roleLabel}
+                        >
+                          <option value="owner">Владелец</option>
+                          <option value="manager">Управляющий</option>
+                          <option value="marketer">Маркетолог</option>
+                          <option value="other">Сотрудник</option>
+                        </select>
+                        <button
+                          type="button"
+                          disabled={mBusy}
+                          onClick={() => { if (window.confirm(`Удалить ${m.fullName} из организации?`)) void memberAction({ action: 'removeMember', memberId: m.id }) }}
+                          className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
