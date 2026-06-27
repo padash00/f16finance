@@ -33,6 +33,12 @@ export async function GET(request: Request) {
       return json({ error: 'forbidden' }, 403)
     }
     const days = Number(url.searchParams.get('days')) || null
+    // Произвольный период (мягкая валидация формата YYYY-MM-DD; движок проверит сам).
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+    const fromRaw = String(url.searchParams.get('from') || '').trim()
+    const toRaw = String(url.searchParams.get('to') || '').trim()
+    const from = DATE_RE.test(fromRaw) ? fromRaw : null
+    const to = DATE_RE.test(toRaw) ? toRaw : null
 
     const data = await computeBusinessIntelligence(supabase, {
       organizationId: access.activeOrganization?.id || null,
@@ -40,6 +46,8 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
       companyId,
       days,
+      from,
+      to,
     })
 
     return json({ ok: true, data })

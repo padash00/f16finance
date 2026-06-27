@@ -49,14 +49,28 @@ export default function ExpenseAnalysisPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState<string>('') // '' = все точки
   const [days, setDays] = useState<number>(90)
+  const [custom, setCustom] = useState<boolean>(false) // выбран «Свой период»
+  const [from, setFrom] = useState<string>('') // 'YYYY-MM-DD'
+  const [to, setTo] = useState<string>('') // 'YYYY-MM-DD'
 
-  const run = async (cid: string = companyId, d: number = days) => {
+  const run = async (
+    cid: string = companyId,
+    d: number = days,
+    useCustom: boolean = custom,
+    f: string = from,
+    t: string = to,
+  ) => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
       if (cid) params.set('company_id', cid)
-      params.set('days', String(d))
+      if (useCustom && f && t) {
+        params.set('from', f)
+        params.set('to', t)
+      } else {
+        params.set('days', String(d))
+      }
       const res = await fetch(`/api/ai/expense-analysis?${params.toString()}`, { cache: 'no-store' })
       const j = await res.json()
       if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
@@ -83,10 +97,12 @@ export default function ExpenseAnalysisPage() {
   }, [])
 
   // Первичная загрузка + перезапуск при смене точки/периода.
+  // В режиме «Свой период» рефетчим только когда заданы обе даты.
   useEffect(() => {
-    run(companyId, days)
+    if (custom && !(from && to)) return
+    run(companyId, days, custom, from, to)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, days])
+  }, [companyId, days, custom, from, to])
 
   const metrics = data?.metrics
   const insights = data?.insights || []
@@ -105,19 +121,35 @@ export default function ExpenseAnalysisPage() {
         backHref="/"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <select value={days} onChange={(e) => setDays(Number(e.target.value))} disabled={loading} className={selectCls} title="Период анализа">
+            <select
+              value={custom ? 'custom' : String(days)}
+              onChange={(e) => {
+                if (e.target.value === 'custom') { setCustom(true) }
+                else { setCustom(false); setDays(Number(e.target.value)) }
+              }}
+              disabled={loading}
+              className={selectCls}
+              title="Период анализа"
+            >
               <option value={30}>Месяц</option>
               <option value={90}>Квартал</option>
               <option value={180}>Полгода</option>
               <option value={365}>Год</option>
+              <option value="custom">Свой период</option>
             </select>
+            {custom ? (
+              <>
+                <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} disabled={loading} className={selectCls} title="С" />
+                <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} disabled={loading} className={selectCls} title="По" />
+              </>
+            ) : null}
             <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} disabled={loading} className={selectCls}>
               <option value="">Все точки</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <button onClick={() => run(companyId, days)} disabled={loading}
+            <button onClick={() => run(companyId, days, custom, from, to)} disabled={loading}
               className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}>
               <RefreshCw className="h-3.5 w-3.5" /> Обновить
             </button>

@@ -141,14 +141,23 @@ export default function BusinessIntelligencePage() {
   const [error, setError] = useState<string | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState<string>('') // '' = все точки
-  const [days, setDays] = useState<number>(90) // период анализа
+  const [days, setDays] = useState<number>(90) // период анализа (пресет)
+  const [period, setPeriod] = useState<number | 'custom'>(90) // выбор в селекте
+  const [customFrom, setCustomFrom] = useState<string>('') // YYYY-MM-DD
+  const [customTo, setCustomTo] = useState<string>('') // YYYY-MM-DD
+  // Произвольный период активен только когда выбран «custom» и обе даты заданы.
+  const customActive = period === 'custom' && !!customFrom && !!customTo
 
   // AI-сводка «Главное сегодня».
   const [aiActions, setAiActions] = useState<string[] | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiUnavailable, setAiUnavailable] = useState(false)
 
-  const runAi = async (cid: string = companyId, d: number = days) => {
+  // Параметры периода для запроса: либо {from,to}, либо {days}.
+  const periodParams = (): { from?: string; to?: string; days?: number } =>
+    customActive ? { from: customFrom, to: customTo } : { days }
+
+  const runAi = async (cid: string = companyId, pp: { from?: string; to?: string; days?: number } = periodParams()) => {
     setAiLoading(true)
     setAiUnavailable(false)
     setAiActions(null)
@@ -157,7 +166,12 @@ export default function BusinessIntelligencePage() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         cache: 'no-store',
-        body: JSON.stringify({ company_id: cid || null, days: d || null }),
+        body: JSON.stringify({
+          company_id: cid || null,
+          days: pp.days || null,
+          from: pp.from || null,
+          to: pp.to || null,
+        }),
       })
       const j = await res.json().catch(() => ({}))
       if (res.ok && j?.ok && Array.isArray(j.actions) && j.actions.length) {
@@ -172,13 +186,18 @@ export default function BusinessIntelligencePage() {
     }
   }
 
-  const run = async (cid: string = companyId, d: number = days) => {
+  const run = async (cid: string = companyId, pp: { from?: string; to?: string; days?: number } = periodParams()) => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
       if (cid) params.set('company_id', cid)
-      if (d) params.set('days', String(d))
+      if (pp.from && pp.to) {
+        params.set('from', pp.from)
+        params.set('to', pp.to)
+      } else if (pp.days) {
+        params.set('days', String(pp.days))
+      }
       const qs = params.toString()
       const url = qs ? `/api/admin/business-intelligence?${qs}` : '/api/admin/business-intelligence'
       const res = await fetch(url, { cache: 'no-store' })
@@ -207,11 +226,23 @@ export default function BusinessIntelligencePage() {
   }, [])
 
   // Первичная загрузка + перезапуск при смене точки или периода.
+  // При «своём периоде» ждём, пока заданы ОБЕ даты (иначе не дёргаем сервер).
   useEffect(() => {
-    run(companyId, days)
-    runAi(companyId, days)
+    if (period === 'custom' && !customActive) return
+    const pp = customActive ? { from: customFrom, to: customTo } : { days }
+    run(companyId, pp)
+    runAi(companyId, pp)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, days])
+  }, [companyId, days, period, customFrom, customTo])
+
+  // Подпись периода (учитывает «свой период»: «с DD.MM по DD.MM»).
+  const dmShort = (iso: string) => {
+    const m2 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+    return m2 ? `${m2[3]}.${m2[2]}` : iso
+  }
+  const periodLabel = customActive
+    ? `с ${dmShort(customFrom)} по ${dmShort(customTo)}`
+    : `за ${days} дней`
 
   return (
     <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
@@ -224,8 +255,17 @@ export default function BusinessIntelligencePage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <select
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
+              value={period === 'custom' ? 'custom' : String(period)}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'custom') {
+                  setPeriod('custom')
+                } else {
+                  const n = Number(v)
+                  setPeriod(n)
+                  setDays(n)
+                }
+              }}
               disabled={loading}
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
               title="Период анализа"
@@ -234,7 +274,31 @@ export default function BusinessIntelligencePage() {
               <option value={90}>Квартал</option>
               <option value={180}>Полгода</option>
               <option value={365}>Год</option>
+              <option value="custom">Свой период</option>
             </select>
+            {period === 'custom' ? (
+              <>
+                <input
+                  type="date"
+                  value={customFrom}
+                  max={customTo || undefined}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  disabled={loading}
+                  title="С"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                />
+                <span className={`text-sm ${sub}`}>—</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  min={customFrom || undefined}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  disabled={loading}
+                  title="По"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                />
+              </>
+            ) : null}
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
@@ -343,7 +407,7 @@ export default function BusinessIntelligencePage() {
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
-          <p className="text-sm">Считаем формулы по данным за {days} дней…</p>
+          <p className="text-sm">Считаем формулы по данным {periodLabel}…</p>
         </div>
       ) : !data ? null : (
         <div className={loading ? 'space-y-5 opacity-50 transition-opacity' : 'space-y-5'}>
@@ -716,7 +780,7 @@ export default function BusinessIntelligencePage() {
           </SectionCard>
 
           <p className={`pt-2 text-center text-xs ${sub}`}>
-            Расчёт по данным за {days} дней · обновлено {new Date(data.generatedAt).toLocaleString('ru-RU')}
+            Расчёт по данным {periodLabel} · обновлено {new Date(data.generatedAt).toLocaleString('ru-RU')}
           </p>
         </div>
       )}

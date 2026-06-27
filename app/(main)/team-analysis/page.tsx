@@ -67,14 +67,28 @@ export default function TeamAnalysisPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState<string>('')
   const [days, setDays] = useState<number>(30)
+  const [custom, setCustom] = useState<boolean>(false)
+  const [from, setFrom] = useState<string>('')
+  const [to, setTo] = useState<string>('')
 
-  const run = async (cid: string = companyId, d: number = days) => {
+  const run = async (
+    cid: string = companyId,
+    d: number = days,
+    useCustom: boolean = custom,
+    f: string = from,
+    t: string = to,
+  ) => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
       if (cid) params.set('company_id', cid)
-      params.set('days', String(d))
+      if (useCustom && f && t) {
+        params.set('from', f)
+        params.set('to', t)
+      } else {
+        params.set('days', String(d))
+      }
       const res = await fetch(`/api/ai/team-analysis?${params.toString()}`, { cache: 'no-store' })
       const j = await res.json()
       if (!res.ok || j?.error) throw new Error(j?.error === 'forbidden' ? 'Нет доступа' : j?.error || 'Ошибка')
@@ -101,9 +115,11 @@ export default function TeamAnalysisPage() {
   }, [])
 
   useEffect(() => {
-    run(companyId, days)
+    // В режиме «Свой период» ждём, пока заданы обе даты.
+    if (custom && (!from || !to)) return
+    run(companyId, days, custom, from, to)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, days])
+  }, [companyId, days, custom, from, to])
 
   const operators = data?.metrics?.operators || []
   const insights = data?.insights || []
@@ -119,8 +135,16 @@ export default function TeamAnalysisPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <select
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
+              value={custom ? 'custom' : String(days)}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'custom') {
+                  setCustom(true)
+                } else {
+                  setCustom(false)
+                  setDays(Number(v))
+                }
+              }}
               disabled={loading}
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
               title="Период анализа"
@@ -130,7 +154,30 @@ export default function TeamAnalysisPage() {
               <option value={30}>Месяц</option>
               <option value={60}>2 месяца</option>
               <option value={90}>Квартал</option>
+              <option value="custom">Свой период</option>
             </select>
+            {custom ? (
+              <>
+                <input
+                  type="date"
+                  value={from}
+                  max={to || undefined}
+                  onChange={(e) => setFrom(e.target.value)}
+                  disabled={loading}
+                  title="С"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                />
+                <input
+                  type="date"
+                  value={to}
+                  min={from || undefined}
+                  onChange={(e) => setTo(e.target.value)}
+                  disabled={loading}
+                  title="По"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
+                />
+              </>
+            ) : null}
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
@@ -164,7 +211,7 @@ export default function TeamAnalysisPage() {
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
-          <p className="text-sm">ИИ анализирует команду за {days} дней…</p>
+          <p className="text-sm">{custom ? 'ИИ анализирует команду за выбранный период…' : `ИИ анализирует команду за ${days} дней…`}</p>
         </div>
       ) : !data ? null : operators.length === 0 ? (
         <div className={cardCls}>

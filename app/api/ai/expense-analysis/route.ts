@@ -52,11 +52,33 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const companyParam = url.searchParams.get('company_id')
-    const daysRaw = Number(url.searchParams.get('days'))
-    const days = [30, 90, 180, 365].includes(daysRaw) ? daysRaw : 90
+    const fromParam = url.searchParams.get('from')
+    const toParam = url.searchParams.get('to')
 
-    const dateTo = todayISO()
-    const dateFrom = addDaysISO(dateTo, -(days - 1))
+    const isISODate = (s: string | null): s is string => Boolean(s && /^\d{4}-\d{2}-\d{2}$/.test(s))
+
+    let days: number
+    let dateFrom: string
+    let dateTo: string
+
+    // Свой период: если заданы обе даты (валидны и from <= to) — берём их как текущий период.
+    if (isISODate(fromParam) && isISODate(toParam) && fromParam <= toParam) {
+      dateFrom = fromParam
+      dateTo = toParam
+      // Длина периода в днях (включительно): кол-во дней от from до to.
+      const [fy, fm, fd] = dateFrom.split('-').map(Number)
+      const [ty, tm, td] = dateTo.split('-').map(Number)
+      const msPerDay = 86_400_000
+      const diffDays = Math.round((Date.UTC(ty, (tm || 1) - 1, td || 1) - Date.UTC(fy, (fm || 1) - 1, fd || 1)) / msPerDay)
+      days = Math.max(1, diffDays + 1)
+    } else {
+      const daysRaw = Number(url.searchParams.get('days'))
+      days = [30, 90, 180, 365].includes(daysRaw) ? daysRaw : 90
+      dateTo = todayISO()
+      dateFrom = addDaysISO(dateTo, -(days - 1))
+    }
+
+    // Предыдущий период такой же длины — непосредственно перед dateFrom.
     const prevTo = addDaysISO(dateFrom, -1)
     const prevFrom = addDaysISO(prevTo, -(days - 1))
 

@@ -305,12 +305,33 @@ export async function computeBusinessIntelligence(
     isSuperAdmin?: boolean
     companyId?: string | null
     days?: number | null
+    from?: string | null
+    to?: string | null
   },
 ): Promise<BusinessIntelligenceResult> {
   const organizationId = params.organizationId || null
   const allowedCompanyIds = params.allowedCompanyIds
-  // Окно анализа: 30/90/180/365 дней (по умолчанию 60).
-  const windowDays = [30, 90, 180, 365].includes(Number(params.days)) ? Number(params.days) : ANALYSIS_DAYS
+
+  // ── Окно анализа ───────────────────────────────────────────────────────────
+  // Приоритет: если заданы ОБА валидных from/to (YYYY-MM-DD) — произвольный период.
+  // Иначе — пресет days (30/90/180/365), по умолчанию 60.
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+  const fromStr = typeof params.from === 'string' ? params.from.trim() : ''
+  const toStr = typeof params.to === 'string' ? params.to.trim() : ''
+  let customSince: Date | null = null
+  let customUntil: Date | null = null
+  if (DATE_RE.test(fromStr) && DATE_RE.test(toStr)) {
+    const s = new Date(`${fromStr}T00:00:00`)
+    const u = new Date(`${toStr}T23:59:59`)
+    if (Number.isFinite(s.getTime()) && Number.isFinite(u.getTime()) && u.getTime() >= s.getTime()) {
+      customSince = s
+      customUntil = u
+    }
+  }
+  // windowDays: из произвольного периода — ceil((until−since)/DAY_MS), мин. 1; иначе пресет.
+  const windowDays = customSince && customUntil
+    ? Math.max(1, Math.ceil((customUntil.getTime() - customSince.getTime()) / DAY_MS))
+    : [30, 90, 180, 365].includes(Number(params.days)) ? Number(params.days) : ANALYSIS_DAYS
 
   // NEVER-pattern: не-супер без орг → пустой набор компаний → пустой результат.
   if (Array.isArray(allowedCompanyIds) && allowedCompanyIds.length === 0) {
@@ -325,7 +346,9 @@ export async function computeBusinessIntelligence(
   }
 
   const now = Date.now()
-  const since = new Date(now - windowDays * DAY_MS).toISOString()
+  // since/until: при произвольном периоде — заданные границы; иначе скользящее окно.
+  const since = (customSince ? customSince : new Date(now - windowDays * DAY_MS)).toISOString()
+  const until = customUntil ? customUntil.toISOString() : null
 
   // 1. Точки (companies) и их локации скоупа.
   let compQ = supabase.from('companies').select('id, name')
@@ -357,12 +380,15 @@ export async function computeBusinessIntelligence(
   const dailyRevByCompany = new Map<string, Map<string, number>>()
 
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+    let salesQ = supabase
       .from('inventory_movements')
       .select('item_id, quantity, created_at, total_amount, from_location_id')
       .eq('movement_type', 'sale')
       .in('from_location_id', locationIds)
       .gte('created_at', since)
+    // Верхняя граница произвольного периода (если задан).
+    if (until) salesQ = salesQ.lte('created_at', until)
+    const { data, error } = await salesQ
       .order('created_at', { ascending: true })
       .range(from, from + PAGE - 1)
     if (error) throw error

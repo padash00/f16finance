@@ -65,8 +65,23 @@ export async function GET(request: Request) {
     const requestedCompanyId = (url.searchParams.get('company_id') || '').trim() || null
     const daysParam = Number(url.searchParams.get('days'))
     const days = [7, 14, 30, 60, 90].includes(daysParam) ? daysParam : 30
-    const dateTo = todayISO()
-    const dateFrom = addDaysISO(dateTo, -(days - 1))
+
+    // Свой период: from/to ('YYYY-MM-DD'). Если ОБА валидны — используем их вместо last-N-days.
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/
+    const fromParam = (url.searchParams.get('from') || '').trim()
+    const toParam = (url.searchParams.get('to') || '').trim()
+    const customRange = isoRe.test(fromParam) && isoRe.test(toParam)
+
+    let dateFrom: string
+    let dateTo: string
+    if (customRange) {
+      // нормализуем порядок на случай from > to
+      dateFrom = fromParam <= toParam ? fromParam : toParam
+      dateTo = fromParam <= toParam ? toParam : fromParam
+    } else {
+      dateTo = todayISO()
+      dateFrom = addDaysISO(dateTo, -(days - 1))
+    }
 
     const supabase = createAdminSupabaseClient()
 
@@ -250,7 +265,8 @@ export async function GET(request: Request) {
       : 0
 
     const aggregates = {
-      days,
+      days: customRange ? null : days,
+      customRange,
       dateFrom,
       dateTo,
       operatorsCount: operatorMetrics.length,
@@ -290,7 +306,7 @@ export async function GET(request: Request) {
 
     const messages: AiMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Данные команды за ${days} дней (${dateFrom} — ${dateTo}):\n\n${JSON.stringify(metrics)}\n\nСделай разбор команды в JSON по структуре.` },
+      { role: 'user', content: `Данные команды за период ${dateFrom} — ${dateTo}:\n\n${JSON.stringify(metrics)}\n\nСделай разбор команды в JSON по структуре.` },
     ]
 
     let insights: any[] = []

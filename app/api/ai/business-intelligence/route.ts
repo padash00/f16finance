@@ -38,12 +38,18 @@ export async function POST(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const body = (await request.json().catch(() => ({}))) as { company_id?: string | null; days?: number | null }
+    const body = (await request.json().catch(() => ({}))) as { company_id?: string | null; days?: number | null; from?: string | null; to?: string | null }
     const companyId = String(body?.company_id || '').trim() || null
     if (companyId && companyScope.allowedCompanyIds && !companyScope.allowedCompanyIds.includes(companyId)) {
       return json({ error: 'forbidden' }, 403)
     }
     const days = Number(body?.days) || null
+    // Произвольный период (мягкая валидация формата; движок проверит окончательно).
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+    const fromRaw = String(body?.from || '').trim()
+    const toRaw = String(body?.to || '').trim()
+    const from = DATE_RE.test(fromRaw) ? fromRaw : null
+    const to = DATE_RE.test(toRaw) ? toRaw : null
 
     const data = await computeBusinessIntelligence(supabase, {
       organizationId: access.activeOrganization?.id || null,
@@ -51,6 +57,8 @@ export async function POST(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
       companyId,
       days,
+      from,
+      to,
     })
 
     // Нет ключа AI — мягко.
