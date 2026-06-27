@@ -48,6 +48,7 @@ function SectionCard({
   title,
   formula,
   how,
+  action,
   available,
   unavailableNote,
   children,
@@ -56,6 +57,7 @@ function SectionCard({
   title: string
   formula: string
   how: string
+  action?: string
   available: boolean
   unavailableNote?: string
   children?: React.ReactNode
@@ -67,8 +69,10 @@ function SectionCard({
           <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
             <span aria-hidden>{emoji}</span> {title}
           </h2>
-          <p className={`mt-0.5 text-xs ${sub}`}>
-            <span className="font-mono text-violet-600 dark:text-violet-300">{formula}</span>
+          <p className="mt-1">
+            <span className="inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
+              {formula}
+            </span>
           </p>
         </div>
         {!available ? (
@@ -77,10 +81,18 @@ function SectionCard({
           </span>
         ) : null}
       </div>
-      <p className={`mt-2 flex items-start gap-1.5 text-xs ${sub}`}>
-        <span aria-hidden>💡</span>
-        <span className="leading-relaxed">{how}</span>
-      </p>
+      <div className="mt-3 rounded-lg bg-violet-500/[0.06] px-3 py-2">
+        <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-200">
+          <span aria-hidden>💡</span>
+          <span className="leading-relaxed"><span className="font-medium">Что это:</span> {how}</span>
+        </p>
+        {action ? (
+          <p className="mt-1.5 flex items-start gap-1.5 text-sm font-semibold text-violet-700 dark:text-violet-300">
+            <span aria-hidden>👉</span>
+            <span className="leading-relaxed">{action}</span>
+          </p>
+        ) : null}
+      </div>
       <div className="mt-4">
         {available ? children : <p className="text-sm text-slate-400 dark:text-slate-500">{unavailableNote || 'Недостаточно данных для расчёта.'}</p>}
       </div>
@@ -96,17 +108,24 @@ function Table({ children }: { children: React.ReactNode }) {
   )
 }
 
+type Company = { id: string; name: string }
+
 export default function BusinessIntelligencePage() {
   const [data, setData] = useState<BI | null>(null)
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [companyId, setCompanyId] = useState<string>('') // '' = все точки
 
-  const run = async () => {
+  const run = async (cid: string = companyId) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/business-intelligence', { cache: 'no-store' })
+      const url = cid
+        ? `/api/admin/business-intelligence?company_id=${encodeURIComponent(cid)}`
+        : '/api/admin/business-intelligence'
+      const res = await fetch(url, { cache: 'no-store' })
       const j = await res.json()
       if (!res.ok || j?.error) throw new Error(j?.error || 'Ошибка')
       setData(j.data as BI)
@@ -117,9 +136,25 @@ export default function BusinessIntelligencePage() {
       setLoading(false)
     }
   }
+
+  // Список точек.
   useEffect(() => {
-    run()
+    let active = true
+    fetch('/api/admin/companies', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!active) return
+        setCompanies((Array.isArray(j?.data) ? j.data : []) as Company[])
+      })
+      .catch(() => { if (active) setCompanies([]) })
+    return () => { active = false }
   }, [])
+
+  // Первичная загрузка + перезапуск при смене точки.
+  useEffect(() => {
+    run(companyId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
 
   return (
     <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
@@ -130,15 +165,34 @@ export default function BusinessIntelligencePage() {
         accent="violet"
         backHref="/"
         actions={
-          <button
-            onClick={run}
-            disabled={loading}
-            className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Обновить
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              disabled={loading}
+              className={`rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]`}
+            >
+              <option value="">Все точки</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => run()}
+              disabled={loading}
+              className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Обновить
+            </button>
+          </div>
         }
       />
+
+      <p className={`text-xs ${sub}`}>
+        {companyId
+          ? `Показано по точке: ${companies.find((c) => c.id === companyId)?.name || '—'}`
+          : 'По всем точкам (детектор аномалий — по каждой отдельно)'}
+      </p>
 
       {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
 
@@ -154,7 +208,8 @@ export default function BusinessIntelligencePage() {
             emoji="📈"
             title="Детектор аномалий (Six Sigma)"
             formula={`z = (x − μ) / σ · аномалия при |z| > 2 · границы μ ± 3σ`}
-            how="Считаем среднюю дневную выручку каждой точки и её разброс. День, где выручка отклонилась больше чем на 2 сигмы — повод разобраться (праздник, сбой кассы, кража). Дни вне границ μ±3σ — почти наверняка не случайность."
+            how="Система знает твою обычную выручку по дням. Если день резко выбился из нормы — подсвечивает."
+            action="Проверь выделенные дни: сбой кассы, забыли пробить, или воровство."
             available={data.anomalies.available}
             unavailableNote={data.anomalies.note}
           >
@@ -226,7 +281,8 @@ export default function BusinessIntelligencePage() {
             emoji="📦"
             title="EOQ — оптимальный размер заказа (формула Уилсона)"
             formula="EOQ = √(2·D·S / H)"
-            how={`Сколько штук заказывать за раз, чтобы суммарно тратить меньше на доставку и хранение. D — годовой спрос, S — стоимость одного заказа (${num(data.eoq.orderCost)} ₸), H — хранение единицы в год (${Math.round(data.eoq.holdingRate * 100)}% от закупочной цены).`}
+            how="Сколько штук брать за один заказ: слишком часто заказывать — переплата за доставку и время; слишком много разом — деньги застряли на складе."
+            action="Заказывай примерно по EOQ — это золотая середина."
             available={data.eoq.available}
             unavailableNote={data.eoq.note}
           >
@@ -259,7 +315,8 @@ export default function BusinessIntelligencePage() {
             emoji="🛡️"
             title="Страховой запас и точка дозаказа"
             formula={`SS = Z·σ_d·√L · ROP = спрос·L + SS · (Z=${data.safetyStock.serviceZ}, L=${data.safetyStock.leadTimeWeeks} нед)`}
-            how="Сколько держать «на всякий случай» и при каком остатке пора заказывать снова, чтобы в 95% случаев не уйти в ноль. Если остаток ниже точки дозаказа — заказывайте сейчас."
+            how="Сколько держать «про запас», чтобы не остаться без ходового товара."
+            action="Когда остаток падает до «точки дозаказа» — пора заказывать."
             available={data.safetyStock.available}
             unavailableNote={data.safetyStock.note}
           >
@@ -302,7 +359,8 @@ export default function BusinessIntelligencePage() {
             emoji="🥡"
             title="Newsvendor — заказ скоропорта (critical fractile)"
             formula="CF = Cu / (Cu + Co) · Q* = μ + z(CF)·σ"
-            how="Для товаров, что портятся: баланс между «не хватило» (теряем маржу Cu) и «списали» (теряем закупку Co). Чем выше критический фрактиль — тем смелее заказывать. Q* — рекомендуемый запас."
+            how="Для товара, который может залежаться/испортиться: сколько брать, чтобы и не кончилось, и не списывать."
+            action="Держи запас близко к рекомендованному."
             available={data.newsvendor.available}
             unavailableNote={data.newsvendor.note}
           >
@@ -338,7 +396,8 @@ export default function BusinessIntelligencePage() {
             emoji="🔤"
             title="ABC-анализ (Парето 80/20)"
             formula="накопит.% выручки · A ≤ 80% · B ≤ 95% · C — остальное"
-            how="20% товаров дают 80% выручки. Класс A — жизненно важные (следите за наличием жёстко), C — кандидаты на сокращение ассортимента."
+            how="Обычно 20% товаров дают 80% выручки. Класс A — твои кормильцы, класс C — мелочь."
+            action="За классом A следи в первую очередь: не допускай, чтобы он кончался."
             available={data.abc.available}
             unavailableNote={data.abc.note}
           >
@@ -391,7 +450,8 @@ export default function BusinessIntelligencePage() {
             emoji="🎲"
             title="Байес-риск недостач по кассирам"
             formula="P = (1 + недостачи) / (5 + всего событий) · Beta(α=1, β=4)"
-            how="Кто чаще «не досчитывается» на ревизии — с поправкой на малую выборку (байесовское сглаживание), чтобы один случай не клеймил человека. Высокий процент — повод присмотреться."
+            how="По ревизиям считает, у кого недостачи СИСТЕМАТИЧЕСКИ, а не разово (случайная ошибка бывает у всех)."
+            action="Высокий % — присмотрись к кассиру лично."
             available={data.cashierRisk.available}
             unavailableNote={data.cashierRisk.note}
           >
@@ -427,7 +487,8 @@ export default function BusinessIntelligencePage() {
             emoji="👥"
             title="RFM — сегментация клиентов"
             formula="R = давность · F = частота · M = сумма · квинтили 1–5"
-            how="Делим клиентов по свежести, частоте и сумме покупок. Чемпионам — VIP-внимание, «в зоне риска» — вернуть акцией, «потерянным» — реактивация."
+            how="Делит клиентов по поведению: кто ходит часто и много, а кто давно пропал."
+            action="«В зоне риска» и «Уходят» — верни акцией/сообщением, пока не потеряли."
             available={data.rfm.available}
             unavailableNote={data.rfm.note}
           >

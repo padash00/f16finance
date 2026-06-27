@@ -280,6 +280,7 @@ export async function computeBusinessIntelligence(
     organizationId: string | null
     allowedCompanyIds: string[] | null
     isSuperAdmin?: boolean
+    companyId?: string | null
   },
 ): Promise<BusinessIntelligenceResult> {
   const organizationId = params.organizationId || null
@@ -290,19 +291,26 @@ export async function computeBusinessIntelligence(
     return emptyResult(organizationId)
   }
 
+  // Фильтр одной точки (если выбрана) — в пределах разрешённого скоупа.
+  let effectiveCompanyIds = allowedCompanyIds
+  if (params.companyId) {
+    if (allowedCompanyIds && !allowedCompanyIds.includes(params.companyId)) return emptyResult(organizationId)
+    effectiveCompanyIds = [params.companyId]
+  }
+
   const now = Date.now()
   const since = new Date(now - ANALYSIS_DAYS * DAY_MS).toISOString()
 
   // 1. Точки (companies) и их локации скоупа.
   let compQ = supabase.from('companies').select('id, name')
-  if (allowedCompanyIds) compQ = compQ.in('id', allowedCompanyIds)
+  if (effectiveCompanyIds) compQ = compQ.in('id', effectiveCompanyIds)
   const { data: compRows, error: compErr } = await compQ
   if (compErr) throw compErr
   const companyName = new Map<string, string>()
   for (const c of (compRows || []) as any[]) companyName.set(String(c.id), String(c.name || '—'))
 
   let locQ = supabase.from('inventory_locations').select('id, company_id')
-  if (allowedCompanyIds) locQ = locQ.in('company_id', allowedCompanyIds)
+  if (effectiveCompanyIds) locQ = locQ.in('company_id', effectiveCompanyIds)
   const { data: locRows, error: locErr } = await locQ
   if (locErr) throw locErr
   const companyByLocation = new Map<string, string>()
