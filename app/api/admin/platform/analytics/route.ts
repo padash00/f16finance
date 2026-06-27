@@ -33,14 +33,15 @@ export async function GET(req: Request) {
     const supabase = createAdminSupabaseClient()
 
     const [orgsR, subsR, invR] = await Promise.all([
-      supabase.from('organizations').select('id, status, created_at'),
+      supabase.from('organizations').select('id, name, status, created_at'),
       supabase.from('organization_subscriptions').select('organization_id, status, plan:plan_id(price_monthly)'),
-      supabase.from('invoices').select('amount, paid_at, status'),
+      supabase.from('invoices').select('organization_id, amount, paid_at, status'),
     ])
 
     const orgs = (orgsR as any).data || []
     const subs = (subsR as any).data || []
     const invoices = (invR as any).data || []
+    const orgName = new Map<string, string>(orgs.map((o: any) => [String(o.id), String(o.name || '—')]))
 
     // Статусы организаций
     const statusBreakdown: Record<string, number> = {}
@@ -59,21 +60,45 @@ export async function GET(req: Request) {
       activeSubs++
     }
 
-    // Новые организации по месяцам (6 мес)
     const months = lastMonths(6)
+
+    // Новые организации по месяцам + накопительный рост.
     const newOrgsByMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]))
+    let beforeWindow = 0
     for (const o of orgs) {
       const key = o.created_at ? String(o.created_at).slice(0, 7) : null
-      if (key && key in newOrgsByMonth) newOrgsByMonth[key]++
+      if (!key) continue
+      if (key in newOrgsByMonth) newOrgsByMonth[key]++
+      else if (key < months[0]) beforeWindow++
+    }
+    const cumulativeOrgsByMonth: Record<string, number> = {}
+    let running = beforeWindow
+    for (const m of months) {
+      running += newOrgsByMonth[m]
+      cumulativeOrgsByMonth[m] = running
     }
 
-    // Выручка (оплаченные счета) по месяцам
+    // Выручка (оплаченные счета) по месяцам + топ-клиенты по оплаченному.
     const revenueByMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]))
+    const paidByOrg = new Map<string, number>()
+    let paidInvoicesTotal = 0
     for (const inv of invoices) {
-      if (inv.status !== 'paid' || !inv.paid_at) continue
-      const key = String(inv.paid_at).slice(0, 7)
-      if (key in revenueByMonth) revenueByMonth[key] += Number(inv.amount) || 0
+      if (inv.status !== 'paid') continue
+      const amt = Number(inv.amount) || 0
+      paidInvoicesTotal += amt
+      const oid = String(inv.organization_id || '')
+      if (oid) paidByOrg.set(oid, (paidByOrg.get(oid) || 0) + amt)
+      if (inv.paid_at) {
+        const key = String(inv.paid_at).slice(0, 7)
+        if (key in revenueByMonth) revenueByMonth[key] += amt
+      }
     }
+    const topClients = Array.from(paidByOrg.entries())
+      .map(([oid, total]) => ({ name: orgName.get(oid) || '—', total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8)
+
+    const churned = (statusBreakdown.canceled || 0) + (statusBreakdown.suspended || 0)
 
     return json({
       data: {
@@ -81,12 +106,16 @@ export async function GET(req: Request) {
           organizations: orgs.length,
           activeSubscriptions: activeSubs,
           mrr,
-          paidInvoicesTotal: invoices.filter((i: any) => i.status === 'paid').reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0),
+          arpu: activeSubs ? Math.round(mrr / activeSubs) : 0,
+          paidInvoicesTotal,
+          churned,
         },
         statusBreakdown,
         months,
         newOrgsByMonth,
+        cumulativeOrgsByMonth,
         revenueByMonth,
+        topClients,
       },
     })
   } catch (error: any) {
