@@ -38,21 +38,21 @@ const sub = 'text-slate-500 dark:text-slate-400'
 const thCls = 'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400'
 const tdCls = 'px-3 py-2 text-sm text-slate-700 dark:text-slate-200 tabular-nums'
 
-const SEV: Record<Insight['severity'], { ring: string; chip: string; label: string; icon: React.ReactNode }> = {
+const SEV: Record<Insight['severity'], { accent: string; chip: string; label: string; icon: React.ReactNode }> = {
   high: {
-    ring: 'border-rose-300 dark:border-rose-400/30',
+    accent: 'text-rose-600 dark:text-rose-400',
     chip: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
     label: 'Внимание',
     icon: <AlertTriangle className="h-4 w-4 text-rose-500" />,
   },
   medium: {
-    ring: 'border-amber-300 dark:border-amber-400/30',
+    accent: 'text-amber-600 dark:text-amber-400',
     chip: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
     label: 'Развитие',
     icon: <GraduationCap className="h-4 w-4 text-amber-500" />,
   },
   low: {
-    ring: 'border-emerald-300 dark:border-emerald-400/30',
+    accent: 'text-emerald-600 dark:text-emerald-400',
     chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     label: 'Звезда',
     icon: <Star className="h-4 w-4 text-emerald-500" />,
@@ -164,7 +164,7 @@ export default function TeamAnalysisPage() {
       {loading && !loaded ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
           <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
-          <p className="text-sm">HR-аналитик разбирает команду за {days} дней…</p>
+          <p className="text-sm">ИИ анализирует команду за {days} дней…</p>
         </div>
       ) : !data ? null : operators.length === 0 ? (
         <div className={cardCls}>
@@ -173,11 +173,12 @@ export default function TeamAnalysisPage() {
       ) : (
         <div className={loading ? 'space-y-5 opacity-50 transition-opacity' : 'space-y-5'}>
 
-          {/* Сводка */}
+          {/* AI-сводка наверху */}
           {data.summary ? (
-            <div className="rounded-2xl border border-violet-300 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-400/30 dark:from-violet-500/10 dark:to-slate-900/40">
+            <div className="rounded-2xl border border-violet-200 bg-violet-500/[0.06] p-5 dark:border-violet-500/20">
               <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
-                <Sparkles className="h-4 w-4 text-violet-500" aria-hidden /> Итог по команде
+                <span aria-hidden>🧠</span> Главное по команде
+                <Sparkles className="h-4 w-4 text-violet-500" aria-hidden />
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{data.summary}</p>
             </div>
@@ -189,11 +190,11 @@ export default function TeamAnalysisPage() {
               {insights.map((it, i) => {
                 const sev = SEV[it.severity] || SEV.medium
                 return (
-                  <div key={i} className={`rounded-2xl border bg-white p-5 dark:bg-slate-900/40 ${sev.ring}`}>
+                  <div key={i} className={cardCls}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2">
                         <span className="mt-0.5">{sev.icon}</span>
-                        <h3 className="text-sm font-semibold leading-snug text-slate-900 dark:text-white">{it.verdict}</h3>
+                        <h3 className={`text-base font-semibold leading-snug ${sev.accent}`}>{it.verdict}</h3>
                       </div>
                       <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${sev.chip}`}>{sev.label}</span>
                     </div>
@@ -203,7 +204,7 @@ export default function TeamAnalysisPage() {
                       </p>
                     ) : null}
                     {it.action ? (
-                      <p className="mt-2 flex items-start gap-1.5 text-sm font-medium text-violet-700 dark:text-violet-300">
+                      <p className="mt-2 flex items-start gap-1.5 text-sm font-semibold text-violet-700 dark:text-violet-300">
                         <span aria-hidden>👉</span>
                         <span className="leading-relaxed">{it.action}</span>
                       </p>

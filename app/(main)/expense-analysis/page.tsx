@@ -18,22 +18,24 @@ type Company = { id: string; name: string }
 
 const money = (v: number) => Math.round(v || 0).toLocaleString('ru-RU') + ' ₸'
 
-const C = { card: 'bg-white dark:bg-[#111113]', border: 'border-slate-200 dark:border-[#27272A]', sub: 'text-slate-500 dark:text-[#A1A1AA]' }
-const cardCls = `rounded-xl border ${C.border} ${C.card} p-5`
+const cardCls = 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900/40'
+const sub = 'text-slate-500 dark:text-slate-400'
 
-const SEVERITY: Record<string, { border: string; tag: string; label: string }> = {
-  high: { border: 'border-rose-300 dark:border-rose-500/40', tag: 'bg-rose-500/15 text-rose-600 dark:text-rose-300', label: 'Важно' },
-  medium: { border: 'border-amber-300 dark:border-amber-500/40', tag: 'bg-amber-500/15 text-amber-600 dark:text-amber-300', label: 'Средне' },
-  low: { border: 'border-slate-200 dark:border-white/10', tag: 'bg-slate-500/10 text-slate-500 dark:text-slate-300', label: 'Мелочь' },
+// Цвет акцента карточки insight по важности (high=rose, medium=amber, low=emerald).
+const SEVERITY: Record<string, { accent: string; tag: string; label: string }> = {
+  high: { accent: 'bg-rose-500', tag: 'bg-rose-500/10 text-rose-600 dark:text-rose-400', label: 'Важно' },
+  medium: { accent: 'bg-amber-500', tag: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', label: 'Средне' },
+  low: { accent: 'bg-emerald-500', tag: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', label: 'Мелочь' },
 }
 
 function ChangeBadge({ value, goodWhenUp = false }: { value: number; goodWhenUp?: boolean }) {
-  if (!value) return <span className="text-xs text-slate-500 dark:text-[#A1A1AA] tabular-nums">0%</span>
+  if (!value) return <span className={`text-xs tabular-nums ${sub}`}>0%</span>
   const up = value > 0
-  const color = up === goodWhenUp ? '#22C55E' : '#EF4444'
+  const good = up === goodWhenUp
+  const color = good ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
   const Icon = up ? ArrowUpRight : ArrowDownRight
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs font-medium tabular-nums" style={{ color }}>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${color}`}>
       <Icon className="h-3 w-3" />{Math.abs(value).toFixed(1)}%
     </span>
   )
@@ -94,7 +96,7 @@ export default function ExpenseAnalysisPage() {
     'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]'
 
   return (
-    <div className="app-page-wide space-y-5 text-slate-900 dark:text-[#FAFAFA]">
+    <div className="app-page-wide space-y-5 text-slate-900 dark:text-white">
       <AdminPageHeader
         title="AI Разбор расходов"
         description="Где утекают деньги и что урезать"
@@ -116,28 +118,31 @@ export default function ExpenseAnalysisPage() {
               ))}
             </select>
             <button onClick={() => run(companyId, days)} disabled={loading}
-              className={`inline-flex items-center gap-1.5 rounded-lg border ${C.border} px-3 py-1.5 text-sm ${C.sub} transition hover:bg-slate-100 dark:hover:bg-white/[0.03] disabled:opacity-50`}>
+              className={`inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm ${sub} transition hover:bg-slate-100 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/[0.04]`}>
               <RefreshCw className="h-3.5 w-3.5" /> Обновить
             </button>
           </div>
         }
       />
 
-      {error ? <p className="text-sm text-[#EF4444]">{error}</p> : null}
+      {error ? <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
 
       {loading && !loaded ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-500 dark:text-[#A1A1AA]">
-          <Loader2 className="h-7 w-7 animate-spin text-amber-400" />
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-slate-500 dark:text-slate-400">
+          <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
           <p className="text-sm">ИИ анализирует расходы…</p>
         </div>
       ) : !data ? null : (
-        <div className={loading ? 'space-y-5 opacity-40 transition-opacity' : 'space-y-5'}>
-          {/* Сводка сверху */}
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-500/20 bg-gradient-to-br from-amber-50 via-white to-white dark:from-amber-900/15 dark:via-[#111113] dark:to-[#111113] p-5">
-            <div className="flex flex-wrap items-center gap-5">
+        <div className={loading ? 'space-y-5 opacity-50 transition-opacity' : 'space-y-5'}>
+          {/* AI-сводка сверху */}
+          <div className="rounded-2xl border border-violet-200 bg-violet-500/[0.06] p-5 dark:border-violet-500/20">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+              <span aria-hidden>🧠</span> Главное по расходам
+            </h2>
+            <div className="mt-3 flex flex-wrap items-center gap-5">
               <div className="shrink-0">
-                <p className={`text-xs ${C.sub}`}>Расходы за период</p>
-                <p className="text-3xl font-bold tabular-nums text-slate-900 dark:text-[#FAFAFA]">{money(metrics?.total || 0)}</p>
+                <p className={`text-xs ${sub}`}>Расходы за период</p>
+                <p className="text-3xl font-bold tabular-nums text-slate-900 dark:text-white">{money(metrics?.total || 0)}</p>
                 <div className="mt-1"><ChangeBadge value={metrics?.totalPrevPct || 0} /></div>
               </div>
               <p className="min-w-[240px] flex-1 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
@@ -152,18 +157,19 @@ export default function ExpenseAnalysisPage() {
 
           {/* Карточки insights */}
           {insights.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {insights.map((it, i) => {
                 const sv = SEVERITY[it.severity] || SEVERITY.medium
                 return (
-                  <div key={i} className={`rounded-xl border ${sv.border} ${C.card} p-5`}>
+                  <div key={i} className={`relative overflow-hidden ${cardCls}`}>
+                    <span className={`absolute inset-y-0 left-0 w-1 ${sv.accent}`} aria-hidden />
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-base font-semibold leading-snug text-slate-900 dark:text-[#FAFAFA]">{it.verdict || '—'}</p>
+                      <p className="text-base font-semibold leading-snug text-slate-900 dark:text-white">{it.verdict || '—'}</p>
                       <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${sv.tag}`}>{sv.label}</span>
                     </div>
-                    {it.reason ? <p className={`mt-2 text-sm leading-relaxed ${C.sub}`}>{it.reason}</p> : null}
+                    {it.reason ? <p className={`mt-2 text-sm leading-relaxed ${sub}`}>{it.reason}</p> : null}
                     {it.action ? (
-                      <p className="mt-3 flex gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
+                      <p className="mt-3 flex gap-1.5 text-sm font-semibold text-violet-700 dark:text-violet-300">
                         <span aria-hidden>👉</span>
                         <span>{it.action}</span>
                       </p>
@@ -174,33 +180,33 @@ export default function ExpenseAnalysisPage() {
             </div>
           ) : data.summary === '' && !categories.length ? (
             <div className={`${cardCls} text-center`}>
-              <p className={`text-sm ${C.sub}`}>За выбранный период расходов не найдено.</p>
+              <p className={`text-sm ${sub}`}>За выбранный период расходов не найдено.</p>
             </div>
           ) : null}
 
           {/* Таблица категорий */}
           {categories.length ? (
             <div className={cardCls}>
-              <h3 className="mb-4 text-sm font-semibold flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-amber-500" />Расходы по категориям
+              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+                <TrendingDown className="h-4 w-4 text-violet-500" /> Расходы по категориям
               </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className={`text-left text-xs ${C.sub}`}>
-                      <th className="pb-2 font-medium">Категория</th>
-                      <th className="pb-2 text-right font-medium">Сумма</th>
-                      <th className="pb-2 text-right font-medium">Доля</th>
-                      <th className="pb-2 text-right font-medium">Изменение</th>
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+                <table className="min-w-full">
+                  <thead className="bg-slate-50 dark:bg-white/[0.03]">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Категория</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Сумма</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Доля</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Изменение</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                     {categories.map((c, i) => (
-                      <tr key={i} className="border-t border-slate-100 dark:border-white/[0.06]">
-                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-200">{c.category}</td>
-                        <td className="py-2 pl-3 text-right tabular-nums font-medium text-slate-900 dark:text-white">{money(c.amount)}</td>
-                        <td className={`py-2 pl-3 text-right tabular-nums ${C.sub}`}>{c.sharePct.toFixed(1)}%</td>
-                        <td className="py-2 pl-3 text-right"><ChangeBadge value={c.changePct} /></td>
+                      <tr key={i}>
+                        <td className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200">{c.category}</td>
+                        <td className="px-3 py-2 text-right text-sm font-medium tabular-nums text-slate-900 dark:text-white">{money(c.amount)}</td>
+                        <td className={`px-3 py-2 text-right text-sm tabular-nums ${sub}`}>{c.sharePct.toFixed(1)}%</td>
+                        <td className="px-3 py-2 text-right"><ChangeBadge value={c.changePct} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -209,9 +215,9 @@ export default function ExpenseAnalysisPage() {
             </div>
           ) : null}
 
-          {loading ? <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /></div> : null}
+          {loading ? <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-violet-500" /></div> : null}
           {!insights.length && data.summary === '' && categories.length ? (
-            <p className="text-xs text-[#F59E0B]">AI-разбор недоступен, но цифры по категориям посчитаны.</p>
+            <p className={`text-xs ${sub}`}>AI-разбор недоступен, но цифры по категориям посчитаны.</p>
           ) : null}
         </div>
       )}
