@@ -137,11 +137,6 @@ export async function GET(request: Request) {
 
     // Get project name + branding
     await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
-    const { data: project } = await supabase
-      .from('point_projects')
-      .select('id, name, arena_logo_url, arena_cover_url, arena_accent, arena_description, arena_provisioning_key')
-      .eq('id', projectId)
-      .single()
 
     function withCompany<T>(q: T): T {
       if (!companyId) return q
@@ -149,6 +144,7 @@ export async function GET(request: Request) {
     }
 
     const [
+      { data: project },
       { data: zones, error: zonesError },
       { data: stations, error: stationsError },
       { data: tariffs, error: tariffsError },
@@ -156,6 +152,11 @@ export async function GET(request: Request) {
       { data: gamesCatalog, error: gamesCatalogError },
       { data: stationGames, error: stationGamesError },
     ] = await Promise.all([
+      supabase
+        .from('point_projects')
+        .select('id, name, arena_logo_url, arena_cover_url, arena_accent, arena_description, arena_provisioning_key')
+        .eq('id', projectId)
+        .single(),
       withCompany(supabase.from('arena_zones').select('*').eq('point_project_id', projectId)).order('name'),
       withCompany(supabase.from('arena_stations').select('*').eq('point_project_id', projectId)).order('order_index').order('name'),
       withCompany(supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId)).order('price'),

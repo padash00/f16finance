@@ -153,12 +153,6 @@ export async function GET(request: Request) {
       allowedCompanyIds: companyScope.allowedCompanyIds,
       isSuperAdmin: access.isSuperAdmin,
     }
-    const data = await fetchStoreReceipts(supabase as any, inventoryScope)
-    const { data: expenseCategories, error: expenseCategoriesError } = await supabase
-      .from('expense_categories')
-      .select('id, name, accounting_group')
-      .order('name', { ascending: true })
-    if (expenseCategoriesError) throw expenseCategoriesError
     let draftsQuery: any = supabase
       .from('inventory_receipt_drafts')
       .select('id, title, payload, status, created_at, updated_at')
@@ -168,7 +162,19 @@ export async function GET(request: Request) {
     if (!access.isSuperAdmin && access.activeOrganization?.id) {
       draftsQuery = draftsQuery.eq('organization_id', access.activeOrganization.id)
     }
-    const { data: drafts, error: draftsError } = await draftsQuery
+    // Эти три запроса независимы (не используют результат друг друга) — параллелим,
+    // чтобы не складывать round-trip'ы до БД в Токио.
+    const [data, expenseCategoriesResult, draftsResult] = await Promise.all([
+      fetchStoreReceipts(supabase as any, inventoryScope),
+      supabase
+        .from('expense_categories')
+        .select('id, name, accounting_group')
+        .order('name', { ascending: true }),
+      draftsQuery,
+    ])
+    const { data: expenseCategories, error: expenseCategoriesError } = expenseCategoriesResult
+    if (expenseCategoriesError) throw expenseCategoriesError
+    const { data: drafts, error: draftsError } = draftsResult
     if (draftsError) throw draftsError
     const locationType = scope === 'showcase' ? 'point_display' : scope === 'warehouse' ? 'warehouse' : null
     if (locationType) {
