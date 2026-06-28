@@ -137,9 +137,9 @@ function startOfYearISO() { return `${new Date().getFullYear()}-01-01` }
 
 export default function TaxPage() {
   const [iknRate, setIknRate] = useState(() => {
-    if (typeof window === 'undefined') return 3
+    if (typeof window === 'undefined') return 2
     const saved = localStorage.getItem('tax_ikn_rate')
-    return saved ? Number(saved) : 3
+    return saved ? Number(saved) : 2
   })
 
   // Учитывать сотрудников в итоговом расчёте
@@ -176,9 +176,9 @@ export default function TaxPage() {
 
   // Настройки бизнеса (ИИН/БИН, ОКЭД, флаг плательщика НДС)
   const [bizSettings, setBizSettings] = useState<{ bin: string; oked: string; ipnRate: number; vatPayer: boolean; companyFullName: string }>(() => {
-    if (typeof window === 'undefined') return { bin: '', oked: '93290', ipnRate: 4, vatPayer: false, companyFullName: '' }
-    try { return { bin: '', oked: '93290', ipnRate: 4, vatPayer: false, companyFullName: '', ...JSON.parse(localStorage.getItem('tax_business_settings') || '{}') } }
-    catch { return { bin: '', oked: '93290', ipnRate: 4, vatPayer: false, companyFullName: '' } }
+    if (typeof window === 'undefined') return { bin: '', oked: '93290', ipnRate: 2, vatPayer: false, companyFullName: '' }
+    try { return { bin: '', oked: '93290', ipnRate: 2, vatPayer: false, companyFullName: '', ...JSON.parse(localStorage.getItem('tax_business_settings') || '{}') } }
+    catch { return { bin: '', oked: '93290', ipnRate: 2, vatPayer: false, companyFullName: '' } }
   })
   function updateBizSettings(patch: Partial<typeof bizSettings>) {
     const next = { ...bizSettings, ...patch }
