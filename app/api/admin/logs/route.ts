@@ -79,6 +79,12 @@ const ENTITY_LABELS: Record<string, string> = {
   shift: 'смену',
   'point-shift-report': 'отчет смены',
   'point-shift': 'смену точки',
+  'point-sale': 'продажу',
+  'point-return': 'возврат',
+  'operator-salary-week-payment': 'выплату зарплаты за неделю',
+  'operator-salary-week': 'зарплату за неделю',
+  'shift-week-response': 'ответ на график смен',
+  'shift-publication': 'публикацию графика смен',
   'point-device': 'устройство точки',
   'point-debt': 'долг точки',
   'point-debt-item': 'товар в долг точки',
@@ -116,10 +122,17 @@ const ENTITY_LABELS: Record<string, string> = {
 
 const ACTION_LABELS: Record<string, string> = {
   create: 'добавил',
+  created: 'добавил',
+  'create-with-advance': 'выдал зарплату с авансом',
+  create_with_advance: 'выдал зарплату с авансом',
+  'telegram-confirm-week': 'подтвердил график смен (через Telegram)',
+  telegram_confirm_week: 'подтвердил график смен (через Telegram)',
   'create-batch': 'добавил пачкой',
   create_batch: 'добавил пачкой',
+  updated: 'изменил',
+  deleted: 'удалил',
   update: 'изменил',
-  'update-online': 'обновил Online сумму',
+  'update-online': 'обновил сумму онлайн-оплат',
   delete: 'удалил',
   remove: 'удалил',
   upsert: 'сохранил',
@@ -273,7 +286,7 @@ function compact(parts: Array<string | null | undefined>) {
   return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ')
 }
 
-const MONEY_DETAIL_LABELS = new Set(['Наличные', 'Безналичный', 'Online', 'Карта', 'Итого', 'Сумма', 'Цена за единицу', 'Стоимость', 'Старт кассы', 'Монеты', 'Долги', 'Wipon', 'Расхождение'])
+const MONEY_DETAIL_LABELS = new Set(['Наличные', 'Наличными', 'Безналичный', 'Онлайн', 'Карта', 'Итого', 'Сумма', 'Цена за единицу', 'Стоимость', 'Старт кассы', 'Монеты', 'Долги', 'Wipon', 'Расхождение', 'Переплата', 'Аванс', 'База', 'Бонусов на сумму', 'Штрафов на сумму', 'Бонус', 'Штраф', 'Выручка'])
 
 const VALUE_LABELS: Record<string, string> = {
   success: 'успешно',
@@ -289,6 +302,43 @@ const VALUE_LABELS: Record<string, string> = {
   'unhandledrejection': 'необработанная ошибка браузера',
   'point-debt-notify': 'уведомление о долге точки',
   'point-debt-item': 'товар в долг точки',
+  // Тип смены
+  day: 'дневная',
+  night: 'ночная',
+  // Зоны / режимы точки
+  pc: 'ПК (зона)',
+  ps: 'PlayStation (зона)',
+  console: 'консоли (зона)',
+  vip: 'VIP (зона)',
+  bar: 'бар (зона)',
+  // Способы / методы оплаты
+  cash: 'наличные',
+  kaspi: 'Безналичный',
+  card: 'карта',
+  online: 'онлайн',
+  mixed: 'смешанная оплата',
+  deferred: 'отсрочка',
+  now: 'оплата сразу',
+  // Статусы долга / решений
+  open: 'открыт',
+  paid: 'оплачен',
+  closed: 'закрыт',
+  pending: 'ожидает',
+  approved: 'одобрено',
+  rejected: 'отклонено',
+  declined: 'отклонено',
+  // Прочие частые значения
+  yes: 'да',
+  no: 'нет',
+  true: 'да',
+  false: 'нет',
+  manager: 'управляющий',
+  owner: 'владелец',
+  staff: 'сотрудник',
+  operator: 'оператор',
+  warehouse: 'склад',
+  point_display: 'витрина точки',
+  showcase: 'витрина',
 }
 
 const PAGE_LABELS: Record<string, string> = {
@@ -359,6 +409,9 @@ function recipientLabel(item: Omit<CombinedLogItem, 'details' | 'detailRows'>) {
   ) || item.recipient || ''
 }
 
+// Поля-даты: их значение (ISO) нужно показывать как ДД.ММ.ГГГГ.
+const DATE_DETAIL_LABELS = new Set(['Дата', 'Неделя с', 'Неделя по', 'Дата выплаты', 'Дата приемки', 'Срок оплаты'])
+
 function renderValue(value: unknown, label?: string): string {
   if (value == null || value === '') return ''
   if (typeof value === 'number') {
@@ -370,6 +423,11 @@ function renderValue(value: unknown, label?: string): string {
   if (Array.isArray(value)) return value.map((item) => renderValue(item, label)).filter(Boolean).join(', ')
   if (typeof value === 'object') return ''
   const raw = String(value).trim()
+  // ISO-дата в поле-дате → ДД.ММ.ГГГГ
+  if (label && DATE_DETAIL_LABELS.has(label)) {
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`
+  }
   return VALUE_LABELS[raw.toLowerCase()] || raw
 }
 
@@ -381,32 +439,46 @@ function addDetail(parts: string[], label: string, value: unknown) {
 const FIELD_LABELS: Record<string, string> = {
   date: 'Дата',
   shift: 'Смена',
+  shift_type: 'Тип смены',
   zone: 'Зона',
   category: 'Категория',
+  category_name: 'Категория',
   comment: 'Комментарий',
+  note: 'Заметка',
   cash_amount: 'Наличные',
   kaspi_amount: 'Безналичный',
-  online_amount: 'Online',
+  online_amount: 'Онлайн',
   card_amount: 'Карта',
   total_amount: 'Итого',
   amount: 'Сумма',
+  amount_cash: 'Наличными',
+  amount_kaspi: 'Безналичный',
+  cash: 'Наличные',
+  kaspi: 'Безналичный',
   quantity: 'Количество',
   qty: 'Количество',
+  count: 'Количество',
+  rows_count: 'Количество записей',
   unit_price: 'Цена за единицу',
+  unit_cost: 'Цена за единицу',
   item_name: 'Товар',
   product_name: 'Товар',
   name: 'Название',
   full_name: 'ФИО',
+  short_name: 'Имя',
   email: 'Email',
   role: 'Роль',
   code: 'Код',
   operator_name: 'Оператор',
+  staff_name: 'Сотрудник',
   point_device_name: 'Точка',
   point_name: 'Точка',
   company_code: 'Компания',
   company_name: 'Компания',
   client_name: 'Клиент',
   reason: 'Причина',
+  one_off_reason: 'Причина',
+  one_off_payee: 'Разовый получатель',
   message: 'Сообщение',
   source: 'Источник',
   endpoint: 'Раздел',
@@ -433,10 +505,54 @@ const FIELD_LABELS: Record<string, string> = {
   title: 'Название',
   point_mode: 'Режим точки',
   low_stock_threshold: 'Минимальный остаток',
+  // Зарплата / недельная выплата
+  week_start: 'Неделя с',
+  week_end: 'Неделя по',
+  payment_date: 'Дата выплаты',
+  overpayment_amount: 'Переплата',
+  advance_amount: 'Аванс',
+  base_amount: 'База',
+  bonuses_total: 'Бонусов на сумму',
+  fines_total: 'Штрафов на сумму',
+  bonus_amount: 'Бонус',
+  fine_amount: 'Штраф',
+  // Графики смен / публикация
+  company_count: 'Компаний',
+  publication_required: 'Требует публикации',
+  kaspi_before_midnight: 'Каспи до полуночи',
+  // Документы
+  document_kind: 'Тип документа',
+  document_url: 'Документ',
+  document_urls: 'Документы',
+  backdated_confirmed: 'Задним числом',
+  // Сводные суммы (разбивка)
+  cash_total: 'Наличные',
+  kaspi_total: 'Безналичный',
+  revenue: 'Выручка',
+  total_revenue: 'Выручка',
+  start_cash: 'Старт кассы',
+  coins: 'Монеты',
+  debts: 'Долги',
+  wipon: 'Wipon',
+  diff: 'Расхождение',
+  ip: 'IP',
+  month: 'Месяц',
+  operator_count: 'Операторов',
+  requested_count: 'Запрошено позиций',
+  items_count: 'Позиций',
 }
+
+// Технические поля, которые скрываем даже если попали в FIELD_LABELS-список:
+// внутренние идентификаторы поставщиков и т.п. — пользователю не нужны.
+const HIDDEN_FIELDS = new Set(['whitelist_vendor_id', 'vendor_id'])
 
 function fieldLabel(key: string) {
   return FIELD_LABELS[key] || key.replace(/_/g, ' ')
+}
+
+// Известно ли поле? (есть человеческий перевод в FIELD_LABELS)
+function isKnownField(key: string) {
+  return Boolean(FIELD_LABELS[key])
 }
 
 function normalizeForCompare(value: unknown) {
@@ -461,6 +577,9 @@ function describeChanges(previous: Record<string, unknown>, next: Record<string,
   }
 
   for (const key of keys) {
+    if (HIDDEN_FIELDS.has(key)) continue
+    // Незнакомые технические поля не показываем сырым английским.
+    if (!isKnownField(key)) continue
     if (normalizeForCompare(previous[key]) === normalizeForCompare(next[key])) continue
     const label = fieldLabel(key)
     rows.push(`${label}: ${fmtVal(previous[key], label)} → ${fmtVal(next[key], label)}`)
@@ -470,13 +589,16 @@ function describeChanges(previous: Record<string, unknown>, next: Record<string,
 }
 
 function addScalarDetails(rows: string[], source: Record<string, unknown>) {
-  // Технический шум — не показываем пользователю (дамп ключей, метка актора уже есть отдельно).
-  const ignored = new Set(['id', 'created_at', 'updated_at', 'previous', 'next', 'meta', 'payload_keys', 'actor_label', 'actor_name', 'ids', 'rows', 'items', 'items_preview', 'stack', 'company_id', 'operator_id'])
+  // Показываем поле ТОЛЬКО если у него есть человеческий перевод в FIELD_LABELS.
+  // Незнакомые технические поля скрываем целиком — лучше ничего, чем сырой английский.
   for (const [key, value] of Object.entries(source)) {
-    if (ignored.has(key) || key.endsWith('_id') || key.endsWith('_ids')) continue
-    if (rows.some((row) => row.startsWith(`${fieldLabel(key)}:`))) continue
-    const rendered = renderValue(value, fieldLabel(key))
-    if (rendered) rows.push(`${fieldLabel(key)}: ${rendered}`)
+    if (HIDDEN_FIELDS.has(key)) continue
+    if (key.endsWith('_id') || key.endsWith('_ids')) continue
+    if (!isKnownField(key)) continue
+    const label = fieldLabel(key)
+    if (rows.some((row) => row.startsWith(`${label}:`))) continue
+    const rendered = renderValue(value, label)
+    if (rendered) rows.push(`${label}: ${rendered}`)
   }
 }
 
@@ -610,7 +732,7 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     addDetail(details, 'Смена', src.shift === 'day' ? 'день' : src.shift === 'night' ? 'ночь' : src.shift)
     addDetail(details, 'Наличные', src.cash_amount)
     addDetail(details, 'Безналичный', src.kaspi_amount)
-    addDetail(details, 'Online', src.online_amount)
+    addDetail(details, 'Онлайн', src.online_amount)
     addDetail(details, 'Карта', src.card_amount)
     const detailRows = act === 'update'
       ? describeChanges(prev, src)
@@ -706,23 +828,66 @@ function summarizeLogItem(item: Omit<CombinedLogItem, 'details' | 'detailRows'>)
     return { title: `${who} ${action} устройство точки`, subtitle: item.subtitle, details: compact(details), detailRows: details }
   }
 
+  if (et === 'point-sale' || et === 'point-return') {
+    // Реальная сумма — из total_amount/amount/sum/sum_total, не из «0».
+    const saleTotal =
+      Number(p.total_amount) ||
+      Number(p.amount) ||
+      Number(p.sum) ||
+      Number(p.sum_total) ||
+      0
+    addDetail(details, 'Товар', p.product_name || p.item_name || p.name)
+    addDetail(details, 'Количество', p.quantity || p.qty)
+    addDetail(details, 'Итого', saleTotal)
+    addDetail(details, 'Метод оплаты', p.payment_method || p.payment_mode)
+    addDetail(details, 'Точка', p.point_name || p.point_device_name || p.company_name || p.company_code)
+    addDetail(details, 'Оператор', p.operator_name)
+    addDetail(details, 'Клиент', p.client_name)
+    addDetail(details, 'Неделя с', dateLabel(p.week_start))
+    const what = et === 'point-return' ? 'возврат' : 'продажу'
+    const verb = et === 'point-return' ? 'оформил' : (act === 'refund' ? 'вернул' : act === 'cancel' ? 'отменил' : 'оформил')
+    const title = saleTotal
+      ? `${who} ${verb} ${what} на ${money(saleTotal)}`
+      : `${who} ${verb} ${what}`
+    return { title, subtitle: text(p.point_name || p.point_device_name || p.company_name) || item.subtitle, details: compact(details), detailRows: details }
+  }
+
   if (et.includes('inventory') || et.startsWith('point-')) {
     addDetail(details, 'Товар', p.product_name || p.item_name || p.name)
-    addDetail(details, 'Кол-во', p.quantity || p.qty)
+    addDetail(details, 'Количество', p.quantity || p.qty)
     addDetail(details, 'Сумма', p.amount || p.total_amount)
     addDetail(details, 'Точка', p.point_name || p.point_device_name || p.company_code)
     addDetail(details, 'Оператор', p.operator_name)
     addDetail(details, 'Клиент', p.client_name)
-    addDetail(details, 'Неделя продажи', p.week_start)
+    addDetail(details, 'Неделя с', dateLabel(p.week_start))
     addDetail(details, 'Режим', p.point_mode)
     return { title: `${who} ${action} ${entity}`, subtitle: text(p.product_name) || text(p.item_name) || item.subtitle, details: compact(details), detailRows: details }
   }
 
-  if (et === 'staff-payment' || et === 'salary_payment') {
-    addDetail(details, 'Сумма', p.total_amount || p.amount)
+  if (et === 'staff-payment' || et === 'salary_payment' || et === 'operator-salary-week-payment' || et === 'operator-salary-week') {
+    const payTotal = Number(p.total_amount) || Number(p.amount) || 0
     addDetail(details, 'Оператор', p.operator_name || p.staff_name)
+    addDetail(details, 'Итого', payTotal)
+    addDetail(details, 'Наличные', p.cash_amount)
+    addDetail(details, 'Безналичный', p.kaspi_amount)
+    addDetail(details, 'Аванс', p.advance_amount)
+    addDetail(details, 'Переплата', p.overpayment_amount)
+    addDetail(details, 'Бонусов на сумму', p.bonuses_total)
+    addDetail(details, 'Штрафов на сумму', p.fines_total)
+    addDetail(details, 'Неделя с', dateLabel(p.week_start))
+    addDetail(details, 'Дата выплаты', dateLabel(p.payment_date))
     addDetail(details, 'Комментарий', p.comment)
-    return { title: `${who} ${action} выплату зарплаты ${money(p.total_amount || p.amount)}`, subtitle: text(p.operator_name) || text(p.staff_name) || item.subtitle, details: compact(details), detailRows: details }
+    // Действие: выдача с авансом / обычная выплата.
+    const withAdvance = act.includes('advance') || Number(p.advance_amount) > 0
+    const verb = act === 'delete' || act === 'deleted'
+      ? 'удалил выплату зарплаты'
+      : withAdvance
+        ? 'выдал зарплату с авансом'
+        : 'выплатил зарплату'
+    const title = payTotal && act !== 'delete' && act !== 'deleted'
+      ? `${who} ${verb}${payTotal ? ` ${money(payTotal)}` : ''}`
+      : `${who} ${verb}`
+    return { title, subtitle: text(p.operator_name) || text(p.staff_name) || item.subtitle, details: compact(details), detailRows: details }
   }
 
   if (et === 'company' || et === 'staff' || et === 'operator' || et === 'expense_category') {

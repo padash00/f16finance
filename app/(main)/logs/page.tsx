@@ -205,9 +205,30 @@ function formatItem(item: LogItem): FormattedEvent | null {
   })
 }
 
+// Проверка: осмысленный ли заголовок от API (не сырой «entity • action», не пустой, без «·»).
+function isMeaningfulApiTitle(title: string | null | undefined): boolean {
+  const t = String(title || '').trim()
+  if (!t) return false
+  if (t === '·') return false
+  // «inventory-receipt • create» — необработанный технический заголовок API.
+  if (t.includes(' • ')) return false
+  // Заголовок, заканчивающийся на «·» (пустое имя страницы и т.п.).
+  if (/[:·]\s*·?\s*$/.test(t)) return false
+  return true
+}
+
 // Старый humanTitle оставлен для notification и ai типов событий + как fallback
 function humanTitle(item: LogItem): string {
-  // audit события форматируются через единый форматтер
+  // ВАЖНО: API отдаёт записи с payload = null (он вырезается ради размера ответа),
+  // поэтому формат-функция formatItem на странице работает с пустым payload и даёт
+  // вырожденные заголовки («оформил продажу: 0 ₸», «открыл страницу: ·»).
+  // Подробный человеческий заголовок строит сервер (route.ts → summarizeLogItem)
+  // из РЕАЛЬНОГО payload. Поэтому для audit-событий берём его напрямую.
+  if (item.kind === 'audit' && isMeaningfulApiTitle(item.title)) {
+    return item.title
+  }
+
+  // audit события форматируются через единый форматтер (резерв, если API-заголовок пуст)
   if (item.kind === 'audit') {
     const f = formatItem(item)
     if (f) {
@@ -360,7 +381,7 @@ function PayloadRows({ item }: { item: LogItem }) {
     add('Дата', fmtDate(src.date as string))
     add('Наличные', fmtMoney(src.cash_amount))
     add('Безналичный', fmtMoney(src.kaspi_amount))
-    add('Online', fmtMoney(src.online_amount))
+    add('Онлайн', fmtMoney(src.online_amount))
     add('Карта', fmtMoney(src.card_amount))
     if (act === 'update-online') {
       add('Было', fmtMoney(p.previous))
