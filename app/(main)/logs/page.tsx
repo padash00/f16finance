@@ -640,14 +640,23 @@ export default function LogsPage() {
 
   const stats = useMemo(() => {
     const items = data?.items || []
+    const ent = (i: any) => String(i.entityType || '').toLowerCase()
+    const isErr = (i: any) =>
+      i.status === 'failed' || i.status === 'error' || ent(i) === 'system-error' ||
+      String(i.action || '').toLowerCase().includes('error') || String(i.action || '').toLowerCase().includes('failed')
+    const count = (pred: (i: any) => boolean) => items.filter(pred).length
     return {
       total: data?.total || 0,
-      audit: items.filter(i => i.kind === 'audit').length,
-      notifications: items.filter(i => i.kind === 'notification').length,
-      ai: items.filter(i => i.kind === 'ai').length,
-      failed: items.filter(i => i.status === 'failed').length,
-      systemErrors: items.filter(i => i.entityType === 'system-error').length,
-      pages: items.filter(i => i.entityType === 'page-view' || i.entityType === 'visit').length,
+      shown: items.length,
+      errors: count(isErr),
+      sales: count(i => ['point-sale', 'point-return'].includes(ent(i))),
+      finance: count(i => ['income', 'expense', 'income-export', 'expense-export'].includes(ent(i))),
+      debts: count(i => ['point-debt', 'point-debt-item', 'supplier-debt', 'debts', 'debt'].includes(ent(i))),
+      shifts: count(i => ['shift', 'point-shift', 'point-shift-report', 'shift-week', 'shift-change-request', 'shift-week-response', 'shift-publication'].includes(ent(i))),
+      staff: count(i => ['staff', 'operator', 'staff-payment', 'operator-staff-link', 'operator-salary-adjustment', 'operator-salary-week-payment'].includes(ent(i))),
+      inventory: count(i => ent(i).startsWith('inventory')),
+      tasks: count(i => ['task', 'task-comment', 'point-incident'].includes(ent(i))),
+      notifications: count(i => i.kind === 'notification'),
     }
   }, [data])
 
@@ -696,26 +705,40 @@ export default function LogsPage() {
         }
       />
 
-      {/* Stats */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
-        {[
-          { label: 'Всего событий', value: stats.total, icon: Activity },
-          { label: 'Действия', value: stats.audit, icon: ShieldCheck },
-          { label: 'Страницы', value: stats.pages, icon: Eye },
-          { label: 'Ошибки отправки', value: stats.failed, icon: CircleAlert },
-          { label: 'Ошибки системы', value: stats.systemErrors, icon: AlertTriangle },
-        ].map(({ label, value, icon: Icon }) => (
-          <Card key={label} className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-4 text-slate-900 dark:text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-slate-400">{label}</p>
-                <p className="mt-1.5 text-2xl font-semibold">{value}</p>
-              </div>
-              <div className="rounded-xl bg-slate-100 dark:bg-white/6 p-2.5"><Icon className="h-4 w-4 text-sky-600 dark:text-sky-300" /></div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* Сводка по выборке */}
+      <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 px-4 py-3 text-slate-900 dark:text-white">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <span className="text-xs text-slate-400">
+            Сводка · показано {stats.shown}{stats.total > stats.shown ? ` из ${stats.total}` : ''}
+          </span>
+          {[
+            { label: 'продаж', value: stats.sales, emoji: '🛒' },
+            { label: 'фин. операций', value: stats.finance, emoji: '💰' },
+            { label: 'долгов', value: stats.debts, emoji: '🧾' },
+            { label: 'по сменам', value: stats.shifts, emoji: '📋' },
+            { label: 'по кадрам', value: stats.staff, emoji: '👤' },
+            { label: 'по складу', value: stats.inventory, emoji: '📦' },
+            { label: 'задач/инцидентов', value: stats.tasks, emoji: '✅' },
+            { label: 'уведомлений', value: stats.notifications, emoji: '✈️' },
+          ].filter(s => s.value > 0).map(s => (
+            <span key={s.label} className="inline-flex items-center gap-1.5">
+              <span>{s.emoji}</span>
+              <span className="font-semibold tabular-nums">{s.value}</span>
+              <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={() => applyPreset('errors')}
+            className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition ${stats.errors > 0 ? 'text-red-600 dark:text-red-300 font-semibold hover:bg-red-500/10' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+            title="Показать только ошибки"
+          >
+            <span>🔴</span>
+            <span className="tabular-nums">{stats.errors}</span>
+            <span>{stats.errors === 1 ? 'ошибка' : 'ошибок'}</span>
+          </button>
+        </div>
+      </Card>
 
       {/* Filters */}
       <Card className="border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950/65 p-5 text-slate-900 dark:text-white">
