@@ -630,11 +630,11 @@ async function handleMyShifts(chatId: number, operatorId: string, operatorName: 
 
   const { data: shifts } = await supabase
     .from('shifts')
-    .select('shift_date, shift_type, company:company_id(name)')
+    .select('shift_date:date, shift_type, company:company_id(name)')
     .eq('operator_id', operatorId)
-    .gte('shift_date', today)
-    .lte('shift_date', dateTo)
-    .order('shift_date', { ascending: true })
+    .gte('date', today)
+    .lte('date', dateTo)
+    .order('date', { ascending: true })
     .limit(10)
 
   const shiftTypeLabel: Record<string, string> = {
@@ -2209,7 +2209,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       const dateFrom2 = addDaysISO(today2, -29)
       const [incomesR, shiftsR] = await Promise.all([
         supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').eq('operator_id', found.id).gte('date', dateFrom2).lte('date', today2),
-        supabase.from('shifts').select('shift_date, shift_type, company:company_id(name)').eq('operator_id', found.id).gte('shift_date', today2).lte('shift_date', addDaysISO(today2, 14)).order('shift_date'),
+        supabase.from('shifts').select('shift_date:date, shift_type, company:company_id(name)').eq('operator_id', found.id).gte('date', today2).lte('date', addDaysISO(today2, 14)).order('date'),
       ])
       const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
       const displayName = profiles?.[0]?.full_name || found.name

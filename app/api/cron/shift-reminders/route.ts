@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   const { data: shifts } = await supabase
     .from('shifts')
     .select('operator_id, shift_type, company:company_id(name), operators(telegram_chat_id, name, short_name, operator_profiles(full_name))')
-    .eq('shift_date', today)
+    .eq('date', today)
     .in('shift_type', upcomingShiftTypes)
 
   let sent = 0
