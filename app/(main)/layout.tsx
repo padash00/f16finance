@@ -1,4 +1,5 @@
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { DocumentTitle } from '@/components/document-title'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { PageEntitlementGuard } from '@/components/page-entitlement-guard'
 import { Sidebar } from '@/components/sidebar'
@@ -10,6 +11,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <CashlessProvider>
       <div className="app-shell-layout">
         <PageEntitlementGuard />
+        <DocumentTitle />
         <TopNav />
         <KeyboardShortcuts />
         <Sidebar desktopEnabled={false} />
