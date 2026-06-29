@@ -8,9 +8,9 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
       data-slot="card"
       className={cn(
         'bg-card text-card-foreground flex flex-col gap-6 rounded-[1.4rem] border border-white/[0.1] py-6 backdrop-blur-xl transition-all duration-200 ' +
-          // Премиум 3D: слоистая тень (видна на светлой теме) + лёгкий подъём на ховере.
-          'shadow-[0_2px_8px_rgba(15,23,42,0.06),0_16px_40px_rgba(15,23,42,0.10)] ' +
-          'hover:shadow-[0_6px_18px_rgba(15,23,42,0.08),0_28px_60px_rgba(15,23,42,0.16)] hover:-translate-y-0.5',
+          // Премиум 3D: тень из токена --card-shadow (globals.css — одно место на весь
+          // проект) + лёгкий подъём на ховере. Общая с .orda-panel.
+          'shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] hover:-translate-y-0.5',
         className,
       )}
       {...props}
