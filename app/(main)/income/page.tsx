@@ -1570,7 +1570,7 @@ function OverviewTab(props: any) {
                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" vertical={false} />
                 <XAxis dataKey="formattedDate" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Formatters.money(v)} />
                 <Tooltip {...Formatters.tooltip} formatter={(val: number) => [Formatters.moneyDetailed(val), '']} />
@@ -1596,8 +1596,8 @@ function OverviewTab(props: any) {
                   data={analytics.paymentData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
+                  innerRadius="58%"
+                  outerRadius="88%"
                   paddingAngle={2}
                   dataKey="value"
                 >
@@ -1843,7 +1843,7 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={analytics.paymentData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                 <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.money(v)} />
                 <Tooltip formatter={(val: number) => Formatters.moneyDetailed(val)} contentStyle={Formatters.tooltip.contentStyle} />

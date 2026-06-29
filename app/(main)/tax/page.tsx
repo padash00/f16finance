@@ -980,7 +980,7 @@ export default function TaxPage() {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} />
                 <XAxis dataKey="monthName" stroke="#9ca3af" fontSize={11} />
                 <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(v) => fmtCompact(v)} />
                 <Tooltip

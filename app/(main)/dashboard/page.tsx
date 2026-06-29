@@ -1543,7 +1543,7 @@ function ChartCard(props: {
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" vertical={false} />
               <XAxis dataKey="label" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
               <YAxis
                 stroke="#6b7280"
@@ -1603,7 +1603,7 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
-                <Pie data={props.data} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2}>
+                <Pie data={props.data} dataKey="value" cx="50%" cy="50%" innerRadius="58%" outerRadius="88%" paddingAngle={2}>
                   {props.data.map((e, i) => (
                     <Cell key={i} fill={e.color} />
                   ))}
@@ -1811,7 +1811,7 @@ function Details(props: {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={paymentStats}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                 <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(v)} />
                 <Tooltip

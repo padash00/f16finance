@@ -283,7 +283,7 @@ export default function AnalyticsPage() {
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={revenueChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} />
                   <XAxis dataKey="month" stroke="rgba(255,255,255,0.45)" fontSize={11} />
                   <YAxis stroke="rgba(255,255,255,0.45)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
@@ -305,7 +305,7 @@ export default function AnalyticsPage() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={paymentChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} />
                     <XAxis dataKey="month" stroke="rgba(255,255,255,0.45)" fontSize={11} />
                     <YAxis stroke="rgba(255,255,255,0.45)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
@@ -325,7 +325,7 @@ export default function AnalyticsPage() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={profitChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} />
                     <XAxis dataKey="month" stroke="rgba(255,255,255,0.45)" fontSize={11} />
                     <YAxis stroke="rgba(255,255,255,0.45)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                     <Tooltip

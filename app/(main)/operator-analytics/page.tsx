@@ -374,7 +374,7 @@ const OperatorDailyChart = memo(({ data }: { data: { date: string; amount: numbe
       </div>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
           <XAxis 
             dataKey="label" 
             stroke="#6b7280" 
@@ -428,8 +428,8 @@ const PaymentPieChart = memo(({ data }: { data: { name: string; value: number; c
           data={dataWithPercent} 
           cx="50%" 
           cy="50%" 
-          innerRadius={30} 
-          outerRadius={45}
+          innerRadius="58%"
+          outerRadius="88%"
           paddingAngle={2}
           dataKey="value"
         >
@@ -2196,7 +2196,7 @@ function OperatorAnalyticsContent() {
                       layout="vertical"
                       margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} horizontal={false} />
                       <XAxis type="number" tickFormatter={formatCompact} stroke="#6b7280" fontSize={10} />
                       <YAxis type="category" dataKey="name" stroke="#6b7280" fontSize={10} width={80} />
                       <Tooltip
@@ -2227,8 +2227,8 @@ function OperatorAnalyticsContent() {
                         ].filter(item => item.value > 0)}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
+                        innerRadius="58%"
+                        outerRadius="88%"
                         paddingAngle={3}
                         dataKey="value"
                       >

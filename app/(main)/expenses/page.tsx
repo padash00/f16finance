@@ -1809,7 +1809,7 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
                     <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" vertical={false} />
                 <XAxis dataKey="formattedDate" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Formatters.money(v)} />
                 <Tooltip {...Formatters.tooltip} formatter={(val: number) => [Formatters.moneyDetailed(val), '']} />
@@ -1835,8 +1835,8 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, 
                   data={analytics.categoryData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
+                  innerRadius="58%"
+                  outerRadius="88%"
                   paddingAngle={2}
                   dataKey="value"
                 >
@@ -2007,7 +2007,7 @@ function AnalyticsTab({ analytics }: any) {
                 { name: 'Наличные', value: analytics.cash, color: '#f59e0b' },
                 { name: cashLabels.providerName, value: analytics.kaspi, color: '#ef4444' }
               ]}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" />
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} stroke="#94a3b8" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                 <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.money(v)} />
                 <Tooltip formatter={(v: number) => Formatters.moneyDetailed(v)} contentStyle={Formatters.tooltip.contentStyle} />

@@ -301,7 +301,7 @@ export default function SimulationPage() {
           <div className="mt-3 h-52">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={calc.perZone.map((r) => ({ name: r.zone.name || '—', value: Math.round(r.potentialPerMonth) }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} />
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.45)" fontSize={10} />
                 <YAxis stroke="rgba(255,255,255,0.45)" fontSize={10} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
                 <Tooltip

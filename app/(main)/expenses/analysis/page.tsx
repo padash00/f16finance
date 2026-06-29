@@ -267,7 +267,7 @@ export default function ExpensesDashboard() {
                                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05}/>
                                 </linearGradient>
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
                             
                             <XAxis 
                                 dataKey="date" 
@@ -325,8 +325,8 @@ export default function ExpensesDashboard() {
                             <PieChart>
                                 <Pie
                                     data={stats.catData}
-                                    innerRadius={60}
-                                    outerRadius={90}
+                                    innerRadius="58%"
+                                    outerRadius="88%"
                                     paddingAngle={2}
                                     dataKey="value"
                                     stroke="none"

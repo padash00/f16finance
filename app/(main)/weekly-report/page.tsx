@@ -379,7 +379,7 @@ const MemoizedDailyChart = memo(({ data }: { data: DailyDataPoint[] }) => {
             <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
         <XAxis 
           dataKey="label" 
           stroke="#6b7280" 
@@ -445,7 +445,7 @@ const MemoizedBalanceChart = memo(({ data }: { data: BalancePoint[] }) => {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
         <XAxis 
           dataKey="label" 
           stroke="#6b7280" 
@@ -521,8 +521,8 @@ const MemoizedPieChart = memo(
           data={data} 
           cx="50%" 
           cy="50%" 
-          innerRadius={60} 
-          outerRadius={80}
+          innerRadius="58%"
+          outerRadius="88%"
           paddingAngle={3}
           dataKey="value"
         >
@@ -557,7 +557,7 @@ const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; k
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ left: 20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} horizontal={false} />
         <XAxis 
           dataKey="name" 
           stroke="#6b7280" 

@@ -220,7 +220,7 @@ export default function AnalysisPage() {
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
                     <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis fontSize={10} tickLine={false} axisLine={false} tickFormatter={moneyShort} />
                     <Tooltip formatter={(v: any) => money(Number(v))} />
