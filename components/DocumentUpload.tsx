@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Upload, FileText, X, Loader2, Check, Eye, Download, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 
 interface Document {
   id: string
@@ -199,20 +200,18 @@ export default function DocumentUpload({ operatorId, onUploadComplete, onError }
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Дата выдачи</label>
-            <input
-              type="date"
+            <DatePicker
               value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+              onChange={setIssueDate}
+              className="w-full"
             />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Действителен до</label>
-            <input
-              type="date"
+            <DatePicker
               value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+              onChange={setExpiryDate}
+              className="w-full"
             />
           </div>
         </div>

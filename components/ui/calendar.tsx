@@ -10,7 +10,7 @@ export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
 /**
  * Единый красивый календарь для всего приложения. Работает на светлой и тёмной теме.
- * Поверх react-day-picker v9. Используется внутри DatePicker / DateRangePicker.
+ * Поверх react-day-picker v9. Выпадающие месяц/год + стрелки навигации.
  */
 export function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
   return (
@@ -18,17 +18,25 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
       showOutsideDays={showOutsideDays}
       locale={ru}
       weekStartsOn={1}
+      captionLayout="dropdown"
+      startMonth={new Date(2021, 0)}
+      endMonth={new Date(2035, 11)}
       className={cn('p-3', className)}
       classNames={{
         months: 'flex flex-col sm:flex-row gap-4',
-        month: 'space-y-3',
-        month_caption: 'flex justify-center pt-1 pb-1 relative items-center h-8',
-        caption_label: 'text-sm font-semibold text-slate-900 dark:text-white capitalize',
-        nav: 'flex items-center gap-1 absolute inset-x-1 top-1 justify-between',
+        // relative — чтобы абсолютные стрелки навигации позиционировались внутри месяца
+        month: 'relative space-y-3',
+        month_caption: 'flex justify-center items-center h-9 px-9',
+        caption_label: 'hidden',
+        dropdowns: 'flex items-center gap-1.5',
+        dropdown_root: 'relative inline-flex items-center',
+        dropdown:
+          'rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium px-2 py-1 cursor-pointer outline-none hover:border-amber-400 focus:border-amber-500 capitalize',
+        nav: 'absolute inset-x-0 top-0 flex items-center justify-between px-1 z-10',
         button_previous:
-          'h-7 w-7 inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30',
+          'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer',
         button_next:
-          'h-7 w-7 inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30',
+          'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer',
         month_grid: 'w-full border-collapse',
         weekdays: 'flex',
         weekday: 'text-slate-400 dark:text-slate-500 w-9 font-medium text-[0.65rem] uppercase tracking-wide',

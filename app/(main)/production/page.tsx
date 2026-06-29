@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { ChefHat, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 
 type Ingredient = { id: string; name: string; unit: string | null; purchase_price: number | null; category?: string | null; stock_qty?: number | null }
@@ -353,9 +354,9 @@ export default function ProductionPage() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Анализ продаж · теоретический food cost</h3>
           <div className="flex items-center gap-2">
-            <input className={inputCls} type="date" value={anFrom} onChange={(e) => setAnFrom(e.target.value)} />
+            <DatePicker className={inputCls} value={anFrom} onChange={setAnFrom} />
             <span className="text-slate-500">—</span>
-            <input className={inputCls} type="date" value={anTo} onChange={(e) => setAnTo(e.target.value)} />
+            <DatePicker className={inputCls} value={anTo} onChange={setAnTo} />
             <button onClick={runAnalysis} disabled={anLoading} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {anLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Посчитать
             </button>

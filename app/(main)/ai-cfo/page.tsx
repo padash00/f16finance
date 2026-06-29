@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Brain, Loader2, ShieldAlert, TrendingUp, TrendingDown, Lightbulb, Target, CalendarDays, RefreshCw } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 
 type Exec = {
   revenue: number; revenueDeltaPct: number
@@ -192,9 +193,9 @@ export default function AiCfoPage() {
             {/* Раскрывающийся выбор дат */}
             {showCustom ? (
               <div className="flex w-full items-center gap-2">
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={`rounded-xl border ${C.border} bg-white dark:bg-[#111113] px-3 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
+                <DatePicker value={customFrom} onChange={setCustomFrom} max={customTo || undefined} />
                 <span className={C.sub}>—</span>
-                <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={`rounded-xl border ${C.border} bg-white dark:bg-[#111113] px-3 py-1.5 text-sm text-slate-900 dark:text-[#FAFAFA] [color-scheme:light] dark:[color-scheme:dark]`} />
+                <DatePicker value={customTo} onChange={setCustomTo} min={customFrom || undefined} />
                 <button onClick={() => { if (customFrom && customTo) run({ dateFrom: customFrom, dateTo: customTo }, 'custom') }} disabled={loading || !customFrom || !customTo}
                   className="rounded-xl bg-violet-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-violet-600 disabled:opacity-40">
                   Применить

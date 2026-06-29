@@ -12,6 +12,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -240,11 +241,11 @@ function ReceiptLineRowImpl({ line, items, itemsById, canRemove, onPatch, onRemo
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="space-y-1.5">
             <Label className="text-[11px]">Изготовлен (от)</Label>
-            <Input type="date" value={line.production_date || ''} onChange={(event) => onPatch(line.uid, { production_date: event.target.value })} />
+            <DatePicker value={line.production_date || ''} onChange={(v) => onPatch(line.uid, { production_date: v })} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-[11px]">Годен до {lineItem?.requires_expiry === false ? '(необяз.)' : '*'}</Label>
-            <Input type="date" value={line.expiry_date || ''} onChange={(event) => onPatch(line.uid, { expiry_date: event.target.value })} />
+            <DatePicker value={line.expiry_date || ''} onChange={(v) => onPatch(line.uid, { expiry_date: v })} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-[11px]">Возврат / недопоставка (кол-во)</Label>

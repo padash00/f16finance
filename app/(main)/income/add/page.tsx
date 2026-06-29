@@ -27,6 +27,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 
 type Company = {
   id: string
@@ -469,15 +470,7 @@ export default function AddIncomePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <label className="text-xs text-gray-500 uppercase mb-2 block">Дата</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl py-3 pl-10 pr-4 text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
-                    />
-                  </div>
+                  <DatePicker value={date} onChange={setDate} className="w-full" />
                 </div>
 
                 <div>

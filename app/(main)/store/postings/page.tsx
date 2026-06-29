@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -335,7 +336,7 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Дата</Label>
-              <Input type="date" value={receivedAt} onChange={(e) => setReceivedAt(e.target.value)} />
+              <DatePicker value={receivedAt} onChange={setReceivedAt} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Комментарий (обязательно для отчётности)</Label>
@@ -438,13 +439,13 @@ export default function StorePostingsPage({ embedded = false }: { embedded?: boo
                       <div className="grid gap-2 sm:grid-cols-12">
                         <div className="sm:col-span-3">
                           <Label className="mb-1 block text-[10px] text-muted-foreground">Изготовлен (от)</Label>
-                          <Input type="date" value={line.production_date} onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, production_date: e.target.value } : l))} />
+                          <DatePicker value={line.production_date} onChange={(v) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, production_date: v } : l))} />
                         </div>
                         <div className="sm:col-span-3">
                           <Label className="mb-1 block text-[10px] text-muted-foreground">
                             Годен до {it?.requires_expiry === false ? '(необяз.)' : '*'}
                           </Label>
-                          <Input type="date" value={line.expiry_date} onChange={(e) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, expiry_date: e.target.value } : l))} />
+                          <DatePicker value={line.expiry_date} onChange={(v) => setLines((prev) => prev.map((l) => l.key === line.key ? { ...l, expiry_date: v } : l))} />
                         </div>
                         {it?.requires_expiry === false ? (
                           <div className="flex items-end sm:col-span-6"><span className="text-[11px] text-muted-foreground">Товар без срока годности (бургеры/хотдоги и пр.)</span></div>

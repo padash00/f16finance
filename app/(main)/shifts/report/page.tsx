@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { ChevronLeft, Printer, RefreshCw, Loader2, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 
 type Location = {
@@ -192,11 +193,9 @@ export default function ShiftReportPage() {
               <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground">Дата</label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    onChange={setDate}
                   />
                 </div>
 

@@ -13,6 +13,7 @@ import { ModalPortal } from '@/components/ui/modal-portal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -592,8 +593,8 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Поставщик, БИН/ИИН или № накладной..."
           />
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="С" />
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="По" />
+          <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="С" />
+          <DatePicker value={dateTo} onChange={setDateTo} placeholder="По" />
           {activeTab === 'debts' && companies.length > 0 && !storeCompanyId ? (
             <Select value={companyFilter || '__all__'} onValueChange={(v) => setCompanyFilter(v === '__all__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="Все точки" /></SelectTrigger>
@@ -860,7 +861,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Дата оплаты</Label>
-                <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                <DatePicker value={payDate} onChange={setPayDate} />
               </div>
               <div className="space-y-1.5">
                 <Label>Способ оплаты</Label>
@@ -995,7 +996,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Дата оплаты</Label>
-                <Input type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} />
+                <DatePicker value={bulkDate} onChange={setBulkDate} />
               </div>
               <div className="space-y-1.5">
                 <Label>Способ оплаты</Label>
@@ -1065,7 +1066,7 @@ export default function BillingPage({ embedded = false }: { embedded?: boolean }
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Новый срок (пусто = снять срок)</Label>
-                <Input type="date" value={reschedDate} onChange={(e) => setReschedDate(e.target.value)} />
+                <DatePicker value={reschedDate} onChange={setReschedDate} />
               </div>
               <div className="space-y-1.5">
                 <Label>Причина (опционально)</Label>

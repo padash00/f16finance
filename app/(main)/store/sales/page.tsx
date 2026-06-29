@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useStoreScope } from '@/components/store/store-scope'
+import { DatePicker } from '@/components/ui/date-picker'
 import {
   Activity, RefreshCw, Loader2, TrendingUp, Receipt,
   Clock, Trophy, Pause, Play, Users, Tags, Coins, Package, Search, AlertTriangle,
@@ -219,9 +220,9 @@ export default function SalesMonitorPage() {
           </button>
         ))}
         <div className="flex items-center gap-1.5">
-          <input type="date" value={from} max={to} onChange={(e) => { setFrom(e.target.value); setPreset('custom') }} className={inputCls} />
+          <DatePicker value={from} max={to} onChange={(v) => { setFrom(v); setPreset('custom') }} className={inputCls} />
           <span className="text-slate-500">—</span>
-          <input type="date" value={to} max={today} onChange={(e) => { setTo(e.target.value); setPreset('custom') }} className={inputCls} />
+          <DatePicker value={to} max={today} onChange={(v) => { setTo(v); setPreset('custom') }} className={inputCls} />
         </div>
         {!storeCompanyId && (
           <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={inputCls}>

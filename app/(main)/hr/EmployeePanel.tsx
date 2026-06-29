@@ -10,7 +10,6 @@ import {
   ArrowDownCircle,
   Briefcase,
   Building2,
-  Calendar,
   Check,
   ChevronRight,
   Clock,
@@ -29,6 +28,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type Position = { id: string; name: string; description: string | null; label?: string | null }
@@ -411,15 +411,7 @@ export default function EmployeePanel({ employee, onClose, onUpdated }: Props) {
                 </select>
               </Field>
               <Field label="Дата найма">
-                <div className="relative">
-                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type="date"
-                    value={hireDate}
-                    onChange={(e) => setHireDate(e.target.value)}
-                    className={inputClass + ' pl-9'}
-                  />
-                </div>
+                <DatePicker value={hireDate} onChange={setHireDate} />
               </Field>
             </div>
           </Section>

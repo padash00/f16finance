@@ -17,6 +17,7 @@ import { createPortal } from 'react-dom'
 import { computeMonthEndForecast, type ForecastHints } from '@/lib/reports/forecast-hybrid'
 import { emptyProcessedReport, processedFromBundleAggregate, type ReportBundleAggregate } from '@/lib/reports/from-api-aggregate'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { ReportsMethodologyBanner } from '@/components/reports/reports-methodology-banner'
 import { ReportsPageSkeleton } from '@/components/reports/reports-page-skeleton'
 import { AIInsightCard } from '@/components/reports/ai-insight-card'
@@ -2080,24 +2081,20 @@ function ReportsContent() {
               </select>
 
               <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-2 py-1">
-                <input
-                  type="date"
+                <DatePicker
                   value={dateFrom}
-                  onChange={(e) => {
-                    setDateFrom(e.target.value)
+                  onChange={(v) => {
+                    setDateFrom(v)
                     setDatePreset('custom')
                   }}
-                  className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
                 />
                 <span className="text-slate-400 dark:text-slate-500">—</span>
-                <input
-                  type="date"
+                <DatePicker
                   value={dateTo}
-                  onChange={(e) => {
-                    setDateTo(e.target.value)
+                  onChange={(v) => {
+                    setDateTo(v)
                     setDatePreset('custom')
                   }}
-                  className="bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
                 />
               </div>
 

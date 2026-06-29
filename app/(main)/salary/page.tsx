@@ -13,6 +13,7 @@ import { Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Credi
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
@@ -1357,7 +1358,7 @@ export default function SalaryPage() {
                 <option value="debt">Долг</option>
                 <option value="bonus">Бонус</option>
               </select>
-              <input className={input} type="date" value={adjDate} onChange={(e) => setAdjDate(e.target.value)} />
+              <DatePicker className="h-11" value={adjDate} onChange={setAdjDate} />
               <input className={input} type="text" placeholder="Сумма" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
               <Button type="submit" className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">
                 {adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
@@ -1418,8 +1419,8 @@ export default function SalaryPage() {
                     <option value="active">Активные</option>
                     <option value="voided">Аннулированные</option>
                   </select>
-                  <input className={input} type="date" value={operatorEventsDateFrom} onChange={(e) => setOperatorEventsDateFrom(e.target.value)} />
-                  <input className={input} type="date" value={operatorEventsDateTo} onChange={(e) => setOperatorEventsDateTo(e.target.value)} />
+                  <DatePicker className="h-11" placeholder="С даты" value={operatorEventsDateFrom} onChange={setOperatorEventsDateFrom} />
+                  <DatePicker className="h-11" placeholder="По дату" value={operatorEventsDateTo} onChange={setOperatorEventsDateTo} />
                 </div>
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
                   <span className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-1">
@@ -1875,8 +1876,8 @@ export default function SalaryPage() {
                     <option value="paid">Закрытые выплатой</option>
                     <option value="voided">Аннулированные</option>
                   </select>
-                  <input className={input} type="date" value={eventsDateFrom} onChange={(e) => setEventsDateFrom(e.target.value)} />
-                  <input className={input} type="date" value={eventsDateTo} onChange={(e) => setEventsDateTo(e.target.value)} />
+                  <DatePicker className="h-11" placeholder="С даты" value={eventsDateFrom} onChange={setEventsDateFrom} />
+                  <DatePicker className="h-11" placeholder="По дату" value={eventsDateTo} onChange={setEventsDateTo} />
                 </div>
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
                   <span className="rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] px-3 py-1">
@@ -1986,7 +1987,7 @@ export default function SalaryPage() {
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
-                <input className={input} type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} />
+                <DatePicker className="h-11" value={advanceDate} onChange={setAdvanceDate} />
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
@@ -2013,7 +2014,7 @@ export default function SalaryPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
-                <input className={input} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                <DatePicker className="h-11" value={payDate} onChange={setPayDate} />
               </div>
               <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 text-sm text-slate-700 dark:text-slate-300">Эта выплата автоматически разложится по компаниям по фактическому начислению.</div>
               <div>
@@ -2125,7 +2126,7 @@ export default function SalaryPage() {
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата</label>
-                <input className={input} type="date" value={staffAdjDate} onChange={e => setStaffAdjDate(e.target.value)} />
+                <DatePicker className="h-11" value={staffAdjDate} onChange={setStaffAdjDate} />
               </div>
               {staffAdjKind === 'advance' ? (
                 <div className="md:col-span-2">
@@ -2165,7 +2166,7 @@ export default function SalaryPage() {
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
-                <input className={input} type="date" value={staffPayDate} onChange={e => setStaffPayDate(e.target.value)} />
+                <DatePicker className="h-11" value={staffPayDate} onChange={setStaffPayDate} />
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Компания (расход)</label>

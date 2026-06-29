@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, AlertCircle, CheckSquare, ChevronDown, ChevronRight
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
@@ -1048,12 +1049,7 @@ export default function HrPage() {
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Дата увольнения</label>
-                <input
-                  type="date"
-                  value={dismissDate}
-                  onChange={(e) => setDismissDate(e.target.value)}
-                  className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
-                />
+                <DatePicker value={dismissDate} onChange={setDismissDate} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 text-slate-900 dark:text-white">Тип</label>

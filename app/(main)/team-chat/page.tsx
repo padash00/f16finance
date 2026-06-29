@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import {
   MessageSquare,
@@ -333,12 +334,11 @@ function ChatContent() {
                 )}
                 {showPinPicker === m.id && (
                   <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="date"
+                    <DatePicker
                       value={pinDate}
-                      onChange={e => setPinDate(e.target.value)}
+                      onChange={setPinDate}
                       min={new Date().toISOString().slice(0, 10)}
-                      className="bg-input border border-border rounded px-2 py-1 text-xs"
+                      className="px-2 py-1 text-xs"
                     />
                     <Button size="sm" onClick={() => pin(m.id)}>
                       Закрепить до этой даты

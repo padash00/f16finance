@@ -3,6 +3,7 @@ import { Suspense, useState, useEffect, useCallback, useMemo } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from 'lucide-react'
@@ -346,21 +347,17 @@ function PosReceiptsPageContent({ embedded = false }: { embedded?: boolean }) {
               {/* Date from */}
               <div className="flex flex-col gap-1 min-w-[140px]">
                 <label className="text-xs text-muted-foreground">Дата от</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={filters.date_from}
-                  onChange={(e) => setFilters({ date_from: e.target.value, page: '1' })}
-                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onChange={(v) => setFilters({ date_from: v, page: '1' })}
                 />
               </div>
               {/* Date to */}
               <div className="flex flex-col gap-1 min-w-[140px]">
                 <label className="text-xs text-muted-foreground">Дата до</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={filters.date_to}
-                  onChange={(e) => setFilters({ date_to: e.target.value, page: '1' })}
-                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  onChange={(v) => setFilters({ date_to: v, page: '1' })}
                 />
               </div>
               {/* Company */}

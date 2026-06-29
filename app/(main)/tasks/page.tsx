@@ -42,6 +42,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
@@ -1641,11 +1642,9 @@ function TaskDetailModal({
                   ))}
                 </select>
 
-                <Input
-                  type="date"
+                <DatePicker
                   value={editForm.due_date}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, due_date: e.target.value }))}
-                  className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+                  onChange={(v) => setEditForm((prev) => ({ ...prev, due_date: v }))}
                 />
               </div>
 
@@ -2009,11 +2008,9 @@ function CreateTaskModal({
               <option value="critical">🔥 Критический</option>
             </select>
 
-            <Input
-              type="date"
+            <DatePicker
               value={form.due_date}
-              onChange={(e) => setForm({...form, due_date: e.target.value})}
-              className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10"
+              onChange={(v) => setForm({...form, due_date: v})}
             />
           </div>
 

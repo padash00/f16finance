@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -976,7 +977,7 @@ export default function StoreRevisionsPage({ embedded = false }: { embedded?: bo
 
               <div className="space-y-1.5">
                 <Label>Дата ревизии</Label>
-                <Input type="date" value={countedAt} onChange={(event) => setCountedAt(event.target.value)} />
+                <DatePicker value={countedAt} onChange={setCountedAt} />
               </div>
             </div>
 

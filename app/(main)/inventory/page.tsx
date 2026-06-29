@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -1228,7 +1229,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </Field>
 
               <Field label="Дата приемки">
-                <Input type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} />
+                <DatePicker value={receiptDate} onChange={setReceiptDate} />
               </Field>
 
               <Field label="Номер накладной">
@@ -1299,7 +1300,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                 </Select>
               </Field>
               <Field label="Дата списания">
-                <Input type="date" value={writeoffDate} onChange={(event) => setWriteoffDate(event.target.value)} />
+                <DatePicker value={writeoffDate} onChange={setWriteoffDate} />
               </Field>
             </div>
 
@@ -1392,7 +1393,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                 </Select>
               </Field>
               <Field label="Дата ревизии">
-                <Input type="date" value={stocktakeDate} onChange={(event) => setStocktakeDate(event.target.value)} />
+                <DatePicker value={stocktakeDate} onChange={setStocktakeDate} />
               </Field>
             </div>
 
@@ -1936,7 +1937,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </Select>
             </Field>
             <Field label="Дата списания">
-              <Input type="date" value={writeoffDate} onChange={(event) => setWriteoffDate(event.target.value)} />
+              <DatePicker value={writeoffDate} onChange={setWriteoffDate} />
             </Field>
           </div>
 
@@ -2029,7 +2030,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </Select>
             </Field>
             <Field label="Дата ревизии">
-              <Input type="date" value={stocktakeDate} onChange={(event) => setStocktakeDate(event.target.value)} />
+              <DatePicker value={stocktakeDate} onChange={setStocktakeDate} />
             </Field>
           </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, Loader2, TrendingDown, Wallet, RefreshCw } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 
 type Category = { category: string; amount: number; prev: number; sharePct: number; changePct: number }
 type Insight = { verdict: string; reason: string; action: string; severity: 'high' | 'medium' | 'low' }
@@ -139,8 +140,8 @@ export default function ExpenseAnalysisPage() {
             </select>
             {custom ? (
               <>
-                <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} disabled={loading} className={selectCls} title="С" />
-                <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} disabled={loading} className={selectCls} title="По" />
+                <DatePicker value={from} max={to || undefined} onChange={setFrom} disabled={loading} />
+                <DatePicker value={to} min={from || undefined} onChange={setTo} disabled={loading} />
               </>
             ) : null}
             <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} disabled={loading} className={selectCls}>

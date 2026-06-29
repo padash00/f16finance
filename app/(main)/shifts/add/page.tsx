@@ -5,6 +5,7 @@ import { CalendarPlus } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
@@ -185,12 +186,11 @@ export default function AddShiftPage() {
                   <label className="text-xs text-muted-foreground block mb-2">
                     Дата смены
                   </label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={date}
-                    min={today}        // можно сегодня и вперёд
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
+                    min={today}
+                    onChange={setDate}
+                    className="w-full"
                   />
                 </div>
                 <div>

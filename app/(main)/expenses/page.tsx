@@ -14,6 +14,7 @@ import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CardSkeleton, TableSkeleton, StatGridSkeleton } from '@/components/skeleton'
@@ -1172,20 +1173,18 @@ export default function ExpensesPage() {
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <label className="text-xs text-gray-500 uppercase mb-1 block">С</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={dateFrom}
-                        onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 outline-none"
+                        onChange={(v) => { setDateFrom(v); setActivePreset('custom' as any) }}
+                        className="w-full"
                       />
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 uppercase mb-1 block">По</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={dateTo}
-                        onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-white dark:bg-gray-800 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-700 focus:border-red-500 outline-none"
+                        onChange={(v) => { setDateTo(v); setActivePreset('custom' as any) }}
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -1473,11 +1472,10 @@ export default function ExpensesPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Дата</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={editExpenseDate}
-                  onChange={(e) => setEditExpenseDate(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-red-500/50"
+                  onChange={setEditExpenseDate}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">

@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { AppModal } from '@/components/ui/app-modal'
 import { getPublicAppUrl } from '@/lib/core/app-url'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
@@ -641,21 +642,11 @@ function DocumentUpload({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Дата выдачи</label>
-            <input
-              type="date"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-            />
+            <DatePicker value={issueDate} onChange={setIssueDate} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Действителен до</label>
-            <input
-              type="date"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-            />
+            <DatePicker value={expiryDate} onChange={setExpiryDate} className="w-full" />
           </div>
         </div>
 
@@ -1966,11 +1957,10 @@ export default function OperatorProfilePage() {
                       Дата рождения
                     </label>
                     {isEditing ? (
-                      <input
-                        type="date"
+                      <DatePicker
                         value={editedProfile.birth_date || ''}
-                        onChange={(e) => setEditedProfile({ ...editedProfile, birth_date: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        onChange={(v) => setEditedProfile({ ...editedProfile, birth_date: v })}
+                        className="w-full"
                       />
                     ) : (
                       <p className="text-sm">{formatDate(profile?.birth_date || null)}</p>
@@ -2060,11 +2050,10 @@ export default function OperatorProfilePage() {
                       Дата найма
                     </label>
                     {isEditing ? (
-                      <input
-                        type="date"
+                      <DatePicker
                         value={editedProfile.hire_date || ''}
-                        onChange={(e) => setEditedProfile({ ...editedProfile, hire_date: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        onChange={(v) => setEditedProfile({ ...editedProfile, hire_date: v })}
+                        className="w-full"
                       />
                     ) : (
                       <p className="text-sm">{formatDate(profile?.hire_date || null)}</p>
@@ -2184,11 +2173,10 @@ export default function OperatorProfilePage() {
                   <div>
                     <label className="text-xs text-gray-500 mb-1">Срок действия</label>
                     {isEditing ? (
-                      <input
-                        type="date"
+                      <DatePicker
                         value={editedProfile.id_expiry_date || ''}
-                        onChange={(e) => setEditedProfile({ ...editedProfile, id_expiry_date: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                        onChange={(v) => setEditedProfile({ ...editedProfile, id_expiry_date: v })}
+                        className="w-full"
                       />
                     ) : (
                       <p className="text-sm">{formatDate(profile?.id_expiry_date || null)}</p>
@@ -2341,23 +2329,20 @@ export default function OperatorProfilePage() {
 
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">Дата начала *</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={newWork.start_date}
-                        onChange={(e) => setNewWork({ ...newWork, start_date: e.target.value })}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                        required
+                        onChange={(v) => setNewWork({ ...newWork, start_date: v })}
+                        className="w-full"
                       />
                     </div>
 
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">Дата окончания</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={newWork.end_date}
-                        onChange={(e) => setNewWork({ ...newWork, end_date: e.target.value })}
+                        onChange={(v) => setNewWork({ ...newWork, end_date: v })}
                         disabled={newWork.is_current}
-                        className="w-full bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 disabled:opacity-50"
+                        className="w-full"
                       />
                     </div>
 

@@ -5,7 +5,7 @@ import { Loader2, Play, Sun, Moon, Sparkles, AlertCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { formatMoney } from '@/lib/core/format'
 
 type OperatorOption = {
@@ -172,10 +172,9 @@ export function SalaryPreviewTab() {
             <label className="mb-1.5 block text-xs uppercase tracking-wider text-slate-500 dark:text-gray-400">
               Начало недели (пн)
             </label>
-            <Input
-              type="date"
+            <DatePicker
               value={weekStart}
-              onChange={(event) => setWeekStart(event.target.value)}
+              onChange={setWeekStart}
             />
           </div>
           <div className="flex items-end">

@@ -8,6 +8,7 @@ import { SalaryVariantsTab } from '@/components/admin/salary-variants-tab'
 import { SalaryPreviewTab } from '@/components/admin/salary-preview-tab'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Plus,
@@ -1458,12 +1459,10 @@ function SalaryRulesContent() {
                               />
                               <div className="flex items-center gap-1">
                                 <span className="text-[10px] text-gray-500">с:</span>
-                                <input
-                                  type="date"
+                                <DatePicker
                                   value={r.effective_from ?? ''}
-                                  onChange={(e) => handleFieldChange(r.id, 'effective_from', e.target.value || null)}
-                                  className="px-1.5 py-0.5 bg-white dark:bg-gray-800/50 border border-slate-200 dark:border-white/10 rounded text-[10px] text-slate-700 dark:text-gray-300 focus:border-orange-500/50 focus:outline-none"
-                                  title="С какой даты применяется новый оклад"
+                                  onChange={(v) => handleFieldChange(r.id, 'effective_from', v || null)}
+                                  className="h-7 rounded px-2 py-0 text-[10px]"
                                 />
                               </div>
                               {r.effective_from && (
@@ -1663,7 +1662,7 @@ function SalaryRulesContent() {
                                       <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 text-xs">
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Применять с</span>
-                                          <input type="date" value={newVersionDraft.effective_from || ''} onChange={(e) => handleNewVersionFieldChange('effective_from', e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-2 text-slate-900 dark:text-white" />
+                                          <DatePicker value={newVersionDraft.effective_from || ''} onChange={(v) => handleNewVersionFieldChange('effective_from', v)} className="h-8 rounded-lg px-2" />
                                         </label>
                                         <label className="grid gap-1">
                                           <span className="text-slate-500 dark:text-gray-400">Оклад</span>
@@ -1741,7 +1740,7 @@ function SalaryRulesContent() {
                                               <tr key={v.id} className="border-t border-slate-200 dark:border-white/5">
                                                 <td className="px-2 py-2">
                                                   {isEditing ? (
-                                                    <input type="date" value={display.effective_from || ''} onChange={(e) => handleVersionFieldChange(v.id, 'effective_from', e.target.value)} className="h-7 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-900 px-1 text-slate-900 dark:text-white text-[11px]" />
+                                                    <DatePicker value={display.effective_from || ''} onChange={(iso) => handleVersionFieldChange(v.id, 'effective_from', iso)} className="h-7 rounded px-1 text-[11px]" />
                                                   ) : (
                                                     <span className="text-slate-700 dark:text-gray-200">{v.effective_from}</span>
                                                   )}
@@ -2035,12 +2034,10 @@ function SalaryRulesContent() {
                     </label>
                     <label className="grid gap-1 text-xs text-slate-700 dark:text-gray-400">
                       Применять с
-                      <input
-                        type="date"
+                      <DatePicker
                         value={newTierFrom}
-                        onChange={(e) => setNewTierFrom(e.target.value)}
-                        className="h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-950 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-violet-500/60"
-                        title="Смены до этой даты не получат надбавку, даже если сотрудник проработал нужный срок"
+                        onChange={setNewTierFrom}
+                        className="h-10 rounded-xl px-3 text-sm"
                       />
                     </label>
                     <Button
@@ -2120,12 +2117,10 @@ function SalaryRulesContent() {
                                     </div>
                                     <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-500">
                                       Применять с
-                                      <input
-                                        type="date"
+                                      <DatePicker
                                         value={tier.effective_from || ''}
-                                        onChange={(e) => handleTierFieldChange(tier.id, 'effective_from', e.target.value)}
-                                        className="h-8 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-gray-950 px-2 text-xs text-slate-900 dark:text-white outline-none focus:border-violet-500/60"
-                                        title="Смены до этой даты не получат надбавку"
+                                        onChange={(v) => handleTierFieldChange(tier.id, 'effective_from', v)}
+                                        className="h-8 rounded-lg px-2 text-xs"
                                       />
                                     </label>
                                   </div>

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { formatTariffWindowLabel, parseTimeToMinutes } from '@/lib/core/arena-tariff-window'
 import { useCapabilities } from '@/lib/client/use-capabilities'
+import { DatePicker } from '@/components/ui/date-picker'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -2711,9 +2712,9 @@ function StationsPageContent() {
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата с" />
+              <DatePicker value={analyticsFrom} onChange={setAnalyticsFrom} max={analyticsTo} />
               <span className="text-muted-foreground">—</span>
-              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)} className="rounded-lg border border-slate-200 dark:border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата по" />
+              <DatePicker value={analyticsTo} onChange={setAnalyticsTo} min={analyticsFrom} />
               <button type="button" onClick={() => void loadAnalytics()} disabled={analyticsLoading} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">
                 {analyticsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Загрузить
               </button>

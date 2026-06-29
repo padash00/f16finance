@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Users, Loader2, RefreshCw, Star, AlertTriangle, GraduationCap, Sparkles } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 
 type OperatorMetric = {
   id: string
@@ -158,23 +159,17 @@ export default function TeamAnalysisPage() {
             </select>
             {custom ? (
               <>
-                <input
-                  type="date"
+                <DatePicker
                   value={from}
                   max={to || undefined}
-                  onChange={(e) => setFrom(e.target.value)}
+                  onChange={setFrom}
                   disabled={loading}
-                  title="С"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                 />
-                <input
-                  type="date"
+                <DatePicker
                   value={to}
                   min={from || undefined}
-                  onChange={(e) => setTo(e.target.value)}
+                  onChange={setTo}
                   disabled={loading}
-                  title="По"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                 />
               </>
             ) : null}

@@ -8,6 +8,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { isAbortError } from '@/lib/is-abort-error'
@@ -471,7 +472,7 @@ export function ConsumablesPageContent({ embedded = false }: { embedded?: boolea
             <div className="mb-3 text-sm font-medium">Новая выдача расходников</div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
               <Field label="Дата">
-                <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+                <DatePicker value={issueDate} onChange={setIssueDate} />
               </Field>
               <Field label="Точка">
                 <Select value={issueLocationId} onValueChange={setIssueLocationId}>

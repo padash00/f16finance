@@ -6,7 +6,6 @@ import {
   AlertCircle,
   Briefcase,
   Building2,
-  Calendar,
   Check,
   CheckCircle2,
   Copy,
@@ -26,6 +25,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useModalEscape } from '@/lib/client/use-modal-escape'
 
 type HireType = 'operator' | 'staff'
@@ -332,15 +332,7 @@ export default function HireModal({ open, onClose, onCreated }: Props) {
                 </select>
               </Field>
               <Field label="Дата найма">
-                <div className="relative">
-                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type="date"
-                    value={hireDate}
-                    onChange={(e) => setHireDate(e.target.value)}
-                    className={inputClass + ' pl-9'}
-                  />
-                </div>
+                <DatePicker value={hireDate} onChange={setHireDate} />
               </Field>
             </div>
           </div>

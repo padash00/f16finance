@@ -3,11 +3,12 @@
 import { useMemo, useState } from 'react'
 
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { useCompanies } from '@/hooks/use-companies'
 import { useIncome } from '@/hooks/use-income'
 import { useOperators } from '@/hooks/use-operators'
-import { ArrowDown, ArrowUp, CalendarDays, Loader2, Medal, Minus, TrendingUp, Trophy, Users2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Loader2, Medal, Minus, TrendingUp, Trophy, Users2 } from 'lucide-react'
 
 // ================== HELPERS ==================
 const toISODateLocal = (d: Date) => {
@@ -156,20 +157,17 @@ export default function RatingsPage() {
                     {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : 'Месяц'}
                   </button>
                 ))}
-                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
-                  <input
-                    type="date"
+                <div className="flex items-center gap-2">
+                  <DatePicker
                     value={dateFrom}
-                    onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom') }}
-                    className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none w-[120px]"
+                    onChange={(v) => { setDateFrom(v); setActivePreset('custom') }}
+                    className="w-auto"
                   />
                   <span className="text-slate-500">—</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={dateTo}
-                    onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom') }}
-                    className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none w-[120px]"
+                    onChange={(v) => { setDateTo(v); setActivePreset('custom') }}
+                    className="w-auto"
                   />
                 </div>
                 {companies.length > 0 && (

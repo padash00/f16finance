@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -317,11 +318,11 @@ export default function DiscountsPage({ embedded = false }: { embedded?: boolean
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Действует с</Label>
-          <Input value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} type="date" />
+          <DatePicker value={form.valid_from} onChange={(v) => setForm({ ...form, valid_from: v })} className="w-full" />
         </div>
         <div className="space-y-1.5">
           <Label>Действует до</Label>
-          <Input value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} type="date" />
+          <DatePicker value={form.valid_to} onChange={(v) => setForm({ ...form, valid_to: v })} className="w-full" />
         </div>
       </div>
       <div className="space-y-1.5">

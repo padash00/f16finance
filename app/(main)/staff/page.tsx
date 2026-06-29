@@ -7,6 +7,7 @@ import { useCapabilities } from '@/lib/client/use-capabilities'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -925,13 +926,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Дата</label>
-              <Input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="bg-white dark:bg-slate-800/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white"
-                required
-              />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div className="space-y-2">
               <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Тип выплаты</label>

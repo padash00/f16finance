@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -1373,7 +1374,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
 
               <div className="space-y-1.5">
                 <Label>Дата приемки</Label>
-                <Input type="date" value={receivedAt} onChange={(event) => setReceivedAt(event.target.value)} />
+                <DatePicker value={receivedAt} onChange={setReceivedAt} />
               </div>
 
               <div className="space-y-1.5">
@@ -1452,7 +1453,7 @@ export default function StoreReceiptsPage({ embedded = false }: { embedded?: boo
                 <>
                   <div className="space-y-1.5">
                     <Label>Срок оплаты (опционально)</Label>
-                    <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+                    <DatePicker value={dueDate} onChange={setDueDate} />
                   </div>
                   <div className="space-y-1.5 flex items-end">
                     <label className="flex items-center gap-2 text-sm cursor-pointer">

@@ -27,6 +27,7 @@ import {
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
@@ -473,7 +474,7 @@ function OperatorSalaryDetailPageContent() {
                     <option value="">Без привязки к точке</option>
                     {data.companies.map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
                   </select>
-                  <input className={input} type="date" value={adjDate} onChange={(e) => setAdjDate(e.target.value)} />
+                  <DatePicker className="h-11" value={adjDate} onChange={setAdjDate} />
                   <input className={input} type="text" placeholder="Сумма" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
                   <Button type="submit" className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">
                     {adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
@@ -539,7 +540,7 @@ function OperatorSalaryDetailPageContent() {
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата</label>
-                <input className={input} type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} />
+                <DatePicker className="h-11" value={advanceDate} onChange={setAdvanceDate} />
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Наличные</label>
@@ -587,7 +588,7 @@ function OperatorSalaryDetailPageContent() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm text-slate-700 dark:text-slate-300">Дата выплаты</label>
-                <input className={input} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                <DatePicker className="h-11" value={payDate} onChange={setPayDate} />
               </div>
               <div className="flex items-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-3 text-xs text-slate-500 dark:text-slate-400">Выплата разложится по точкам пропорционально начислению</div>
               <div>

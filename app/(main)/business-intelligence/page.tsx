@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Brain, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 
 // ── Типы ответа движка ───────────────────────────────────────────────────────
 type AnomalyDay = { company: string; date: string; revenue: number; z: number; direction: 'above' | 'below' }
@@ -278,24 +279,18 @@ export default function BusinessIntelligencePage() {
             </select>
             {period === 'custom' ? (
               <>
-                <input
-                  type="date"
+                <DatePicker
                   value={customFrom}
                   max={customTo || undefined}
-                  onChange={(e) => setCustomFrom(e.target.value)}
+                  onChange={setCustomFrom}
                   disabled={loading}
-                  title="С"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                 />
                 <span className={`text-sm ${sub}`}>—</span>
-                <input
-                  type="date"
+                <DatePicker
                   value={customTo}
                   min={customFrom || undefined}
-                  onChange={(e) => setCustomTo(e.target.value)}
+                  onChange={setCustomTo}
                   disabled={loading}
-                  title="По"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-white/[0.04]"
                 />
               </>
             ) : null}

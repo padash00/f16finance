@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { downloadReportPdf } from '@/lib/client/download-pdf'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Card } from '@/components/ui/card'
 import { useCompanies } from '@/hooks/use-companies'
@@ -326,19 +327,9 @@ export default function CashFlowPage() {
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
                   <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none w-[120px]"
-                  />
+                  <DatePicker value={dateFrom} onChange={setDateFrom} className="w-[120px]" />
                   <span className="text-slate-500">—</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="bg-transparent text-sm text-slate-700 dark:text-slate-200 outline-none w-[120px]"
-                  />
+                  <DatePicker value={dateTo} onChange={setDateTo} className="w-[120px]" />
                 </div>
                 {companies.length > 0 && (
                   <select

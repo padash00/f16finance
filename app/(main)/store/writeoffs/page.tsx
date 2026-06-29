@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -722,7 +723,7 @@ export default function StoreWriteoffsPage({ embedded = false }: { embedded?: bo
 
               <div className="space-y-1.5">
                 <Label>Дата списания</Label>
-                <Input type="date" value={writtenAt} onChange={(event) => setWrittenAt(event.target.value)} />
+                <DatePicker value={writtenAt} onChange={setWrittenAt} />
               </div>
 
               <div className="space-y-1.5">

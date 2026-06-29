@@ -51,6 +51,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useIncome } from '@/hooks/use-income'
 import { useCompanies } from '@/hooks/use-companies'
 import { useOperators } from '@/hooks/use-operators'
@@ -1041,20 +1042,18 @@ export default function IncomePage() {
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <label className="text-xs text-slate-500 uppercase mb-1 block">С</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={dateFrom}
-                        onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 outline-none"
+                        onChange={(v) => { setDateFrom(v); setActivePreset('custom' as any) }}
+                        className="w-full"
                       />
                     </div>
                     <div>
                       <label className="text-xs text-slate-500 uppercase mb-1 block">По</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={dateTo}
-                        onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom' as any) }}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-amber-500 outline-none"
+                        onChange={(v) => { setDateTo(v); setActivePreset('custom' as any) }}
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -1342,11 +1341,10 @@ export default function IncomePage() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                     <span>Дата</span>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={editIncomeDate}
-                      onChange={(e) => setEditIncomeDate(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white outline-none focus:border-amber-500/40"
+                      onChange={setEditIncomeDate}
+                      className="w-full"
                     />
                   </label>
 

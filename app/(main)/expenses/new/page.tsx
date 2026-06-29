@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 import { useCapabilities } from '@/lib/client/use-capabilities'
 
@@ -864,12 +865,11 @@ function ExpenseWizardPageContent() {
               <span>Дата</span>
               {isDateValid ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : null}
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={payload.date}
               max={todayISO()}
-              onChange={(e) => setPayload((p) => ({ ...p, date: e.target.value, backdated_confirmed: false }))}
-              className={`${inputBaseClass} ${!payload.date || (isBackdated && !payload.backdated_confirmed) ? inputErrorClass : ''}`}
+              onChange={(v) => setPayload((p) => ({ ...p, date: v, backdated_confirmed: false }))}
+              className={`w-full ${!payload.date || (isBackdated && !payload.backdated_confirmed) ? inputErrorClass : ''}`}
             />
             {isBackdated && (
               <label className="mt-2 flex items-start gap-2 text-xs">

@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
+import { DatePicker } from '@/components/ui/date-picker'
 import {
   Calculator,
   CalendarDays,
@@ -513,21 +514,11 @@ export default function TaxPage() {
           <Card className="p-1 flex items-center gap-2 bg-card/50">
             <div className="flex items-center px-2">
               <CalendarDays className="w-4 h-4 text-muted-foreground mr-2" />
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="bg-transparent text-sm text-foreground outline-none"
-              />
+              <DatePicker value={dateFrom} onChange={setDateFrom} />
             </div>
             <span className="text-muted-foreground">—</span>
             <div className="flex items-center px-2">
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="bg-transparent text-sm text-foreground outline-none"
-              />
+              <DatePicker value={dateTo} onChange={setDateTo} />
             </div>
           </Card>
         }

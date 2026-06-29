@@ -18,6 +18,7 @@ import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { StoreDataTableSkeleton } from '@/components/store/store-data-table-skeleton'
@@ -419,8 +420,8 @@ function StoreRequestsJournalPageContent({ embedded = false }: { embedded?: bool
               placeholder="Кто создавал/одобрял"
               className="h-9 w-[220px]"
             />
-            <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
-            <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
+            <DatePicker value={filters.from} onChange={(v) => setFilters({ from: v })} className="w-[150px]" />
+            <DatePicker value={filters.to} onChange={(v) => setFilters({ to: v })} className="w-[150px]" />
             <Button
               variant="outline"
               size="sm"
