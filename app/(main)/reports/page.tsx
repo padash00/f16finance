@@ -414,7 +414,7 @@ const MemoizedComposedChart = memo(({ data }: { data: TimeAggregation[] }) => {
             <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.4} vertical={false} />
         <XAxis 
           dataKey="label" 
           stroke="#6b7280" 
@@ -478,10 +478,10 @@ const MemoizedPieChart = memo(({ data }: { data: Array<{ name: string; amount: n
       <PieChart>
         <Pie 
           data={data} 
-          cx="50%" 
-          cy="50%" 
-          innerRadius={60} 
-          outerRadius={80}
+          cx="50%"
+          cy="50%"
+          innerRadius="58%"
+          outerRadius="88%"
           paddingAngle={3}
           dataKey="amount"
         >
@@ -1949,10 +1949,6 @@ function ReportsContent() {
                         <FileSpreadsheet className="w-4 h-4" />
                         Скачать PDF
                       </button>
-                      <button onClick={() => window.print()} className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5 flex items-center gap-2">
-                        <span className="text-base leading-none">🖨</span>
-                        Печать / PDF
-                      </button>
                     </div>
                   </div>
                 )}
@@ -1967,15 +1963,6 @@ function ReportsContent() {
                   <Share2 className="w-4 h-4" />
                 </Button>
 
-                <Button
-                  variant="outline"
-                  className="no-print rounded-xl border-slate-200 dark:border-white/10 bg-white dark:bg-[#111113] hover:bg-slate-100 dark:hover:bg-white/[0.06] gap-2"
-                  onClick={handlePrintPDF}
-                  title="PDF / Печать"
-                >
-                  <FileText className="w-4 h-4" />
-                  PDF / Печать
-                </Button>
               </>
             }
             toolbar={

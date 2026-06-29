@@ -36,7 +36,16 @@ export function DocumentTitle() {
   const pathname = usePathname()
   useEffect(() => {
     const name = resolveTitle(pathname || '')
-    document.title = name ? `${name} · Orda Control` : 'Orda Control'
+    const apply = () => {
+      document.title = name ? `${name} · Orda Control` : 'Orda Control'
+    }
+    apply()
+    // На ПОЛНОЙ загрузке (Ctrl+Shift+R) Next.js применяет metadata-заголовок
+    // асинхронно после гидрации и перебивает наш на «Orda Control».
+    // Ставим снова следующими тиками, чтобы выиграть гонку.
+    const t1 = setTimeout(apply, 100)
+    const t2 = setTimeout(apply, 400)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [pathname])
   return null
 }
