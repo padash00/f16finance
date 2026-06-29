@@ -558,6 +558,8 @@ export default function LogsPage() {
   const [action, setAction] = useState('')
   const [actor, setActor] = useState('')
   const [onlyErrors, setOnlyErrors] = useState(false)
+  // По умолчанию шум (просмотры страниц, AI-вызовы) скрыт — показываем важное.
+  const [includeNoise, setIncludeNoise] = useState(false)
   const [page, setPage] = useState(1)
 
   const applyPreset = (preset: 'all' | 'pages' | 'site-errors' | 'telegram' | 'ai' | 'receipts' | 'debts' | 'auth' | 'finance' | 'staff' | 'operations' | 'structure' | 'errors') => {
@@ -590,6 +592,7 @@ export default function LogsPage() {
       if (action) params.set('action', action)
       if (actor) params.set('actor', actor)
       if (onlyErrors) params.set('onlyErrors', 'true')
+      if (includeNoise) params.set('includeNoise', 'true')
       const response = await fetch(`/api/admin/logs?${params.toString()}`)
       const json = (await response.json().catch(() => null)) as LogResponse | { error?: string } | null
       if (!response.ok || !json || !('ok' in json)) throw new Error((json as any)?.error || 'Не удалось загрузить логи')
@@ -633,7 +636,7 @@ export default function LogsPage() {
     window.open(`/api/admin/logs?${params.toString()}`, '_blank')
   }
 
-  useEffect(() => { loadLogs() }, [page, domain, kind, entityType, action, actor, onlyErrors]) // eslint-disable-line
+  useEffect(() => { loadLogs() }, [page, domain, kind, entityType, action, actor, onlyErrors, includeNoise]) // eslint-disable-line
 
   const stats = useMemo(() => {
     const items = data?.items || []
@@ -649,7 +652,7 @@ export default function LogsPage() {
   }, [data])
 
   const PRESETS = [
-    { key: 'all', label: 'Все' },
+    { key: 'all', label: 'Важное' },
     { key: 'pages', label: '👁 Все страницы' },
     { key: 'site-errors', label: '🚨 Ошибки сайта' },
     { key: 'telegram', label: '✈ Telegram' },
@@ -673,6 +676,14 @@ export default function LogsPage() {
         icon={<ShieldCheck className="h-5 w-5" aria-hidden />}
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={() => { setPage(1); setIncludeNoise(v => !v) }}
+              className={`border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 ${includeNoise ? 'ring-1 ring-sky-500/40 text-sky-700 dark:text-sky-300' : ''}`}
+              title={includeNoise ? 'Сейчас показаны все события, включая просмотры страниц и AI' : 'Сейчас скрыт шум (просмотры страниц, AI). Нажмите, чтобы показать всё'}
+            >
+              {includeNoise ? 'Только важное' : 'Показать всё'}
+            </Button>
             <Button variant="outline" onClick={exportLogs} className="border-slate-200 bg-white hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
               <Download className="mr-2 h-4 w-4" />
               Экспорт CSV

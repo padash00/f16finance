@@ -1029,6 +1029,7 @@ export async function GET(req: Request) {
     const status = url.searchParams.get('status')?.trim().toLowerCase() || ''
     const actor = url.searchParams.get('actor')?.trim().toLowerCase() || ''
     const onlyErrors = url.searchParams.get('onlyErrors') === 'true'
+    const includeNoise = url.searchParams.get('includeNoise') === 'true'
     const format = url.searchParams.get('format')?.trim().toLowerCase() || 'json'
     const page = Math.max(1, Number(url.searchParams.get('page') || 1))
     const limit = Math.min(200, Math.max(20, Number(url.searchParams.get('limit') || 80)))
@@ -1235,6 +1236,17 @@ export async function GET(req: Request) {
         return { ...item, ...summary }
       })
       .filter((item) => {
+        // По умолчанию (без выбранного пресета) прячем шум: просмотры страниц и
+        // AI-вызовы — чтобы важные события (продажи, долги, ошибки) не тонули.
+        // Кнопка «Показать всё» (includeNoise) или пресеты «Страницы»/«AI» их вернут.
+        if (!domain && !includeNoise) {
+          const ent = (item.entityType || '').toLowerCase()
+          const act2 = (item.action || '').toLowerCase()
+          if (['page-view', 'visit', 'ai-usage'].includes(ent) || act2 === 'page-view' || act2 === 'visit') {
+            return false
+          }
+        }
+
         if (domain === 'auth') {
           const authEntityTypes = ['auth-attempt', 'auth-session']
           if (!authEntityTypes.includes((item.entityType || '').toLowerCase())) return false
