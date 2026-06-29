@@ -97,7 +97,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // Связанная запись в incomes (с meta: coins, wipon, debts, start_cash, diff)
       supabase
         .from('incomes')
-        .select('id, date, cash_amount, kaspi_amount, kaspi_before_midnight, total_amount, comment, meta')
+        .select('id, date, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment, meta')
         .eq('shift_id', id)
         .maybeSingle(),
       // Долги клиентов созданные на этой смене — через company_id + временной интервал

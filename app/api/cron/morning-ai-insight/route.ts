@@ -159,11 +159,12 @@ async function collectInsights(
     }
 
     // Просроченные долги клиентов
+    // Долги клиентов: таблица debts не имеет due_date, а статус — 'active' (не 'open').
+    // Считаем активные (непогашенные) долги.
     let debtsQ = supabase
       .from('debts')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'open')
-      .lt('due_date', today)
+      .eq('status', 'active')
     if (companyIds) debtsQ = debtsQ.in('company_id', companyIds)
     const { count: overdueDebtsCount } = await debtsQ
     data.overdueDebts = overdueDebtsCount || 0

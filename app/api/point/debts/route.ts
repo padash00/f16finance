@@ -224,7 +224,9 @@ async function upsertAggregateDebt(params: {
   const payload = {
     client_name: params.clientName,
     amount: params.amount,
-    date: params.weekStart,
+    // date — NOT NULL в таблице debts. Если weekStart не передан, ставим сегодня (KZ),
+    // иначе insert падал с "null value in column date violates not-null constraint".
+    date: params.weekStart || new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10),
     operator_id: params.operatorId || null,
     company_id: params.companyId,
     comment: params.commentLine || null,
